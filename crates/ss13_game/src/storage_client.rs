@@ -55,6 +55,7 @@ pub struct StoragePanel {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInventory)]
 struct StorageRoot;
 
 /// A grid cell: its index in the contents order.

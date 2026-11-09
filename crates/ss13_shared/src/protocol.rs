@@ -90,6 +90,24 @@ pub enum ClientIntent {
     /// predicts nothing) while the key is held, at most once per server tick; the server checks
     /// the mob may shift and caps the offset.
     PixelShift(Dir),
+    /// tg `/client/verb/ooc` (keys O, F2).
+    Ooc(String),
+    /// BandaStation `/client/proc/looc_message` (key L); `wall_pierce`: heard through walls in
+    /// the same range (the "LOOC (Wallpierce)" verb).
+    Looc {
+        text: String,
+        wall_pierce: bool,
+    },
+    /// tg `/mob/verb/pray` (key P).
+    Pray(String),
+    /// tg `quick_equip` (key E): the active hand's item into the best free slot.
+    QuickEquip,
+    /// tg `smart_equip_targeted` (Shift+E, Shift+V, Shift+Q, Alt+1, Alt+2): the active hand's
+    /// item into `slot`'s item or the slot, or the last thing out of it into the hand. Only
+    /// the belt, back, suit storage and pocket slots are accepted.
+    SmartEquip(InventorySlot),
+    /// BandaStation `quick_accessory_draw` (Shift+F).
+    QuickAccessoryDraw,
 }
 
 /// One end of a [`ClientIntent::Drag`].

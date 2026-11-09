@@ -35,10 +35,34 @@ pub enum Animation {
     /// tg `balloon_alert`: `text` (at most [`MAX_BALLOON_CHARS`] characters, plain) floats up
     /// from the entity and fades. Sent to one client only, never to every viewer.
     Balloon { text: String },
+    /// tg `/datum/chatmessage` (runechat): `text` over the entity, for one client. Stacked and
+    /// aged by the client (`ss13_game::runechat_client`).
+    Runechat {
+        text: String,
+        /// `chat_color` of the speaker (`colorize_string`), RGB.
+        color: [u8; 3],
+        style: RunechatStyle,
+    },
+}
+
+/// The classes of a [`Animation::Runechat`] (`extra_classes`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunechatStyle {
+    /// `italics`: whispers and emotes; the color is already darkened.
+    pub italics: bool,
+    /// `small`: non-mob speakers.
+    pub small: bool,
+    /// `yell`: the text ends in `!!`.
+    pub yell: bool,
+    /// BandaStation: the `[LOOC]` prefix.
+    pub looc: bool,
 }
 
 /// Most characters of a [`Animation::Balloon`]; the server cuts longer texts.
 pub const MAX_BALLOON_CHARS: usize = 120;
+
+/// tg `CHAT_MESSAGE_MAX_LENGTH`: a longer [`Animation::Runechat`] is cut and gets `...`.
+pub const MAX_RUNECHAT_CHARS: usize = 110;
 
 /// Keyframes from the rest transform: step `i` moves from step `i - 1`'s pose (the first from
 /// rest) to its own over its time. The whole list plays `loops` times (0: until stopped), each

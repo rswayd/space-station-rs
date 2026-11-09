@@ -45,6 +45,7 @@ pub struct AlertHud {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInfo)]
 struct AlertRoot;
 
 /// The `i`th alert's place (0-based).

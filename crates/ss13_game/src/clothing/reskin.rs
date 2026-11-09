@@ -4,11 +4,11 @@
 //!
 //! - every sheath (`/obj/item/storage/belt/sheath/update_icon_state`, [`SheathLook`]) shows
 //!   `<base>-full` (icon, in-hand and worn state) while it holds something;
-//! - the sabre sheath ([`SABRE_SHEATH`]) with a sabre inside is alt-clicked: a list (tg's radial)
+//! - the sabre sheath ([`SABRE_SHEATH`]) with a sabre inside is alt-clicked: a radial
 //!   of the `/datum/atom_skin/cap_sheath` skins; the pick reskins the sheath and the sabre in it
 //!   (`cap_sabre` of the same name) at once, and both lose the option (`infinite_reskin` off).
 //!   An empty sheath (or one holding something else) warns and the click goes on.
-// shortcut: a list prompt instead of the radial with sprite previews; tg's sheath alt-click
+// shortcut: tg's sheath alt-click
 // (the blade into the hand) is not ported, an alt-click opens the storage as before.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -16,7 +16,7 @@ use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{DmAtom, DmItem};
 use ss13_shared::chat::Span;
-use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems, ask_world};
+use ss13_tgui::prompt::{PromptAnswer, PromptAnswered, PromptSystems, RadialChoice};
 use ss13_tgui::server::UiSystems;
 
 use crate::health::Stat;
@@ -264,20 +264,26 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, sheath: Entity)
         return false;
     }
     let title = crate::security::name_of(world, sheath);
-    let prompt = ask_world(
+    let choices = SKINS
+        .iter()
+        .map(|(name, suffix)| RadialChoice {
+            name: (*name).to_owned(),
+            icon: crate::radial::icon_of(world, SHEATH_ICON, &format!("sheath_{suffix}")),
+        })
+        .collect();
+    if let Some(prompt) = crate::radial::show(
         world,
-        Ask::new(
+        crate::radial::RadialMenu {
             client,
-            mob,
+            actor: mob,
+            anchor: sheath,
             title,
-            "Выберите облик",
-            PromptKind::List {
-                items: SKINS.iter().map(|(n, _)| (*n).to_owned()).collect(),
-                default: None,
-            },
-        ),
-    );
-    world.entity_mut(prompt).insert(ReskinAsk { sheath });
+            choices,
+            require_near: false,
+        },
+    ) {
+        world.entity_mut(prompt).insert(ReskinAsk { sheath });
+    }
     true
 }
 

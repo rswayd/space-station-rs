@@ -35,6 +35,7 @@ pub mod medical_kiosk;
 pub mod number_input;
 pub mod pipe_dispenser;
 pub mod portable_generator;
+pub mod radial;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
 pub mod sleeper;

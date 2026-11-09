@@ -204,6 +204,7 @@ impl Plugin for AdminServerPlugin {
         });
         crate::logout_report::build(app);
         crate::lobby::build(app);
+        crate::ooc::build(app);
         app.insert_resource(AdminLogFile(file))
             .init_resource::<Bans>()
             .init_resource::<Mutes>()
@@ -571,7 +572,10 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | ErtPanel
         | ErtDispatch { .. }
         | ErtDeny(_)
-        | ErtToggleAnswered => R_ADMIN,
+        | ErtToggleAnswered
+        | ToggleOoc
+        | ToggleDeadOoc
+        | ToggleLooc => R_ADMIN,
         AdminList | SetAdminRank { .. } | RemoveAdmin(_) => R_PERMISSIONS,
         PlaySound { .. } => R_SOUND,
         AirStatus | SpawnAir(_) | VvTile | ViewVariables(_) => R_DEBUG,
@@ -580,7 +584,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         FindPrototypes(_) | Spawn(_) | Subtypes(_) => R_SPAWN,
         Smite { .. } | Emp { .. } => R_ADMIN | R_FUN,
         Events | ForceEvent { .. } | DropBomb(_) | GiveAi { .. } | ErtSummon(_) => R_FUN,
-        StartNow | EndRound | Restart => R_SERVER,
+        StartNow | EndRound | Restart | SetAdminNotice(_) => R_SERVER,
         TimeScale(_) => R_DEBUG,
     })
 }
@@ -657,6 +661,14 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             world.resource_mut::<Tickets>().dirty = true;
             done(verb)
         }
+        AdminRequest::SetAdminNotice(text) => {
+            done(crate::ooc::set_admin_notice(world, &key, &text))
+        }
+        AdminRequest::ToggleOoc => done(crate::ooc::toggle(world, &key, crate::ooc::Switch::Ooc)),
+        AdminRequest::ToggleDeadOoc => {
+            done(crate::ooc::toggle(world, &key, crate::ooc::Switch::DeadOoc))
+        }
+        AdminRequest::ToggleLooc => done(crate::ooc::toggle(world, &key, crate::ooc::Switch::Looc)),
         AdminRequest::Asay(text) => {
             let text = sanitize_text(&text, MAX_MESSAGE_LEN);
             if text.is_empty() {

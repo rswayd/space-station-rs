@@ -196,10 +196,103 @@ pub struct JumpButton;
 #[derive(Component, Clone, Debug, Default)]
 pub struct SayInput;
 
+/// The channel button before the say line.
+#[derive(Component, Clone, Debug, Default)]
+pub struct ChannelButton;
+
+/// tgui-say's channel: what the say line sends. Back to [`Self::Say`] after every message, as
+/// tgui-say closes after one: the next line never goes to OOC by accident.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SayChannel {
+    #[default]
+    Say,
+    Radio,
+    Whisper,
+    Me,
+    Ooc,
+    Looc,
+    LoocWallpierce,
+    Pray,
+}
+
+impl SayChannel {
+    /// tgui-say's Tab order (the button); pray has only its key.
+    const CYCLE: [SayChannel; 7] = [
+        SayChannel::Say,
+        SayChannel::Radio,
+        SayChannel::Whisper,
+        SayChannel::Me,
+        SayChannel::Ooc,
+        SayChannel::Looc,
+        SayChannel::LoocWallpierce,
+    ];
+
+    pub fn next(self) -> Self {
+        let i = Self::CYCLE.iter().position(|c| *c == self).unwrap_or(0);
+        Self::CYCLE[(i + 1) % Self::CYCLE.len()]
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SayChannel::Say => "Сказать",
+            SayChannel::Radio => "Рация",
+            SayChannel::Whisper => "Шёпот",
+            SayChannel::Me => "Эмоция",
+            SayChannel::Ooc => "OOC",
+            SayChannel::Looc => "LOOC",
+            SayChannel::LoocWallpierce => "LOOC (сквозь стены)",
+            SayChannel::Pray => "Молитва",
+        }
+    }
+
+    /// tg `tgui_say/delegate_speech`: the intent of a line sent in this channel.
+    pub fn intent(self, text: &str) -> ClientIntent {
+        let text = text.to_string();
+        match self {
+            SayChannel::Say => ClientIntent::Say(text),
+            SayChannel::Radio => ClientIntent::Say(format!("; {text}")),
+            SayChannel::Whisper => ClientIntent::Say(format!("#{text}")),
+            SayChannel::Me => ClientIntent::Say(format!("*me {text}")),
+            SayChannel::Ooc => ClientIntent::Ooc(text),
+            SayChannel::Looc => ClientIntent::Looc {
+                text,
+                wall_pierce: false,
+            },
+            SayChannel::LoocWallpierce => ClientIntent::Looc {
+                text,
+                wall_pierce: true,
+            },
+            SayChannel::Pray => ClientIntent::Pray(text),
+        }
+    }
+}
+
+/// tg's `/datum/keybinding/client/communication` defaults (with BandaStation's edits).
+pub const CHANNEL_KEYS: [(KeyCode, SayChannel); 8] = [
+    (KeyCode::KeyT, SayChannel::Say),
+    (KeyCode::F3, SayChannel::Say),
+    (KeyCode::KeyY, SayChannel::Radio),
+    (KeyCode::KeyO, SayChannel::Ooc),
+    (KeyCode::F2, SayChannel::Ooc),
+    (KeyCode::KeyM, SayChannel::Me),
+    (KeyCode::KeyP, SayChannel::Pray),
+    (KeyCode::KeyL, SayChannel::Looc),
+];
+
 pub(crate) fn plugin(app: &mut App) {
     app.init_resource::<ChatView>()
+        .init_resource::<SayChannel>()
         .add_systems(Startup, spawn_panel)
-        .add_systems(Update, (sync_view, show_jump_button).chain())
+        .add_systems(
+            Update,
+            (
+                sync_view,
+                show_jump_button,
+                channel_keys,
+                show_channel.run_if(resource_changed::<SayChannel>),
+            )
+                .chain(),
+        )
         .add_observer(on_act)
         .add_observer(on_say_submitted)
         .add_observer(on_say_escape);
@@ -382,7 +475,9 @@ fn spawn_panel(view: Res<ChatView>, mut commands: Commands) {
             BorderColor::all(theme::COLOR_BORDER_DARK)
             @root_text_style()
             Children [
-                Text("Сказать")
+                @Button { @content: "Сказать" }
+                Act("cycle_channel")
+                ChannelButton
                 --
                 Input {
                     placeholder: "Сообщение... (Enter — отправить, Esc — очистить)",
@@ -594,12 +689,14 @@ fn on_act(
     panels: Query<(), With<ChatPanel>>,
     mut tabs: Query<(&mut TabsTab, &Act)>,
     mut view: ResMut<ChatView>,
+    mut channel: ResMut<SayChannel>,
 ) {
     if !panels.contains(act.scope) {
         return;
     }
     match act.action.as_str() {
         "scroll_bottom" => view.autoscroll.jump_to_bottom(),
+        "cycle_channel" => *channel = channel.next(),
         action => {
             let tab = match action {
                 "tab:all" => ChatTab::All,
@@ -621,6 +718,8 @@ fn on_say_submitted(
     submitted: On<InputSubmitted>,
     inputs: Query<(), With<SayInput>>,
     mut intents: MessageWriter<SendIntent>,
+    mut channel: ResMut<SayChannel>,
+    mut focus: ResMut<InputFocus>,
 ) {
     if !inputs.contains(submitted.entity) {
         return;
@@ -628,7 +727,58 @@ fn on_say_submitted(
     // The server checks everything again; this only avoids sending nothing.
     let text = submitted.value.trim();
     if !text.is_empty() {
-        intents.write(SendIntent(ClientIntent::Say(text.to_string())));
+        intents.write(SendIntent(channel.intent(text)));
+    }
+    *channel = SayChannel::Say;
+    focus.clear();
+}
+
+/// tg `keybinding/client/communication`: the key picks the channel and opens the say line.
+fn channel_keys(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut focus: ResMut<InputFocus>,
+    fields: Query<(Entity, &ChildOf), With<EditableText>>,
+    inputs: Query<(), With<SayInput>>,
+    mut channel: ResMut<SayChannel>,
+) {
+    if focus.get().is_some()
+        || keys.any_pressed([
+            KeyCode::ShiftLeft,
+            KeyCode::ShiftRight,
+            KeyCode::ControlLeft,
+            KeyCode::ControlRight,
+            KeyCode::AltLeft,
+            KeyCode::AltRight,
+        ])
+    {
+        return;
+    }
+    let Some(picked) = CHANNEL_KEYS
+        .into_iter()
+        .find_map(|(key, picked)| keys.just_pressed(key).then_some(picked))
+    else {
+        return;
+    };
+    let Some((field, _)) = fields.iter().find(|(_, p)| inputs.contains(p.parent())) else {
+        return;
+    };
+    *channel = picked;
+    focus.set(field, bevy::input_focus::FocusCause::Navigated);
+}
+
+fn show_channel(
+    channel: Res<SayChannel>,
+    buttons: Query<&Children, With<ChannelButton>>,
+    mut texts: Query<&mut Text>,
+) {
+    for children in &buttons {
+        for &child in children {
+            if let Ok(mut text) = texts.get_mut(child)
+                && text.0 != channel.label()
+            {
+                text.0 = channel.label().to_string();
+            }
+        }
     }
 }
 
@@ -638,6 +788,7 @@ fn on_say_escape(
     mut fields: Query<(&mut EditableText, &ChildOf)>,
     mut inputs: Query<&mut Input, With<SayInput>>,
     mut focus: ResMut<InputFocus>,
+    mut channel: ResMut<SayChannel>,
 ) {
     if key.input.state != ButtonState::Pressed || key.input.key_code != KeyCode::Escape {
         return;
@@ -651,6 +802,7 @@ fn on_say_escape(
     input.value.clear();
     editable.clear();
     focus.clear();
+    *channel = SayChannel::Say;
 }
 
 #[cfg(test)]
@@ -658,6 +810,39 @@ mod tests {
     use super::*;
 
     const VIEW: f32 = 160.0;
+
+    #[test]
+    fn channels_send_their_intents() {
+        assert_eq!(SayChannel::Say.intent("да"), ClientIntent::Say("да".into()));
+        assert_eq!(
+            SayChannel::Radio.intent("да"),
+            ClientIntent::Say("; да".into())
+        );
+        assert_eq!(
+            SayChannel::Whisper.intent("да"),
+            ClientIntent::Say("#да".into())
+        );
+        assert_eq!(
+            SayChannel::Me.intent("кивает"),
+            ClientIntent::Say("*me кивает".into())
+        );
+        assert_eq!(SayChannel::Ooc.intent("да"), ClientIntent::Ooc("да".into()));
+        assert_eq!(
+            SayChannel::LoocWallpierce.intent("да"),
+            ClientIntent::Looc {
+                text: "да".into(),
+                wall_pierce: true
+            }
+        );
+        // The button walks every channel but pray and comes back.
+        let mut c = SayChannel::Say;
+        for _ in 0..7 {
+            c = c.next();
+            assert_ne!(c, SayChannel::Pray);
+        }
+        assert_eq!(c, SayChannel::Say);
+        assert_eq!(SayChannel::Pray.next(), SayChannel::Radio);
+    }
 
     #[test]
     fn follows_bottom_until_scrolled_up_then_holds_and_counts() {

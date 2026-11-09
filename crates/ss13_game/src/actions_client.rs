@@ -60,6 +60,7 @@ pub struct ActionHud {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInfo)]
 struct ActionRoot;
 
 /// A button and its index in [`ActionHud::data`].

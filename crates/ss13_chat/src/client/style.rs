@@ -64,6 +64,10 @@ pub fn span_style(span: Span) -> SpanStyle {
         // shortcut: no `text-shadow` glow.
         Span::Mansus => (Color::srgb_u8(0x0d, 0x9b, 0x00), false, false),
         // shortcut: the `hypnocolor` animation is drawn in its 50% purple.
+        // BandaStation `.looc { color: #6699cc }`, bold with `.ooc`.
+        Span::Looc => (Color::srgb_u8(0x66, 0x99, 0xcc), true, false),
+        // `.adminooc`.
+        Span::AdminOoc => (Color::hsl(226.6, 0.528, 0.502), true, false),
         Span::Hypnophrase => (Color::hsl(272.0, 0.863, 0.6), true, false),
         // Drawn as an icon (`super::panel`); its `:name:` text measures the line.
         Span::Emoji(_) => (CHAT_TEXT, false, false),

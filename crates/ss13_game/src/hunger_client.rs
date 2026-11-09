@@ -55,6 +55,7 @@ pub struct HungerHud {
 }
 
 #[derive(Component)]
+#[require(crate::client_keys::HudInfo)]
 struct HungerRoot;
 
 /// The 32x32 slot all parts sit in.

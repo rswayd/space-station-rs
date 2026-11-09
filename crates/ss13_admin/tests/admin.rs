@@ -524,6 +524,120 @@ fn unauthenticated_tokens_get_no_admin_session() {
     );
 }
 
+/// OOC is global, stops with the admin switch (not for admins), never reaches an ignorer; LOOC
+/// is heard in range only; a mute silences both.
+#[test]
+fn ooc_is_global_and_looc_is_local() {
+    use ss13_admin::ooc::{OocIgnored, OocPolicy};
+    use ss13_shared::protocol::ClientIntent;
+    let mut s = Session::start("ooc_looc");
+    s.st.send(PLAYER, ClientIntent::Ooc("всем привет".into()));
+    s.run_until("OOC reaches the admin", |s| {
+        s.chat_has(ADMIN, "OOC: bob: всем привет")
+    });
+    assert!(s.chat_has(PLAYER, "OOC: bob: всем привет"));
+
+    // Too long: cut to `MAX_MESSAGE_LEN`, never rejected wholesale by a client limit alone.
+    let spam = "я".repeat(5000);
+    s.st.send(PLAYER, ClientIntent::Ooc(spam));
+    s.run_until("the long OOC is cut", |s| {
+        s.seen(ADMIN)
+            .chat
+            .iter()
+            .any(|l| l.starts_with("OOC: bob: я") && l.chars().count() <= 1024 + 12)
+    });
+
+    // Nine tiles apart with walls around: LOOC is not heard.
+    s.st.send(
+        PLAYER,
+        ClientIntent::Looc {
+            text: "далеко".into(),
+            wall_pierce: false,
+        },
+    );
+    s.run_until("the sender reads its LOOC", |s| {
+        s.chat_has(PLAYER, "LOOC: ") && s.chat_has(PLAYER, "далеко")
+    });
+    assert!(
+        s.seen(ADMIN)
+            .chat
+            .iter()
+            .any(|l| l.starts_with("(R)LOOC") && l.contains("далеко")),
+        "out of range the admin sees it remotely"
+    );
+    let bob = s.mob("bob");
+    let near = s.pos("The Admin");
+    s.server.world_mut().entity_mut(bob).insert(near);
+    s.tick();
+    s.st.send(
+        PLAYER,
+        ClientIntent::Looc {
+            text: "рядом".into(),
+            wall_pierce: false,
+        },
+    );
+    s.run_until("the admin hears it near", |s| {
+        s.seen(ADMIN)
+            .chat
+            .iter()
+            .any(|l| l.starts_with("LOOC") && l.contains("рядом"))
+    });
+
+    // The admin notice reaches everyone online.
+    done(s.ask(
+        ADMIN,
+        AdminRequest::SetAdminNotice("Рестарт в полночь".into()),
+    ));
+    s.run_until("the notice", |s| s.chat_has(PLAYER, "Рестарт в полночь"));
+
+    // The switch silences players, not admins.
+    done(s.ask(ADMIN, AdminRequest::ToggleOoc));
+    assert!(!s.server.world().resource::<OocPolicy>().ooc);
+    let before = s.seen(ADMIN).chat.len();
+    s.st.send(PLAYER, ClientIntent::Ooc("теперь нельзя".into()));
+    s.run_until("the refusal", |s| {
+        s.chat_has(PLAYER, "OOC глобально заглушён")
+    });
+    assert!(
+        !s.seen(ADMIN).chat[before..]
+            .iter()
+            .any(|l| l.contains("теперь нельзя"))
+    );
+    s.st.send(ADMIN, ClientIntent::Ooc("админу можно".into()));
+    s.run_until("the admin speaks anyway", |s| {
+        s.chat_has(PLAYER, "OOC: theadmin: админу можно")
+    });
+    done(s.ask(ADMIN, AdminRequest::ToggleOoc));
+
+    // An ignorer never gets it; a muted player cannot send.
+    let admin_client = s.server_client("The Admin");
+    s.server
+        .world_mut()
+        .entity_mut(admin_client)
+        .insert(OocIgnored(std::iter::once("bob".to_owned()).collect()));
+    let before = s.seen(ADMIN).chat.len();
+    s.st.send(PLAYER, ClientIntent::Ooc("не для админа".into()));
+    s.run_until("bob reads it himself", |s| {
+        s.chat_has(PLAYER, "не для админа")
+    });
+    assert!(
+        !s.seen(ADMIN).chat[before..]
+            .iter()
+            .any(|l| l.contains("не для админа"))
+    );
+    done(s.ask(
+        ADMIN,
+        AdminRequest::Mute {
+            ckey: "bob".into(),
+            mute: true,
+        },
+    ));
+    s.st.send(PLAYER, ClientIntent::Ooc("из мута".into()));
+    s.run_until("the mute refusal", |s| {
+        s.chat_has(PLAYER, "Вы не можете использовать OOC")
+    });
+}
+
 /// A mute stays with the ckey across a reconnect; banning an offline admin of a higher rank is
 /// refused like banning an online one.
 #[test]

@@ -239,6 +239,8 @@ pub mod click;
 pub mod click_handlers;
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "client")]
+pub mod client_keys;
 #[cfg(feature = "server")]
 pub mod closets;
 pub mod clothing;
@@ -512,6 +514,10 @@ pub mod pull;
 #[cfg(feature = "server")]
 pub mod quirks;
 #[cfg(feature = "server")]
+pub mod radial;
+#[cfg(feature = "client")]
+pub mod radial_client;
+#[cfg(feature = "server")]
 pub mod radiation;
 #[cfg(feature = "server")]
 pub mod radio;
@@ -533,6 +539,10 @@ pub mod restraints;
 pub mod round;
 #[cfg(feature = "server")]
 pub mod round_news;
+#[cfg(feature = "server")]
+pub mod runechat;
+#[cfg(feature = "client")]
+pub mod runechat_client;
 #[cfg(feature = "client")]
 pub mod safe_client;
 pub mod safe_ui;

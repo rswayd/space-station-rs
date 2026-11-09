@@ -297,6 +297,10 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
         .add_plugins(crate::statpanel::StatPanelServerPlugin)
         .add_plugins((
+            crate::runechat::RunechatServerPlugin,
+            crate::radial::RadialServerPlugin,
+        ))
+        .add_plugins((
             crate::ssd::SsdPlugin,
             crate::dreams::DreamsPlugin,
             crate::emojis::EmojisPlugin,

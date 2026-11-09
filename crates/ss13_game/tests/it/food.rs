@@ -255,6 +255,25 @@ impl Station {
         self.click_with(p, entity, ClickModifiers::default());
     }
 
+    /// Picks "cook" in the microwave's radial menu.
+    fn cook_from_radial(&mut self, p: usize) {
+        use ss13_tgui::UiInterface;
+        use ss13_tgui::interfaces::radial::RadialUi;
+        use ss13_tgui::server::UiWindow;
+        let link = self.players[p].link;
+        let mut window = None;
+        self.run_until("the radial opens", |s| {
+            let world = s.server.world_mut();
+            let mut q = world.query::<&UiWindow>();
+            window = q
+                .iter(world)
+                .find(|w| w.client == link && w.interface == RadialUi::NAME)
+                .map(|w| w.id);
+            window.is_some()
+        });
+        self.act(p, window.expect("open"), "submit", &[("entry", "Готовить")]);
+    }
+
     fn said(&self, p: usize, text: &str) -> bool {
         self.players[p]
             .app
@@ -358,6 +377,7 @@ fn hunger_microwave_eat_and_slice() {
     });
     s.run_until("A reads it", |s| s.said(0, "Вы добавляете egg в "));
     s.click(0, microwave);
+    s.cook_from_radial(0);
     s.run_until("it runs", |s| {
         s.get::<Microwave>(microwave).operating.is_some()
     });
@@ -494,6 +514,7 @@ fn metastation_kitchen_meal() {
     s.run_until("inside", |s| s.server.world().get::<TilePos>(egg).is_none());
     s.run_until("A reads it", |s| s.said(0, "Вы добавляете egg в "));
     s.click(0, microwave);
+    s.cook_from_radial(0);
     s.run_until_for(30.0, "the boiled egg", |s| {
         !s.items_on(mw_pos, "/obj/item/food/boiledegg").is_empty()
     });

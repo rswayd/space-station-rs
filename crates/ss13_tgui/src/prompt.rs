@@ -24,6 +24,7 @@ use crate::interfaces::color_picker::{ColorPickerStatic, ColorPickerUi, sanitize
 use crate::interfaces::key_combo::{KeyComboStatic, KeyComboUi, MAX_COMBO_LEN};
 use crate::interfaces::list_input::{ListInputData, ListInputUi};
 use crate::interfaces::number_input::{NumberInputStatic, NumberInputUi};
+use crate::interfaces::radial::{RadialData, RadialFrame, RadialSlice, RadialUi};
 use crate::interfaces::text_input::{TextInputStatic, TextInputUi};
 use crate::server::{
     AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
@@ -70,6 +71,19 @@ pub enum PromptKind {
     KeyCombo { default: String },
     /// `tgui_color_picker(default, autofocus)`; `default` is `#rrggbb`.
     Color { default: String, autofocus: bool },
+    /// `show_radial_menu`: drawn around `anchor` by the client ([`RadialUi`]).
+    Radial {
+        items: Vec<RadialChoice>,
+        anchor: Option<ss13_shared::protocol::NetId>,
+        frame: RadialFrame,
+    },
+}
+
+/// One choice of a [`PromptKind::Radial`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct RadialChoice {
+    pub name: String,
+    pub icon: Option<ss13_shared::IconStateId>,
 }
 
 /// A valid answer, by the kind asked.
@@ -173,6 +187,10 @@ impl Ask {
         }
         let keys = match &kind {
             PromptKind::List { items, .. } => unique_keys(items),
+            PromptKind::Radial { items, .. } => {
+                let names: Vec<String> = items.iter().map(|i| i.name.clone()).collect();
+                unique_keys(&names)
+            }
             _ => Vec::new(),
         };
         let interface = match kind {
@@ -183,6 +201,7 @@ impl Ask {
             PromptKind::Checkboxes { .. } => CheckboxInputUi::NAME,
             PromptKind::KeyCombo { .. } => KeyComboUi::NAME,
             PromptKind::Color { .. } => ColorPickerUi::NAME,
+            PromptKind::Radial { .. } => RadialUi::NAME,
         };
         let open = OpenUi {
             client: self.client,
@@ -427,6 +446,33 @@ prompt_ui!(ListInputUi, SUBMIT, "entry", |_p| (), |p, now| {
     }
 });
 
+prompt_ui!(
+    RadialUi,
+    SUBMIT,
+    "entry",
+    |_p| (),
+    |p, _now| match &p.kind {
+        PromptKind::Radial {
+            items,
+            anchor,
+            frame,
+        } => RadialData {
+            anchor: *anchor,
+            items: items
+                .iter()
+                .zip(&p.keys)
+                .map(|(item, key)| RadialSlice {
+                    key: key.clone(),
+                    name: item.name.clone(),
+                    icon: item.icon,
+                })
+                .collect(),
+            frame: *frame,
+        },
+        _ => RadialData::default(),
+    }
+);
+
 /// tg `ui_act` validation of an entry against the question; `None` drops the act (tg `CRASH`
 /// or a bare `return`: the window stays open).
 pub fn check_entry(prompt: &Prompt, entry: &str) -> Option<PromptAnswer> {
@@ -450,7 +496,7 @@ pub fn check_entry(prompt: &Prompt, entry: &str) -> Option<PromptAnswer> {
                 .contains(&value)
                 .then_some(PromptAnswer::Number(value))
         }
-        PromptKind::List { .. } => prompt
+        PromptKind::List { .. } | PromptKind::Radial { .. } => prompt
             .keys
             .iter()
             .position(|k| k == entry)
@@ -564,6 +610,7 @@ pub(crate) fn plugin(app: &mut App) {
         .register_ui::<CheckboxInputUi>()
         .register_ui::<KeyComboUi>()
         .register_ui::<ColorPickerUi>()
+        .register_ui::<RadialUi>()
         .configure_sets(Update, PromptSystems::Answer.in_set(UiSystems::Handle))
         .add_systems(
             Update,
@@ -577,6 +624,7 @@ pub(crate) fn plugin(app: &mut App) {
                     answer_acts::<CheckboxInputUi>,
                     answer_acts::<KeyComboUi>,
                     answer_acts::<ColorPickerUi>,
+                    answer_acts::<RadialUi>,
                 )
                     .chain()
                     .in_set(PromptSystems::Answer),
@@ -617,6 +665,35 @@ mod tests {
         let client = app.world_mut().spawn_empty().id();
         let actor = app.world_mut().spawn_empty().id();
         (app, client, actor)
+    }
+
+    #[test]
+    fn radial_entries_are_the_slices_and_nothing_else() {
+        let radial = Ask::new(
+            Entity::PLACEHOLDER,
+            Entity::PLACEHOLDER,
+            "t",
+            "",
+            PromptKind::Radial {
+                items: vec![
+                    RadialChoice {
+                        name: "a".into(),
+                        icon: None,
+                    },
+                    RadialChoice {
+                        name: "a".into(),
+                        icon: None,
+                    },
+                ],
+                anchor: None,
+                frame: RadialFrame::default(),
+            },
+        );
+        let (prompt, open) = radial.into_prompt();
+        assert_eq!(open.interface, RadialUi::NAME);
+        assert_eq!(check_entry(&prompt, "a"), Some(PromptAnswer::Item(0)));
+        assert_eq!(check_entry(&prompt, "a (2)"), Some(PromptAnswer::Item(1)));
+        assert_eq!(check_entry(&prompt, "b"), None);
     }
 
     fn open(app: &mut App, ask: Ask) -> (Entity, u32) {

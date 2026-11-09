@@ -84,6 +84,8 @@ fn start_animations(
             }
             // Drawn by `crate::balloon_client`.
             Animation::Balloon { .. } => {}
+            // Drawn by `crate::runechat_client`.
+            Animation::Runechat { .. } => {}
         }
     }
     for (entity, anims) in fresh.drain() {

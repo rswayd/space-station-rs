@@ -3,7 +3,8 @@
 //! and `/obj/machinery/reagentgrinder` (`reagentgrinder.dm`, `/obj/item/proc/grind`).
 //!
 //! - Microwave: an item of normal size or smaller goes in on a click out of combat mode (10 at
-//!   most). A click with an empty hand cooks (tg's radial "cook"), a right click ejects ("eject").
+//!   most). A click with an empty hand opens the radial (`crate::radial`: eject, cook, charge),
+//!   a right click ejects at once.
 //!   Cooking runs 10 cycles of 1 s, each using `active_power_usage`; then every food turns into
 //!   its `microwavable` result (a real recipe such as an egg into a boiled egg, anything else
 //!   into a burned mess) with the food's reagents, and everything is ejected. Each cooked item
@@ -16,8 +17,8 @@
 //!   beaker, anything with reagents goes in (up to `6 * matter bin tier` total weight); an
 //!   empty-hand click grinds for `6 s / servo tier` (every ingredient's reagents into the beaker, then it is gone), a right click
 //!   takes the beaker out, or ejects the contents without a beaker.
-// shortcut: the radial menus are fixed clicks (microwave: cook / right click eject; grinder:
-// grind / right click beaker or eject); no juicing or mixing, no `grind_results()` procs, no
+// shortcut: the grinder's radial is fixed clicks (grind / right click beaker or eject), the
+// microwave's right click eject is the old fixed click; no juicing or mixing, no `grind_results()` procs, no
 // wires, anchoring, cleaning
 // a filthy microwave, repairing a broken one, PDA charging, cells, shocks of mobs inside, the
 // processor's mob gibbing, sounds or the ingredients drawn inside the microwave.
@@ -34,6 +35,9 @@ use crate::inventory::{CarriedBy, Inventory};
 use crate::power::Unpowered;
 use crate::storage::{Stored, put_inside, take_out};
 use crate::tools::tell;
+use bevy::ecs::message::{MessageCursor, Messages};
+use ss13_tgui::prompt::{PromptAnswer, PromptAnswered, PromptSystems, RadialChoice};
+use ss13_tgui::server::UiSystems;
 
 pub const MICROWAVE_ROOT: &str = "/obj/machinery/microwave";
 pub const PROCESSOR_ROOT: &str = ss13_mapload::food::PROCESSOR;
@@ -155,7 +159,15 @@ impl Plugin for KitchenServerPlugin {
                 .is_some_and(|h| crate::kitchen::item_interaction(w, c.client, c.mob, h, c.target))
         });
         app.add_systems(ss13_world::MapInit, setup_machines)
-            .add_systems(Update, kitchen_tick.run_if(any_running));
+            .add_systems(
+                Update,
+                (
+                    kitchen_tick.run_if(any_running),
+                    microwave_answers
+                        .in_set(UiSystems::Handle)
+                        .after(PromptSystems::Answer),
+                ),
+            );
     }
 }
 
@@ -312,7 +324,7 @@ pub fn interact(
     right: bool,
 ) -> bool {
     if world.get::<Microwave>(target).is_some() {
-        microwave_interact(world, client, target, right);
+        microwave_interact(world, client, mob, target, right);
         return true;
     }
     if world.get::<Processor>(target).is_some() {
@@ -552,9 +564,23 @@ fn microwave_insert(
     true
 }
 
-fn microwave_interact(world: &mut World, client: Entity, e: Entity, right: bool) {
+/// On a radial prompt: the microwave it is for.
+#[derive(Component, Clone, Copy, Debug)]
+struct MicrowaveAsk {
+    microwave: Entity,
+}
+
+/// `radial_options`: name on the slice, `icons/hud/radial.dmi` state.
+const MICROWAVE_CHOICES: [(&str, &str); 3] = [
+    ("Достать", "radial_eject"),
+    ("Готовить", "radial_cook"),
+    ("Зарядить", "radial_charge"),
+];
+
+/// tg `ui_interact`.
+fn microwave_interact(world: &mut World, client: Entity, mob: Entity, e: Entity, right: bool) {
     let mw = world.get::<Microwave>(e).cloned().expect("checked");
-    if mw.operating.is_some() {
+    if mw.operating.is_some() || crate::machine_frame::panel_open(world, e) {
         return;
     }
     if contents(world, e).is_empty() {
@@ -565,8 +591,67 @@ fn microwave_interact(world: &mut World, client: Entity, e: Entity, right: bool)
         eject(world, e, None);
         return;
     }
-    // `start_cycle`: the mode wire cut swaps to `charge()`, which needs the vampire upgrade
-    // (not ported).
+    let choices = MICROWAVE_CHOICES
+        .iter()
+        .map(|(name, state)| RadialChoice {
+            name: (*name).to_owned(),
+            icon: crate::radial::radial_icon(world, state),
+        })
+        .collect();
+    let title = crate::security::name_of(world, e);
+    if let Some(prompt) = crate::radial::show(
+        world,
+        crate::radial::RadialMenu {
+            client,
+            actor: mob,
+            anchor: e,
+            title,
+            choices,
+            require_near: true,
+        },
+    ) {
+        world
+            .entity_mut(prompt)
+            .insert(MicrowaveAsk { microwave: e });
+    }
+}
+
+/// tg `ui_interact` after `show_radial_menu`: everything is checked again at the moment of
+/// effect, the radial only proved the choice is one of the slices.
+fn microwave_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {
+    let answers: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, mob, answer) in answers {
+        let Some(ask) = world.get::<MicrowaveAsk>(prompt).copied() else {
+            continue;
+        };
+        let Some(PromptAnswer::Item(i)) = answer else {
+            continue;
+        };
+        let e = ask.microwave;
+        let Some(mw) = world.get::<Microwave>(e).cloned() else {
+            continue;
+        };
+        if mw.operating.is_some()
+            || crate::machine_frame::panel_open(world, e)
+            || !crate::radial::can_still_use(world, mob, e)
+        {
+            continue;
+        }
+        match i {
+            0 => eject(world, e, None),
+            1 => start_cycle(world, client, e),
+            // `charge()` without `vampire_charging_capable` (the upgrade is not ported).
+            2 => tell(world, client, Span::Warning, "нужны улучшения!"),
+            _ => {}
+        }
+    }
+}
+
+/// tg `start_cycle`: the mode wire cut swaps to `charge()`, which needs the vampire upgrade.
+fn start_cycle(world: &mut World, client: Entity, e: Entity) {
     let swapped = world
         .get::<crate::wires::Wires>(e)
         .is_some_and(|w| w.is_cut(crate::device_wires::WIRE_MODE_SELECT));
