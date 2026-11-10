@@ -328,6 +328,13 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `fugitive_capture/mouse_drop_receive` (`NEED_DEXTERITY`).
+    if let (End::World(over), End::World(_)) = (to, from)
+        && !traits.hands_blocked
+        && crate::antag::raiders::fugitive::mouse_drop_receive(world, actor, over, dragged)
+    {
+        return;
+    }
     // `netpod/mouse_drop_receive`.
     if let (End::World(over), End::World(_)) = (to, from)
         && crate::science::bitrunning::avatar::mouse_drop_receive(world, over, dragged)

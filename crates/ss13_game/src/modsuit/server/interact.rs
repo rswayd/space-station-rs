@@ -22,6 +22,8 @@ pub fn item_interaction(
         if let Some(mut s) = world.get_mut::<ModSuit>(control) {
             s.locked = !s.locked;
         }
+        // The DNA lock's `on_emag`.
+        crate::modsuit::ninja::clear_lock(world, control, false);
         let text = if suit.locked {
             "доступ разблокирован"
         } else {
@@ -318,6 +320,10 @@ pub(super) fn suit_emp(world: &mut World, mut cursor: Local<MessageCursor<EmpAct
         let Some(suit) = world.get::<ModSuit>(ev.target).cloned() else {
             continue;
         };
+        // The DNA lock's `on_emp`.
+        if ev.hits_self() {
+            crate::modsuit::ninja::clear_lock(world, ev.target, true);
+        }
         let Some(wearer) = suit.wearer.filter(|_| suit.active) else {
             continue;
         };

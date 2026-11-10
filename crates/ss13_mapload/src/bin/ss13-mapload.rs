@@ -199,6 +199,14 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
             .filter(|p| types.types.contains_key(*p))
             .map(str::to_owned),
     );
+    // The space ninja's and the fugitives' outfits are spawned at runtime.
+    used.extend(
+        antag
+            .raider_types()
+            .into_iter()
+            .filter(|p| types.types.contains_key(*p))
+            .map(str::to_owned),
+    );
     let cargo = ss13_mapload::cargo::resolve(&types);
     // Supply crates, their contents and manifests are spawned at runtime.
     used.extend(

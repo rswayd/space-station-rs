@@ -50,6 +50,8 @@ pub mod objectives;
 #[cfg(feature = "server")]
 pub mod paradox_clone;
 #[cfg(feature = "server")]
+pub mod raiders;
+#[cfg(feature = "server")]
 pub mod revenant;
 pub mod revolution;
 #[cfg(feature = "server")]
@@ -105,7 +107,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             revenant::RevenantPlugin,
             slaughter::SlaughterPlugin,
         ))
-        .add_plugins((zombie::ZombiePlugin, ert::ErtPlugin))
+        .add_plugins((zombie::ZombiePlugin, ert::ErtPlugin, raiders::RaidersPlugin))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
     }
@@ -144,6 +146,10 @@ pub const ROLE_SPACE_DRAGON: &str = "Space Dragon";
 pub const ROLE_BLOB: &str = "Blob";
 /// tg `ROLE_BLOB_INFECTION`: the living crew member who becomes a blob host (`blob`).
 pub const ROLE_BLOB_INFECTION: &str = "Blob Infection";
+/// tg `ROLE_NINJA` (`raiders::ninja`).
+pub const ROLE_NINJA: &str = "Space Ninja";
+/// tg `ROLE_FUGITIVE` (`raiders::fugitive`).
+pub const ROLE_FUGITIVE: &str = "Fugitive";
 
 /// The blood brother's info panel.
 pub struct AntagInfoBrotherUi;

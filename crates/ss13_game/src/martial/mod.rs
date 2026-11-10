@@ -885,9 +885,11 @@ pub(crate) fn deflect_projectile(
         && carp::deflect(world, mob, entity, projectile)
 }
 
-/// tg `TRAIT_NOGUNS` (the sleeping carp): the mob cannot fire guns.
+/// tg `TRAIT_NOGUNS` (the sleeping carp, the ninja's weapon recall module): the mob cannot fire
+/// guns.
 pub fn no_guns(world: &World, mob: Entity) -> bool {
     active_style(world, mob) == Some(Style::SleepingCarp)
+        || world.get::<crate::modsuit::ninja::NoGuns>(mob).is_some()
 }
 
 /// tg `TRAIT_PERFECT_ATTACKER` (the sleeping carp): unarmed strikes never miss.

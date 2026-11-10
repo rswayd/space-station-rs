@@ -1541,7 +1541,7 @@ pub const SECDEF_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 32] = [
+    let tables: [&[&'static str]; 33] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -1557,6 +1557,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         &antag::WIZARD_RUNTIME_TYPES,
         &antag::ABDUCTOR_RUNTIME_TYPES,
         &antag::ZOMBIE_RUNTIME_TYPES,
+        &antag::RAIDER_RUNTIME_TYPES,
         &mobs::MOB_RUNTIME_TYPES,
         &crate::restaurant::RESTAURANT_RUNTIME_TYPES,
         &silicon::CAMERA_RUNTIME_TYPES,

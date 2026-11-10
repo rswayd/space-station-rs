@@ -26,8 +26,9 @@
 // wizard, the paradox clone (`super::paradox_clone`), the nightmare (`super::nightmare`), the
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
 // (`super::revenant`), the slaughter demon (`super::slaughter`), the abductors
-// (`super::abductor`), the blob and blob infection (`super::blob`) and the xenomorphs
-// (`super::xeno`) spawn anyone;
+// (`super::abductor`), the blob and blob infection (`super::blob`), the xenomorphs
+// (`super::xeno`), the space ninja, the fugitives and the light and heavy pirates
+// (`super::raiders`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
 // no account age or job bans, and `EMERGENCY_PAST_POINT_OF_NO_RETURN` ignores the call's
@@ -83,6 +84,9 @@ pub enum Candidates {
     Ghosts,
     /// The latejoiner.
     Latejoiner,
+    /// Nobody: the ruleset runs without candidates (the pirates' threat; tg's "abnormal
+    /// ruleset that selects no players").
+    Nobody,
 }
 
 /// `get_antag_cap`: a number, or `ceil(population / denominator) + offset`.
@@ -142,6 +146,10 @@ pub const ABDUCTORS: &str = "Abductors";
 pub const BLOB: &str = "Blob";
 pub const BLOB_INFECTION: &str = "Blob Infection";
 pub const XENOMORPH: &str = "Xenomorph";
+pub const LIGHT_PIRATES: &str = "Light Pirates";
+pub const HEAVY_PIRATES: &str = "Heavy Pirates";
+pub const FUGITIVES: &str = "Fugitives";
+pub const SPACE_NINJA: &str = "Space Ninja";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -205,7 +213,10 @@ pub const RULESETS: [Ruleset; 30] = {
     use Kind::{Heavy, Latejoin, Light};
     [
         // Light midrounds.
-        other("Light Pirates", Light, flat(3), 15),
+        Ruleset {
+            candidates: Candidates::Nobody,
+            ..other(LIGHT_PIRATES, Light, flat(3), 15)
+        },
         other("Midround Blood Worm", Light, flat(2), 20),
         Ruleset {
             role: Some(super::ROLE_NIGHTMARE),
@@ -226,7 +237,14 @@ pub const RULESETS: [Ruleset; 30] = {
             ..other(PARADOX_CLONE, Light, flat(5), 10)
         },
         other("Voidwalker", Light, flat(5), 30),
-        non_repeatable(other("Fugitives", Light, flat(3), 20)),
+        Ruleset {
+            role: Some(super::ROLE_FUGITIVE),
+            caps: (
+                Cap::Fixed(super::raiders::fugitive::CAPS.0),
+                Cap::Fixed(super::raiders::fugitive::CAPS.1),
+            ),
+            ..non_repeatable(other(FUGITIVES, Light, flat(3), 20))
+        },
         Ruleset {
             role: Some(super::ROLE_MORPH),
             ..other(MORPH, Light, flat(0), 0)
@@ -240,7 +258,10 @@ pub const RULESETS: [Ruleset; 30] = {
         other("Midround Obsessed", Light, [5, 5, 3, 1], 5),
         // Heavy midrounds.
         other("Spiders", Heavy, [0, 0, 1, 2], 30),
-        child(other("Heavy Pirates", Heavy, flat(3), 25), "Light Pirates"),
+        Ruleset {
+            candidates: Candidates::Nobody,
+            ..child(other(HEAVY_PIRATES, Heavy, flat(3), 25), LIGHT_PIRATES)
+        },
         Ruleset {
             role: Some(super::wizard::ROLE_WIZARD_MIDROUND),
             ..high_impact(other(MIDROUND_WIZARD, Heavy, [0, 0, 1, 2], 30))
@@ -275,7 +296,10 @@ pub const RULESETS: [Ruleset; 30] = {
             role: Some(super::ROLE_SPACE_DRAGON),
             ..decrease(other(SPACE_DRAGON, Heavy, [0, 3, 5, 5], 30), 3)
         },
-        non_repeatable(other("Space Ninja", Heavy, [0, 0, 1, 2], 30)),
+        Ruleset {
+            role: Some(super::ROLE_NINJA),
+            ..non_repeatable(other(SPACE_NINJA, Heavy, [0, 0, 1, 2], 30))
+        },
         child(
             decrease(other("Mass Changelings", Heavy, [0, 3, 4, 5], 25), 4),
             "Midround Changeling",
@@ -504,7 +528,7 @@ pub fn player_counts(world: &mut World) -> (u32, u32) {
 }
 
 /// `EMERGENCY_IDLE_OR_RECALLED`.
-fn shuttle_idle_or_recalled(world: &World) -> bool {
+pub(crate) fn shuttle_idle_or_recalled(world: &World) -> bool {
     use crate::shuttle::{EmergencyShuttle, ShuttleMode};
     world
         .get_resource::<EmergencyShuttle>()
@@ -587,6 +611,11 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         BLOB => super::blob::can_spawn(world),
         // A vent to crawl out of.
         XENOMORPH => super::xeno::can_spawn(world),
+        // A carp spawn; a maintenance spawn; a gang left in the pool.
+        SPACE_NINJA => super::raiders::ninja::can_spawn(world),
+        FUGITIVES => super::raiders::fugitive::can_spawn(world),
+        LIGHT_PIRATES => super::raiders::pirate::can_spawn(world, false),
+        HEAVY_PIRATES => super::raiders::pirate::can_spawn(world, true),
         _ => true,
     }
 }
@@ -612,6 +641,17 @@ pub fn try_spawn_midround(world: &mut World, kind: Kind) -> bool {
         info!("dynamic: midround ({kind:?}): no rulesets to pick from");
         return false;
     };
+    if picked.candidates == Candidates::Nobody {
+        if !run_without_candidates(world, picked) {
+            info!(
+                "dynamic: midround ({kind:?}): {} preparation failed",
+                picked.config_tag
+            );
+            return false;
+        }
+        midround_spawned(world, kind);
+        return true;
+    }
     if picked.candidates == Candidates::Ghosts {
         let polling = poll_ruleset(world, picked, alive, AfterPoll::Midround(kind));
         if !polling {
@@ -648,6 +688,13 @@ pub fn force_midround(world: &mut World, tag: &str) -> Result<Vec<Entity>, Strin
     let r = ruleset(tag)
         .filter(|r| r.kind != Kind::Latejoin)
         .ok_or_else(|| format!("Нет мидраунд-рулсета {tag}."))?;
+    if r.candidates == Candidates::Nobody {
+        return if run_without_candidates(world, r) {
+            Ok(Vec::new())
+        } else {
+            Err(format!("{tag}: подготовка не удалась."))
+        };
+    }
     if r.role.is_none() {
         return Err(format!("{tag} здесь не реализован."));
     }
@@ -724,6 +771,20 @@ pub fn on_latejoin(world: &mut World, latejoiner: Entity) {
     state.latejoin_cooldown = t + cd;
 }
 
+/// `execute` of a ruleset that selects nobody (the pirates' `send_pirate_threat`).
+fn run_without_candidates(world: &mut World, r: &'static Ruleset) -> bool {
+    let ran = match r.config_tag {
+        LIGHT_PIRATES => super::raiders::pirate::send_threat(world, false),
+        HEAVY_PIRATES => super::raiders::pirate::send_threat(world, true),
+        _ => false,
+    };
+    if ran {
+        info!("dynamic: {} executed", r.config_tag);
+        world.resource_mut::<Midround>().executed.push(r.config_tag);
+    }
+    ran
+}
+
 /// `get_blacklisted_roles`: the config's, the protected and blacklisted jobs, the AI and cyborg.
 fn blacklisted(world: &World, r: &Ruleset, title: &str) -> bool {
     let protect = world
@@ -775,6 +836,7 @@ fn candidates(world: &mut World, r: &Ruleset, latejoiner: Option<Entity>) -> Vec
         return Vec::new();
     }
     let mut pool: Vec<Entity> = match r.candidates {
+        Candidates::Nobody => Vec::new(),
         Candidates::Latejoiner => latejoiner.into_iter().collect(),
         Candidates::Living => {
             let mut q =
@@ -833,6 +895,8 @@ fn poll_role_name(r: &Ruleset) -> &'static str {
         ABDUCTORS => "Абдуктор",
         BLOB => "Блоб",
         XENOMORPH => "Ксеноморф",
+        SPACE_NINJA => "Космический ниндзя",
+        FUGITIVES => "Беглец",
         tag => tag,
     }
 }
@@ -888,6 +952,14 @@ fn ghost_ruleset_polled(
     signed_up: Vec<Candidate>,
 ) {
     let mut chosen = Vec::new();
+    // The fugitives' `collect_candidates`: few volunteers make one fugitive.
+    let caps = if r.config_tag == FUGITIVES {
+        let roll = with_rng(world, |rng| rng.range(0, 9999) as f32 / 100.0);
+        let (min, max) = super::raiders::fugitive::poll_caps(signed_up.len(), roll);
+        (max, min)
+    } else {
+        caps
+    };
     if !signed_up.is_empty() && can_be_selected(world, r) {
         let pool: Vec<Entity> = signed_up.iter().map(|c| c.mob).collect();
         let pool: Vec<Entity> = pool.into_iter().filter(|&m| wants(world, m, r)).collect();
@@ -1032,6 +1104,24 @@ fn select_and_run(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             if super::abductor::server::spawn_abductors(world, &clients).is_empty() {
+                return Vec::new();
+            }
+        }
+        SPACE_NINJA => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            if super::raiders::ninja::spawn_ninjas(world, &clients).is_empty() {
+                return Vec::new();
+            }
+        }
+        FUGITIVES => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            if super::raiders::fugitive::spawn_fugitives(world, &clients).is_empty() {
                 return Vec::new();
             }
         }

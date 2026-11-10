@@ -230,6 +230,34 @@ pub const ERT_OUTFITS: [&str; 56] = [
     "/datum/outfit/bountysynth/ert",
 ];
 
+/// The space ninja's and the fugitives' outfits (`ss13_game::antag::raiders`; pirates and
+/// hunters wear their spawners' outfits, `crate::mob_spawn`).
+pub const RAIDER_OUTFITS: [&str; 6] = [
+    "/datum/outfit/ninja",
+    "/datum/outfit/prisoner",
+    "/datum/outfit/yalp_cultist",
+    "/datum/outfit/waldo",
+    "/datum/outfit/synthetic",
+    "/datum/outfit/invisible_man",
+];
+
+/// What the raiders make at runtime (`ss13_game::antag::raiders`, `ss13_game::modsuit::ninja`):
+/// the ninja's katana (when the sheath came empty), MOD and spider charge, the star
+/// dispenser's stars, the energy net, the fugitive leader's toolbox and the synth's augments,
+/// the hunters' capture machine.
+pub const RAIDER_RUNTIME_TYPES: [&str; 10] = [
+    "/obj/item/energy_katana",
+    "/obj/item/mod/control/pre_equipped/ninja",
+    "/obj/item/grenade/c4/ninja",
+    "/obj/item/throwing_star/stamina/ninja",
+    "/obj/structure/energy_net",
+    "/obj/item/storage/toolbox/mechanical",
+    "/obj/item/choice_beacon/augments",
+    "/obj/item/autosurgeon",
+    "/obj/machinery/fugitive_capture",
+    "/obj/machinery/fugitive_capture/psyker",
+];
+
 /// Items the nuclear operatives get at runtime: the leader's code paper and war declaration
 /// item (`/datum/antagonist/nukeop/leader`, the clowns' `/clownops`), the uplinks
 /// (`/datum/outfit/syndicate` `uplink_type`: nuclear, lone operative, clown), the operatives'
@@ -651,6 +679,20 @@ pub struct AntagData {
     /// `strings/names/last.txt` (`GLOB.last_names`).
     #[serde(default)]
     pub last_names: Vec<String>,
+    /// [`RAIDER_OUTFITS`] that resolve, in that order.
+    #[serde(default)]
+    pub raider_outfits: Vec<crate::jobs::Outfit>,
+    /// `strings/names/ninjatitle.txt`, `ninjaname.txt` (`GLOB.ninja_titles`, `ninja_names`).
+    #[serde(default)]
+    pub ninja_titles: Vec<String>,
+    #[serde(default)]
+    pub ninja_names: Vec<String>,
+    /// `strings/ninja.json` `lines` (`NINJA_FILE`): the adrenaline boost's battle cries.
+    #[serde(default)]
+    pub ninja_lines: Vec<String>,
+    /// `strings/pirates.json` (`PIRATE_NAMES_FILE`): name pools by key, sorted.
+    #[serde(default)]
+    pub pirate_names: Vec<(String, Vec<String>)>,
 }
 
 /// Reads the traitor flavor and the phonetic alphabet from the BYOND checkout's `strings/`;
@@ -686,6 +728,30 @@ pub fn read_strings(source: &Path, data: &mut AntagData) -> Vec<String> {
     data.phonetic_alphabet = lines("strings/phonetic_alphabet.txt", &mut problems);
     data.operative_aliases = lines("strings/names/operative_alias.txt", &mut problems);
     data.last_names = lines("strings/names/last.txt", &mut problems);
+    data.ninja_titles = lines("strings/names/ninjatitle.txt", &mut problems);
+    data.ninja_names = lines("strings/names/ninjaname.txt", &mut problems);
+    let json = |file: &str, problems: &mut Vec<String>| {
+        let path = source.join(file);
+        match std::fs::read(&path)
+            .map_err(anyhow::Error::from)
+            .and_then(|b| {
+                Ok(serde_json::from_slice::<
+                    std::collections::BTreeMap<String, Vec<String>>,
+                >(&b)?)
+            }) {
+            Ok(map) => map,
+            Err(e) => {
+                problems.push(format!("{}: {e}", path.display()));
+                std::collections::BTreeMap::new()
+            }
+        }
+    };
+    data.ninja_lines = json("strings/ninja.json", &mut problems)
+        .remove("lines")
+        .unwrap_or_default();
+    data.pirate_names = json("strings/pirates.json", &mut problems)
+        .into_iter()
+        .collect();
     problems
 }
 
@@ -712,6 +778,19 @@ impl AntagData {
     /// Item types the emergency response teams' outfits spawn.
     pub fn ert_types(&self) -> BTreeSet<&str> {
         self.ert_outfits
+            .iter()
+            .flat_map(|o| {
+                o.items
+                    .iter()
+                    .map(|(_, p)| p.as_str())
+                    .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+            })
+            .collect()
+    }
+
+    /// Item types the raiders' outfits spawn ([`RAIDER_OUTFITS`]).
+    pub fn raider_types(&self) -> BTreeSet<&str> {
+        self.raider_outfits
             .iter()
             .flat_map(|o| {
                 o.items
@@ -833,6 +912,11 @@ pub fn resolve(types: &DmTypes) -> AntagData {
         .filter(|p| types.types.contains_key(**p))
         .map(|p| crate::jobs::outfit(types, p))
         .collect();
+    let raider_outfits = RAIDER_OUTFITS
+        .iter()
+        .filter(|p| types.types.contains_key(**p))
+        .map(|p| crate::jobs::outfit(types, p))
+        .collect();
     AntagData {
         uplink_categories: categories.into_iter().map(|(_, n)| n).collect(),
         discount_category: text(types.resolved(DISCOUNT_CATEGORY, "name")),
@@ -840,6 +924,7 @@ pub fn resolve(types: &DmTypes) -> AntagData {
         steal_items,
         nukeop_outfits,
         ert_outfits,
+        raider_outfits,
         ..AntagData::default()
     }
 }

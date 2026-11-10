@@ -361,6 +361,8 @@ pub enum Job {
     SpaceDragon(crate::antag::space_dragon::DragonJob),
     /// The Grand Ritual and the Scepter of Vendormancy.
     Wizard(crate::antag::wizard::server::WizardJob),
+    /// The ninja's hacks and drains, the fugitive capture machine ([`crate::antag::raiders`]).
+    Raiders(crate::antag::raiders::RaiderJob),
     /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
     RadiationLeak,
     /// An anomaly releaser on a core ([`crate::events::anomalies`]).
@@ -1490,6 +1492,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),
         &Job::SpaceDragon(job) => crate::antag::space_dragon::complete(world, mob, action, job),
         &Job::Wizard(job) => crate::antag::wizard::server::complete(world, mob, action, job),
+        &Job::Raiders(job) => crate::antag::raiders::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         &Job::FieldGenerator(job) => {
             crate::power::field_generator::complete(world, client, target, job, consume)

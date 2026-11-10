@@ -398,6 +398,10 @@ pub fn toggle_activate(
             refuse(world, control, user, "панель открыта!");
             return false;
         }
+        // `COMSIG_MOD_ACTIVATE`: a DNA lock refuses another body.
+        if !crate::modsuit::ninja::activation_allowed(world, control, user) {
+            return false;
+        }
     }
     if suit.activating || !suit.steps.is_empty() {
         if !force {
