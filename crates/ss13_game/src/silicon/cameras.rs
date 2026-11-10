@@ -844,11 +844,11 @@ fn assign_view_masks(
             None => controlled.and_then(|c| eyes.get(c.0).ok()).and_then(|eye| {
                 match inside.get(eye.ai) {
                     // A carded AI sees around the card without cameras.
-                    Ok(super::ai::AiInside::Card(_) | super::ai::AiInside::Terminal(_))
-                        if !eye.blind =>
-                    {
-                        None
-                    }
+                    Ok(
+                        super::ai::AiInside::Card(_)
+                        | super::ai::AiInside::Terminal(_)
+                        | super::ai::AiInside::Mod(_),
+                    ) if !eye.blind => None,
                     _ if eye.blind => Some(super::ai::AI_BLIND_MASK),
                     _ => Some(CAMERANET_MASK),
                 }

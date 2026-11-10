@@ -296,9 +296,10 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
-    // `/obj/vehicle/sealed/mouse_drop_receive` (`NEED_HANDS`): climbing into a mech.
+    // `/obj/vehicle/sealed/mouse_drop_receive` (`NEED_HANDS`): climbing into a mech; the Vim
+    // drops the flags (`interaction_flags_mouse_drop = NONE`) for its handless pets.
     if let (End::World(over), End::World(_)) = (to, from)
-        && !traits.hands_blocked
+        && (!traits.hands_blocked || crate::mecha::core::is_vim(world, over))
         && crate::mecha::core::mouse_drop_receive(world, actor, over, dragged)
     {
         return;

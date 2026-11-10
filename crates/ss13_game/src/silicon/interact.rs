@@ -106,6 +106,10 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         crate::mecha::bay::open(world, client, user, target);
         return true;
     }
+    if crate::mecha::control::is_console(world, target) {
+        crate::mecha::control::open(world, client, user, target);
+        return true;
+    }
     if e.contains::<crate::power::solar::SolarControl>() {
         crate::power::solar::open(world, client, user, target);
         return true;
@@ -207,7 +211,9 @@ fn silicon_status(
             // tg `can_see`: a carded AI by the distance from its card (its eye is on it).
             let sees = if matches!(
                 inside.get(eye.ai),
-                Ok(super::ai::AiInside::Card(_) | super::ai::AiInside::Terminal(_))
+                Ok(super::ai::AiInside::Card(_)
+                    | super::ai::AiInside::Terminal(_)
+                    | super::ai::AiInside::Mod(_))
             ) {
                 positions
                     .get(actor)

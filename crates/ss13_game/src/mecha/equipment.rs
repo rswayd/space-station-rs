@@ -16,8 +16,8 @@
 //! - Drill: walls fall after `60 / drill_level` deciseconds (reinforced walls need a hardened
 //!   drill), objects with integrity take 15 brute and mobs 10 brute per `drill_delay`, repeated
 //!   while the target stays.
-// shortcut: weapons live in `super::weapons`; no other ranged equipment (the syringe gun, the
-// medical beam), no sleeper, no detaching through the Mecha window, no clamp forcing doors open,
+// shortcut: weapons live in `super::weapons`, the medical equipment in `super::medical`; no
+// detaching through the Mecha window, no clamp forcing doors open,
 // no mining (no mineral turfs here), boulders, butchering or the killer clamp's dismemberment.
 
 use bevy::prelude::*;
@@ -70,6 +70,8 @@ pub enum EquipJob {
     DrillWall { equip: Entity },
     /// One drill turn on an object or a mob.
     DrillTurn { equip: Entity },
+    /// The mounted sleeper takes its patient in (`super::medical`).
+    SleeperLoad { equip: Entity },
 }
 
 pub(super) fn def(world: &World, equip: Entity) -> Option<EquipDef> {
@@ -114,6 +116,7 @@ pub fn attach(world: &mut World, mech: Entity, item: Entity, right: bool) {
 
 /// tg `detach(moveto)`: out of the mech onto `pos`; the cargo compartment drops its contents.
 pub fn detach(world: &mut World, mech: Entity, equip: Entity, pos: TilePos) {
+    super::medical::on_detach(world, equip);
     let cargo_hold = def(world, equip).is_some_and(|d| d.cargo_capacity > 0);
     let Some(mut m) = world.get_mut::<Mech>(mech) else {
         return;
@@ -525,7 +528,12 @@ fn drill_job(job: EquipJob) -> Job {
 
 /// tg `do_after_checks` of mech equipment: still attached to the pilot's mech, facing the
 /// target, next to it.
-fn still_aimed(world: &World, mob: Entity, equip: Entity, target_pos: TilePos) -> Option<Entity> {
+pub(super) fn still_aimed(
+    world: &World,
+    mob: Entity,
+    equip: Entity,
+    target_pos: TilePos,
+) -> Option<Entity> {
     let mech = world.get::<super::core::Pilot>(mob)?.mech;
     if !world.get::<Mech>(mech)?.equipment().any(|e| e == equip) {
         return None;
@@ -545,6 +553,7 @@ fn still_aimed(world: &World, mob: Entity, equip: Entity, target_pos: TilePos) -
 pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: EquipJob) {
     let target = action.target;
     match job {
+        EquipJob::SleeperLoad { equip } => super::medical::complete_load(world, mob, action, equip),
         EquipJob::ClampLoad { equip } => {
             let Some(mech) = still_aimed(world, mob, equip, action.target_pos) else {
                 return;

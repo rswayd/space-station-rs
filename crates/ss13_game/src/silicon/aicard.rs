@@ -15,7 +15,8 @@
 //!   wireless and its radio. The card shows the AI's face and an on/off light.
 // shortcut: the menu is a list prompt instead of the `Intellicard` window (laws are not shown);
 // no intelliTater or intelliLantern looks, no light; a destroyed card
-// kills its AI and ghosts its player (tg deletes it); no transfers into mechs or MODsuits (the AI fixer: `super::ai_fixer`);
+// kills its AI and ghosts its player (tg deletes it); no transfers into mechs (MODsuits:
+// `crate::modsuit::ai`; the AI fixer: `super::ai_fixer`);
 // no `can_be_carded` (doomsday); messages are chat lines (tg balloon alerts).
 
 use bevy::ecs::message::MessageCursor;
@@ -150,7 +151,7 @@ fn exe_number(world: &mut World) -> u32 {
 }
 
 /// tg `set_control_disabled` and `radio_enabled`.
-pub(super) fn set_wireless(world: &mut World, ai: Entity, on: bool) {
+pub(crate) fn set_wireless(world: &mut World, ai: Entity, on: bool) {
     if let Some(mut c) = world.get_mut::<AiCore>(ai)
         && c.control_disabled == on
     {
@@ -165,7 +166,7 @@ pub(super) fn radio_on(world: &World, ai: Entity) -> bool {
         .is_some_and(|r| !r.tx_cut)
 }
 
-pub(super) fn set_radio(world: &mut World, ai: Entity, on: bool) {
+pub(crate) fn set_radio(world: &mut World, ai: Entity, on: bool) {
     let Some(radio) = eye_of(world, ai)
         .and_then(|eye| world.get::<crate::radio::SiliconRadio>(eye))
         .map(|r| r.0)
@@ -178,7 +179,7 @@ pub(super) fn set_radio(world: &mut World, ai: Entity, on: bool) {
 }
 
 /// The eye's senses and view follow its new housing; tracking stops (tg `cancel_camera`).
-pub(super) fn refresh_eye(world: &mut World, ai: Entity, carded: bool) {
+pub(crate) fn refresh_eye(world: &mut World, ai: Entity, carded: bool) {
     let Some(eye) = eye_of(world, ai) else {
         return;
     };
@@ -206,6 +207,20 @@ pub fn interact_with_atom(
     let Some(state) = card(world, held) else {
         return false;
     };
+    // `/obj/item/mod/control/transfer_ai`, `/obj/item/mod/ai_minicard/transfer_ai`.
+    if crate::modsuit::ai::is_target(world, target) {
+        if state.flush {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                "ERROR: AI flush is in progress, cannot execute transfer protocol.",
+            );
+        } else {
+            crate::modsuit::ai::transfer(world, client, user, held, state.ai, target);
+        }
+        return true;
+    }
     let ai_target = world.get::<AiCore>(target).is_some();
     let core_target = super::ai_core::is_core(world, target);
     let apc_target = world.get::<crate::power::Apc>(target).is_some();
@@ -730,7 +745,7 @@ fn card_removed(
 
 /// tg `update_name` ("<initial name> - <AI>") and `update_overlays`: the AI's face (`ai`, dead
 /// `ai_dead`) and the wireless light.
-pub(super) fn refresh_look(world: &mut World, card: Entity) {
+pub(crate) fn refresh_look(world: &mut World, card: Entity) {
     let ai = world.get::<IntelliCard>(card).and_then(|c| c.ai);
     let initial = world.get::<DmItem>(card).and_then(|i| {
         world

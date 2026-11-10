@@ -86,7 +86,11 @@ pub fn init_suit(world: &mut World, control: Entity) {
     let Some(suit_i) = db.suit(&path) else {
         return;
     };
-    let def: SuitDef = db.data.suits[suit_i].clone();
+    let mut def: SuitDef = db.data.suits[suit_i].clone();
+    // `new /obj/item/mod/control(loc, new_theme)` of a finished MOD shell.
+    if let Some(theme) = world.get::<ThemeOverride>(control) {
+        def.theme = theme.0.clone();
+    }
     let Some(theme_i) = db.theme(&def.theme) else {
         warn!("{path}: no MOD theme {}", def.theme);
         return;

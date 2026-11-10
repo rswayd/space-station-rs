@@ -20,11 +20,14 @@
 //!   screwdriver (4 s) build it.
 //! - Honkbot: a robot arm on an empty clown box gives the assembly; a proximity sensor and a bike
 //!   horn build it.
+//! - Vim (`helmet/space/eva/item_interaction`, `bot_assembly/vim`): a robot leg on an EVA helmet
+//!   lying on the floor gives the assembly; the other leg, a flashlight, a screwdriver (4 s)
+//!   and a voice analyzer build the mini-mech (`crate::mecha`), with its default parts.
 //!
 //! The built bot appears where the assembly was and takes the assembly's name. Each step checks
 //! the held item and the assembly's step at the moment of effect; consumed parts are deleted.
-// shortcut: no hygienebot (its assembly is a stack recipe, no crafting menu here), repairbot or
-// Vim assemblies, no renaming assemblies with a pen.
+// shortcut: no hygienebot (its assembly is a stack recipe, no crafting menu here) or repairbot
+// assemblies, no renaming assemblies with a pen.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -43,6 +46,13 @@ pub const SECBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/secbot";
 pub const FIREBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/firebot";
 pub const ED209_ASSEMBLY: &str = "/obj/item/bot_assembly/ed209";
 pub const HONKBOT_ASSEMBLY: &str = "/obj/item/bot_assembly/honkbot";
+pub const VIM_ASSEMBLY: &str = "/obj/item/bot_assembly/vim";
+const EVA_HELMET: &str = "/obj/item/clothing/head/helmet/space/eva";
+const FLASHLIGHT: &str = "/obj/item/flashlight";
+const VOICE_ANALYZER: &str = "/obj/item/assembly/voice";
+const VIM: &str = "/obj/vehicle/sealed/mecha/vim";
+/// The Vim's flashlight step: `use_tool(src, user, 4 SECONDS)`.
+const VIM_SCREW_DS: f32 = 40.0;
 const ROBOT_SUIT: &str = "/obj/item/robot_suit";
 const IRON: &str = "/obj/item/stack/sheet/iron";
 const LEGS: [&str; 2] = [
@@ -107,6 +117,8 @@ fn add_assembly_state(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands:
         "ED-209 Security Robot"
     } else if is_under(&item.path, HONKBOT_ASSEMBLY) {
         "Honkbot"
+    } else if is_under(&item.path, VIM_ASSEMBLY) {
+        "Vim"
     } else {
         return;
     };
@@ -219,6 +231,14 @@ pub fn item_interaction(
         }
         return start(world, ctx, MEDBOT_ASSEMBLY, Some(target_path));
     }
+    // `helmet/space/eva/item_interaction` with a robot leg: only on the floor.
+    if is_under(&target_path, EVA_HELMET) && LEGS.iter().any(|l| is_under(&tool_path, l)) {
+        if world.get::<CarriedBy>(target).is_some() {
+            tell(world, client, Span::Warning, "сначала положите шлем!");
+            return true;
+        }
+        return start(world, ctx, VIM_ASSEMBLY, None);
+    }
     let Some(assembly) = world.get::<BotAssembly>(target).cloned() else {
         return false;
     };
@@ -241,7 +261,77 @@ pub fn item_interaction(
     if is_under(&target_path, HONKBOT_ASSEMBLY) {
         return honkbot_step(world, ctx, &assembly, &tool_path);
     }
+    if is_under(&target_path, VIM_ASSEMBLY) {
+        return vim_step(world, ctx, &assembly, &tool_path);
+    }
     false
+}
+
+/// `/obj/item/bot_assembly/vim/item_interaction`.
+fn vim_step(world: &mut World, ctx: Ctx, a: &BotAssembly, tool: &str) -> bool {
+    match (a.step, tool_kind(world, ctx.tool)) {
+        (1, _) if LEGS.iter().any(|l| is_under(tool, l)) => {
+            add_part(world, ctx, 2);
+            set_icon(world, ctx.target, "vim_1");
+            true
+        }
+        (2, _) if is_under(tool, FLASHLIGHT) => {
+            add_part(world, ctx, 3);
+            set_icon(world, ctx.target, "vim_2");
+            true
+        }
+        (3, Some(ToolKind::Screwdriver)) => {
+            tell(world, ctx.client, Span::Notice, "закрепление фонарика...");
+            crate::tools::do_after(
+                world,
+                crate::tools::Actor {
+                    client: ctx.client,
+                    mob: ctx.mob,
+                    item: Some(ctx.tool),
+                },
+                ctx.target,
+                VIM_SCREW_DS,
+                0,
+                crate::construction::Job::Bot(super::BotUserJob::SecureVimLight),
+            );
+            true
+        }
+        (4, _) if is_under(tool, VOICE_ANALYZER) => {
+            let Some((pos, _)) = place_of(world, ctx) else {
+                return true;
+            };
+            consume(world, ctx.tool);
+            consume(world, ctx.target);
+            // `new /obj/vehicle/sealed/mecha/vim(drop_location())`: not built manually, so it
+            // gets its default parts.
+            if let Some(mech) = crate::construction::spawn_obj(world, VIM, pos) {
+                world.flush();
+                crate::mecha::core::init_mech(world, mech, VIM, false);
+            }
+            tell(world, ctx.client, Span::Notice, "сборка завершена");
+            true
+        }
+        _ => false,
+    }
+}
+
+/// End of the Vim's screwdriver step, rechecked: the assembly still at it, the tool in hand.
+fn complete_vim(world: &mut World, mob: Entity, action: &crate::tools::DoAfter) {
+    let target = action.target;
+    if world.get::<BotAssembly>(target).is_none_or(|a| a.step != 3) {
+        return;
+    }
+    let held = action.item.filter(|&i| {
+        world
+            .get::<Inventory>(mob)
+            .is_some_and(|inv| inv.active_item() == Some(i))
+    });
+    if held.is_none_or(|t| tool_kind(world, t) != Some(ToolKind::Screwdriver)) {
+        return;
+    }
+    set_step(world, target, 4);
+    set_icon(world, target, "vim_3");
+    tell(world, action.client, Span::Notice, "фонарик закреплён");
 }
 
 #[derive(Clone, Copy)]
@@ -768,6 +858,7 @@ pub fn complete_ed209(
             finish(world, ctx, "/mob/living/basic/bot/secbot/ed209", &a);
             tell(world, ctx.client, Span::Notice, "Вы завершаете ED-209.");
         }
+        super::BotUserJob::SecureVimLight => complete_vim(world, mob, action),
         super::BotUserJob::AttachKnife => {}
     }
 }

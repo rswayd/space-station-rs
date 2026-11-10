@@ -2,8 +2,12 @@
 //! activation, the ID lock, core, complexity, wearer), its parts with a deploy toggle each, and
 //! its modules with their costs, select/toggle and pin buttons and their configuration
 //! (numbers as -/+ buttons, lists as one button per option, booleans as one toggle).
-// shortcut: no MODlink, AI/pAI or wire sections, no module custom status panels (health
-// readout, radiation counter), no per-theme window style; the layout is one column.
+// The MODlink row (id, frequency, call/hang up) and the AI assistant row are part of the
+// parameters. `MODpaint` (the paint kit's color matrix: -/+ per value, presets, confirm) is
+// here too.
+// shortcut: no pAI or wire sections, no module custom status panels (health readout,
+// radiation counter), no per-theme window style; the layout is one column; the paint window has
+// -/+ buttons (5%) instead of sliders and no preview.
 
 use bevy::scene::EntityScene;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi};
@@ -16,7 +20,8 @@ pub struct ModSuitClientPlugin;
 
 impl Plugin for ModSuitClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<ModSuitUi>();
+        app.register_ui_view::<ModSuitUi>()
+            .register_ui_view::<ModPaintUi>();
     }
 }
 
@@ -77,6 +82,38 @@ fn lock_row(locked: bool) -> Box<dyn SceneList> {
             @Button { @icon: icon, @content: text }
             Button { selected: locked }
             Act(LOCK)
+        ]
+    }))
+}
+
+/// `MODsuit.tsx` `ModLink`: the id and frequency, and the call button.
+fn link_row(status: &SuitStatus) -> Box<dyn SceneList> {
+    let freq = status
+        .link_freq
+        .clone()
+        .unwrap_or_else(|| "не задана".to_owned());
+    let text = match &status.link_call {
+        Some(other) => format!("ID {}, частота {freq}, вызов: {other}", status.link_id),
+        None => format!("ID {}, частота {freq}", status.link_id),
+    };
+    let calling = status.link_call.is_some();
+    let (icon, label) = if calling {
+        ("phone-slash", "Завершить")
+    } else {
+        ("phone", "Вызвать")
+    };
+    let no_freq = status.link_freq.is_none();
+    Box::new(EntityScene(bsn! {
+        @LabeledListItem { @label: "MODlink" }
+        Children [
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center }
+            Children [
+                Text(text)
+                --
+                @Button { @icon: icon, @content: label, @compact: true }
+                Button { selected: calling, disabled: no_freq }
+                Act(CALL)
+            ]
         ]
     }))
 }
@@ -251,7 +288,7 @@ impl ClientUi for ModSuitUi {
         } else {
             "Закрыта"
         };
-        let rows: Vec<Box<dyn SceneList>> = vec![
+        let mut rows: Vec<Box<dyn SceneList>> = vec![
             power_row(status),
             text_row("Статус", state.to_owned()),
             lock_row(status.locked),
@@ -273,6 +310,13 @@ impl ClientUi for ModSuitUi {
                 },
             ),
         ];
+        let ai = match (&status.ai_name, status.is_ai) {
+            (Some(name), true) => format!("{name} (вы)"),
+            (Some(name), false) => name.clone(),
+            (None, _) => "Нет".to_owned(),
+        };
+        rows.push(text_row("ИИ", ai));
+        rows.push(link_row(status));
         let parts: Vec<Box<dyn SceneList>> = data.parts.iter().map(part_row).collect();
         let modules: Vec<Box<dyn SceneList>> = if data.module_info.is_empty() {
             vec![Box::new(EntityScene(bsn! {
@@ -300,6 +344,114 @@ impl ClientUi for ModSuitUi {
                 --
                 @Section { @title: "Модули", @scrollable: true }
                 Children [ {modules} ]
+            ]
+        }
+    }
+}
+
+/// The paint kit's matrix: `row` (red, green, blue in) × `col` (red, green, blue out).
+fn paint_value(data: &ModPaintData, row: usize, col: usize) -> f32 {
+    data.current_color
+        .get(row * 4 + col)
+        .copied()
+        .unwrap_or(0.0)
+}
+
+fn matrix_params(matrix: &[f32]) -> ActParams {
+    let text: Vec<String> = matrix.iter().map(|v| format!("{v}")).collect();
+    params(&[(COLOR, text.join(","))])
+}
+
+const CHANNELS: [&str; 3] = ["Красный", "Зелёный", "Синий"];
+
+fn paint_row(data: &ModPaintData, row: usize, col: usize) -> Box<dyn SceneList> {
+    let value = paint_value(data, row, col);
+    let step = |delta: f32| {
+        let mut m = if data.current_color.len() == 20 {
+            data.current_color.clone()
+        } else {
+            COLOR_MATRIX_IDENTITY.to_vec()
+        };
+        m[row * 4 + col] = ((value + delta) * 100.0).round().clamp(0.0, 125.0) / 100.0;
+        matrix_params(&m)
+    };
+    let (minus, plus) = (step(-0.05), step(0.05));
+    let label = format!("{}:", CHANNELS[col]);
+    let text = format!("{}%", (value * 100.0).round());
+    Box::new(EntityScene(bsn! {
+        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center }
+        Children [
+            Text(label)
+            TextColor({UiColor::Label.base()})
+            --
+            @Button { @content: "-", @compact: true }
+            Act(TRANSITION_COLOR)
+            minus
+            --
+            Text(text)
+            --
+            @Button { @content: "+", @compact: true }
+            Act(TRANSITION_COLOR)
+            plus
+        ]
+    }))
+}
+
+impl ClientUi for ModPaintUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 365.0;
+
+    fn content(_: &(), data: &ModPaintData) -> impl Scene {
+        let sections: Vec<Box<dyn SceneList>> = (0..3)
+            .map(|row| {
+                let title = format!("{} превращается в:", CHANNELS[row]);
+                let rows: Vec<Box<dyn SceneList>> =
+                    (0..3).map(|col| paint_row(data, row, col)).collect();
+                let section: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+                    @Section { @title: title }
+                    Children [ {rows} ]
+                }));
+                section
+            })
+            .collect();
+        let presets: Vec<Box<dyn SceneList>> = PAINT_PRESETS
+            .iter()
+            .map(|(name, matrix)| {
+                let p = matrix_params(matrix);
+                let label = (*name).to_owned();
+                let button: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+                    @Button { @content: label, @compact: true }
+                    Act(TRANSITION_COLOR)
+                    p
+                }));
+                button
+            })
+            .collect();
+        bsn! {
+            @WindowContent
+            Children [
+                Node { flex_direction: FlexDirection::Row }
+                Children [
+                    Node { flex_direction: FlexDirection::Column, width: percent(55) }
+                    Children [ {sections} ]
+                    --
+                    Node { flex_direction: FlexDirection::Column, width: percent(45) }
+                    Children [
+                        @Section { @title: "Пресеты" }
+                        Children [
+                            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap }
+                            Children [ {presets} ]
+                        ]
+                        --
+                        @Section { @title: "Матрица цвета" }
+                        Children [
+                            Text("Это матрица цвета: изображение правится тремя слоями — красным, зелёным и синим, а не итоговым RGB.")
+                            --
+                            @Button { @icon: "check", @content: "Подтвердить" }
+                            Act(CONFIRM)
+                        ]
+                    ]
+                ]
             ]
         }
     }

@@ -243,7 +243,8 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
                 Some(
                     &super::ai::AiInside::Apc(e)
                     | &super::ai::AiInside::Card(e)
-                    | &super::ai::AiInside::Terminal(e),
+                    | &super::ai::AiInside::Terminal(e)
+                    | &super::ai::AiInside::Mod(e),
                 ) => crate::explosions::turf_of(world, e),
                 None => world.get::<TilePos>(core).copied(),
             };

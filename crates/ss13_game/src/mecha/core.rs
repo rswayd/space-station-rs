@@ -29,13 +29,15 @@
 //!   equipment and the cell, and the mech is gone. Wreckages give salvage to a welder (30% fail,
 //!   `salvage_num` times) and a crowbar (the equipment and cell).
 //! - The pilot's screen alerts: charge (`ALERT_CHARGE`) and integrity (`ALERT_MECH_DAMAGE`).
+//! - The Vim (`/obj/vehicle/sealed/mecha/vim`) takes only mobs up to `MOB_SIZE_SMALL` and no
+//!   silicons, at once (no delay or locks).
 //!
 //! Cost: one relay per pilot step, one alert pass per occupied mech per tick.
-// shortcut: no Mecha tgui window (stats, equipment selection, the drill toggle, cargo eject,
-// lights, cabin seal, internals, DNA lock), no action buttons; the drill acts on clicks while
-// attached. No internal damage, overclock, thrusters, MMI/AI pilots, mech bay recharging,
-// tracking beacons, mouse pointer, sounds, speech bubbles, open-canopy hits on the pilot,
-// thrown-item hits, wall punches or `TRAIT_HANDS_BLOCKED` for the HUD slots of a pilot.
+// shortcut: the Mecha window and the pilot's buttons (`super::panel`) have no equipment
+// selection, drill toggle, cargo eject, cabin seal, internals or DNA lock; the drill acts on
+// clicks while attached. No internal damage, overclock, thrusters, MMI/AI pilots, mouse
+// pointer, sounds, speech bubbles, open-canopy hits on the pilot, thrown-item hits, wall punches
+// or `TRAIT_HANDS_BLOCKED` for the HUD slots of a pilot.
 
 use std::collections::HashMap;
 
@@ -61,11 +63,19 @@ use crate::power::model::Cell;
 use crate::storage::{put_inside, take_out};
 use crate::tools::{Actor, DoAfter, do_after, tell};
 
-/// `ID_LOCK_ON`, `CAN_STRAFE`, `IS_ENCLOSED`, `OMNIDIRECTIONAL_ATTACKS` (`__DEFINES/mecha.dm`).
+/// `ID_LOCK_ON`, `CAN_STRAFE`, `LIGHTS_ON`, `IS_ENCLOSED`, `HAS_LIGHTS`,
+/// `OMNIDIRECTIONAL_ATTACKS`, `BEACON_TRACKABLE`, `BEACON_CONTROLLABLE` (`__DEFINES/mecha.dm`).
 pub const ID_LOCK_ON: u32 = 1 << 1;
 pub const CAN_STRAFE: u32 = 1 << 2;
+pub const LIGHTS_ON: u32 = 1 << 3;
 pub const IS_ENCLOSED: u32 = 1 << 5;
+pub const HAS_LIGHTS: u32 = 1 << 6;
 pub const OMNIDIRECTIONAL_ATTACKS: u32 = 1 << 12;
+pub const BEACON_TRACKABLE: u32 = 1 << 14;
+pub const BEACON_CONTROLLABLE: u32 = 1 << 15;
+/// The Vim (`/obj/vehicle/sealed/mecha/vim`) and its `maximum_mob_size` (`MOB_SIZE_SMALL`).
+pub const VIM: &str = "/obj/vehicle/sealed/mecha/vim";
+const VIM_MAX_MOB_SIZE: u8 = 1;
 /// BandaStation `TG_SPEED` and the config's `RUN_DELAY` (`modified_move_delay`), deciseconds.
 const TG_SPEED: f32 = 1.5;
 const RP_SPEED: f32 = crate::RUN_DELAY_SECS * 10.0;
@@ -191,6 +201,12 @@ pub struct Mech {
     pub is_currently_ejecting: bool,
     /// The facing to keep after a strafing step.
     strafe_facing: Option<Dir>,
+    /// Tracking beacons attached (`trackers`), inside the mech.
+    pub trackers: Vec<Entity>,
+    /// `TRAIT_MECHA_DIAGNOSTIC_CREATED`.
+    pub diagnostic_created: bool,
+    /// The Vim's `sound_cooldown`.
+    pub next_noise: f64,
 }
 
 impl Mech {
@@ -220,6 +236,9 @@ impl Mech {
             strafe: false,
             is_currently_ejecting: false,
             strafe_facing: None,
+            trackers: Vec::new(),
+            diagnostic_created: false,
+            next_noise: 0.0,
         }
     }
 
@@ -626,8 +645,45 @@ pub fn mouse_drop_receive(world: &mut World, actor: Actor, over: Entity, dragged
     true
 }
 
+/// The mech is a Vim.
+pub fn is_vim(world: &World, mech: Entity) -> bool {
+    world
+        .get::<Mech>(mech)
+        .is_some_and(|m| world.resource::<MechaDb>().data.mechs[m.def].path == VIM)
+}
+
+/// `/obj/vehicle/sealed/mecha/vim/mob_try_enter`: no silicons, nothing bigger than
+/// `MOB_SIZE_SMALL`; in at once, without the delay, ID lock or DNA lock.
+// Not tg: the occupancy, the destroyed mech and an already piloting mob still refuse (tg's
+// override skips `enter_checks`, so a second pet could climb in).
+fn vim_try_enter(world: &mut World, actor: Actor, mech: Entity) {
+    let silicon = world
+        .get::<crate::silicon::cyborg::Cyborg>(actor.mob)
+        .is_some()
+        || world.get::<crate::silicon::ai::AiCore>(actor.mob).is_some();
+    if silicon || crate::mobs::pets::mob_size(world, actor.mob) > VIM_MAX_MOB_SIZE {
+        tell(world, actor.client, Span::Warning, "не помещается внутрь!");
+        return;
+    }
+    let Some(m) = world.get::<Mech>(mech) else {
+        return;
+    };
+    if m.occupant.is_some()
+        || m.integrity <= 0.0
+        || world.get::<Pilot>(actor.mob).is_some()
+        || world.get::<Stat>(actor.mob) != Some(&Stat::Conscious)
+    {
+        return;
+    }
+    moved_inside(world, actor.client, actor.mob, mech);
+}
+
 /// tg `mob_try_enter` (`/obj/vehicle/sealed/mecha` then `/obj/vehicle/sealed`).
 fn mob_try_enter(world: &mut World, actor: Actor, mech: Entity) {
+    if is_vim(world, mech) {
+        vim_try_enter(world, actor, mech);
+        return;
+    }
     // `ishuman(M)`: no silicons in mechas.
     if world.get::<Inventory>(actor.mob).is_none()
         || world
@@ -759,6 +815,7 @@ fn moved_inside(world: &mut World, client: Entity, mob: Entity, mech: Entity) {
         Span::Notice,
         format!("You climb into the {mech_name}."),
     );
+    super::panel::refresh_buttons(world, mob);
 }
 
 /// tg `mob_exit` of the pilot: back onto the mech's tile with its look.
@@ -796,6 +853,7 @@ fn release_pilot(world: &mut World, pilot: Entity) {
         alerts.clear(AlertCategory::Charge);
         alerts.clear(AlertCategory::MechDamage);
     }
+    super::panel::refresh_buttons(world, pilot);
 }
 
 /// A mech despawned some other way lets its pilot out where it stood.
@@ -1207,6 +1265,38 @@ fn on_mouseclick(world: &mut World, click: MechClick) {
             e == click.target || e == mech || world.get::<Mover>(e).is_some()
         });
     let selected = if modifiers.right { m.r_arm } else { m.l_arm };
+    // The medical equipment (`super::medical`): melee next to the target, ranged beyond.
+    if let Some(equip) = selected
+        && super::medical::is_medical(world, equip)
+    {
+        let range = world.get::<MechEquip>(equip).map_or(0, |e| {
+            world.resource::<MechaDb>().data.equipment[e.def].range
+        });
+        let in_range = if adjacent {
+            range & 1 != 0
+        } else {
+            range & 2 != 0
+        };
+        if in_range {
+            if world
+                .get::<crate::emp::power::MechEquipmentDisabled>(mech)
+                .is_some()
+            {
+                tell_occupant(
+                    world,
+                    mech,
+                    Span::Warning,
+                    "Error -- Equipment control unit is unresponsive.",
+                );
+                return;
+            }
+            super::medical::action(world, click, mech, equip);
+            return;
+        }
+        if !adjacent {
+            return;
+        }
+    }
     // A ranged weapon on a target out of reach (`selected.range & MECHA_RANGED`).
     if let Some(equip) = selected
         && !adjacent

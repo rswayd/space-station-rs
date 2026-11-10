@@ -49,6 +49,9 @@ pub(super) fn refresh_view(world: &mut World, control: Entity) {
         })
         .collect();
     let core_name = suit.core.map(|c| name(world, c));
+    let ai = crate::modsuit::ai::assistant(world, control);
+    let ai_eye = ai.and_then(|a| world.get::<crate::silicon::ai::AiCore>(a).map(|c| c.eye));
+    let (link_id, link_freq, link_call) = crate::modsuit::link::window_fields(world, control);
     let view = ModSuitView {
         statics: ModSuitStatic {
             ui_theme: theme.ui_theme.clone(),
@@ -69,6 +72,11 @@ pub(super) fn refresh_view(world: &mut World, control: Entity) {
                     .is_some_and(|w| w.malfunctioning),
                 locked: suit.locked,
                 complexity: suit.complexity,
+                ai_name: ai.map(|a| name(world, a)),
+                is_ai: false,
+                link_id,
+                link_freq,
+                link_call,
             },
             user_status: UserStatus {
                 user_name: suit.wearer.map(|w| name(world, w)).unwrap_or_default(),
@@ -83,6 +91,7 @@ pub(super) fn refresh_view(world: &mut World, control: Entity) {
             .iter()
             .map(|&(user, m)| (user, m.to_bits()))
             .collect(),
+        ai_eye,
     };
     if let Some(mut old) = world.get_mut::<ModSuitView>(control) {
         old.set_if_neq(view);
@@ -103,8 +112,14 @@ pub(super) fn slot_name(slot: InventorySlot) -> &'static str {
     }
 }
 
-/// tg `default_state` of a carried item: the window stays while its user carries the unit.
-pub(super) fn window_status(mut windows: Query<&mut UiWindow>, carried: Query<&CarriedBy>) {
+/// tg `default_state` of a carried item: the window stays while its user carries the unit;
+/// for its AI assistant, while the AI is in it (`contained_state`).
+pub(super) fn window_status(
+    mut windows: Query<&mut UiWindow>,
+    carried: Query<&CarriedBy>,
+    eyes: Query<&crate::silicon::ai::AiEye>,
+    inside: Query<&crate::silicon::ai::AiInside>,
+) {
     for mut window in &mut windows {
         if window.interface != ModSuitUi::NAME {
             continue;
@@ -112,7 +127,12 @@ pub(super) fn window_status(mut windows: Query<&mut UiWindow>, carried: Query<&C
         let held = carried
             .get(window.source)
             .is_ok_and(|c| c.0 == window.actor);
-        if !held {
+        let assistant = eyes
+            .get(window.actor)
+            .ok()
+            .and_then(|e| inside.get(e.ai).ok())
+            == Some(&crate::silicon::ai::AiInside::Mod(window.source));
+        if !held && !assistant {
             window.cap_status(UiStatus::Close);
         }
     }
@@ -126,11 +146,11 @@ pub fn open_panel(world: &mut World, client: Entity, mob: Entity, control: Entit
 
 /// `ui_act`, checked against the unit now (`locate(params["ref"]) in modules`/`get_parts()`).
 pub(super) fn suit_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<ModSuitUi>>>) {
-    let pending: Vec<(Entity, Entity, ModAct)> = acts
+    let pending: Vec<(Entity, Entity, Entity, ModAct)> = acts
         .read(world.resource::<Messages<UiActed<ModSuitUi>>>())
-        .map(|a| (a.actor, a.source, a.act.clone()))
+        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
         .collect();
-    for (actor, control, act) in pending {
+    for (client, actor, control, act) in pending {
         let Some(suit) = world.get::<ModSuit>(control).cloned() else {
             continue;
         };
@@ -153,6 +173,9 @@ pub(super) fn suit_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed
             }
             ModAct::Activate => {
                 toggle_activate(world, control, Some(actor), false);
+            }
+            ModAct::Call => {
+                crate::modsuit::link::window_call(world, client, actor, control);
             }
             ModAct::Select(bits) => {
                 if let Some(m) = module(bits) {
@@ -326,7 +349,7 @@ pub(super) fn trigger_buttons(
         if actor != source || world.get::<PlayerMob>(actor).map(|p| p.client) != Some(client) {
             continue;
         }
-        if world.get::<Stat>(actor) != Some(&Stat::Conscious) {
+        if world.get::<Stat>(body_of(world, actor)) != Some(&Stat::Conscious) {
             continue;
         }
         let mut fields = id.trim_start_matches(BUTTON).split(':');
@@ -334,7 +357,7 @@ pub(super) fn trigger_buttons(
             .next()
             .and_then(|b| b.parse::<u64>().ok())
             .and_then(Entity::try_from_bits)
-            .filter(|&c| world.get::<CarriedBy>(c).is_some_and(|h| h.0 == actor))
+            .filter(|&c| controls(world, actor, c))
             .filter(|&c| world.get::<ModSuit>(c).is_some())
         else {
             continue;
@@ -491,11 +514,10 @@ pub(super) fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<
         let Some(suit) = world.get::<ModSuit>(control).cloned() else {
             continue;
         };
-        let able = world.get::<Stat>(actor) == Some(&Stat::Conscious)
-            && !crate::status_effects::incapacitation(world, actor).incapacitated;
-        let holds = world
-            .get::<CarriedBy>(control)
-            .is_some_and(|c| c.0 == actor);
+        let body = body_of(world, actor);
+        let able = world.get::<Stat>(body) == Some(&Stat::Conscious)
+            && !crate::status_effects::incapacitation(world, body).incapacitated;
+        let holds = controls(world, actor, control);
         if !able {
             continue;
         }

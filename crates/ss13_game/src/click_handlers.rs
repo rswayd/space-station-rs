@@ -43,6 +43,7 @@
 //! | 1600 | `antag::syndie_items::attack_self` |
 //! | 1700 | `devices::attack_self` (pinpointers, handheld crew monitor) |
 //! | 1710 | `devices::flashlight::toggle_light` |
+//! | 1717 | `modsuit::link::scryer_attack_self` (the MODlink scryer's label) |
 //! | 1720 | `devices::gps::interact` |
 //! | 1730 | `devices::rcd::attack_self` (the design list) |
 //! | 1737 | `devices::rhd::attack_self` (RLD, RTD, RDD, RPLD, RWD, RSF lists) |
@@ -117,6 +118,7 @@
 //! | 77 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 89 | `machine_wires::held_on_target` (a screwdriver on a radio, wire tools on an open MOD or radio in the other hand) |
 //! | 91 | `modsuit::anomalock::item_interaction` (an anomaly core into a locked MOD module, a screwdriver taking it out) |
+//! | 97 | `modsuit` construction, paint and scryer cell (a part, core or tool on a MOD shell, a cell on a scryer, the paint kit or skin applier on a unit in the other hand) |
 //! | 100 | `modsuit::server::hand_interaction` |
 //! | 150 | `silicon::mmi::item_interaction` |
 //! | 200 | `bots::construction::item_interaction` |
@@ -207,8 +209,10 @@
 //! | 2012 | `power::lighting::floodlight_hand` (setting, the tube out with the panel open) |
 //! | 2017 | `misc_items::puzzle::press` (ruin puzzle buttons) |
 //! | 2027 | `misc_items::flatpacks::unload` (the topmost flatpack off a cart) |
+//! | 2037 | `modsuit::link::remove_cell` (right click: the MODlink scryer's cell out) |
 //! | 2100 | `power::apc_ui::interact` (right click by a human: `toggle_lock`) |
 //! | 2200 | `mecha::bay::interact` |
+//! | 2207 | `mecha::control::interact` (the exosuit control console's window) |
 //! | 2300 | `mecha::core::attack_hand` |
 //! | 2400 | `modpc::pda::console_interact` |
 //! | 2403 | `modpc::laptop::attack_hand_secondary` (right click: open or use a laptop where it lies) |
@@ -297,6 +301,7 @@
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
+//! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 300 | `emag::interact_with_atom` (left click) |

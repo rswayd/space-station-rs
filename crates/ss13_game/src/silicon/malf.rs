@@ -310,7 +310,11 @@ pub fn occupy(world: &mut World, client: Entity, actor: Entity, apc: Entity) {
             );
             return;
         }
-        Some(super::ai::AiInside::Card(_) | super::ai::AiInside::Terminal(_)) => return,
+        Some(
+            super::ai::AiInside::Card(_)
+            | super::ai::AiInside::Terminal(_)
+            | super::ai::AiInside::Mod(_),
+        ) => return,
         None => {}
     }
     let station = world

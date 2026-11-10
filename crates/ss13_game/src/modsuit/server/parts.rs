@@ -158,6 +158,10 @@ pub(super) fn chargebar(world: &World, control: Entity) -> (String, String) {
 
 /// Every control unit `mob` carries (hands and slots).
 pub(super) fn carried_suits(world: &World, mob: Entity) -> Vec<Entity> {
+    // The AI assistant's eye: the unit it is in (tg grants it the `ai_action`s).
+    if let Some(control) = crate::modsuit::ai::suit_of_eye(world, mob) {
+        return vec![control];
+    }
     let Some(inventory) = world.get::<Inventory>(mob) else {
         return Vec::new();
     };
@@ -166,6 +170,19 @@ pub(super) fn carried_suits(world: &World, mob: Entity) -> Vec<Entity> {
         .filter_map(|&s| inventory.slot(s))
         .filter(|&e| world.get::<ModSuit>(e).is_some())
         .collect()
+}
+
+/// `mob` carries the unit, or is its AI assistant's eye (tg `ai_action`s, `contained_state`).
+pub(crate) fn controls(world: &World, mob: Entity, control: Entity) -> bool {
+    world.get::<CarriedBy>(control).is_some_and(|c| c.0 == mob)
+        || crate::modsuit::ai::suit_of_eye(world, mob) == Some(control)
+}
+
+/// Whose stat counts for `actor`: an AI eye's AI, else the actor itself.
+pub(crate) fn body_of(world: &World, actor: Entity) -> Entity {
+    world
+        .get::<crate::silicon::ai::AiEye>(actor)
+        .map_or(actor, |e| e.ai)
 }
 
 /// The unit `mob` wears.
