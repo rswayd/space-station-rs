@@ -341,7 +341,8 @@ fn roll_safe_removal(world: &mut World, mount: Entity, fish: Entity, user: Optio
         m.fish = None;
     }
     world.entity_mut(fish).despawn();
-    crate::construction::spawn_obj(world, if w_class >= BULKY { ASH_LARGE } else { ASH }, at);
+    let ash = if w_class >= BULKY { ASH_LARGE } else { ASH };
+    crate::construction::spawn_obj(world, ash, at);
     let mount_name = crate::chem::name_of(world, mount);
     let lines = crate::pull::visible_message(
         world,

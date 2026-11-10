@@ -322,10 +322,11 @@ pub fn apply_act(world: &mut World, actor: Entity, e: Entity, act: SmokeAct) {
             }
         }
         SmokeAct::Setting(amount) => {
-            if amount.fract() == 0.0 && (1.0..=f64::from(m.max_range)).contains(&amount) {
-                if let Some(mut m) = world.get_mut::<SmokeMachine>(e) {
-                    m.setting = amount as u32;
-                }
+            if amount.fract() == 0.0
+                && (1.0..=f64::from(m.max_range)).contains(&amount)
+                && let Some(mut m) = world.get_mut::<SmokeMachine>(e)
+            {
+                m.setting = amount as u32;
             }
         }
         SmokeAct::Power => {

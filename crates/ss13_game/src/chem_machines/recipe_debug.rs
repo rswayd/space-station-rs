@@ -429,7 +429,7 @@ pub(super) fn acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<Re
 
 fn set(world: &mut World, e: Entity, f: impl FnOnce(&mut RecipeDebug)) {
     if let Some(mut d) = world.get_mut::<RecipeDebug>(e) {
-        f(&mut *d);
+        f(&mut d);
     }
 }
 

@@ -60,7 +60,7 @@ const MARKET_NAME: &str = "Black Market";
 pub const LTSRBT_METHOD: &str = "LTSRBT";
 pub const LAUNCH: &str = "Launch";
 pub const TELEPORT: &str = "Teleport";
-pub const SUPPLY_POD: &str = "Supply Pod";
+pub const SUPPLY_POD_METHOD: &str = "Supply Pod";
 /// `/datum/market/blackmarket` `shipping`.
 const SHIPPING: [(&str, i64); 3] = [(LTSRBT_METHOD, 40), (LAUNCH, 0), (TELEPORT, 75)];
 /// `SSmarket.shipping_method_descriptions`.
@@ -78,7 +78,7 @@ const DESCRIPTIONS: [(&str, &str); 4] = [
         "Teleports the item in a random area in the station, you get 60 seconds to get there first though.",
     ),
     (
-        SUPPLY_POD,
+        SUPPLY_POD_METHOD,
         "Ships the item inside a supply pod at your exact location. Showy, speedy and expensive.",
     ),
 ];
@@ -651,7 +651,7 @@ pub fn uplink_act(world: &mut World, client: Entity, actor: Entity, e: Entity, a
     };
     let set = |world: &mut World, f: &dyn Fn(&mut MarketUplink)| {
         if let Some(mut u) = world.get_mut::<MarketUplink>(e) {
-            f(&mut *u);
+            f(&mut u);
         }
     };
     match act {
@@ -851,8 +851,9 @@ fn spawn_custom(world: &mut World, def: &str, path: &str, pos: TilePos) -> Optio
                 "/obj/item/storage/pill_bottle/stimulant",
                 "/obj/item/storage/pill_bottle/maintenance_pill",
             ];
-            let i = roll(world, PILLS.len() as u32);
-            crate::construction::spawn_obj(world, PILLS[i], pos)
+            // The bottles are runtime types (`ss13_mapload::runtime`), checked by hand.
+            let bottle: &str = PILLS[roll(world, PILLS.len() as u32)];
+            crate::construction::spawn_obj(world, bottle, pos)
         }
         "/datum/market_item/clothing/full_spacesuit_set" => {
             let boxed = crate::construction::spawn_obj(world, path, pos)?;
@@ -1554,7 +1555,7 @@ mod tests {
         }
         let entry = market.entry("Tools", "/datum/market_item/a").unwrap();
         assert_eq!(BlackMarket::fee(entry, LTSRBT_METHOD), Some(40));
-        assert_eq!(BlackMarket::fee(entry, SUPPLY_POD), None);
+        assert_eq!(BlackMarket::fee(entry, SUPPLY_POD_METHOD), None);
     }
 
     #[test]

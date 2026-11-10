@@ -887,7 +887,8 @@ mod tests {
     #[test]
     fn the_payoff_is_four_fifths_of_cargo_floored_with_a_minimum() {
         assert_eq!(payoff(0), PAYOFF_MIN);
-        assert_eq!(payoff(30_000), PAYOFF_MIN);
+        assert_eq!(payoff(20_000), PAYOFF_MIN);
+        assert_eq!(payoff(30_000), 24_000);
         assert_eq!(payoff(100_000), 80_000);
         assert_eq!(payoff(101_999), 81_000);
     }

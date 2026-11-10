@@ -233,7 +233,7 @@ pub fn apply_act(world: &mut World, client: Entity, actor: Entity, e: Entity, ac
         .map_or(0.0, |r| r.0.maximum_volume);
     let set = |world: &mut World, f: &dyn Fn(&mut Synthesizer)| {
         if let Some(mut s) = world.get_mut::<Synthesizer>(e) {
-            f(&mut *s);
+            f(&mut s);
         }
     };
     match act {

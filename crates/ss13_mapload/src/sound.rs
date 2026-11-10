@@ -327,7 +327,17 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 323] = [
+    pub const GAME_CODE: [&str; 333] = [
+        "sound/effects/chemistry/catalyst.ogg",
+        "sound/effects/empulse.ogg",
+        "sound/items/handling/toolbox/toolbox_drop.ogg",
+        "sound/items/modsuit/ballin.ogg",
+        "sound/items/modsuit/loader_charge.ogg",
+        "sound/items/modsuit/loader_launch.ogg",
+        "sound/items/weapons/contractor_baton/contractorbatonhit.ogg",
+        "sound/machines/oven/oven_close.ogg",
+        "sound/machines/oven/oven_open.ogg",
+        "sound/music/antag/ninja_greeting.ogg",
         "sound/effects/glug.ogg",
         "sound/items/balloon_pop.ogg",
         "sound/items/ceramic_break.ogg",

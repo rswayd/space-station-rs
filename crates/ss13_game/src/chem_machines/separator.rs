@@ -372,11 +372,11 @@ fn tick(world: &mut World, e: Entity, chem: &Chemistry) {
     if flask.total_volume <= 0.0 {
         let beaker_empty = holder(world, beaker).is_none_or(|h| h.total_volume <= 0.0);
         if beaker_empty {
-            if s.boiling || s.burner_on {
-                if let Some(mut s) = world.get_mut::<Separator>(e) {
-                    s.boiling = false;
-                    s.burner_on = false;
-                }
+            if (s.boiling || s.burner_on)
+                && let Some(mut s) = world.get_mut::<Separator>(e)
+            {
+                s.boiling = false;
+                s.burner_on = false;
             }
             return;
         }
