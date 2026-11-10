@@ -203,6 +203,8 @@ pub enum Job {
     RemoveElectrodes,
     /// A gun in the mouth or to a head (`crate::guns`, tg `handle_suicide`).
     GunSuicide,
+    /// Sawing a gun off (`crate::gun_modes`, tg `try_sawoff`).
+    SawOff,
     /// Taking aim at a mob (`crate::gunpoint`).
     Gunpoint,
     /// A medical stack on a living mob ([`crate::medical`]).
@@ -1405,6 +1407,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Barricade(job) => crate::defenses::barricades::complete(world, action, job),
         Job::RemoveElectrodes => crate::taser::complete_removal(world, mob),
         Job::GunSuicide => crate::guns::complete_suicide(world, mob, action),
+        Job::SawOff => crate::gun_modes::complete_sawoff(world, mob, target),
         Job::Gunpoint => crate::gunpoint::complete_aim(world, mob, action),
         Job::Heal(job) => crate::medical::complete_heal(world, mob, action, *job),
         Job::Cpr { panicking } => crate::medical::complete_cpr(world, mob, action, *panicking),

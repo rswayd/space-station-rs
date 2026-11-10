@@ -300,6 +300,10 @@ fn step(world: &mut World, e: Entity, dt: f32) {
         }
         if p.moved >= p.data.range {
             crate::mining::rocks::kinetic_on_range(world, &mut p, tile);
+            // `/obj/projectile/energy/electrode/on_range`.
+            if p.data.tase_stamina > 0.0 {
+                crate::effects::particles::do_sparks(world, 1, true, tile);
+            }
             world.despawn(e);
             return;
         }
@@ -530,6 +534,7 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
         return;
     }
     impact(world, p, name, target);
+    pulse_hit(world, p, target);
     // A dart's `on_hit`: its reagents or DNA injector (`crate::guns_special`).
     crate::guns_special::dart_hit(world, e, p, target);
     // The kinetic crusher's destabilizer marks or mines (`crate::mining::crusher`).
@@ -540,6 +545,29 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     crate::genetics::effects::beam_hit(world, e, target);
     if let Some(bolt) = bolt {
         crate::spells::effects::bolt_hit(world, &bolt, p, target);
+    }
+}
+
+/// `/obj/projectile/beam/pulse/on_hit`: a hit wall, floor or structure takes an
+/// `EXPLODE_HEAVY` (`SSexplosions.medturf`, `med_mov_atom`).
+fn pulse_hit(world: &mut World, p: &Projectile, target: Entity) {
+    use crate::explosions::{Severity, ex_act};
+    if !is_under(&p.data.path, "/obj/projectile/beam/pulse") || world.get_entity(target).is_err() {
+        return;
+    }
+    if world.get::<Turf>(target).is_some() {
+        if let Some(&pos) = world.get::<TilePos>(target) {
+            ex_act::ex_act_tile(world, pos, Severity::Heavy);
+        }
+        return;
+    }
+    let structure = crate::construction::path_of(world, target)
+        .is_some_and(|path| is_under(&path, "/obj/structure"));
+    if structure {
+        for thing in ex_act::contents_of(world, target) {
+            ex_act::ex_act_movable(world, thing, Severity::Heavy);
+        }
+        ex_act::ex_act_movable(world, target, Severity::Heavy);
     }
 }
 

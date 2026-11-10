@@ -145,7 +145,11 @@ const TYPES: &str = r##"{
         "declared_vars": { "name": "Makarov pistol", "icon_state": "pistol", "bolt_type": 4,
         "can_suppress": 1, "can_unsuppress": 1, "suppressed": 0, "suppressed_volume": 60 } },
     "/obj/item/gun/ballistic/automatic/c20r": { "parent": "/obj/item/gun/ballistic/automatic",
-        "declared_vars": { "name": "C-20r SMG", "icon_state": "pistol" } },
+        "declared_vars": { "name": "C-20r SMG", "icon_state": "pistol", "burst_size": 3,
+        "burst_fire_selection": 1, "actions_types": { "list": [
+            { "path": "/datum/action/item_action/toggle_firemode" } ] } } },
+    "/obj/item/circular_saw": { "parent": "/obj/item", "declared_vars": {
+        "name": "circular saw", "icon_state": "toy", "tool_behaviour": "saw", "toolspeed": 1 } },
     "/obj/item/flashlight": { "parent": "/obj/item", "declared_vars": {
         "name": "flashlight", "icon_state": "flashlight", "light_range": 4, "light_power": 1,
         "light_color": "#FFD8A8", "light_on": 0, "start_on": 0 } },
@@ -162,7 +166,8 @@ const TYPES: &str = r##"{
         "accepted_magazine_type": { "path": "/obj/item/ammo_box/magazine/bouncy" } } },
     "/obj/item/gun/ballistic/shotgun": { "parent": "/obj/item/gun/ballistic", "declared_vars": {
         "name": "shotgun", "icon_state": "shotgun", "semi_auto": 0, "internal_magazine": 1,
-        "casing_ejector": 0, "weapon_weight": 3, "recoil": 1,
+        "casing_ejector": 0, "weapon_weight": 3, "recoil": 1, "can_be_sawn_off": 1,
+        "sawoff_bonus_recoil": 1,
         "accepted_magazine_type": { "path": "/obj/item/ammo_box/magazine/internal/shot" } } },
     "/obj/item/gun/energy": { "parent": "/obj/item/gun", "declared_vars": { "can_charge": 1,
         "cell_type": { "path": "/obj/item/stock_parts/power_store/cell" },
@@ -286,6 +291,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/item/flashlight/seclite",
         "/obj/item/suppressor",
         "/obj/item/knife/combat",
+        "/obj/item/circular_saw",
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -933,9 +939,9 @@ fn a_gun_rack_stands_a_gun_up_until_it_is_taken() {
 
 #[test]
 fn a_seclite_a_suppressor_and_a_bayonet_go_on_guns() {
-    use ss13_game::gun_attachments::LightMount;
+    use ss13_game::gun_attachments::{BayonetMount, LightMount};
     let mut s = Station::start("a_seclite_a_suppressor_and_a_bayonet_go_on_guns");
-    let a = s.players[0].mob;
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
     // A seclite onto the energy gun in the other hand; switched on, it lights A.
     let (light, egun) = s.use_on_other_hand(
         0,
@@ -957,9 +963,117 @@ fn a_seclite_a_suppressor_and_a_bayonet_go_on_guns() {
             .is_some_and(|o| o.light.is_some())
     });
 
-    // FIXME: the suppressor and bayonet half of this test is parked: in this fixture the
-    // pistol's `DmGun.can_suppress` comes out false although TYPES declares it, so the
-    // suppressor is refused silently. Re-enable once the fixture/converter path is checked.
+    // A suppressor onto the pistol: its shots print no shot message.
+    let (suppressor, pistol) = s.use_on_other_hand(
+        0,
+        "/obj/item/suppressor",
+        "/obj/item/gun/ballistic/automatic/pistol",
+    );
+    s.run_until("suppressed", |s| {
+        s.get::<Gun>(pistol).suppressor == Some(suppressor)
+    });
+    assert_eq!(s.get::<Gun>(pistol).suppressed, 1);
+    s.send(0, ClientIntent::SwapHands);
+    s.run_until("pistol in the active hand", |s| {
+        s.get::<Inventory>(a).active_item() == Some(pistol)
+    });
+    let floor = s.turf_at(TilePos::new(7, 5, 1));
+    s.shoot(0, floor);
+    s.run_until_for(3.0, "the bullet lands", |s| s.projectiles() == 0);
+    s.run_for(0.5);
+    assert!(!s.said(0, "Вы стреляете из"), "a suppressed shot is quiet");
+
+    // A combat knife onto the C-20r: a combat-mode right click on B stabs with it.
+    let (knife, smg) = s.use_on_other_hand(
+        0,
+        "/obj/item/knife/combat",
+        "/obj/item/gun/ballistic/automatic/c20r",
+    );
+    s.run_until("bayonet on", |s| {
+        s.get::<BayonetMount>(smg).bayonet == Some(knife)
+    });
+    s.send(0, ClientIntent::SwapHands);
+    s.run_until("smg in the active hand", |s| {
+        s.get::<Inventory>(a).active_item() == Some(smg)
+    });
+    let world = s.0.server.world_mut();
+    world.entity_mut(b).insert(TilePos::new(3, 3, 1));
+    world
+        .entity_mut(a)
+        .insert(ss13_game::combat::CombatMode(true));
+    s.run_until("replicated", |s| s.net_id(0, b).is_some());
+    s.run_until("off cooldown", |s| s.now() >= s.get::<NextMove>(a).0);
+    let right = ClickModifiers {
+        right: true,
+        ..default()
+    };
+    s.0.click_with(0, b, right);
+    s.run_until("stabbed", |s| s.get::<Health>(b).brute > 0.0);
+    assert_eq!(s.projectiles(), 0, "the bayonet, not a shot");
+    assert!(
+        s.get::<Health>(b).brute >= 15.0,
+        "{}",
+        s.get::<Health>(b).brute
+    );
+}
+
+#[test]
+fn the_smg_switches_to_single_shots_and_a_shotgun_is_sawn_off() {
+    use ss13_game::guns::burst_and_delay;
+    let mut s = Station::start("the_smg_switches_to_single_shots_and_a_shotgun_is_sawn_off");
+    let a = s.players[0].mob;
+    // The C-20r fires bursts of 3 until its fire mode button switches it to single shots.
+    let smg = s.give(0, "/obj/item/gun/ballistic/automatic/c20r");
+    s.run_until("a fire mode button", |s| {
+        s.try_get::<ss13_game::actions::ActionButtons>(a)
+            .is_some_and(|b| b.0.iter().any(|(b, _)| b.id.starts_with("firemode:")))
+    });
+    let dm = s.get::<ss13_mapload::DmGun>(smg).clone();
+    assert_eq!(burst_and_delay(&dm, s.get::<Gun>(smg)).0, 3);
+    let client = s.get::<ss13_game::server::PlayerMob>(a).client;
+    ss13_game::gun_modes::burst_select(s.0.server.world_mut(), client, a, smg);
+    assert_eq!(burst_and_delay(&dm, s.get::<Gun>(smg)), (1, 0.0));
+    s.run_until("told", |s| s.said(0, "режим - полуавтомат"));
+    let rounds = |s: &Station| {
+        s.get::<Gun>(smg)
+            .magazine
+            .as_ref()
+            .map_or(0, |m| m.ammo_count(false))
+    };
+    let before = rounds(&s);
+    let floor = s.turf_at(TilePos::new(7, 5, 1));
+    s.shoot(0, floor);
+    s.run_for(1.0);
+    assert_eq!(rounds(&s), before - 1, "one round, not a burst");
+
+    // A saw on the loaded shotgun: the chambered shell goes off into A first.
+    let (_saw, shotgun) = s.use_on_other_hand(
+        0,
+        "/obj/item/circular_saw",
+        "/obj/item/gun/ballistic/shotgun",
+    );
+    s.run_until("the shell goes off", |s| {
+        s.said(0, "выстреливает вам в лицо")
+    });
+    assert!(!s.get::<Gun>(shotgun).sawn_off);
+    // Again with the chamber spent: 3 seconds later it is a sawn-off.
+    let hand = 1 - s.get::<Inventory>(a).active;
+    let slot = if hand == 0 {
+        InventorySlot::LeftHand
+    } else {
+        InventorySlot::RightHand
+    };
+    s.run_until("off the click cooldown", |s| {
+        s.now() >= s.get::<NextMove>(a).0
+    });
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.run_until_for(5.0, "sawn off", |s| s.get::<Gun>(shotgun).sawn_off);
+    assert!(
+        s.get::<ss13_mapload::DmName>(shotgun)
+            .name
+            .starts_with("обрез")
+    );
+    assert_eq!(s.get::<ss13_mapload::DmWeight>(shotgun).w_class, 3);
 }
 
 #[test]

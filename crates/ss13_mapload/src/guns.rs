@@ -102,6 +102,10 @@ pub struct CasingData {
     pub pellets: u32,
     pub variance: f32,
     pub randomspread: bool,
+    /// `can_misfire` (TRUE: misfires in any gun) and `misfire_increment` (added to the gun's
+    /// `misfire_probability` per shot of it).
+    pub can_misfire: bool,
+    pub misfire_increment: f32,
 }
 
 /// `/obj/item/ammo_box` (magazines, speedloaders, ammo boxes) vars, with its ammo resolved.
@@ -171,6 +175,24 @@ pub struct DmGun {
     pub can_unsuppress: bool,
     pub suppressed_sound: String,
     pub suppressed_volume: f32,
+    /// `actions_types` has `/datum/action/item_action/toggle_firemode` (`burst_select`), and
+    /// the starting `burst_fire_selection`.
+    pub burst_select: bool,
+    pub burst_fire_selection: bool,
+    /// `can_be_sawn_off`, `spawn_sawn_off`, `sawoff_bonus_recoil`, `sawn_desc`.
+    pub can_be_sawn_off: bool,
+    pub spawn_sawn_off: bool,
+    pub sawoff_bonus_recoil: f32,
+    pub sawn_desc: String,
+    /// `can_misfire`, the starting `misfire_probability`, `misfire_percentage_increment`,
+    /// `misfire_probability_cap` (percent).
+    pub can_misfire: bool,
+    pub misfire_probability: f32,
+    pub misfire_percentage_increment: f32,
+    pub misfire_probability_cap: f32,
+    /// `/obj/item/gun/ballistic/shotgun/automatic/dual_tube`: its B tube (`alt_mag_type`, else
+    /// the spawned magazine type), resolved; empty path for other guns.
+    pub alt_magazine: MagazineData,
     pub sounds: GunSounds,
 }
 
@@ -431,8 +453,28 @@ pub fn casing(types: &DmTypes, path: &str) -> CasingData {
         pellets: num(types, path, "pellets").max(1.0) as u32,
         variance: num(types, path, "variance") as f32,
         randomspread: truthy(types.resolved(path, "randomspread")),
+        can_misfire: truthy(types.resolved(path, "can_misfire")),
+        misfire_increment: num(types, path, "misfire_increment") as f32,
     }
 }
+
+/// Whether `actions_types` of `path` lists `action` (the action type itself need not be
+/// dumped).
+fn has_action(types: &DmTypes, path: &str, action: &str) -> bool {
+    match types.resolved(path, "actions_types") {
+        Some(Value::Object(o)) => o
+            .get("list")
+            .and_then(Value::as_array)
+            .is_some_and(|items| {
+                items
+                    .iter()
+                    .any(|v| v.get("path").and_then(Value::as_str) == Some(action))
+            }),
+        _ => false,
+    }
+}
+
+pub const DUAL_TUBE: &str = "/obj/item/gun/ballistic/shotgun/automatic/dual_tube";
 
 pub fn magazine(types: &DmTypes, path: &str) -> MagazineData {
     if path.is_empty() {
@@ -520,6 +562,27 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
         can_unsuppress: truthy(types.resolved(path, "can_unsuppress")),
         suppressed_sound: crate::sound::sound_var(types, path, "suppressed_sound"),
         suppressed_volume: n("suppressed_volume") as f32,
+        burst_select: ballistic
+            && has_action(types, path, "/datum/action/item_action/toggle_firemode"),
+        burst_fire_selection: truthy(types.resolved(path, "burst_fire_selection")),
+        can_be_sawn_off: ballistic && truthy(types.resolved(path, "can_be_sawn_off")),
+        spawn_sawn_off: ballistic && truthy(types.resolved(path, "spawn_sawn_off")),
+        sawoff_bonus_recoil: n("sawoff_bonus_recoil") as f32,
+        sawn_desc: text(types, path, "sawn_desc"),
+        can_misfire: ballistic && truthy(types.resolved(path, "can_misfire")),
+        misfire_probability: n("misfire_probability") as f32,
+        misfire_percentage_increment: n("misfire_percentage_increment") as f32,
+        misfire_probability_cap: n("misfire_probability_cap") as f32,
+        alt_magazine: if is_under(path, DUAL_TUBE) {
+            magazine(
+                types,
+                &Some(type_var(types, path, "alt_mag_type"))
+                    .filter(|p| !p.is_empty())
+                    .unwrap_or_else(|| spawn.clone()),
+            )
+        } else {
+            MagazineData::default()
+        },
         sounds: gun_sounds(types, path),
     }
 }
@@ -702,6 +765,30 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 ron(&g.projectile_damage_multiplier),
             ),
             ext(c, "auto_rack", ron(&g.auto_rack)),
+            ext(c, "can_suppress", ron(&g.can_suppress)),
+            ext(c, "suppressed", ron(&g.suppressed)),
+            ext(c, "can_unsuppress", ron(&g.can_unsuppress)),
+            ext(c, "suppressed_sound", ron(&g.suppressed_sound)),
+            ext(c, "suppressed_volume", ron(&g.suppressed_volume)),
+            ext(c, "burst_select", ron(&g.burst_select)),
+            ext(c, "burst_fire_selection", ron(&g.burst_fire_selection)),
+            ext(c, "can_be_sawn_off", ron(&g.can_be_sawn_off)),
+            ext(c, "spawn_sawn_off", ron(&g.spawn_sawn_off)),
+            ext(c, "sawoff_bonus_recoil", ron(&g.sawoff_bonus_recoil)),
+            ext(c, "sawn_desc", ron(&g.sawn_desc)),
+            ext(c, "can_misfire", ron(&g.can_misfire)),
+            ext(c, "misfire_probability", ron(&g.misfire_probability)),
+            ext(
+                c,
+                "misfire_percentage_increment",
+                ron(&g.misfire_percentage_increment),
+            ),
+            ext(
+                c,
+                "misfire_probability_cap",
+                ron(&g.misfire_probability_cap),
+            ),
+            ext(c, "alt_magazine", ron(&g.alt_magazine)),
             ext(c, "sounds", ron(&g.sounds)),
         ]);
     }
@@ -786,6 +873,7 @@ pub fn gun_closure<'a>(
                 out.insert(g.magazine.path.clone());
             }
             add_casing(&mut out, &g.magazine.ammo);
+            add_casing(&mut out, &g.alt_magazine.ammo);
             for shot in &g.shots {
                 add_casing(&mut out, shot);
             }

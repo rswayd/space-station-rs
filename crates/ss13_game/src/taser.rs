@@ -10,10 +10,15 @@
 //! victim gets out of reach or sight, or someone pulls the electrodes out (resist: a 5 second
 //! `do_after` on yourself).
 //!
+//! A hit sparks at the victim and at the gun; an electrode that flies its full range sparks
+//! where it falls. Silicons and bots shrug electrodes off. The first set upsets the victim
+//! (`/datum/mood_event/tased`); a wet victim (wet stacks) burns `max(1, wet * 0.5)` per tick and
+//! sparks, a clumsy one lying down may bang their head (10 brute) while tased.
+//!
 //! Messages are written in Russian here (the checkout has them in English).
-// shortcut: no electrode beams, sparks, mood, alert, hulk shouts, wet-victim
-// burns or clumsy head bumps; silicons and bots are not exempt; a helper cannot pull the
-// electrodes out of someone else; add them with those systems.
+// shortcut: no electrode beams (no beam visuals in the port), no alert, no hulk shouts; drones
+// and `TRAIT_PIERCEIMMUNE` are not exempt; a helper cannot pull the electrodes out of someone
+// else; add them with those systems.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -35,6 +40,17 @@ pub const BEING_TASED_SLOWDOWN: f32 = 4.0;
 pub const TASING_SLOWDOWN: f32 = 2.0;
 /// `can_see(taser, owner, 5)`.
 const SIGHT: u32 = 5;
+/// `tick_interval`, seconds.
+const TICK_SECS: f32 = 0.25;
+const HEAD_SMASH: &str = "sound/effects/tableheadsmash.ogg";
+/// `/datum/mood_event/tased`.
+const TASED_MOOD: crate::mood::MoodEvent = crate::mood::MoodEvent {
+    id: "tased",
+    description: "В слове «шокер» нет буквы «з». Она - в звуке «ззз».",
+    mood_change: -3.0,
+    timeout: 120.0,
+    hidden: false,
+};
 /// The removal `do_after`, deciseconds.
 pub const REMOVAL_DS: f32 = 50.0;
 
@@ -103,6 +119,27 @@ pub fn tase(world: &mut World, p: &Projectile, target: Entity) {
         );
         return;
     };
+    crate::effects::particles::do_sparks(world, 1, true, at);
+    if let Some(gun_at) = crate::modpc::pda::turf_of(world, gun) {
+        crate::effects::particles::do_sparks(world, 1, true, gun_at);
+    }
+    // `tased/on_apply`: silicons and bots.
+    if world.get::<crate::silicon::Silicon>(target).is_some()
+        || world.get::<crate::bots::Bot>(target).is_some()
+    {
+        show(
+            world,
+            at,
+            COMBAT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Warning,
+                format!("Электроды не цепляются за {victim}!"),
+            ),
+            &[],
+        );
+        return;
+    }
     let tase = Tase {
         gun,
         firer: p.firer,
@@ -114,6 +151,7 @@ pub fn tase(world: &mut World, p: &Projectile, target: Entity) {
     tased.0.push(tase);
     world.entity_mut(target).insert(tased);
     if first {
+        crate::mood::add_event(world, target, "tased", &TASED_MOOD);
         crate::mobs::defense::emote(world, target, "кричит!");
     }
     update_slowdown(world, target);
@@ -247,6 +285,59 @@ fn tick(world: &mut World) {
             use crate::status_effects::{Timed, adjust_timed};
             adjust_timed(world, owner, Timed::Stutter, 40.0 * secs, Some(20.0));
             adjust_timed(world, owner, Timed::Jitter, 80.0 * secs, Some(30.0));
+            hazards(world, owner, secs);
+        }
+    }
+}
+
+/// `tased/tick`'s wet burns and clumsy head bumps, for `secs` of the 0.25 s ticks.
+fn hazards(world: &mut World, owner: Entity, secs: f32) {
+    use crate::health::DamageType;
+    use crate::medical::wounds::spt_prob;
+    // "You are damp, that's bad when you're being tased": `max(1, wet * 0.5 * tick)` a tick.
+    let wet = crate::fire::wet_stacks(world, owner);
+    if wet > 0.0 {
+        let per_tick = (wet * 0.5 * TICK_SECS).max(1.0);
+        crate::mobs::defense::hurt(
+            world,
+            owner,
+            DamageType::Burn,
+            per_tick * secs / TICK_SECS,
+            None,
+        );
+        let spark = spt_prob(
+            &mut world.resource_mut::<crate::combat::CombatRng>(),
+            25.0,
+            secs,
+        );
+        if spark && let Some(&at) = world.get::<TilePos>(owner) {
+            crate::effects::particles::do_sparks(world, 1, false, at);
+        }
+    }
+    // "clumsy people might hit their head while being tased".
+    let lying = world
+        .get::<crate::health::BodyPosition>(owner)
+        .is_some_and(|b| b.lying());
+    if lying
+        && crate::genetics::is_clumsy(world, owner)
+        && spt_prob(
+            &mut world.resource_mut::<crate::combat::CombatRng>(),
+            20.0,
+            secs,
+        )
+    {
+        crate::mobs::defense::hurt(
+            world,
+            owner,
+            DamageType::Brute,
+            10.0,
+            Some(crate::zone::BodyZone::Head),
+        );
+        if let Some(&at) = world.get::<TilePos>(owner) {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(at, HEAD_SMASH, 75.0, true),
+            );
         }
     }
 }

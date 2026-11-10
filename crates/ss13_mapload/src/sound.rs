@@ -327,7 +327,7 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 368] = [
+    pub const GAME_CODE: [&str; 370] = [
         "modular_bandastation/weapon/sound/melee/electrostaff_on.ogg",
         "sound/effects/clock_tick.ogg",
         "sound/effects/woodhit.ogg",
@@ -701,6 +701,10 @@ pub mod files {
         "sound/machines/closet/closet_lock.ogg",
         "sound/machines/closet/closet_unlock.ogg",
         "sound/items/weapons/gun/revolver/empty.ogg",
+        // The taser's clumsy head bump, the rotfrag grenade's turns (`ss13_game::taser`,
+        // `ss13_game::grenades`).
+        "sound/effects/tableheadsmash.ogg",
+        "sound/misc/box_deploy.ogg",
     ];
     /// Admin verbs (`ss13_admin::verbs`): BandaStation's Man Up.
     pub const ADMIN: [&str; 1] = ["modular_bandastation/admin/sound/manup1.ogg"];
