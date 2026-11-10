@@ -303,6 +303,13 @@ fn flush_now(world: &mut World, bin: Entity, now: f64) {
     if !hasmob && let Some(&last) = deliveries.last() {
         destination_tag = last;
     }
+    // A wearer's sealed MOD disposal selector (`COMSIG_MOVABLE_DISPOSING`).
+    if let Some(tag) = mobs
+        .iter()
+        .find_map(|&m| crate::modsuit::supply::disposal_tag(world, m))
+    {
+        destination_tag = tag;
+    }
     let trunk = state
         .trunk
         .filter(|&t| world.get::<super::DisposalPipe>(t).is_some());

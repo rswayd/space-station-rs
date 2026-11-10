@@ -1678,6 +1678,7 @@ pub fn can_see_reagents(world: &World, mob: Entity) -> bool {
     world.get::<Stat>(mob) == Some(&Stat::Dead)
         || world.get::<crate::ghost::Ghost>(mob).is_some()
         || world.get::<crate::silicon::Silicon>(mob).is_some()
+        || crate::modsuit::science::sees_reagents(world, mob)
         || world
             .get::<Inventory>(mob)
             .and_then(|i| i.slot(InventorySlot::Eyes))

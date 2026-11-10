@@ -29,6 +29,10 @@
 //! - anti-slip (`noslip`): sealed boots do not slip on water (`TRAIT_NO_SLIP_WATER`,
 //!   [`NoSlipWater`]).
 //! - bike horn: used, it honks.
+//! - supply modules (GPS, clamps, drill, ore bag, loader arms and magnet, disposal selector, ash
+//!   accretion, sphere transform): [`super::supply`]; science modules (reagent scanners,
+//!   anti-gravity, teleporter, kinesis): [`super::science`]; the pathfinder:
+//!   [`super::pathfinder`].
 //! - worn overlays (`generate_worn_overlay`): the module's inactive / active / use state drawn
 //!   over the part of its first required slot (the unit without required slots) while its parts
 //!   are sealed ([`ModOverlays`]).
@@ -109,6 +113,27 @@ pub enum Kind {
     QuickCuff,
     NoSlipWater,
     Bikehorn,
+    /// Supply modules (`super::supply`).
+    Gps,
+    Clamp {
+        loader: bool,
+    },
+    Drill,
+    OreBag,
+    Hydraulic,
+    DisposalConnector,
+    Magnet,
+    AshAccretion,
+    Sphere,
+    /// Science modules (`super::science`).
+    ReagentScanner {
+        advanced: bool,
+    },
+    Antigrav,
+    Teleporter,
+    Kinesis,
+    /// `super::pathfinder`.
+    Pathfinder,
     Other,
 }
 
@@ -155,6 +180,38 @@ impl Kind {
             Self::NoSlipWater
         } else if under("bikehorn") {
             Self::Bikehorn
+        } else if under("gps") {
+            Self::Gps
+        } else if under("clamp/loader") {
+            Self::Clamp { loader: true }
+        } else if under("clamp") {
+            Self::Clamp { loader: false }
+        } else if under("drill") {
+            Self::Drill
+        } else if under("orebag") {
+            Self::OreBag
+        } else if under("hydraulic") {
+            Self::Hydraulic
+        } else if under("disposal_connector") {
+            Self::DisposalConnector
+        } else if under("magnet") {
+            Self::Magnet
+        } else if under("ash_accretion") {
+            Self::AshAccretion
+        } else if under("sphere_transform") {
+            Self::Sphere
+        } else if under("reagent_scanner/advanced") {
+            Self::ReagentScanner { advanced: true }
+        } else if under("reagent_scanner") {
+            Self::ReagentScanner { advanced: false }
+        } else if under("anomaly_locked/antigrav") {
+            Self::Antigrav
+        } else if under("anomaly_locked/teleporter") {
+            Self::Teleporter
+        } else if under("anomaly_locked/kinesis") {
+            Self::Kinesis
+        } else if under("pathfinder") {
+            Self::Pathfinder
         } else {
             Self::Other
         }
@@ -265,7 +322,10 @@ pub fn init_module(world: &mut World, module: Entity) {
         lit: None,
         stabilize: true,
     };
+    let kind = state.kind;
     world.entity_mut(module).insert(state);
+    super::supply::init(world, module, kind);
+    super::pathfinder::init(world, module, kind);
 }
 
 pub fn def_of(world: &World, module: Entity) -> Option<ModuleDef> {
@@ -376,6 +436,7 @@ pub fn on_part_activation(world: &mut World, control: Entity, module: Entity) {
                 world.entity_mut(wearer).insert(NoSlipWater);
             }
         }
+        Kind::AshAccretion => super::supply::ash_sealed(world, control, module),
         _ => {}
     }
 }
@@ -408,6 +469,8 @@ pub fn on_part_deactivation(world: &mut World, control: Entity, module: Entity) 
                 world.entity_mut(wearer).remove::<NoSlipWater>();
             }
         }
+        Kind::Clamp { .. } => super::supply::drop_crates(world, control, module),
+        Kind::AshAccretion => super::supply::shed_ash(world, control, module),
         _ => {}
     }
 }
@@ -421,12 +484,13 @@ pub fn on_select(world: &mut World, control: Entity, module: Entity, activator: 
         return;
     };
     let who = Some(activator);
-    if suit.wearer.is_none() && def.allow_flags & MODULE_ALLOW_UNWORN == 0 {
+    let allow_flags = allow_flags(&def, kind(world, module));
+    if suit.wearer.is_none() && allow_flags & MODULE_ALLOW_UNWORN == 0 {
         tell_opt(world, who, Span::Warning, "не надет!");
         return;
     }
     let off = !suit.active || suit.activating;
-    if (off && def.allow_flags & (MODULE_ALLOW_INACTIVE | MODULE_ALLOW_UNWORN) == 0)
+    if (off && allow_flags & (MODULE_ALLOW_INACTIVE | MODULE_ALLOW_UNWORN) == 0)
         || def.module_type == MODULE_PASSIVE
     {
         tell_opt(world, who, Span::Warning, "не активен!");
@@ -434,7 +498,7 @@ pub fn on_select(world: &mut World, control: Entity, module: Entity, activator: 
     }
     let theme = theme_of(world, &suit);
     if !has_required_parts(&def, suit.part_slots(&theme, true))
-        && def.allow_flags & MODULE_ALLOW_UNWORN == 0
+        && allow_flags & MODULE_ALLOW_UNWORN == 0
     {
         tell_opt(world, who, Span::Warning, "нужные части не активны!");
         buzz(world, control);
@@ -442,12 +506,23 @@ pub fn on_select(world: &mut World, control: Entity, module: Entity, activator: 
     }
     if def.module_type == MODULE_USABLE {
         if used(world, control, module, who) {
-            on_use(world, control, module);
+            on_use(world, control, module, activator);
         }
     } else if world.get::<ModModule>(module).is_some_and(|m| m.active) {
         deactivate(world, control, module, true);
     } else {
         activate(world, control, module, who);
+    }
+}
+
+/// The module's `allow_flags`. The pathfinder's are written as a `list(...)` in tg, which the
+/// converter cannot read as flags; its intent (`MODULE_ALLOW_INACTIVE|MODULE_ALLOW_UNWORN`) is
+/// used.
+fn allow_flags(def: &ModuleDef, kind: Kind) -> u32 {
+    if kind == Kind::Pathfinder {
+        def.allow_flags | MODULE_ALLOW_INACTIVE | MODULE_ALLOW_UNWORN
+    } else {
+        def.allow_flags
     }
 }
 
@@ -478,6 +553,11 @@ pub fn activate(
     };
     // `COMSIG_MODULE_TRIGGERED`.
     if !super::anomalock::may_trigger(world, module, Some(wearer)) {
+        return false;
+    }
+    // `sphere_transform/activate`.
+    if state.kind == Kind::Sphere && !super::supply::has_gravity(world, wearer) {
+        tell_opt(world, activator, Span::Warning, "нет гравитации!");
         return false;
     }
     if def.module_type == MODULE_ACTIVE {
@@ -558,9 +638,13 @@ pub fn used(world: &mut World, control: Entity, module: Entity, activator: Optio
 }
 
 /// tg `on_use(activator)` of the usable modules ported here (the others do nothing).
-fn on_use(world: &mut World, control: Entity, module: Entity) {
-    if kind(world, module) != Kind::Bikehorn {
-        return;
+fn on_use(world: &mut World, control: Entity, module: Entity, activator: Entity) {
+    match kind(world, module) {
+        Kind::Bikehorn => {}
+        Kind::Gps => return super::supply::gps_use(world, control, module),
+        Kind::OreBag => return super::supply::orebag_use(world, control, module),
+        Kind::Pathfinder => return super::pathfinder::on_use(world, control, module, activator),
+        _ => return,
     }
     // `playsound(src, 'bikehorn.ogg', 100, FALSE)`.
     if let Some(pos) = crate::chem::map_pos(world, control) {
@@ -574,7 +658,7 @@ fn on_use(world: &mut World, control: Entity, module: Entity) {
 }
 
 /// tg `drain_power(amount)`: nothing is taken when there is not enough.
-fn drain_power(world: &mut World, control: Entity, amount: f64) -> bool {
+pub(crate) fn drain_power(world: &mut World, control: Entity, amount: f64) -> bool {
     if !check_charge(world, control, amount) {
         return false;
     }
@@ -582,8 +666,18 @@ fn drain_power(world: &mut World, control: Entity, amount: f64) -> bool {
     true
 }
 
+/// What a selected module's middle click is about (tg `on_select_use(target)`).
+#[derive(Clone, Copy, Debug)]
+pub struct SelectUse {
+    pub control: Entity,
+    pub module: Entity,
+    pub client: Entity,
+    pub wearer: Entity,
+    pub target: Entity,
+}
+
 /// tg `on_select_use(target)` of a selected module without a device: the health analyzer's
-/// scan.
+/// scan and the modules of `super::supply` and `super::science`.
 pub fn on_select_use(
     world: &mut World,
     control: Entity,
@@ -603,10 +697,39 @@ pub fn on_select_use(
     {
         return;
     }
+    let kind = kind(world, module);
+    // `sphere_transform/used`: `lavaland_equipment_pressure_check`.
+    if kind == Kind::Sphere && !super::supply::low_pressure(world, wearer) {
+        tell_mob(world, wearer, Span::Warning, "слишком высокое давление!");
+        if let Some(pos) = crate::chem::map_pos(world, control) {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(pos, super::supply::DRY_FIRE, 25.0, true),
+            );
+        }
+        return;
+    }
     if !used(world, control, module, Some(wearer)) {
         return;
     }
-    if kind(world, module) != Kind::HealthAnalyzer || world.get::<Health>(target).is_none() {
+    let ctx = SelectUse {
+        control,
+        module,
+        client,
+        wearer,
+        target,
+    };
+    match kind {
+        Kind::Clamp { loader } => return super::supply::clamp(world, ctx, loader),
+        Kind::Drill => return super::supply::drill(world, ctx),
+        Kind::Hydraulic => return super::supply::hydraulic(world, ctx),
+        Kind::Magnet => return super::supply::magnet(world, ctx),
+        Kind::Sphere => return super::supply::sphere_fire(world, ctx),
+        Kind::Teleporter => return super::science::teleporter(world, ctx),
+        Kind::Kinesis => return super::science::kinesis(world, ctx),
+        _ => {}
+    }
+    if kind != Kind::HealthAnalyzer || world.get::<Health>(target).is_none() {
         return;
     }
     let mode = world.get::<ModModule>(module).map_or(0, |m| m.mode);
@@ -673,6 +796,13 @@ fn on_activation(world: &mut World, control: Entity, module: Entity) {
                 .entity_mut(wearer)
                 .insert((ModMegaphone { control, module }, VoiceSpan(MEGAPHONE_VOICE)));
         }
+        Kind::ReagentScanner { advanced } => {
+            world
+                .entity_mut(wearer)
+                .insert(super::science::ReagentScanner { module, advanced });
+        }
+        Kind::Antigrav => super::science::antigrav_on(world, control, wearer),
+        Kind::Sphere => super::supply::sphere_on(world, control, module, wearer),
         _ => {}
     }
 }
@@ -696,6 +826,18 @@ fn strip_wearer(world: &mut World, module: Entity, kind: Kind, wearer: Entity) {
         Kind::Visor { .. } => {
             world.entity_mut(wearer).remove::<VisorHud>();
         }
+        Kind::ReagentScanner { .. }
+            if world
+                .get::<super::science::ReagentScanner>(wearer)
+                .is_some_and(|r| r.module == module) =>
+        {
+            world
+                .entity_mut(wearer)
+                .remove::<super::science::ReagentScanner>();
+        }
+        Kind::Antigrav => super::science::antigrav_off(world, module, wearer),
+        Kind::Sphere => super::supply::sphere_off(world, module, wearer),
+        Kind::Magnet => super::supply::magnet_off(world, wearer),
         Kind::Megaphone
             if world
                 .get::<ModMegaphone>(wearer)
@@ -724,6 +866,9 @@ fn on_deactivation(world: &mut World, control: Entity, module: Entity) {
     let kind = kind(world, module);
     if kind == Kind::Flashlight {
         light_off(world, module);
+    }
+    if kind == Kind::Kinesis {
+        super::science::clear_grab(world, module, true);
     }
     if let Some(w) = wearer.filter(|&w| world.get_entity(w).is_ok()) {
         strip_wearer(world, module, kind, w);
@@ -891,6 +1036,21 @@ pub fn on_process(world: &mut World, control: Entity, module: Entity, dt: f64) {
     if state.active {
         if !drain_power(world, control, active_power(world, module) * dt) {
             deactivate(world, control, module, true);
+            return;
+        }
+        match state.kind {
+            // `sphere_transform/on_active_process`: no gravity, no ball; `on_statchange`: an
+            // unconscious wearer neither.
+            Kind::Sphere => {
+                if let Some(wearer) = suit(world, control).and_then(|s| s.wearer)
+                    && (!super::supply::has_gravity(world, wearer)
+                        || world.get::<Stat>(wearer) != Some(&Stat::Conscious))
+                {
+                    deactivate(world, control, module, true);
+                }
+            }
+            Kind::Kinesis => super::science::kinesis_process(world, control, module, dt),
+            _ => {}
         }
     } else {
         drain_power(world, control, def.idle_power_cost * dt);
@@ -914,6 +1074,9 @@ pub fn slowdown(world: &World, module: Entity) -> f32 {
         Some(m) if m.active && m.kind == Kind::Magboot => {
             def_of(world, module).map_or(0.0, |d| d.slowdown_active)
         }
+        Some(m) if m.kind == Kind::AshAccretion => super::supply::ash_slowdown(world, module),
+        // `/datum/movespeed_modifier/sphere` on the wearer.
+        Some(m) if m.active && m.kind == Kind::Sphere => super::supply::SPHERE_SPEED,
         _ => 0.0,
     }
 }
@@ -946,6 +1109,7 @@ pub fn configuration(world: &World, module: Entity) -> Vec<ModuleConfig> {
             value: SCAN_MODES[state.mode.min(SCAN_MODES.len() - 1)].into(),
             values: SCAN_MODES.iter().map(|m| (*m).to_owned()).collect(),
         }],
+        Kind::DisposalConnector => super::supply::disposal_configuration(world, module),
         Kind::Jetpack { .. } => vec![ModuleConfig {
             key: "stabilizers".into(),
             display_name: "Стабилизаторы".into(),
@@ -987,6 +1151,9 @@ pub fn configure_edit(world: &mut World, control: Entity, module: Entity, key: &
             {
                 m.mode = i;
             }
+        }
+        (Kind::DisposalConnector, "disposal_tag") => {
+            super::supply::disposal_configure(world, module, value);
         }
         // `configure_jetpack(text2num(value))`: an active jetpack's wearer follows at once.
         (Kind::Jetpack { .. }, "stabilizers") => {
@@ -1121,6 +1288,25 @@ mod tests {
         assert_eq!(
             Kind::of(&def("/obj/item/mod/module/noslip")),
             Kind::NoSlipWater
+        );
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/clamp/loader")),
+            Kind::Clamp { loader: true }
+        );
+        assert_eq!(Kind::of(&def("/obj/item/mod/module/magnet")), Kind::Magnet);
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/reagent_scanner/advanced")),
+            Kind::ReagentScanner { advanced: true }
+        );
+        assert_eq!(
+            Kind::of(&def(
+                "/obj/item/mod/module/anomaly_locked/teleporter/prebuilt"
+            )),
+            Kind::Teleporter
+        );
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/pathfinder")),
+            Kind::Pathfinder
         );
         let mut storage = def("/obj/item/mod/module/storage/bluespace");
         storage.storage = Some(Default::default());

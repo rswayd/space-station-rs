@@ -454,7 +454,8 @@ pub fn explosion(world: &mut World, epicenter: TilePos, ex: Explosion) {
         q.count += 1;
         q.count
     };
-    // `COMSIG_GLOB_EXPLOSION`: the doppler arrays.
+    // `COMSIG_GLOB_EXPLOSION`: the advanced MOD reagent scanners and the doppler arrays.
+    crate::modsuit::science::sense_explosion(world, epicenter, [dev, heavy, light]);
     crate::science::ordnance_machines::sense_explosion(
         world,
         &crate::science::ordnance_machines::SensedExplosion {
