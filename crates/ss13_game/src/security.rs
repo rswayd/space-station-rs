@@ -206,9 +206,9 @@ pub struct Flash {
     /// `last_used`, `Time::elapsed_secs_f64`.
     pub last_used: f64,
     /// `last_trigger` of the `cooldown`.
-    last_trigger: f64,
+    pub(crate) last_trigger: f64,
     /// The arm implant's `overheat`, until.
-    overheat_until: f64,
+    pub(crate) overheat_until: f64,
 }
 
 /// `TRAIT_IWASBATONED`: who batoned this mob, until when.

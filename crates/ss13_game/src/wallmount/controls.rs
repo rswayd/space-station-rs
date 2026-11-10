@@ -740,6 +740,7 @@ fn take_bulb(world: &mut World, flasher: Entity) -> Option<Entity> {
             times_used: state.times_used,
             burnt_out: state.burnt_out,
             last_used: state.last_used,
+            ..Default::default()
         });
     }
     if let Some(mut f) = world.get_mut::<Flasher>(flasher) {
