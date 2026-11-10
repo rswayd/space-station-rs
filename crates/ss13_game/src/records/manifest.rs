@@ -1,9 +1,11 @@
 //! `GLOB.manifest` (`code/datums/records/manifest.dm`, `record.dm`, `crime.dm`): a crew record
 //! and a locked record per crew member who joins (`inject`), edits from the ID console
 //! (`modify`), the crew list by department (`get_manifest`).
-// shortcut: no character preferences yet: age 30, species "Human", gender "Male" (names come
-// from the male name lists), no quirks; no character appearance or photos (the consoles show
-// no preview); `inject` runs for every human job (tg checks `JOB_CREW_MANIFEST`).
+//! The species and gender are the body's (`dna.species`, the body type), the photos are made
+//! from the body on first use ([`record_photo`]).
+// shortcut: age 30 (no age preference; tg's ID cards carry the same); the quirk fields stay "None"
+// (the ported quirks have no record categories or `medical_record_text`); no character preview
+// in the consoles; `inject` runs for every human job (tg checks `JOB_CREW_MANIFEST`).
 
 use bevy::prelude::*;
 use ss13_mapload::jobs::JobsData;
@@ -28,6 +30,34 @@ pub struct Crime {
     pub voider: Option<String>,
     pub fine: Option<u32>,
     pub paid: u32,
+}
+
+impl Crime {
+    /// `citation/pay_fine(amount)`: `paid` up to the fine, the fine down to zero.
+    pub fn pay_fine(&mut self, amount: u32) -> bool {
+        let Some(fine) = self.fine.as_mut() else {
+            return false;
+        };
+        if amount == 0 {
+            return false;
+        }
+        self.paid = (self.paid + amount).min(self.paid + *fine);
+        *fine = fine.saturating_sub(amount);
+        true
+    }
+}
+
+/// `citation/alert_owner`: an automated PDA message from the citation server to the messenger
+/// imprinted for `target_name`, sent from `source`.
+pub fn alert_owner(world: &mut World, source: Entity, target_name: &str, message: &str) {
+    crate::modpc::programs::messenger::send_automated(
+        world,
+        source,
+        target_name,
+        "Штраф от охраны",
+        "Сервер штрафов",
+        message,
+    );
 }
 
 /// `/datum/medical_note`.
@@ -95,6 +125,8 @@ pub struct LockedRecord {
 pub struct Manifest {
     pub general: Vec<CrewRecord>,
     pub locked: Vec<LockedRecord>,
+    /// `record_photos` by (record, front): made on first use ([`record_photo`]).
+    pub photos: std::collections::HashMap<(u32, bool), std::sync::Arc<crate::service::Picture>>,
     next_id: u32,
     rng: Rng,
 }
@@ -107,6 +139,7 @@ impl Default for Manifest {
         Self {
             general: Vec::new(),
             locked: Vec::new(),
+            photos: Default::default(),
             next_id: 1,
             rng: Rng::new(seed),
         }
@@ -250,6 +283,89 @@ impl Manifest {
     }
 }
 
+/// `get_front_photo()` (`front`) / `get_side_photo()` of a record: made once from the body the
+/// record was made for (its locked record's), facing south or west.
+// shortcut: the body as it looks at the first print or view, not its look at the join (tg
+// `character_appearance`); no height chart.
+pub fn record_photo(
+    world: &mut World,
+    record: u32,
+    front: bool,
+) -> Option<std::sync::Arc<crate::service::Picture>> {
+    let manifest = world.resource::<Manifest>();
+    if let Some(photo) = manifest.photos.get(&(record, front)) {
+        return Some(photo.clone());
+    }
+    let lock = manifest.get(record)?.lock_ref;
+    let mob = manifest.locked.iter().find(|l| l.id == lock)?.mob;
+    let dir = if front {
+        ss13_shared::Dir::South
+    } else {
+        ss13_shared::Dir::West
+    };
+    let picture = std::sync::Arc::new(crate::service::portrait(world, mob, dir)?);
+    world
+        .resource_mut::<Manifest>()
+        .photos
+        .insert((record, front), picture.clone());
+    Some(picture)
+}
+
+/// `get_rapsheet(alias, header, description)` after its `SR-n: header` line.
+pub fn rapsheet_text(record: &CrewRecord, alias: &str, description: &str) -> String {
+    let mut text = format!(
+        "Name: {}<br>Gender: {}<br>Age: {}<br>",
+        record.name, record.gender, record.age
+    );
+    if alias != record.name {
+        text.push_str(&format!("Alias: {alias}<br>"));
+    }
+    text.push_str(&format!(
+        "Species: {}<br>Fingerprint: {}<br>Wanted Status: {}<br><br><center><B>Security \
+         Data</B></center><br><br>Crimes:<br>",
+        record.species, record.fingerprint, record.wanted_status
+    ));
+    text.push_str(
+        "<table style=\"text-align:center;\" border=\"1\" cellspacing=\"0\" width=\"100%\">\
+         <tr><th>Crime</th><th>Details</th><th>Author</th><th>Time Added</th></tr>",
+    );
+    for crime in &record.crimes {
+        if crime.valid {
+            text.push_str(&format!(
+                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
+                crime.name, crime.details, crime.author, crime.time
+            ));
+        } else {
+            text.push_str(&"<td>--REDACTED--</td>".repeat(4));
+        }
+        text.push_str("</tr>");
+    }
+    text.push_str("</table><br><br>Citations:<br>");
+    text.push_str(
+        "<table style=\"text-align:center;\" border=\"1\" cellspacing=\"0\" width=\"100%\">\
+         <tr><th>Citation</th><th>Details</th><th>Author</th><th>Time Added</th><th>Fine</th>\
+         </tr><br>",
+    );
+    for citation in &record.citations {
+        text.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            citation.name,
+            citation.details,
+            citation.author,
+            citation.time,
+            citation.fine.unwrap_or_default()
+        ));
+    }
+    text.push_str("</table><br><br><center>Important Notes:</center><br>");
+    if !record.security_note.is_empty() {
+        text.push_str(&format!("- {}<br>", record.security_note));
+    }
+    if !description.is_empty() {
+        text.push_str(&format!("- {description}<br>"));
+    }
+    text
+}
+
 /// `round_timestamp()`: `hh:mm:ss` of the round.
 pub fn round_timestamp(world: &World) -> String {
     let now = world.resource::<Time>().elapsed_secs_f64();
@@ -279,6 +395,10 @@ pub fn inject_joiner(world: &mut World, mob: Entity, job: usize) {
         .and_then(|c| c.trim.as_ref())
         .map_or(job_assignment, |t| t.assignment.clone());
     let species = crate::species::def_of(world, mob).name.to_owned();
+    // `person_gender`: "Male" or "Female" by the body type.
+    let gender = world
+        .get::<crate::human::HumanLook>(mob)
+        .map(|l| if l.female { "Female" } else { "Male" });
     let mut manifest = world.resource_mut::<Manifest>();
     let id = manifest.inject(Joiner {
         name: &name,
@@ -289,6 +409,9 @@ pub fn inject_joiner(world: &mut World, mob: Entity, job: usize) {
     // `dna.species.name` of the records.
     let lock = manifest.general.iter_mut().find(|r| r.id == id).map(|r| {
         r.species = species.clone();
+        if let Some(gender) = gender {
+            r.gender = gender.to_owned();
+        }
         r.lock_ref
     });
     if let Some(lock) = lock

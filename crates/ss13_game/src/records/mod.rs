@@ -20,6 +20,12 @@ pub mod console;
 pub mod hud;
 #[cfg(feature = "server")]
 pub mod manifest;
+#[cfg(feature = "server")]
+pub mod posters;
+#[cfg(feature = "server")]
+pub mod sechud;
+#[cfg(feature = "server")]
+pub mod warrant;
 
 /// Records on the server: the manifest, the consoles, the data HUDs.
 #[cfg(feature = "server")]
@@ -28,8 +34,12 @@ pub struct RecordsServerPlugin;
 #[cfg(feature = "server")]
 impl bevy::prelude::Plugin for RecordsServerPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.init_resource::<manifest::Manifest>()
-            .add_plugins((console::RecordsConsolePlugin, hud::DataHudPlugin));
+        app.init_resource::<manifest::Manifest>().add_plugins((
+            console::RecordsConsolePlugin,
+            hud::DataHudPlugin,
+            warrant::WarrantConsolePlugin,
+            sechud::SecHudPlugin,
+        ));
     }
 }
 
@@ -197,6 +207,52 @@ pub const SET_PHYSICAL_STATUS: &str = "set_physical_status";
 pub const SET_MENTAL_STATUS: &str = "set_mental_status";
 pub const SET_CAUSE_OF_DEATH: &str = "set_cause_of_death";
 pub const SET_BLOOD_TYPE: &str = "set_blood_type";
+/// `print_record` of the security console: `type` is one of these.
+pub const PRINT_RECORD: &str = "print_record";
+pub const PRINT_MISSING: &str = "missing";
+pub const PRINT_WANTED: &str = "wanted";
+pub const PRINT_RAPSHEET: &str = "rapsheet";
+
+/// tgui `WarrantConsole`.
+pub struct WarrantConsoleUi;
+
+impl UiInterface for WarrantConsoleUi {
+    const NAME: &'static str = "WarrantConsole";
+    type Data = WarrantData;
+    type StaticData = ();
+}
+
+/// `/obj/machinery/computer/warrant/ui_data`: the records with citations, their valid ones.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WarrantData {
+    pub records: Vec<WarrantRecord>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WarrantRecord {
+    pub citations: Vec<WarrantCitation>,
+    pub crew_name: String,
+    pub crew_ref: String,
+    pub notes: String,
+    pub rank: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WarrantCitation {
+    pub author: String,
+    pub details: String,
+    /// What is left to pay.
+    pub fine: u32,
+    pub fine_name: String,
+    pub fine_ref: String,
+    pub paid: u32,
+    pub time: String,
+}
+
+// Acts of the warrant console.
+pub const PAY: &str = "pay";
+pub const PRINT: &str = "print";
+pub const REFRESH: &str = "refresh";
 
 /// The data HUD images one mob sees over others (no window): tg's `hud_list` images of the
 /// security and medical data HUDs it wears glasses for.

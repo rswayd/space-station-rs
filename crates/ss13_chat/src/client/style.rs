@@ -71,6 +71,8 @@ pub fn span_style(span: Span) -> SpanStyle {
         Span::Hypnophrase => (Color::hsl(272.0, 0.863, 0.6), true, false),
         // Drawn as an icon (`super::panel`); its `:name:` text measures the line.
         Span::Emoji(_) => (CHAT_TEXT, false, false),
+        // `a { color: var(--color-hyperlink) }`.
+        Span::Link(_) => (Color::hsl(207.0, 0.9, 0.65), false, false),
     };
     SpanStyle {
         color,

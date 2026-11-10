@@ -833,7 +833,14 @@ fn populate(world: &mut World, cabinet: Entity) {
         CabinetKind::Security | CabinetKind::Medical if !state.virgin => return,
         CabinetKind::Security => {
             for record in &manifest.general {
-                papers.push((record.name.clone(), rapsheet_text(record)));
+                papers.push((
+                    record.name.clone(),
+                    crate::records::manifest::rapsheet_text(
+                        record,
+                        &record.name,
+                        "No further details.",
+                    ),
+                ));
             }
         }
         CabinetKind::Medical => {
@@ -893,57 +900,6 @@ fn populate(world: &mut World, cabinet: Entity) {
         s.virgin = false;
         s.filed = filed;
     }
-}
-
-/// `get_rapsheet()` after its header.
-fn rapsheet_text(record: &crate::records::manifest::CrewRecord) -> String {
-    let mut text = format!(
-        "Name: {}<br>Gender: {}<br>Age: {}<br>Species: {}<br>Fingerprint: {}<br>Wanted Status: \
-         {}<br><br><center><B>Security Data</B></center><br><br>Crimes:<br>",
-        record.name,
-        record.gender,
-        record.age,
-        record.species,
-        record.fingerprint,
-        record.wanted_status
-    );
-    text.push_str(
-        "<table style=\"text-align:center;\" border=\"1\" cellspacing=\"0\" width=\"100%\">\
-         <tr><th>Crime</th><th>Details</th><th>Author</th><th>Time Added</th></tr>",
-    );
-    for crime in &record.crimes {
-        if crime.valid {
-            text.push_str(&format!(
-                "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-                crime.name, crime.details, crime.author, crime.time
-            ));
-        } else {
-            text.push_str(&"<td>--REDACTED--</td>".repeat(4));
-            text.push_str("</tr>");
-        }
-    }
-    text.push_str("</table><br><br>Citations:<br>");
-    text.push_str(
-        "<table style=\"text-align:center;\" border=\"1\" cellspacing=\"0\" width=\"100%\">\
-         <tr><th>Citation</th><th>Details</th><th>Author</th><th>Time Added</th><th>Fine</th>\
-         </tr><br>",
-    );
-    for citation in &record.citations {
-        text.push_str(&format!(
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
-            citation.name,
-            citation.details,
-            citation.author,
-            citation.time,
-            citation.fine.unwrap_or_default()
-        ));
-    }
-    text.push_str("</table><br><br><center>Important Notes:</center><br>");
-    if !record.security_note.is_empty() {
-        text.push_str(&format!("- {}<br>", record.security_note));
-    }
-    text.push_str("- No further details.<br>");
-    text
 }
 
 /// `filingcabinet/medical/populate`'s record text.

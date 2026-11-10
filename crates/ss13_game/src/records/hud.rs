@@ -10,10 +10,10 @@
 //! refresh.
 // shortcut: glasses give their HUD by type (`/obj/item/clothing/glasses/hud/security`,
 // `.../health`, `.../medsechud` and subtypes), not by `clothing_traits` (no toggling HUD
-// glasses or silicon HUDs; HUD implants come from `crate::medical::cyberimps`); the record is
-// found by the mob's real name (tg: the face name, which a mask hides); no second implant slot
-// offset, virus or defib states; refreshed every 0.5 s rather
-// than on each change.
+// glasses; HUD implants come from `crate::medical::cyberimps`); the AI's and cyborgs' sensor
+// HUDs belong to the silicon group; no second implant slot offset, virus or defib states;
+// refreshed every 0.5 s rather than on each change. The record is the one of [`perp_name`]
+// (tg `get_face_name(get_id_name(""))`).
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -114,6 +114,36 @@ pub fn round_health(health: f32, max: f32, dead: bool) -> &'static str {
     }
 }
 
+/// The name the HUDs read a human by (tg `get_face_name(get_id_name(""))`): the real name, or
+/// with the face hidden the worn ID's name; `None` when neither shows.
+pub fn perp_name(world: &World, mob: Entity) -> Option<String> {
+    match crate::clothing::cover::hidden_face_name(world, mob) {
+        None => world.get::<Name>(mob).map(|n| n.to_string()),
+        Some(n) if n == crate::clothing::cover::UNKNOWN_NAME => None,
+        Some(n) => Some(n),
+    }
+}
+
+/// The data HUDs `mob` has (`TRAIT_SECURITY_HUD`, `TRAIT_MEDICAL_HUD`): (security, medical).
+pub fn wearer_huds(world: &World, mob: Entity) -> (bool, bool) {
+    let Some(inventory) = world.get::<Inventory>(mob) else {
+        return (false, false);
+    };
+    let (sec, med) = inventory
+        .eyes
+        .and_then(|e| world.get::<DmItem>(e))
+        .map_or((false, false), |i| glasses_huds(&i.path));
+    let (implant_sec, implant_med) = crate::medical::cyberimps::implant_huds(world, mob);
+    // MOD security and medical visors (`crate::modsuit::modules::VisorHud`).
+    let (visor_sec, visor_med) = crate::modsuit::modules::visor_huds(world, mob);
+    // The ablative hood's `TRAIT_SECURITY_HUD` (`crate::clothing::ablative`).
+    let hood_sec = crate::clothing::ablative::hood_hud(world, inventory.head);
+    (
+        sec || implant_sec || visor_sec || hood_sec,
+        med || implant_med || visor_med,
+    )
+}
+
 /// Which data HUDs the glasses of type `path` give: (security, medical).
 pub fn glasses_huds(path: &str) -> (bool, bool) {
     (
@@ -130,12 +160,11 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
     *next = now + REFRESH_SECS;
     let mut humans = world.query_filtered::<(
         Entity,
-        &Name,
         Option<&Inventory>,
         Option<&Health>,
         Option<&Stat>,
     ), With<HumanLook>>();
-    let mut wearers = world.query::<(Entity, &Inventory, &PlayerMob, Option<&DataHudData>)>();
+    let mut wearers = world.query::<(Entity, &PlayerMob, Option<&DataHudData>)>();
     let Some(icons) = world.get_resource::<IconIndex>() else {
         return;
     };
@@ -149,7 +178,7 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
     // What each human shows on each HUD, computed once for all wearers.
     let shown: Vec<(Entity, Vec<crate::hud::HudIcon>, Vec<crate::hud::HudIcon>)> = humans
         .iter(world)
-        .map(|(e, name, inventory, health, stat)| {
+        .map(|(e, inventory, health, stat)| {
             let job = inventory
                 .and_then(|i| i.id)
                 .and_then(|id| crate::inventory::get_id(world, id))
@@ -171,8 +200,8 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
             if crate::antag::revolution::server::mindshielded(world, e) {
                 sec.extend(icon("hud_imp_loyal"));
             }
-            if let Some(state) = manifest
-                .find(name.as_str())
+            if let Some(state) = perp_name(world, e)
+                .and_then(|name| manifest.find(&name))
                 .and_then(|r| wanted_state(&r.wanted_status))
             {
                 sec.extend(icon(state));
@@ -192,20 +221,8 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
         return;
     };
     let mut updates = Vec::new();
-    for (mob, inventory, player, old) in wearers.iter(world) {
-        let (sec, med) = inventory
-            .eyes
-            .and_then(|e| world.get::<DmItem>(e))
-            .map_or((false, false), |i| glasses_huds(&i.path));
-        let (implant_sec, implant_med) = crate::medical::cyberimps::implant_huds(world, mob);
-        // MOD security and medical visors (`crate::modsuit::modules::VisorHud`).
-        let (visor_sec, visor_med) = crate::modsuit::modules::visor_huds(world, mob);
-        // The ablative hood's `TRAIT_SECURITY_HUD` (`crate::clothing::ablative`).
-        let hood_sec = crate::clothing::ablative::hood_hud(world, inventory.head);
-        let (sec, med) = (
-            sec || implant_sec || visor_sec || hood_sec,
-            med || implant_med || visor_med,
-        );
+    for (mob, player, old) in wearers.iter(world) {
+        let (sec, med) = wearer_huds(world, mob);
         if !sec && !med && old.is_none_or(|d| d.entries.is_empty()) {
             continue;
         }

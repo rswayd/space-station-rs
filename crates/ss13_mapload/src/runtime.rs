@@ -1026,6 +1026,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/ore/glass/siderite",
     "/obj/item/poster",
     "/obj/structure/sign/poster/ripped",
+    // Wanted and missing posters the security console prints (`ss13_game::records::posters`).
+    "/obj/item/poster/wanted",
+    "/obj/item/poster/wanted/missing",
+    "/obj/structure/sign/poster/wanted",
     // The nightmare's light eater and the morph (`ss13_game::antag`).
     "/obj/item/light_eater",
     "/mob/living/basic/morph",

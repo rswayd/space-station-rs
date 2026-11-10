@@ -91,7 +91,7 @@ pub use paper::{Paper, PaperBin, write_printed};
 #[cfg(feature = "server")]
 pub use photo::{
     Camera, Photo, PhotoJob, Picture, PictureFrame, capture, complete as photo_complete,
-    examined as photo_examined, frame_moved as picture_frame_moved,
+    examined as photo_examined, frame_moved as picture_frame_moved, portrait,
 };
 #[cfg(feature = "server")]
 pub use religion::{
@@ -101,6 +101,8 @@ pub use religion::{
 };
 #[cfg(feature = "server")]
 pub use sparring::{SparMatch, Sparring, Unbreakable};
+#[cfg(feature = "server")]
+pub use stationery::RapsheetCount;
 #[cfg(feature = "server")]
 pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutter, Paperwork};
 #[cfg(feature = "server")]

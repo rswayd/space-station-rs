@@ -101,6 +101,9 @@ pub enum Span {
     /// tg `emoji_parse`: the segment is one emoji, drawn as this icon state of `EMOJI_SET`; its
     /// text (`:name:`) is what a client without the icon shows and what logs keep.
     Emoji(crate::IconStateId),
+    /// A clickable chat link (BYOND `<a href='?src=...'>` in `to_chat`): a click sends
+    /// `ClientIntent::ChatLink` with this id, which only the server knows the meaning of.
+    Link(u32),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

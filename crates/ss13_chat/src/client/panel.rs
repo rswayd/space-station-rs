@@ -332,10 +332,12 @@ pub struct ChatEmoji {
     pub icon_state: Option<IconStateId>,
 }
 
-/// A run of a row: its text pieces, or one emoji.
+/// A run of a row: its text pieces, or one emoji; a link's run is a button whose click is
+/// `link:<id>` ([`on_act`]).
 fn run_scene(
     texts: Vec<(Span, String)>,
     emoji: Option<IconStateId>,
+    link: Option<u32>,
     outer: Option<Span>,
 ) -> impl Scene {
     let spans: Vec<_> = texts
@@ -358,10 +360,15 @@ fn run_scene(
             ]
         }
     });
+    let link = link.map(|id| {
+        let action = format!("link:{id}");
+        bsn! { bevy::ui_widgets::Button Act(action) }
+    });
     bsn! {
         Node { align_items: AlignItems::Center }
         @{text}
         @{icon}
+        @{link}
     }
 }
 
@@ -377,15 +384,26 @@ fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
                     if text.len() > 2 && text.starts_with(':') && text.ends_with(':') =>
                 {
                     if !texts.is_empty() {
-                        runs.push(run_scene(std::mem::take(&mut texts), None, outer));
+                        runs.push(run_scene(std::mem::take(&mut texts), None, None, outer));
                     }
-                    runs.push(run_scene(Vec::new(), Some(id), outer));
+                    runs.push(run_scene(Vec::new(), Some(id), None, outer));
+                }
+                Span::Link(id) => {
+                    if !texts.is_empty() {
+                        runs.push(run_scene(std::mem::take(&mut texts), None, None, outer));
+                    }
+                    runs.push(run_scene(
+                        vec![(*span, text.clone())],
+                        None,
+                        Some(id),
+                        outer,
+                    ));
                 }
                 _ => texts.push((*span, text.clone())),
             }
         }
         if !texts.is_empty() {
-            runs.push(run_scene(texts, None, outer));
+            runs.push(run_scene(texts, None, None, outer));
         }
         (runs, line.badge)
     });
@@ -690,6 +708,7 @@ fn on_act(
     mut tabs: Query<(&mut TabsTab, &Act)>,
     mut view: ResMut<ChatView>,
     mut channel: ResMut<SayChannel>,
+    mut intents: MessageWriter<SendIntent>,
 ) {
     if !panels.contains(act.scope) {
         return;
@@ -697,6 +716,11 @@ fn on_act(
     match act.action.as_str() {
         "scroll_bottom" => view.autoscroll.jump_to_bottom(),
         "cycle_channel" => *channel = channel.next(),
+        action if action.starts_with("link:") => {
+            if let Ok(id) = action["link:".len()..].parse() {
+                intents.write(SendIntent(ClientIntent::ChatLink(id)));
+            }
+        }
         action => {
             let tab = match action {
                 "tab:all" => ChatTab::All,

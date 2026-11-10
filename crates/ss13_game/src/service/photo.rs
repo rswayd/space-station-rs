@@ -358,6 +358,22 @@ pub fn capture(
     })
 }
 
+/// `/datum/record/crew/make_photo`: a one-tile picture of `mob` alone, turned to `facing`
+/// (its look now: tg keeps the `character_appearance` of the join).
+pub fn portrait(world: &World, mob: Entity, facing: Dir) -> Option<Picture> {
+    let look = world.get::<Appearance>(mob)?;
+    let mut drawn = Vec::new();
+    sprites_of(look, facing, [0, 0], 0, &mut drawn);
+    drawn.sort_by_key(|(a, _)| *a);
+    Some(Picture {
+        name: String::new(),
+        desc: String::new(),
+        width: 1,
+        height: 1,
+        sprites: drawn.into_iter().map(|(_, s)| s).collect(),
+    })
+}
+
 /// Draw order: plane, layer, then the atom's place in the scan and the overlay's in its list.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DrawKey {
