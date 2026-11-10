@@ -392,3 +392,25 @@ fn a_grabbed_human_thrown_into_a_wall_is_paralyzed_and_hurt() {
     assert!((lost - 10.0).abs() < 0.01, "B took 10 brute, lost {lost}");
     assert!(!s.paralyzed(a), "the thrower is fine");
 }
+
+/// A gibbed player body leaves every client that saw it.
+#[test]
+fn a_gibbed_body_leaves_the_clients() {
+    let (mut s, _a, b) = Station::start();
+    let id = s.net_id(0, b).expect("A sees B");
+    assert!(s.client_copy(0, b).is_some());
+    ss13_game::health::gib(s.server.world_mut(), b);
+    s.run_for(1.0);
+    let world = s.players[0].app.world_mut();
+    let mut q = world.query::<&ss13_net::client::NetEntity>();
+    let left: Vec<_> = q.iter(world).filter(|n| n.0 == id).collect();
+    assert!(left.is_empty(), "A's client still has the body {id:?}");
+    let world = s.server.world_mut();
+    let mut q = world.query_filtered::<(Entity, &TilePos, Option<&Name>), With<Health>>();
+    let there: Vec<_> = q
+        .iter(world)
+        .filter(|(_, p, _)| **p == B_AT)
+        .map(|(e, _, n)| format!("{e} {n:?}"))
+        .collect();
+    assert!(there.is_empty(), "a body is still on its tile: {there:?}");
+}

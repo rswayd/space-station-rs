@@ -291,6 +291,10 @@ fn path_of(world: &World, e: Entity) -> Option<String> {
     if let Some(mob) = entity.get::<ss13_mapload::DmMob>() {
         return Some(mob.path.clone());
     }
+    // A ghost is a player's mob too, and stays where its body was.
+    if entity.contains::<ss13_game::ghost::Ghost>() {
+        return Some("/mob/dead/observer".into());
+    }
     if entity.contains::<PlayerMob>() || entity.contains::<Health>() {
         return Some("/mob/living/carbon/human".into());
     }
