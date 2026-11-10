@@ -84,6 +84,7 @@ impl Plugin for GameClientPlugin {
         ))
         .add_plugins(crate::antag::nukeop::client::NukeopClientPlugin)
         .add_plugins(crate::shuttle_console_client::ShuttleConsoleClientPlugin)
+        .add_plugins(crate::transport_ui_client::TransportClientPlugin)
         .add_plugins(crate::bots::client::BotsClientPlugin)
         .add_plugins(crate::antag::cult::client::CultClientPlugin)
         .add_plugins(crate::antag::revolution::client::RevolutionClientPlugin)

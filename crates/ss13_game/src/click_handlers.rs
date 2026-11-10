@@ -169,6 +169,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 9 | `deployable_turrets::gunner_click` (a turret's gunner aims and fires) |
+//! | 95 | `shuttle_docker::interact` (a navigation computer: take, leave, rotate; its operator's clicks designate the landing spot) |
 //! | 97 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 99 | `machine_wires::empty_hand` (an open panel shows the wires) |
 //! | 100 | `silicon::interact::attack_robot` |
@@ -304,6 +305,7 @@
 //! | 330 | `shuttle_console_server` (a held item on a shuttle console) |
 //! | 340 | `shuttle_nav` (a held item on a navigation console) |
 //! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |
+//! | 355 | `transport::elevator` (an emag on an elevator panel) |
 //! | 400 | `modsuit::server::item_interaction` |
 //! | 500 | `assemblies::server::item_interaction` |
 //! | 555 | `wiremod::devices::cable_interaction` (USB cables on shells and machines) |

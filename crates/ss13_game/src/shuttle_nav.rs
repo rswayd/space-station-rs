@@ -20,7 +20,8 @@
 // (docks here never overlap), no recharge time, no `no_destination_swap` mid-flight changes (a
 // flying shuttle refuses new requests), no silicon refusal of the ferry console (`attack_ai`).
 // Consoles of shuttles not loaded (monastery) are not claimed here; [`ShuttleConsole::new`] and
-// [`NavShuttle::new`] are the way in.
+// [`NavShuttle::new`] are the way in. Mapped shuttle lifts (`/obj/docking_port/mobile/elevator`)
+// register themselves ([`register_lift_shuttles`]) and dock at once on a request.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -167,6 +168,8 @@ pub struct NavShuttle {
     pub call_secs: f64,
     /// The dock it left from (tg `previous`), where a failed docking puts it back.
     pub previous: Option<Entity>,
+    /// `/obj/docking_port/mobile/elevator`: a request docks it at once, no ignition or transit.
+    pub instant: bool,
 }
 
 impl NavShuttle {
@@ -178,6 +181,7 @@ impl NavShuttle {
             ignition_secs: IGNITION_SECS,
             call_secs: CALL_SECS,
             previous: None,
+            instant: false,
         }
     }
 }
@@ -253,7 +257,10 @@ impl Plugin for ShuttleNavPlugin {
         });
         app.register_ui::<ShuttleConsoleUi>()
             // After every Startup system has registered its shuttles.
-            .add_systems(ss13_world::MapInitLate, setup_consoles)
+            .add_systems(
+                ss13_world::MapInitLate,
+                (register_lift_shuttles, setup_consoles).chain(),
+            )
             .add_systems(
                 Update,
                 (
@@ -262,6 +269,43 @@ impl Plugin for ShuttleNavPlugin {
                     tick_flights,
                 ),
             );
+    }
+}
+
+/// `/obj/docking_port/mobile/elevator` (`mobile_port/variants/elevator.dm`): the old
+/// shuttle-mechanism lift, mapped in place.
+pub const LIFT_PORT: &str = "/obj/docking_port/mobile/elevator";
+
+/// The mapped shuttle lifts: registered where they stand (ids `elevator`, `elevator_2`, ... as
+/// tg's `Check_id` counter) and flown by consoles like any shuttle, docking at once.
+pub(crate) fn register_lift_shuttles(world: &mut World) {
+    let mut q =
+        world.query_filtered::<(Entity, &ss13_mapload::DmDockingPort), With<ss13_world::Mapped>>();
+    let mut lifts: Vec<(Entity, String)> = q
+        .iter(world)
+        .filter(|(_, d)| is_under(&d.path, LIFT_PORT))
+        .map(|(e, d)| {
+            let id = if d.shuttle_id.is_empty() {
+                "elevator"
+            } else {
+                d.shuttle_id.as_str()
+            };
+            (e, id.to_owned())
+        })
+        .collect();
+    lifts.sort_by_key(|(e, _)| world.get::<TilePos>(*e).map(|p| (p.z, p.y, p.x)));
+    let mut seen: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    for (port, base) in lifts {
+        let n = seen.entry(base.clone()).or_default();
+        *n += 1;
+        let id = if *n > 1 { format!("{base}_{n}") } else { base };
+        if !crate::shuttle::register_mapped_port(world, port, &id) {
+            warn!("shuttle lift {port} ({id}) has no size or no shuttle area");
+            continue;
+        }
+        let mut nav = NavShuttle::new(port);
+        nav.instant = true;
+        world.entity_mut(port).insert(nav);
     }
 }
 
@@ -552,6 +596,14 @@ pub fn request(world: &mut World, port: Entity, dest: Entity) -> bool {
     };
     if nav.flight != Flight::Idle {
         return false;
+    }
+    if nav.instant {
+        // `/obj/docking_port/mobile/elevator/request`: `initiate_docking(S, force = TRUE)`.
+        nav.previous = docked;
+        drop(nav);
+        let moved = initiate_docking(world, port, dest);
+        info!("lift shuttle {port} docked: {moved:?}");
+        return moved.is_ok();
     }
     nav.flight = Flight::Igniting {
         dest,

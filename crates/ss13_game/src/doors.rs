@@ -221,6 +221,9 @@ pub struct Door {
     pub(crate) cycle_close_at: Option<f64>,
     /// tg `delayed_close_requested`: a linked airlock opened while this one moved.
     pub(crate) delayed_close_requested: bool,
+    /// tg `elevator_mode` doors (`crate::transport`): `Some(locked)` with `elevator_status`
+    /// (`LIFT_PLATFORM_LOCKED` while the lift is away: no hand opens it).
+    pub elevator_locked: Option<bool>,
 }
 
 /// An airlock's sound vars (empty: silent).
@@ -246,6 +249,13 @@ enum DoorSound {
 }
 
 impl Door {
+    /// Its filler was carried to `to` with it (a moving tram, `crate::transport`).
+    pub fn filler_moved(&mut self, to: TilePos) {
+        if let Some((_, pos)) = &mut self.filler {
+            *pos = to;
+        }
+    }
+
     pub fn is_operating(&self) -> bool {
         self.emagging
             || matches!(
@@ -620,6 +630,7 @@ fn door_from(
         security_level: dm.security_level,
         close_other_id: dm.close_other_id.clone(),
         close_others: Vec::new(),
+        elevator_locked: None,
         cyclelinked: None,
         cycle_opened: false,
         cycle_close_at: None,
@@ -888,12 +899,18 @@ fn activate(
         || !door.can_open_with_hands
         || door.is_operating()
         || !door.has_power(env.powered)
+        || door.elevator_locked == Some(true)
     {
         return false;
     }
     let (opener_pos, access) = opener;
     // "if the ID wire is cut no ID cards are checked at all!": nothing opens it by hand.
-    let allowed = door.allows(access) || door.emergency || door.unrestricted_from(pos, opener_pos);
+    // An elevator windoor whose lift is here opens to a bump without access (`bumpopen`).
+    let lift_here = bumped && door.kind == DoorKind::Windoor && door.elevator_locked == Some(false);
+    let allowed = door.allows(access)
+        || door.emergency
+        || door.unrestricted_from(pos, opener_pos)
+        || lift_here;
     if !door.requires_id(env.wires) || !allowed {
         if door.state != DoorState::Closed {
             return false;
@@ -2163,6 +2180,7 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         security_level: 0,
         close_other_id: String::new(),
         close_others: Vec::new(),
+        elevator_locked: None,
         cyclelinked: None,
         cycle_opened: false,
         cycle_close_at: None,

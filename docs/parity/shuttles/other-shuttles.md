@@ -12,7 +12,7 @@
 
 - **Код:** [`/obj/machinery/computer/camera_advanced/shuttle_docker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/shuttle_consoles/navigation_computer.dm#L1), [`/obj/machinery/computer/camera_advanced/shuttle_docker/whiteship`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/shuttle_consoles/white_ship.dm#L19)
 - **BandaStation:** [`dockers.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/shuttles/code/dockers.dm#L45) — переопределение доков синдиката и доки для шаттлов форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/shuttle_docker.rs`: компьютеры белого корабля, синдиката (смещения BandaStation), SIT, SST, Аргоса и спецназа (`DOCKERS`); щелчок — взять/оставить управление, правый щелчок — поворот точки посадки на 90° со смещениями; щелчок оператора по видимой клетке ставит док `<shuttle>_custom` («custom location») с размером шаттла: проверка каждой клетки (10 клеток от края, только уровни загруженных карт, не шаблоны и не транзит, белый список турфов, у синдиката и минеральные стены, вне прямоугольников чужих доков, свои клетки всегда можно); док переносится, а занятый шаттлом остаётся без id; консоль шаттла летит к нему как к обычному. Нет камеры-глаза (точка — только среди видимых оператору клеток, без зелёной/красной разметки и списка прыжков), ожидания `designate_time`, скрытых доков, глушения при войне, `z_lock`
 
 ### Шаттл прибытия
 Привозит опоздавших игроков на станцию, сам летает между ЦК и станцией, не улетает, пока на борту есть люди или открыта дверь; латеджойн-места — кресла на нём.
@@ -54,7 +54,7 @@ _«Шаттлы майнинга и трудового лагеря» описа
 Старый тип лифта на механизме шаттлов (`/obj/docking_port/mobile/elevator`), сейчас почти не используется картами (лифты — см. transport.md).
 
 - **Код:** [`/obj/docking_port/mobile/elevator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/shuttle/mobile_port/variants/elevator.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/shuttle_nav.rs` (`register_lift_shuttles`, `NavShuttle::instant`) и `crates/ss13_game/src/shuttle.rs` (`register_mapped_port`): размеченный на карте `/obj/docking_port/mobile/elevator` регистрируется на месте (размер из своих переменных, области `/area/shuttle` своего прямоугольника, док под ним; id `elevator`, `elevator_2`…), запрос консоли сразу стыкует его (`initiate_docking(force)`), без разогрева и транзита. Тест: `crates/ss13_game/tests/it/transport.rs`. Упрощение: турфы его областей получают skipover-турф шаттла, чтобы ехать с ним
 
 ### Шаттлы форка: SIT, SST, Аргос, спецназ, Гамма, капсула NT
 Дополнительные шаттлы BandaStation: ударные отряды Синдиката (SIT/SST), «Аргос», спецопераций ЦК, шаттл Гамма-арсенала, штурмовая капсула Nanotrasen; свои области, консоли, платы, доки и звук высадки. Установившему код Гамма админу предлагается сразу отправить шаттл Гамма-арсенала (`/datum/security_level/gamma/post_set_security_level`; сам код — ../security/security-levels.md).
