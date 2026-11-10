@@ -53,6 +53,7 @@ pub mod mining;
 pub mod mob_spawn;
 pub mod mobs;
 pub mod modsuit;
+pub mod nanomap;
 pub mod plants;
 pub mod power;
 pub mod puzzle;

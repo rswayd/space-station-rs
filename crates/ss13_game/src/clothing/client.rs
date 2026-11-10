@@ -1,10 +1,14 @@
-//! Client half of the clothing: the crew monitor window (tgui `CrewConsole.tsx`).
+//! Client half of the clothing: the crew monitor window (tgui `CrewConsole.tsx`, with
+//! BandaStation's `CrewConsole220` List and Map tabs).
 // shortcut: no sort cycling, sort direction or name search; the server sends the list sorted by
-// job (the window's default sort). No "Track" column (no AI link).
+// job (the window's default sort). No "Track" column (no AI link). The map has no heads-only
+// filter or marker highlighting, and its tooltip is one line (name, job, area).
 
 use bevy::scene::EntityScene;
-use ss13_tgui::client::{AppTguiClientExt, ClientUi};
+use ss13_tgui::client::{AppTguiClientExt, ClientUi, SetLocal, UiLocalState};
 use ss13_ui_kit::prelude::*;
+
+use crate::nanomap::MapUiData;
 
 use super::*;
 
@@ -137,35 +141,156 @@ fn row(sensor: &CrewSensor) -> impl Scene + use<> {
     }
 }
 
+/// `useSharedState('crewConsole-tab', 'List')` and `MapView`'s `selectedLevel`.
+const LOCAL_TAB: &str = "tab";
+const LOCAL_Z: &str = "z";
+const MARKER: f32 = 10.0;
+
+fn table(data: &CrewConsoleData) -> impl Scene + use<> {
+    let rows: Vec<_> = data.sensors.iter().map(row).collect();
+    bsn! {
+        @Section { @fill: true, @scrollable: true }
+        Children [
+            @Table
+            Children [
+                @TableRow
+                Children [
+                    @TableCell { @header: true, @content: "Name" }
+                    --
+                    @TableCell { @header: true, @collapsing: true }
+                    --
+                    @TableCell { @header: true, @collapsing: true, @content: "Vitals" }
+                    --
+                    @TableCell { @header: true, @content: "Position" }
+                ]
+                --
+                {rows}
+            ]
+        ]
+    }
+}
+
+/// `MapView`: a circular marker per tracked sensor of the chosen level, in its health color, a
+/// skull when dead.
+fn map_view(map: &MapUiData, data: &CrewConsoleData, local: &UiLocalState) -> impl Scene + use<> {
+    let levels = map.levels();
+    let level = local
+        .value(LOCAL_Z)
+        .and_then(|z| z.parse::<u16>().ok())
+        .filter(|z| levels.contains(z))
+        .or(Some(map.main_floor));
+    let tabs = crate::nanomap::level_tabs(map, level, LOCAL_Z);
+    let markers: Vec<_> = data
+        .sensors
+        .iter()
+        .filter_map(|sensor| {
+            let pos = sensor.pos.filter(|p| Some(p.z) == level)?;
+            let (x, y) = crate::nanomap::tile_px(pos.x, pos.y);
+            let half = MARKER / 2.0;
+            let color = UiColor::Css(
+                sensor
+                    .vitals
+                    .as_ref()
+                    .map_or(HEALTH_COLORS[0], health_color),
+            );
+            let icon = if sensor.life_status == STAT_DEAD {
+                "skull"
+            } else {
+                ""
+            };
+            let mut tooltip = match &sensor.assignment {
+                Some(a) => format!("{} ({a})", sensor.name),
+                None => sensor.name.clone(),
+            };
+            if let Some(area) = &sensor.area {
+                tooltip.push_str(&format!(": {area}"));
+            }
+            let name = Name::new(format!("crew marker: {}", sensor.name));
+            Some(bsn! {
+                @ss13_ui_kit::Button {
+                    @tooltip: tooltip,
+                    @icon: icon,
+                    @compact: true,
+                    @circular: true,
+                }
+                ss13_ui_kit::Button { color: color }
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(x - half),
+                    top: px(y - half),
+                    width: px(MARKER),
+                    height: px(MARKER),
+                    min_height: px(MARKER),
+                    padding: UiRect::ZERO,
+                }
+                name
+            })
+        })
+        .collect();
+    let area = crate::nanomap::map_area(map, level, markers);
+    bsn! {
+        @Stack { @vertical: true, @fill: true }
+        Children [
+            @StackItem Children [ @Tabs Children [ {tabs} ] ]
+            --
+            @StackItem { @grow: 1.0 }
+            Node { min_height: px(0) }
+            Children [
+                @Section { @fill: true, @scrollable: true }
+                Children [ {EntityScene(area)} ]
+            ]
+        ]
+    }
+}
+
+fn crew_view(map: &MapUiData, data: &CrewConsoleData, local: &UiLocalState) -> impl Scene + use<> {
+    let map_tab = local.get(LOCAL_TAB) == "map";
+    let tabs = [
+        ("list", "List", "table", !map_tab),
+        ("map", "Map", "map", map_tab),
+    ]
+    .map(|(key, label, icon, selected)| {
+        let pick = SetLocal {
+            key: LOCAL_TAB.to_owned(),
+            value: key.to_owned(),
+            rerender: true,
+        };
+        bsn! {
+            @TabsTab { @content: label, @icon: icon }
+            TabsTab { selected: selected }
+            pick
+        }
+    });
+    let body: Box<dyn SceneList> = if map_tab {
+        Box::new(EntityScene(map_view(map, data, local)))
+    } else {
+        Box::new(EntityScene(table(data)))
+    };
+    bsn! {
+        @WindowContent
+        Children [
+            @Stack { @vertical: true, @fill: true }
+            Children [
+                @StackItem Children [ @Tabs Children [ {Vec::from(tabs)} ] ]
+                --
+                @StackItem { @grow: 1.0 }
+                Node { min_height: px(0) }
+                Children [ {body} ]
+            ]
+        ]
+    }
+}
+
 impl ClientUi for CrewConsoleUi {
     const WIDTH: f32 = 600.0;
-    const HEIGHT: f32 = 600.0;
+    const HEIGHT: f32 = 650.0;
 
-    fn content(_: &(), data: &CrewConsoleData) -> impl Scene {
-        let rows: Vec<_> = data.sensors.iter().map(row).collect();
-        bsn! {
-            @WindowContent
-            Children [
-                @Section { @title: "Crew Monitor", @scrollable: true }
-                Children [
-                    @Table
-                    Children [
-                        @TableRow
-                        Children [
-                            @TableCell { @header: true, @content: "Name" }
-                            --
-                            @TableCell { @header: true, @collapsing: true }
-                            --
-                            @TableCell { @header: true, @collapsing: true, @content: "Vitals" }
-                            --
-                            @TableCell { @header: true, @content: "Position" }
-                        ]
-                        --
-                        {rows}
-                    ]
-                ]
-            ]
-        }
+    fn content(map: &MapUiData, data: &CrewConsoleData) -> impl Scene {
+        crew_view(map, data, &UiLocalState::default())
+    }
+
+    fn content_local(map: &MapUiData, data: &CrewConsoleData, local: &UiLocalState) -> impl Scene {
+        crew_view(map, data, local)
     }
 }
 

@@ -26,11 +26,13 @@ pub struct CameraEntry {
     pub status: bool,
 }
 
-/// `ui_static_data`: `network`, `cameras` (sorted by `c_tag`, tg `cmp_camera_ctag_asc`).
+/// `ui_static_data`: `network`, `cameras` (sorted by `c_tag`, tg `cmp_camera_ctag_asc`),
+/// BandaStation's `mapData`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct CameraConsoleStatic {
     pub network: Vec<String>,
     pub cameras: Vec<CameraEntry>,
+    pub map_data: crate::nanomap::MapUiData,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

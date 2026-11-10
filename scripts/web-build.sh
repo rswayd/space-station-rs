@@ -57,7 +57,7 @@ awk -F'\t' '
     {
         side = "server"
         if ($1 == "manifest.postcard") side = "both"
-        else if ($1 ~ /^(atlas|sound)\//) side = "client"
+        else if ($1 ~ /^(atlas|sound|nanomap)\//) side = "client"
         gsub(/\\/, "\\\\", $1); gsub(/"/, "\\\"", $1)
         printf "%s\n{\"path\":\"%s\",\"size\":%d,\"side\":\"%s\"}", (NR > 1 ? "," : ""), $1, $2, side
     }

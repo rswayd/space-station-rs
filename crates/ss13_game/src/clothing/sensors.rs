@@ -16,7 +16,8 @@
 // shortcut: no AI tracking link (`select_person`), no sorting/search controls in the window, no
 // sparks while broken (`sensor_malfunction`), no suit sensor module (`/obj/item/suit_sensor`,
 // wirecutters), no strip menu sensor action, no ctrl-click to tracking, no
-// `TRAIT_MULTIZ_SUIT_SENSORS`, BandaStation's NanoMap (`CrewConsole220`) is the plain tg list.
+// `TRAIT_MULTIZ_SUIT_SENSORS`. BandaStation's map tab (`CrewConsole220`) gets `mapData` and the
+// positions; its heads-only filter and marker highlighting are not ported.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -75,6 +76,8 @@ pub struct SuitSensor {
 pub struct CrewConsole {
     pub sensors: Vec<CrewSensor>,
     updated: Option<f64>,
+    /// BandaStation's `ui_static_data` `mapData`, set on the first read.
+    map: crate::nanomap::MapUiData,
 }
 
 /// The jumpsuit a mode prompt is about.
@@ -480,8 +483,9 @@ pub fn update_data(world: &mut World, z: u16) -> Vec<CrewSensor> {
                 brute: h.brute.round() as i32,
                 health: h.health().round() as i32,
             });
-        let area = (sensor.mode >= SENSOR_COORDS)
-            .then(|| crate::forensics::capitalize(&crate::bots::area_name(world, pos)));
+        let tracking = sensor.mode >= SENSOR_COORDS;
+        let area =
+            tracking.then(|| crate::forensics::capitalize(&crate::bots::area_name(world, pos)));
         out.push(CrewSensor {
             key: mob.to_bits(),
             name,
@@ -490,6 +494,7 @@ pub fn update_data(world: &mut World, z: u16) -> Vec<CrewSensor> {
             life_status,
             vitals,
             area,
+            pos: tracking.then_some(pos),
         });
     }
     // The window's default sort: by job id (a stable sort keeps the list's order otherwise).
@@ -515,6 +520,10 @@ fn refresh_consoles(world: &mut World) {
 }
 
 fn refresh(world: &mut World, consoles: Vec<(Entity, u16)>, now: f64) {
+    if consoles.is_empty() {
+        return;
+    }
+    let map = crate::nanomap::map_ui_data(world);
     let mut by_z: Vec<(u16, Vec<CrewSensor>)> = Vec::new();
     for (console, z) in consoles {
         let sensors = match by_z.iter().find(|(at, _)| *at == z) {
@@ -529,6 +538,9 @@ fn refresh(world: &mut World, consoles: Vec<(Entity, u16)>, now: f64) {
             c.updated = Some(now);
             if c.sensors != sensors {
                 c.sensors = sensors;
+            }
+            if c.map != map {
+                c.map = map.clone();
             }
         }
     }
@@ -571,7 +583,7 @@ pub struct CrewWindow;
 impl UiInterface for CrewWindow {
     const NAME: &'static str = CrewConsoleUi::NAME;
     type Data = CrewConsoleData;
-    type StaticData = ();
+    type StaticData = crate::nanomap::MapUiData;
 }
 
 impl ServerUi for CrewWindow {
@@ -579,7 +591,9 @@ impl ServerUi for CrewWindow {
     type UserParam = ();
     type Act = ();
 
-    fn static_data(_: &CrewConsole) {}
+    fn static_data(console: &CrewConsole) -> crate::nanomap::MapUiData {
+        console.map.clone()
+    }
 
     fn data(console: &CrewConsole, _: Entity, _: &()) -> CrewConsoleData {
         CrewConsoleData {

@@ -28,6 +28,7 @@ usage:
       and <assets>/plants.ron (seeds, plant traits, hydroponics trays)
       and <assets>/mobs.ron (basic mob types)
       and <assets>/sfx.ron (SFX keys), <assets>/sound/ (referenced .ogg files, attributions)
+      and <assets>/nanomap/ (station map images of the camera and crew monitor maps)
   ss13-mapload load [--source <repo>] [--assets <dir>] [--seed <n>] [--raw] <map>...
       loads maps (names like MetaStation or .dmm paths) and prints the report; --raw skips the
       fidelity pass (spawners, undertile, smoothing); the seed defaults to $SS13_MAP_SEED
@@ -381,6 +382,24 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     );
     for missing in &copied.missing {
         println!("  sound file missing in the source: {missing}");
+    }
+    let nanomaps = ss13_mapload::nanomap::copy_nanomaps(
+        &config.source,
+        &config.assets,
+        &ss13_mapload::sound::source_commit(&config.source),
+    )?;
+    println!(
+        "{} nanomap images ({:.1} MB, {} attribution files) -> {}",
+        nanomaps.copied,
+        nanomaps.bytes as f64 / 1e6,
+        nanomaps.attributions,
+        config
+            .assets
+            .join(ss13_mapload::nanomap::NANOMAP_DIR)
+            .display()
+    );
+    for missing in &nanomaps.missing {
+        println!("  nanomap image missing in the source: {missing}");
     }
     let modsuit_out = config.assets.join(ss13_mapload::modsuit::MODSUIT_FILE);
     std::fs::write(&modsuit_out, modsuits.to_ron())

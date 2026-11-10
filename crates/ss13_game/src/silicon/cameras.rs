@@ -644,13 +644,18 @@ fn init_consoles(world: &mut World) {
         .map(|(e, d)| (e, d.network.iter().map(|n| n.to_lowercase()).collect()))
         .collect();
     let mut by_network: HashMap<Vec<String>, Arc<CameraConsoleStatic>> = HashMap::new();
+    let map_data = crate::nanomap::map_ui_data(world);
     let mut cams = world.query::<(Entity, &Camera, &TilePos)>();
     for (console, network) in found {
         let statics = by_network
             .entry(network.clone())
             .or_insert_with(|| {
                 let cameras = camera_entries(cams.iter(world), &network);
-                Arc::new(CameraConsoleStatic { network, cameras })
+                Arc::new(CameraConsoleStatic {
+                    network,
+                    cameras,
+                    map_data: map_data.clone(),
+                })
             })
             .clone();
         world.entity_mut(console).insert(CameraConsole {

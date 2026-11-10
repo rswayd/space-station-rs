@@ -24,7 +24,7 @@
 // TTS filter (no TTS), no sign language check; only local speech is loud, not what goes to a
 // radio.
 // shortcut: no bounty shuttle or material sniffer pinpointers; the handheld monitor has no
-// drag-to-activate and shows BandaStation's NanoMap window as the plain tg list (as the console).
+// drag-to-activate; its window is the console's (List and Map tabs, `crate::nanomap`).
 // Cost: one pass over the megaphones (a handful per map) per tick, one lookup per spoken line;
 // the active pair and crew pinpointers every 0.2 s (a crew pinpointer's choice list: one pass
 // over the mobs with an inventory, on use).

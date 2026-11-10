@@ -111,7 +111,8 @@
 //! - `silicon` (feature `server`; the windows' data shared, `silicon::client` with `client`):
 //!   security cameras and the camera network, the camera console, the AI (core, eye, AI
 //!   clicks), cyborgs (models, cell, recharging stations), laws, binary chat.
-//! - `ui_sprites` (feature `client`): atlas sprites inside tgui windows (`UiSprite`).
+//! - `ui_sprites` (feature `client`): atlas sprites inside tgui windows (`UiSprite`). `nanomap`:
+//!   BandaStation's station map under the camera console's and crew monitor's markers.
 //! - `drag` (feature `server`): click-drags (tg `MouseDrop`): storages, the strip menu, closets.
 //!   `strip` (feature `server`): the strip menu. `loot` (feature `server`): alt-clicks
 //!   (`click_alt`, the loot panel). `point` (feature `server`): shift+middle pointing. `panels`:
@@ -484,6 +485,7 @@ pub mod mood;
 pub mod mood_client;
 #[cfg(feature = "server")]
 pub mod multiz;
+pub mod nanomap;
 pub mod newscaster;
 #[cfg(feature = "client")]
 pub mod newscaster_client;
