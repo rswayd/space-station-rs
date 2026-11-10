@@ -310,14 +310,7 @@ pub fn clamp(world: &mut World, ctx: SelectUse, loader: bool) {
             module: ctx.module,
         };
         let actor = actor(world, &ctx);
-        do_after(
-            world,
-            actor,
-            ctx.target,
-            delay_ds,
-            0,
-            Job::ModSuit(job),
-        );
+        do_after(world, actor, ctx.target, delay_ds, 0, Job::ModSuit(job));
         return;
     }
     let loaded = world
@@ -339,14 +332,7 @@ pub fn clamp(world: &mut World, ctx: SelectUse, loader: bool) {
             module: ctx.module,
         };
         let actor = actor(world, &ctx);
-        do_after(
-            world,
-            actor,
-            turf,
-            delay_ds,
-            0,
-            Job::ModSuit(job),
-        );
+        do_after(world, actor, turf, delay_ds, 0, Job::ModSuit(job));
         return;
     }
     tell_mob(world, ctx.wearer, Span::Warning, "неверная цель!");

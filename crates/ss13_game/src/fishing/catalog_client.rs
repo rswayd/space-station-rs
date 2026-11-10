@@ -75,25 +75,20 @@ fn fish_section(f: &AnalyzedFish) -> impl Scene + use<> {
             " (incompatible)"
         }
     );
+    let rows = vec![
+        row("Health", format!("{}%", f.fish_health.round())),
+        row("Size", format!("{} cm", f.fish_size)),
+        row("Weight", format!("{} g", f.fish_weight)),
+        row("Hunger", format!("{}%", (f.fish_hunger * 100.0).round())),
+        row("Food", f.fish_food.clone()),
+        row("Temperature", temp),
+        row("Fluid", fluid),
+    ];
     bsn! {
         @Section { @title: title }
         Children [
             @LabeledList
-            Children [
-                {row("Health", format!("{}%", f.fish_health.round()))}
-                --
-                {row("Size", format!("{} cm", f.fish_size))}
-                --
-                {row("Weight", format!("{} g", f.fish_weight))}
-                --
-                {row("Hunger", format!("{}%", (f.fish_hunger * 100.0).round()))}
-                --
-                {row("Food", f.fish_food.clone())}
-                --
-                {row("Temperature", temp)}
-                --
-                {row("Fluid", fluid)}
-            ]
+            Children [ {rows} ]
             --
             Node { flex_direction: FlexDirection::Column }
             Children [ {traits} ]
@@ -147,33 +142,28 @@ fn catalog_view(s: &FishCatalogStatic, local: &UiLocalState) -> impl Scene + use
                 .collect();
             let title = f.name.clone();
             let desc = f.desc.clone();
+            let rows = vec![
+                row("Required fluid", f.fluid.clone()),
+                row(
+                    "Temperature",
+                    format!("{}-{} K", f.temp_min.round(), f.temp_max.round()),
+                ),
+                row("Average size", format!("{} cm", f.size)),
+                row("Average weight", format!("{} g", f.weight)),
+                row("Feed", f.feed.clone()),
+                row("Acquisition", f.source.clone()),
+                row("Spots", f.spots.clone()),
+                row("Difficulty", f.difficulty.clone()),
+                row("Favorite bait", f.favorite_bait.clone()),
+                row("Disliked bait", f.disliked_bait.clone()),
+            ];
             Box::new(bsn! {
                 @Section { @title: title }
                 Children [
                     Node Children [ Text(desc) ]
                     --
                     @LabeledList
-                    Children [
-                        {row("Required fluid", f.fluid.clone())}
-                        --
-                        {row("Temperature", format!("{}-{} K", f.temp_min.round(), f.temp_max.round()))}
-                        --
-                        {row("Average size", format!("{} cm", f.size))}
-                        --
-                        {row("Average weight", format!("{} g", f.weight))}
-                        --
-                        {row("Feed", f.feed.clone())}
-                        --
-                        {row("Acquisition", f.source.clone())}
-                        --
-                        {row("Spots", f.spots.clone())}
-                        --
-                        {row("Difficulty", f.difficulty.clone())}
-                        --
-                        {row("Favorite bait", f.favorite_bait.clone())}
-                        --
-                        {row("Disliked bait", f.disliked_bait.clone())}
-                    ]
+                    Children [ {rows} ]
                     --
                     Node { flex_direction: FlexDirection::Column }
                     Children [ {traits} ]
