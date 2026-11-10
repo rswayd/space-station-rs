@@ -38,10 +38,10 @@
 - **Статус в ss13-rs:** ❌ нет
 
 ### Каза Рук
-Стиль ящеров (перчатки): удар в шею, подсечка, удар в лёгкие.
+Стиль ящеров (перчатки): удар в шею, подсечка, удар в лёгкие. Также даётся имплантом Kaza Ruk (перенесено из ../security/implants.md).
 
-- **Код:** [`/datum/martial_art/kaza_ruk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/martial/kaza_ruk.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Код:** [`/datum/martial_art/kaza_ruk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/martial/kaza_ruk.dm#L1), [`/obj/item/implant/kaza_ruk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_kaza_ruk.dm#L1)
+- **Статус в ss13-rs:** ❌ нет — вместе со стилем добавить имплант Kaza Ruk по образцу CQC-импланта (`crates/ss13_game/src/implants/mod.rs`: `ImplantKind::Cqc`, кнопка `activate_cqc` → `crate::martial::teach`/`unlearn` с `Origin::Implant`), имплантер и футляр `kaza_ruk`
 
 ### Прочие стили
 Психотический мордобой (случайные эффекты, от наркотиков), грибной удар (гриболюди), укус паука, искусство джунглей.

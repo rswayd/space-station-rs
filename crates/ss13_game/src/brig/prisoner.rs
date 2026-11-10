@@ -8,14 +8,17 @@
 //! and out, its goal is set (1..1000) and its points reset; every tracking implant on the
 //! console's level (connected station levels count), until ten minutes after its host died, shows
 //! its host and area and can send a message to the host's mind; every chem implant on the level
-//! shows its volume and injects 1, 5 or 10 units; either can self-destruct. Questions (goal,
+//! shows its volume and injects 1, 5 or 10 units; every beacon implant until ten minutes after
+//! its host died shows whether it can be teleported to and whether the host's air is safe; each
+//! can self-destruct. Questions (goal,
 //! message, self-destruct) are tgui prompts, re-checked when answered.
 //!
 //! Every act but `login` needs the console logged in (tg checks only in the UI), and the
 //! window's data is empty until then (tg sends the implants to anyone).
 // shortcut: no silicon access, alt-click eject, logs, console deconstruction (the card stays
-// inside), chem implants synced to a signaller (`frequency`), tracking beacons (`/beacon`) or
-// the .38 TRAC implant. Implant categories are sections, not tabs.
+// inside), chem implants synced to a signaller (`frequency`). Implant categories are sections,
+// not tabs. A beacon's environment check (`is_safe_turf`) looks at the air's pressure and
+// temperature only.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -294,14 +297,18 @@ fn name_of(world: &World, e: Entity) -> String {
 
 /// The mob holding the implant `id` of a kind the console shows, and its kind.
 fn implant_host(world: &mut World, id: u32) -> Option<(Entity, ImplantKind)> {
-    [ImplantKind::Tracking, ImplantKind::Chem]
-        .into_iter()
-        .find_map(|kind| {
-            tracked(world, kind)
-                .into_iter()
-                .find(|&(_, i)| i == id)
-                .map(|(mob, _)| (mob, kind))
-        })
+    [
+        ImplantKind::Tracking,
+        ImplantKind::Chem,
+        ImplantKind::Beacon,
+    ]
+    .into_iter()
+    .find_map(|kind| {
+        tracked(world, kind)
+            .into_iter()
+            .find(|&(_, i)| i == id)
+            .map(|(mob, _)| (mob, kind))
+    })
 }
 
 /// `is_valid_z_level(get_turf(console), get_turf(imp_in))`: the same level, or both on the
@@ -316,6 +323,10 @@ fn same_level(world: &World, a: Entity, b: Entity) -> bool {
 
 /// `is_shown_on_console(console)` of an implant of `kind` in `mob`.
 fn shown(world: &World, console: Entity, mob: Entity, kind: ImplantKind) -> bool {
+    // `beacon/is_shown_on_console`: any level.
+    if kind == ImplantKind::Beacon {
+        return crate::implants::beacon_live(world, mob);
+    }
     if kind == ImplantKind::Tracking {
         let now = world.resource::<Time>().elapsed_secs_f64();
         let expired = world.get::<Stat>(mob) == Some(&Stat::Dead)
@@ -617,7 +628,11 @@ fn refresh_views(world: &mut World) {
         return;
     }
     let mut hosts: Vec<(Entity, u32, ImplantKind)> = Vec::new();
-    for kind in [ImplantKind::Tracking, ImplantKind::Chem] {
+    for kind in [
+        ImplantKind::Tracking,
+        ImplantKind::Chem,
+        ImplantKind::Beacon,
+    ] {
         hosts.extend(
             tracked(world, kind)
                 .into_iter()
@@ -691,6 +706,23 @@ fn implant_info(world: &World, mob: Entity, id: u32, kind: ImplantKind) -> Optio
                 WARN,
             ));
         }
+        // `beacon/get_management_console_data`.
+        ImplantKind::Beacon => {
+            let status = match crate::explosions::turf_of(world, mob) {
+                Some(at)
+                    if world.get::<crate::teleport::NoTeleport>(mob).is_none()
+                        && crate::teleport::check_teleport_valid(world, at, at) =>
+                {
+                    if safe_air(world, at) {
+                        "Implant carrier is in a safe environment."
+                    } else {
+                        "Implant carrier is in a hazardous environment!"
+                    }
+                }
+                _ => "Implant carrier teleport signal cannot be reached!",
+            };
+            info.push(("Status".to_owned(), status.to_owned()));
+        }
         ImplantKind::Chem => {
             let volume = implant.reagents.as_ref().map_or(0.0, |r| r.total_volume);
             info.push(("Volume".to_owned(), format!("{volume}u")));
@@ -709,6 +741,24 @@ fn implant_info(world: &World, mob: Entity, id: u32, kind: ImplantKind) -> Optio
         category: implant.name.clone(),
         implant_ref: id.to_string(),
     })
+}
+
+/// `is_safe_turf`'s goldilocks temperature and pressure of the air at `at`.
+fn safe_air(world: &World, at: TilePos) -> bool {
+    use crate::breath::{
+        BODYTEMP_COLD_DAMAGE_LIMIT, BODYTEMP_HEAT_DAMAGE_LIMIT, HAZARD_HIGH_PRESSURE,
+        HAZARD_LOW_PRESSURE,
+    };
+    let Some(atmos) = world.get_resource::<ss13_atmos::Atmos>() else {
+        return false;
+    };
+    let (Some(t), Some(p)) = (atmos.temperature(at), atmos.pressure(at)) else {
+        return false;
+    };
+    t > BODYTEMP_COLD_DAMAGE_LIMIT
+        && t < BODYTEMP_HEAT_DAMAGE_LIMIT
+        && p > HAZARD_LOW_PRESSURE
+        && p < HAZARD_HIGH_PRESSURE
 }
 
 /// tg `item_interaction` of a prisoner console with a prisoner ID: `id_insert`. True when the

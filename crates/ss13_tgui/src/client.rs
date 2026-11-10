@@ -522,6 +522,8 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::destination_tagger::DestinationTaggerUi>()
             .register_ui_view::<crate::interfaces::gps::GpsUi>()
             .register_ui_view::<crate::interfaces::sleeper::SleeperUi>()
+            .register_ui_view::<crate::interfaces::implant_chair::ImplantChairUi>()
+            .register_ui_view::<crate::interfaces::implant_pad::ImplantPadUi>()
             .register_ui_view::<crate::interfaces::cryo::CryoUi>()
             .register_ui_view::<crate::interfaces::medical_kiosk::MedicalKioskUi>()
             .register_ui_view::<crate::interfaces::limbgrower::LimbgrowerUi>()

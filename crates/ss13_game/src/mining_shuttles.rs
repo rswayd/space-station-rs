@@ -10,8 +10,8 @@
 //!   `laborcamp_away` in `Lavaland.dmm`, [`ss13_mapload::MiningLevel`]). Without a mining level
 //!   the shuttles stay at the station with no destination.
 // The labour camp claim console recalls the shuttle (`crate::brig::labor`).
-// shortcut: no mining console exile implant or head revolutionary refusal, no
-// `no_destination_swap`.
+// shortcut: no mining console head revolutionary refusal (the exile implant's is
+// `crate::shuttle_nav`'s), no `no_destination_swap`.
 
 use std::path::PathBuf;
 

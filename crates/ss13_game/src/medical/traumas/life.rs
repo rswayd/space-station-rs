@@ -130,10 +130,15 @@ pub fn refresh(world: &mut World, mob: Entity) {
     super::super::fear::set_sources(world, mob, &phobias, monophobia);
     super::super::split_personality::sync(world, mob, split);
     super::super::imaginary_friend::sync(world, mob, friend);
-    // Tenacity's `TRAIT_NOSOFTCRIT` and `TRAIT_NOHARDCRIT`, with the species' own.
+    // Tenacity's `TRAIT_NOSOFTCRIT` and `TRAIT_NOHARDCRIT`, with the species' own and the
+    // tactical deniability implant's.
     let species_softcrit = crate::species::def_of(world, mob).body_mods().no_softcrit;
+    let deniability = crate::implants::denies_crit(world, mob);
     if let Some(health) = world.get::<Health>(mob) {
-        let (soft, hard) = (species_softcrit || tenacity, tenacity);
+        let (soft, hard) = (
+            species_softcrit || tenacity || deniability,
+            tenacity || deniability,
+        );
         if health.mods.no_softcrit != soft || health.mods.no_hardcrit != hard {
             let mut health = health.clone();
             health.mods.no_softcrit = soft;

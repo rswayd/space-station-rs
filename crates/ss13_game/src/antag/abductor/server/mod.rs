@@ -20,9 +20,8 @@
 //! - [`roundend_report`]: each team (won when its machine has 6 points), its members and the
 //!   abductees.
 // shortcut: no team telepathy (the superlingual matrix tongue is a speech feature), no team HUD
-// between the members, no gland HUD, no baton recall spell, no beamplant implant, no
-// skin-colour teams, no admin "Equip"/team picker; the scientist's extra alien surgeries are the
-// surgery group's.
+// between the members, no gland HUD, no baton recall spell, no skin-colour teams, no admin
+// "Equip"/team picker; the scientist's extra alien surgeries are the surgery group's.
 
 use std::path::PathBuf;
 
@@ -345,6 +344,10 @@ pub fn add_abductor(world: &mut World, mob: Entity, team: u32, role: AbductorRol
         t.members.push(mob);
     }
     gear::link_to_console(world, mob, team);
+    // `/datum/outfit/abductor/scientist/post_equip`: the recall implant.
+    if role.scientist() {
+        crate::implants::give_recall(world, mob);
+    }
     greet(world, mob, role);
     if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client) {
         world.write_message(OpenUi::new::<AntagHudUi>(client, mob, mob, ""));

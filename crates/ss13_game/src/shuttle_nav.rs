@@ -378,18 +378,43 @@ pub fn console_locked(console: &ShuttleConsole, level: SecLevel) -> bool {
 
 fn console_clicks(
     mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&ss13_mapload::DmName, With<ShuttleConsole>>,
+    consoles: Query<(&ss13_mapload::DmName, &ShuttleConsole)>,
     inventories: Query<&Inventory>,
+    implanted: Query<&crate::implants::Implants>,
     mut open: MessageWriter<OpenUi>,
+    mut commands: Commands,
 ) {
     for click in clicks.read() {
-        let Ok(name) = consoles.get(click.target) else {
+        let Ok((name, console)) = consoles.get(click.target) else {
             continue;
         };
         if inventories
             .get(click.mob)
             .is_ok_and(|inv| inv.active_item().is_none())
         {
+            // `computer/shuttle/mining/attack_hand`: an exile implant locks the controls.
+            let mining = matches!(
+                console.shuttle_id.as_deref(),
+                Some("mining" | "mining_common")
+            );
+            if mining
+                && implanted.get(click.mob).is_ok_and(|i| {
+                    i.0.iter()
+                        .any(|imp| imp.kind == crate::implants::ImplantKind::Exile)
+                })
+            {
+                let mob = click.mob;
+                commands.queue(move |world: &mut World| {
+                    crate::tools::tell_mob(
+                        world,
+                        mob,
+                        ss13_shared::chat::Span::Warning,
+                        "На экране вспыхивает предупреждение, и управление шаттлом блокируется \
+                         в ответ на ваш имплант изгнания.",
+                    );
+                });
+                continue;
+            }
             open.write(OpenUi::new::<ShuttleConsoleUi>(
                 click.client,
                 click.mob,

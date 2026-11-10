@@ -6,10 +6,11 @@
 //!   first ones next to it (`link_console_and_hub`). Looked up on use, so built or moved
 //!   machines link as in tg's `Initialize`.
 //! - The console's regime is "Teleporter" (targets: the enabled tracking beacons, named by
-//!   their area) or "Gate" (targets: the stations a multitool linked to this one, each with a
-//!   hub; locking one in links it back). A target must be teleportable to the console's tile
-//!   (`is_eligible`). Changing the regime or the target disengages the station and loses the
-//!   calibration; a beacon switched off clears the target.
+//!   their area, and the hosts of beacon implants until ten minutes after their death, named
+//!   "<real name> (<area>)") or "Gate" (targets: the stations a multitool linked to this one,
+//!   each with a hub; locking one in links it back). A target must be teleportable to the
+//!   console's tile (`is_eligible`). Changing the regime or the target disengages the station
+//!   and loses the calibration; a beacon switched off clears the target.
 //! - "Calibrate" takes 5 s × (3 - accuracy) (`accuracy` = the hub's matter bin tiers); a hub
 //!   with accuracy 3 or more counts as calibrated.
 //! - An empty hand on the station toggles it (it needs a target and a working hub). A hub whose
@@ -19,8 +20,7 @@
 //!   use. Opening the hub's panel disengages the station.
 //! - A multitool saves a station with its panel open; on a closed one it links the saved
 //!   station (up to `efficiency` = capacitor tiers - 1).
-// shortcut: no beacon implants (`/obj/item/implant/beacon`, not ported) as targets, no renamed
-// beacons (no beacon rename), no forced power of a locked-in remote station (`lock_in_station`
+// shortcut: no renamed beacons (no beacon rename), no forced power of a locked-in remote station (`lock_in_station`
 // sets its `NOPOWER` off; the port's power state belongs to the grid), no portal animation, no
 // hub/station icon change on power loss (only on use and toggles).
 // CentCom and away levels are not modelled, so `is_eligible` and `Bumped` skip that check.
@@ -245,6 +245,22 @@ pub fn get_targets(world: &mut World, console: Entity) -> Vec<(String, Entity)> 
             let name = unique_key(area_name_at(world, at), &mut used);
             targets.push((name, beacon));
         }
+        // `/obj/item/implant/beacon` in `GLOB.tracked_implants`: the target is its host.
+        for (mob, _) in crate::implants::tracked(world, crate::implants::ImplantKind::Beacon) {
+            if !crate::implants::beacon_live(world, mob) || !is_eligible(world, mob, console) {
+                continue;
+            }
+            let Some(at) = crate::explosions::turf_of(world, mob) else {
+                continue;
+            };
+            let key = format!(
+                "{} ({})",
+                crate::security::name_of(world, mob),
+                area_name_at(world, at)
+            );
+            let name = unique_key(key, &mut used);
+            targets.push((name, mob));
+        }
     } else if let Some(station) = station_of(world, console) {
         for linked in station_state(world, station).linked {
             if world.get_entity(linked).is_err()
@@ -436,8 +452,14 @@ pub fn teleport(world: &mut World, hub: Entity, mover: Entity) {
     let Some(&hub_pos) = world.get::<TilePos>(hub) else {
         return;
     };
-    let Some(dest) =
-        resolve_target(world, console).and_then(|t| crate::explosions::turf_of(world, t))
+    // A mob target is a beacon implant's host: gone with the implant (`get_turf` of an implant
+    // in nullspace).
+    let Some(dest) = resolve_target(world, console)
+        .filter(|&t| {
+            world.get::<crate::health::Health>(t).is_none()
+                || crate::implants::has_kind(world, t, crate::implants::ImplantKind::Beacon)
+        })
+        .and_then(|t| crate::explosions::turf_of(world, t))
     else {
         set_target(world, console, None);
         visible(

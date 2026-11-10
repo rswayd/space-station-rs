@@ -8,15 +8,16 @@
 //!   "Linkup"). "Activate" opens the gateway to an available destination, which opens back to
 //!   it if it is free (`activate`); "Deactivate" closes both. A gateway that loses power closes.
 //! - Whatever bumps into an open gateway from the side it faces (`dir`) steps out in front of
-//!   the other one, facing its way (`Transfer`: a plain move, no teleport checks).
+//!   the other one, facing its way (`Transfer`: a plain move, no teleport checks). The home
+//!   gateway refuses a mob with an exile implant, and a closet or a ride carrying one
+//!   (`gateway/home/incoming_pass_check`).
 //! - An away gateway needs no console: an empty hand opens it to the home gateway (closing the
 //!   home gateway's other link first) or closes it. A multitool recalibrates a gateway.
 //!
 //! The port loads no away missions, so on the station maps the home gateway has no
 //! destination ("No gateway nodes detected."); two gateways on one map link as above.
 // shortcut: no point destinations of away missions (`/datum/gateway_destination/point`, no away
-// levels), no round-start `wait`, no exile implant check (`/obj/item/implant/exile` is not
-// ported), no portal view (`ByondUi` map) or light overlays, the gateway blocks only its own
+// levels), no round-start `wait`, no portal view (`ByondUi` map) or light overlays, the gateway blocks only its own
 // tile (tg: a 3×2 frame), no ghost click.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -183,11 +184,44 @@ pub fn transfer(world: &mut World, gw: Entity, mover: Entity) {
     let Some(&at) = world.get::<TilePos>(dest) else {
         return;
     };
+    if is_obj(world, dest, HOME) && !incoming_pass_check(world, dest, mover) {
+        return;
+    }
     let dir = facing(world, dest);
     world.entity_mut(mover).insert(at.step(dir));
     if world.get::<Facing>(mover).is_some() {
         world.entity_mut(mover).insert(Facing(dir));
     }
+}
+
+/// `gateway/home/incoming_pass_check`: no exile implant in the mover, in what it carries or in
+/// who rides it.
+fn incoming_pass_check(world: &mut World, home: Entity, mover: Entity) -> bool {
+    if world.get::<crate::health::Health>(mover).is_some() {
+        return !crate::implants::check_exile(world, mover);
+    }
+    let inside: Vec<Entity> = world
+        .query::<(Entity, &crate::closets::InCloset)>()
+        .iter(world)
+        .filter(|(_, c)| c.closet == mover)
+        .map(|(e, _)| e)
+        .collect();
+    let name = crate::examine::name_of(world, mover);
+    for mob in inside {
+        if crate::implants::check_exile(world, mob) {
+            let text = format!("Rejecting {name}: Exile implant detected in contained lifeform.");
+            crate::atmos_machinery::machine_say(world, home, &text);
+            return false;
+        }
+    }
+    if let Some(rider) = crate::medical::surgery::buckled_to(world, mover)
+        && crate::implants::check_exile(world, rider)
+    {
+        let text = format!("Rejecting {name}: Exile implant detected in close proximity lifeform.");
+        crate::atmos_machinery::machine_say(world, home, &text);
+        return false;
+    }
+    true
 }
 
 /// The portal bumper's `Bumped`: only from the side the gateway faces. True when `obstacle` is
