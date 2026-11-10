@@ -50,6 +50,9 @@ pub mod picklock;
 
 pub use kinds::ClosetKind;
 
+/// `lock_sound`, `unlock_sound` (no closet overrides them).
+const LOCK_SOUND: &str = "sound/machines/closet/closet_lock.ogg";
+const UNLOCK_SOUND: &str = "sound/machines/closet/closet_unlock.ogg";
 /// BYOND `OBJ_LAYER`.
 const OBJ_LAYER: f32 = 3.0;
 /// `BELOW_OBJ_LAYER` (`code/__DEFINES/layers.dm`).
@@ -72,6 +75,8 @@ pub struct Closet {
     pub id: Option<String>,
     /// `card_reader_installed`: a personal closet (its one `access_choices` entry "Personal").
     pub card_reader: bool,
+    /// `access_locked`: a multitool locked the access panel (no new registration).
+    pub access_locked: bool,
     /// `id_card`: the registered card, and the closet's name from before.
     owner: Option<(Entity, DmName)>,
     dense_when_open: bool,
@@ -101,6 +106,7 @@ impl Closet {
             contents_initialized: false,
             id: (!dm.id.is_empty()).then(|| dm.id.clone()),
             card_reader: dm.card_reader_installed,
+            access_locked: false,
             owner: None,
             dense_when_open: dm.dense_when_open,
             wall_mounted: dm.wall_mounted,
@@ -797,6 +803,11 @@ fn toggle_lock(
         kinds::relocked(world, closet);
     }
     refresh_look(world, closet);
+    // `play_closet_lock_sound`.
+    if let Some(&pos) = world.get::<TilePos>(closet) {
+        let sound = if locked { LOCK_SOUND } else { UNLOCK_SOUND };
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 50.0, true));
+    }
     let what = crate::security::name_of(world, closet);
     let text = if locked {
         format!("Вы запираете {what}.")
@@ -809,13 +820,20 @@ fn toggle_lock(
 
 /// tg `item_interaction` with a card reader (personal closets, "Personal"): `card` on the
 /// closed, unlocked closet becomes its owner. False when the closet takes no registration.
-// shortcut: no "Job"/"None" access choices, no card readers or airlock electronics installed by
-// hand, no access panel lock (multitool), no renaming with a pen, no lock sounds or deny buzz.
+// shortcut: no "Job"/"None" access choices (only reachable with a card reader installed by
+// hand), no card readers or airlock electronics installed or taken out by hand, no renaming with a
+// pen.
 fn register_owner(world: &mut World, user: Entity, closet: Entity, card: Entity) -> bool {
     let Some(state) = world.get::<Closet>(closet) else {
         return false;
     };
-    if !state.secure || state.broken || !state.card_reader || state.locked || state.opened {
+    if !state.secure
+        || state.broken
+        || !state.card_reader
+        || state.locked
+        || state.opened
+        || state.access_locked
+    {
         return false;
     }
     let initial = match &state.owner {
@@ -840,6 +858,29 @@ fn register_owner(world: &mut World, user: Entity, closet: Entity, card: Entity)
         Span::Notice,
         format!("now owned by {holder}"),
     );
+    true
+}
+
+/// tg `closet/multitool_act`: the access panel of a closed, unlocked personal closet locks or
+/// unlocks. False when `held` is no multitool or the closet takes none.
+fn multitool_act(world: &mut World, user: Entity, closet: Entity, held: Entity) -> bool {
+    if crate::tools::tool_of(world, held).map(|(k, _)| k) != Some(crate::tools::ToolKind::Multitool)
+    {
+        return false;
+    }
+    let Some(mut state) = world.get_mut::<Closet>(closet) else {
+        return false;
+    };
+    if !state.secure || !state.card_reader || state.broken || state.locked || state.opened {
+        return false;
+    }
+    state.access_locked = !state.access_locked;
+    let text = if state.access_locked {
+        "панель доступа заблокирована"
+    } else {
+        "панель доступа разблокирована"
+    };
+    tell_mob(world, Some(user), Span::Notice, text);
     true
 }
 
@@ -973,7 +1014,8 @@ fn closet_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolve
                             .remove::<CarriedBy>()
                             .insert(click.target_pos);
                     }
-                } else if let Some(card) = crate::inventory::get_id(world, held)
+                } else if !multitool_act(world, click.mob, click.target, held)
+                    && let Some(card) = crate::inventory::get_id(world, held)
                     && !register_owner(world, click.mob, click.target, card)
                 {
                     toggle_lock(world, user, click.target, Some(card));

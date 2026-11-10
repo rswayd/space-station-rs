@@ -7,6 +7,9 @@
 //!   goes inside the gun and shines from the gun's holder (or the gun on the floor) while on. A
 //!   held gun with a light gets a "Переключить фонарик" action button. Some guns start with
 //!   one (the mini energy gun, the Zashch and Wespe pistols).
+//! - Security helmets (`head/helmet.dm`: sec, press, bulletproof, marine, riot, NT SWAT and the
+//!   BandaStation spec ops helmet) carry the same mount; the light shines from the wearer, the
+//!   button shows for the helmet in a hand or on the head; the marine helmet starts with one.
 //! - A ballistic gun that `can_suppress` takes a suppressor while held; its shots are then
 //!   heard only nearby (`suppressed_sound`, `SILENCED_SOUND_EXTRARANGE`) and print no shot
 //!   message (`crate::guns`). Alt-click on the held gun takes the suppressor back into a hand
@@ -25,7 +28,7 @@
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
-use ss13_mapload::{DmGun, IconIndex};
+use ss13_mapload::{DmClothing, DmGun, DmItem, IconIndex};
 use ss13_net::camera::server::SendCameraEffect;
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::{CameraEffect, ClickModifiers};
@@ -112,6 +115,21 @@ const STARTING_LIGHT: [&str; 3] = [
     "/obj/item/gun/ballistic/automatic/pistol/zashch",
     "/obj/item/gun/ballistic/automatic/pistol/wespe",
 ];
+/// Helmets with `AddComponent(/datum/component/seclite_attachable, ...)`.
+const HELMET_LIGHT_MOUNTS: [&str; 7] = [
+    "/obj/item/clothing/head/helmet/sec",
+    "/obj/item/clothing/head/helmet/press",
+    "/obj/item/clothing/head/helmet/alt",
+    "/obj/item/clothing/head/helmet/marine",
+    "/obj/item/clothing/head/helmet/toggleable/riot",
+    "/obj/item/clothing/head/helmet/swat/nanotrasen",
+    // BandaStation `modular_bandastation/objects/code/items/clothing/head/helmet.dm`.
+    "/obj/item/clothing/head/helmet/specops",
+];
+/// The helmet that starts with a seclite (`marine/Initialize`).
+const HELMET_STARTING_LIGHT: &str = "/obj/item/clothing/head/helmet/marine";
+/// The hand-slot index the helmet's button stands for, after the two hands.
+const HEAD_BUTTON: usize = 2;
 /// Guns whose `add_bayonet_point` adds a bayonet mount.
 const BAYONET_MOUNTS: [&str; 10] = [
     "/obj/item/gun/ballistic/rifle/boltaction",
@@ -184,6 +202,7 @@ pub fn plugin(app: &mut App) {
             .is_some_and(|h| crate::gun_attachments::attach(w, c.client, c.mob, h, c.target, false))
     });
     app.add_observer(add_mounts)
+        .add_observer(add_helmet_mounts)
         .add_observer(unlight)
         .add_systems(
             Update,
@@ -209,14 +228,7 @@ fn add_mounts(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Commands) 
     if LIGHT_MOUNTS.iter().any(|m| is_under(path, m)) {
         commands.entity(gun).insert_if_new(LightMount::default());
         if STARTING_LIGHT.iter().any(|m| is_under(path, m)) {
-            commands.queue(move |world: &mut World| {
-                let Some(at) = crate::modpc::pda::turf_of(world, gun) else {
-                    return;
-                };
-                if let Some(light) = crate::construction::spawn_obj(world, SECLITE, at) {
-                    mount_light(world, gun, light);
-                }
-            });
+            commands.queue(move |world: &mut World| starting_light(world, gun));
         }
     }
     if BAYONET_MOUNTS.iter().any(|m| is_under(path, m)) {
@@ -224,6 +236,30 @@ fn add_mounts(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Commands) 
     }
     if let Some(&(_, range_modifier)) = SCOPES.iter().find(|(p, _)| is_under(path, p)) {
         commands.entity(gun).insert_if_new(Scope { range_modifier });
+    }
+}
+
+/// The helmet's `Initialize`: `AddComponent(/datum/component/seclite_attachable, ...)`.
+fn add_helmet_mounts(add: On<Add<DmClothing>>, items: Query<&DmItem>, mut commands: Commands) {
+    let Ok(dm) = items.get(add.entity) else {
+        return;
+    };
+    let helmet = add.entity;
+    if HELMET_LIGHT_MOUNTS.iter().any(|m| is_under(&dm.path, m)) {
+        commands.entity(helmet).insert_if_new(LightMount::default());
+        if is_under(&dm.path, HELMET_STARTING_LIGHT) {
+            commands.queue(move |world: &mut World| starting_light(world, helmet));
+        }
+    }
+}
+
+/// `starting_light = new /obj/item/flashlight/seclite(src)`.
+fn starting_light(world: &mut World, holder: Entity) {
+    let Some(at) = crate::modpc::pda::turf_of(world, holder) else {
+        return;
+    };
+    if let Some(light) = crate::construction::spawn_obj(world, SECLITE, at) {
+        mount_light(world, holder, light);
     }
 }
 
@@ -260,7 +296,8 @@ pub fn attach(
     gun: Entity,
     in_hand: bool,
 ) -> bool {
-    if world.get::<Gun>(gun).is_none() || held == gun {
+    // Guns, and helmets with a light mount.
+    if (world.get::<Gun>(gun).is_none() && world.get::<LightMount>(gun).is_none()) || held == gun {
         return false;
     }
     // Seclites.
@@ -511,7 +548,8 @@ fn refresh_buttons(world: &mut World) {
         };
         let icons = world.get_resource::<IconIndex>();
         let mut ours = Vec::new();
-        for (hand, item) in inventory.hands.iter().enumerate() {
+        let held = inventory.hands.iter().copied().chain([inventory.head]);
+        for (hand, item) in held.enumerate() {
             let Some(light) = item
                 .and_then(|g| world.get::<LightMount>(g))
                 .and_then(|m| m.light)
@@ -569,11 +607,17 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
         let Some(hand) = id
             .strip_prefix(BUTTON)
             .and_then(|n| n.parse::<usize>().ok())
-            .filter(|&h| h < 2)
+            .filter(|&h| h <= HEAD_BUTTON)
         else {
             continue;
         };
-        let gun = world.get::<Inventory>(actor).and_then(|i| i.hands[hand]);
+        let gun = world.get::<Inventory>(actor).and_then(|i| {
+            if hand == HEAD_BUTTON {
+                i.head
+            } else {
+                i.hands[hand]
+            }
+        });
         let Some(light) = gun
             .and_then(|g| world.get::<LightMount>(g))
             .and_then(|m| m.light)

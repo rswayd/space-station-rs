@@ -8,7 +8,8 @@
 //!   degrees, now the wearer's, and flies on (`BULLET_ACT_FORCE_PIERCE`). Not one's own shot at
 //!   oneself.
 //! - The hood carries a security HUD (`TRAIT_SECURITY_HUD`, `crate::records::hud`); the coat
-//!   holds what a security vest holds (`allowed = GLOB.security_vest_allowed`, converted).
+//!   holds what a security vest holds (`allowed = GLOB.security_vest_allowed`,
+//!   `crate::clothing::secgear::suit_allows`).
 // shortcut: the zone is the firer's selected one (tg reflects on the zone the hit would take
 // after its accuracy roll); held reflectors (energy swords, shields) are not ported, and the
 // hood's "hud enabled" balloons are not shown. Upgrade with held reflectors.

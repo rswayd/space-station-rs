@@ -16,13 +16,15 @@ pub struct Hit {
 }
 
 /// The owner's traits the wound rolls read: `TRAIT_EASYDISMEMBER`, `TRAIT_NODISMEMBER`,
-/// `TRAIT_EASILY_WOUNDED`, `TRAIT_HARDLY_WOUNDED`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// `TRAIT_EASILY_WOUNDED`, `TRAIT_HARDLY_WOUNDED`; and the `wound` armor of the clothing on the
+/// hit bodypart (`crate::armor::worn_wound_armor`).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WoundTraits {
     pub easy_dismember: bool,
     pub no_dismember: bool,
     pub easily_wounded: bool,
     pub hardly_wounded: bool,
+    pub worn_wound_armor: f32,
 }
 
 impl WoundTraits {
@@ -33,6 +35,7 @@ impl WoundTraits {
             no_dismember: has_trait(world, mob, Trait::NoDismember),
             easily_wounded: super::super::bioware::easily_wounded(world, mob),
             hardly_wounded: has_trait(world, mob, Trait::HardlyWounded),
+            worn_wound_armor: 0.0,
         }
     }
 
@@ -104,7 +107,7 @@ pub(super) fn resistance(zone: BodyZone) -> (f32, f32) {
 }
 
 /// tg `check_wounding` on a human bodypart: the wound to apply, if any.
-// shortcut: armor is only the limb's `wound_resistance` (no clothing `wound` armor).
+/// Without clothing (`WoundTraits::default`).
 pub fn check_wounding(
     rng: &mut CombatRng,
     limb: &Limb,
@@ -164,7 +167,7 @@ pub fn roll_wounding_with(
     let damage = traits.considered_damage(damage);
     let top = (damage.powf(WOUND_DAMAGE_EXPONENT)).round().max(1.0) as u32;
     let base_roll = rng.range(1, top) as f32;
-    let injury_roll = woundings_mods(limb, zone, base_roll, hit);
+    let injury_roll = woundings_mods(limb, zone, base_roll, hit, traits.worn_wound_armor);
     if can_dismember
         && injury_roll > WOUND_DISMEMBER_OUTRIGHT_THRESH
         && rng.chance(hit.part_damage_before / zone.max_damage() * 100.0)
@@ -213,10 +216,10 @@ pub(super) fn try_dismember(
     rng.chance(chance)
 }
 
-/// tg `check_woundings_mods` without clothing armor.
-pub fn woundings_mods(limb: &Limb, zone: BodyZone, roll: f32, hit: Hit) -> f32 {
+/// tg `check_woundings_mods`; `worn` is the clothing's `wound` armor on the bodypart.
+pub fn woundings_mods(limb: &Limb, zone: BodyZone, roll: f32, hit: Hit, worn: f32) -> f32 {
     let (resist, disabled_penalty) = resistance(zone);
-    let mut armor = 0.0;
+    let mut armor = worn;
     let mut injury = roll + hit.wound_bonus;
     for wound in &limb.wounds {
         injury += wound.threshold_penalty;

@@ -26,6 +26,8 @@
 //! - megaphone: the wearer speaks loudly (`VoiceSpan`), each line paying `use_energy_cost`.
 //! - restraint assist (`quick_cuff`): sealed gauntlets cuff in 0.75 of the time
 //!   (`TRAIT_FAST_CUFFING`, [`FastCuffing`]).
+//! - holster: used, it takes the gun in the active hand (bulky at most) or draws the holstered
+//!   one into the empty active hand ([`Holstered`]); uninstalled, the gun drops.
 //! - anti-slip (`noslip`): sealed boots do not slip on water (`TRAIT_NO_SLIP_WATER`,
 //!   [`NoSlipWater`]).
 //! - bike horn: used, it honks.
@@ -88,6 +90,10 @@ pub const FAST_CUFFING_FACTOR: f32 = 0.75;
 /// The megaphone's voice span (`SPAN_COMMAND`; bold, as the handheld megaphone's).
 const MEGAPHONE_VOICE: Span = Span::Bold;
 const BIKEHORN_SOUND: &str = "sound/items/bikehorn.ogg";
+/// The holster's sound both ways.
+const HOLSTER_SOUND: &str = "sound/items/weapons/gun/revolver/empty.ogg";
+/// `WEIGHT_CLASS_BULKY`: the biggest gun the holster takes.
+const HOLSTER_MAX_W_CLASS: u8 = 4;
 /// `overlay_icon_file`'s default.
 const MODULES_WORN_DMI: &str = "icons/mob/clothing/modsuit/mod_modules.dmi";
 
@@ -114,6 +120,7 @@ pub enum Kind {
     },
     Megaphone,
     QuickCuff,
+    Holster,
     NoSlipWater,
     Bikehorn,
     /// Supply modules (`super::supply`).
@@ -195,6 +202,8 @@ impl Kind {
             Self::Megaphone
         } else if under("quick_cuff") {
             Self::QuickCuff
+        } else if under("holster") {
+            Self::Holster
         } else if under("noslip") {
             Self::NoSlipWater
         } else if under("bikehorn") {
@@ -418,7 +427,90 @@ pub fn on_uninstall(world: &mut World, control: Entity, module: Entity) {
         Kind::EmpShield { .. } | Kind::EmpPulse => {
             set_emp_protection(world, control, SHIELD_PROTECTION, false)
         }
+        // `holstered.forceMove(mod.drop_location())`.
+        Kind::Holster => {
+            if let Some(gun) = holstered(world, module)
+                && let Some(pos) = crate::chem::map_pos(world, control)
+            {
+                world.entity_mut(module).remove::<Holstered>();
+                crate::storage::take_out(world, gun, pos);
+            }
+        }
         _ => {}
+    }
+}
+
+/// The gun in a MOD holster (tg `holstered`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Holstered(pub Entity);
+
+/// The holstered gun, if it is still inside the module (`Exited` forgets it).
+fn holstered(world: &World, module: Entity) -> Option<Entity> {
+    let gun = world.get::<Holstered>(module)?.0;
+    world
+        .get::<crate::storage::StoredIn>(gun)
+        .is_some_and(|s| s.0 == module)
+        .then_some(gun)
+}
+
+/// tg `holster/on_use`: the gun in the active hand goes in, or the holstered one comes out.
+fn holster_use(world: &mut World, control: Entity, module: Entity) {
+    let Some(wearer) = suit(world, control).and_then(|s| s.wearer) else {
+        return;
+    };
+    let Some(inventory) = world.get::<crate::inventory::Inventory>(wearer).cloned() else {
+        return;
+    };
+    let say = |world: &mut World, text: &str| tell_mob(world, wearer, Span::Notice, text);
+    let sound = |world: &mut World| {
+        if let Some(pos) = crate::chem::map_pos(world, control) {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(pos, HOLSTER_SOUND, 100.0, true),
+            );
+        }
+    };
+    match holstered(world, module) {
+        None => {
+            world.entity_mut(module).remove::<Holstered>();
+            let Some(held) = inventory.active_item() else {
+                say(world, "нечего убирать в кобуру!");
+                return;
+            };
+            let w_class = world
+                .get::<ss13_mapload::DmWeight>(held)
+                .map_or(0, |w| w.w_class);
+            if world.get::<crate::guns::Gun>(held).is_none() || w_class > HOLSTER_MAX_W_CLASS {
+                say(world, "не подходит!");
+                return;
+            }
+            // `transferItemToLoc(force = FALSE)`: not an item stuck to the hand.
+            if crate::inventory::no_drop(world, held) {
+                return;
+            }
+            if let Some(mut inv) = world.get_mut::<crate::inventory::Inventory>(wearer) {
+                let active = inv.active;
+                inv.hands[active] = None;
+            }
+            crate::storage::put_inside(world, held, module);
+            world.entity_mut(module).insert(Holstered(held));
+            say(world, "оружие убрано в кобуру");
+            sound(world);
+        }
+        Some(gun) if inventory.active_item().is_none() => {
+            world.entity_mut(module).remove::<Holstered>();
+            world
+                .entity_mut(gun)
+                .remove::<(crate::storage::StoredIn, ss13_shared::TilePos)>()
+                .insert(crate::inventory::CarriedBy(wearer));
+            if let Some(mut inv) = world.get_mut::<crate::inventory::Inventory>(wearer) {
+                let active = inv.active;
+                inv.hands[active] = Some(gun);
+            }
+            say(world, "оружие извлечено");
+            sound(world);
+        }
+        Some(_) => say(world, "кобура занята!"),
     }
 }
 
@@ -677,6 +769,7 @@ pub fn used(world: &mut World, control: Entity, module: Entity, activator: Optio
 fn on_use(world: &mut World, control: Entity, module: Entity, activator: Entity) {
     match kind(world, module) {
         Kind::Bikehorn => {}
+        Kind::Holster => return holster_use(world, control, module),
         Kind::Gps => return super::supply::gps_use(world, control, module),
         Kind::OreBag => return super::supply::orebag_use(world, control, module),
         Kind::Pathfinder => return super::pathfinder::on_use(world, control, module, activator),
@@ -1329,6 +1422,10 @@ mod tests {
             Kind::Other
         );
         assert_eq!(Kind::of(&def("/obj/item/mod/module/t_ray")), Kind::Other);
+        assert_eq!(
+            Kind::of(&def("/obj/item/mod/module/holster")),
+            Kind::Holster
+        );
         assert_eq!(
             Kind::of(&def("/obj/item/mod/module/noslip")),
             Kind::NoSlipWater

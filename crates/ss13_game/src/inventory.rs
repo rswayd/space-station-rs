@@ -1171,7 +1171,12 @@ pub fn can_equip(
         | InventorySlot::LeftPocket
         | InventorySlot::RightPocket => inventory.uniform.is_some(),
         InventorySlot::SuitStorage => {
-            let Some(suit) = inventory.suit.and_then(|s| world.get::<DmClothing>(s)) else {
+            let Some((suit, suit_path)) = inventory.suit.and_then(|s| {
+                Some((
+                    world.get::<DmClothing>(s)?,
+                    world.get::<DmItem>(s)?.path.as_str(),
+                ))
+            }) else {
                 return false;
             };
             if w_class == WEIGHT_CLASS_TINY
@@ -1179,7 +1184,9 @@ pub fn can_equip(
             {
                 return true;
             }
-            w_class <= WEIGHT_CLASS_BULKY && suit.allowed.iter().any(|r| is_under(&dm.path, r))
+            // `allowed` after the suit's `Initialize` (`GLOB.security_vest_allowed`, ...).
+            w_class <= WEIGHT_CLASS_BULKY
+                && crate::clothing::secgear::suit_allows(suit_path, &suit.allowed, &dm.path)
         }
         _ => true,
     }

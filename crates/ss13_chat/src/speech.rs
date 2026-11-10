@@ -47,6 +47,34 @@ pub struct VoiceSpan(pub ss13_shared::chat::Span);
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Tongueless;
 
+/// On a body with a muzzle or tape over its mouth (tg `/datum/element/muffles_speech`), kept by
+/// the game: its words become "mmmf" ([`muffle`]) and its audible emotes "a noise".
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Muffled;
+
+/// `muffles_speech/muzzle_talk`: every word becomes `m` × (its length ± 1) and `f`; a message
+/// ending in `!` is yelled in capitals and keeps its `!`s. `roll()` is a percent roll.
+pub fn muffle(message: &str, mut roll: impl FnMut() -> f32) -> String {
+    let trimmed = message.trim_end_matches('!');
+    let yell = &message[trimmed.len()..];
+    let words: Vec<String> = message
+        .split(' ')
+        .map(|word| {
+            let len = word.chars().count() as i64;
+            // `rand(-1, 1)`.
+            let r = ((roll() * 3.0 / 100.0) as i64).min(2) - 1;
+            let n = (len + r).max(0) as usize;
+            let muffled = format!("{}f", "m".repeat(n));
+            if yell.is_empty() {
+                muffled
+            } else {
+                muffled.to_uppercase()
+            }
+        })
+        .collect();
+    format!("{}{yell}", words.join(" "))
+}
+
 /// What impairs a body's speech (tg `TRAIT_MUTE`, `TRAIT_UNINTELLIGIBLE_SPEECH`, the `stutter`
 /// and `derpspeech` status effects), kept by the game (brain traumas).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -732,6 +760,16 @@ pub fn whisper_heard(distance: u32) -> WhisperHeard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn muzzled_words_become_mmmf() {
+        // A middle roll keeps each word's length.
+        assert_eq!(muffle("hi there", || 50.0), "mmf mmmmmf");
+        assert_eq!(muffle("help!!", || 50.0), "MMMMMMF!!");
+        // `rand(-1, 1)` at its ends.
+        assert_eq!(muffle("abc", || 0.0), "mmf");
+        assert_eq!(muffle("abc", || 99.9), "mmmmf");
+    }
 
     #[test]
     fn tongueless_speech_follows_tg_regex() {

@@ -16,5 +16,5 @@
 ### Броня от ран и био
 Значение `wound` снижает шанс ран, `bio` — заражения болезнями и проникновения через кожу, `fire`/`acid` — защиту вещей от огня и кислоты.
 
-- **Код:** [`proc/getarmor()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L31)
-- **Статус в ss13-rs:** ❌ нет
+- **Код:** [`proc/getarmor()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L31), [`proc/check_woundings_mods()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/wounds.dm#L223)
+- **Статус в ss13-rs:** ✅ реализовано — `wound`: сумма рейтингов одежды на части тела (`crates/ss13_game/src/armor.rs` `worn_wound_armor`) плюс `wound_resistance` снижает бросок ран и снимает `exposed_wound_bonus` (`crates/ss13_game/src/medical/wounds/roll.rs`, `treat.rs`), в взрывах — шанс раны (`crates/ss13_game/src/explosions/ex_act.rs`); `bio`: заражение болезнями через рот и кожу (`crates/ss13_game/src/medical/diseases/spread.rs`), блоб, зомби, экзотические аномалии, слизь уборщика; `fire`: горящие и лавой подожжённые вещи (`crates/ss13_game/src/fire.rs`, `lava.rs`); нет `acid` у вещей (кислоты по вещам нет — у группы химии/ксено)

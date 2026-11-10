@@ -176,15 +176,19 @@ fn roll_modifiers_follow_check_woundings_mods() {
     h.wound_bonus = 10.0;
     h.exposed_wound_bonus = 15.0;
     // An arm has no resistance: the exposed bonus applies.
-    assert_eq!(woundings_mods(&limb, BodyZone::LArm, 20.0, h), 45.0);
+    assert_eq!(woundings_mods(&limb, BodyZone::LArm, 20.0, h, 0.0), 45.0);
     // The chest's `wound_resistance` 10 counts as armor: no exposed bonus, 90%.
-    assert!((woundings_mods(&limb, BodyZone::Chest, 20.0, h) - 27.0).abs() < 1e-4);
+    assert!((woundings_mods(&limb, BodyZone::Chest, 20.0, h, 0.0) - 27.0).abs() < 1e-4);
+    // A vest's `wound` 10 adds to it: 80%.
+    assert!((woundings_mods(&limb, BodyZone::Chest, 20.0, h, 10.0) - 24.0).abs() < 1e-4);
+    // Worn wound armor alone also takes the exposed bonus away.
+    assert!((woundings_mods(&limb, BodyZone::LArm, 20.0, h, 20.0) - 24.0).abs() < 1e-4);
     // A maxed arm adds `disabled_wound_penalty`; existing wounds their penalty.
     let mut hurt = Limb::default();
     apply_wound(&mut hurt, WoundKind::Dislocation);
     h.part_damage_before = 50.0;
     assert_eq!(
-        woundings_mods(&hurt, BodyZone::LArm, 20.0, h),
+        woundings_mods(&hurt, BodyZone::LArm, 20.0, h, 0.0),
         20.0 + 10.0 + 5.0 + 15.0 + 15.0
     );
 }

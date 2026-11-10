@@ -79,6 +79,10 @@ pub enum ClothingJob {
     Repair { item: Entity },
     /// The chameleon scanner's 0.5 s scan of `target` (`crate::clothing::chameleon`).
     ChameleonScan { target: Entity, equip: bool },
+    /// A security helmet's straps (`crate::clothing::secgear`).
+    HelmetStraps { item: Entity },
+    /// A tape piece onto the target's mouth (`crate::clothing::muzzle`).
+    TapeMouth { tape: Entity },
 }
 
 /// `body_zone2cover_flags`.
@@ -465,6 +469,14 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         ClothingJob::Repair { item } => item,
         ClothingJob::ChameleonScan { target, equip } => {
             super::chameleon::complete_scan(world, mob, action, target, equip);
+            return;
+        }
+        ClothingJob::HelmetStraps { item } => {
+            super::secgear::complete_straps(world, mob, action.client, item);
+            return;
+        }
+        ClothingJob::TapeMouth { tape } => {
+            super::muzzle::complete_tape(world, mob, action, tape);
             return;
         }
     };
