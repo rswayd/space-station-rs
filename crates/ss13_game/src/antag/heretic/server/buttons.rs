@@ -142,6 +142,13 @@ pub(in crate::antag::heretic) fn set_cooldown(
     id: &str,
     ready: f64,
 ) {
+    // The crimson medallion's `cooldown_time *= 0.5`.
+    let ready = if hastened(world, mob) {
+        let t = now(world);
+        t + (ready - t) * 0.5
+    } else {
+        ready
+    };
     if let Some(mut h) = world.get_mut::<Heretic>(mob) {
         h.set_cooldown(id, ready);
     }

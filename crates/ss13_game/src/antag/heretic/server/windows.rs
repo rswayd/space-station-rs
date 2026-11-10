@@ -46,6 +46,11 @@ pub(super) fn release_rune(world: &mut World, kind: &PromptKind) {
     {
         r.in_use = false;
     }
+    if let PromptKind::Potion { crucible } = kind
+        && let Some(mut c) = world.get_mut::<Crucible>(*crucible)
+    {
+        c.in_use = false;
+    }
 }
 
 pub(super) fn list_acts(
@@ -109,6 +114,11 @@ pub(super) fn list_acts(
                 };
                 if pick == "Да, я уверен" && near {
                     feast_of_owls(world, actor);
+                }
+            }
+            PromptKind::Potion { crucible } => {
+                if let Some(&potion) = prompt.paths.get(i) {
+                    brew_potion(world, client, actor, crucible, potion);
                 }
             }
         }

@@ -229,7 +229,7 @@ pub fn on_grasp(world: &mut World, mob: Entity, target: Entity) {
     }
 }
 
-fn adjust_sanity(world: &mut World, mob: Entity, amount: f32) {
+pub(super) fn adjust_sanity(world: &mut World, mob: Entity, amount: f32) {
     if let Some(mut mood) = world.get_mut::<crate::mood::Mood>(mob) {
         mood.adjust_sanity(
             amount,

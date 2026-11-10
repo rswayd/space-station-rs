@@ -165,6 +165,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::science::cell_lines::examine_lines(world, target, &mut lines);
     crate::silicon::ai_slipper::examine_lines(world, target, &mut lines);
     crate::misc_items::flatpacks::examine_lines(world, target, &mut lines);
+    crate::antag::heretic::server::examine_lines(world, examiner, target, &mut lines);
     (name, lines)
 }
 
