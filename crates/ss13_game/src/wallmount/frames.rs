@@ -5,7 +5,8 @@
 //! into its materials.
 //!
 //! Each `result_path` starts as tg's `Initialize(mapload = FALSE)` leaves it: an extinguisher
-//! cabinet open and empty, a fire axe cabinet empty, a flasher without a bulb.
+//! cabinet open and empty, a fire axe cabinet empty, a flasher without a bulb (a handheld flash
+//! goes in by hand, `controls`) on the channel its frame kept.
 // shortcut: frames of machines with construction stages or their own module (fire alarms and
 // their circuit, APCs, air alarms, intercoms, newscasters, status displays, cameras, lights,
 // mirrors, ...) are not handled here; the button's panel starts closed (no screwdriver panels,
@@ -40,11 +41,11 @@ pub struct FrameKind {
 }
 
 /// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm`,
-/// `fireaxe.dm`, the trophy fish mount (`crate::fishing::mount`), the photo frame
+/// `fireaxe.dm`, `detectiveboard.dm`, the trophy fish mount (`crate::fishing::mount`), the photo frame
 /// (`photos/frame.dm`, its photo moves along: [`crate::service::picture_frame_moved`]) and the
 /// heretic's eldritch paintings (`eldritch_painting.dm`,
 /// `crate::antag::heretic::server::EldritchPainting`). Subtypes come before their parents.
-pub static FRAMES: [FrameKind; 14] = [
+pub static FRAMES: [FrameKind; 15] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",
@@ -80,6 +81,12 @@ pub static FRAMES: [FrameKind; 14] = [
         result: "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
         pixel_shift: 32,
         materials: &[(GLASS, 5), (PLASTEEL, 5)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/detectiveboard",
+        result: "/obj/structure/detectiveboard",
+        pixel_shift: 32,
+        materials: &[(WOOD, 1)],
     },
     FrameKind {
         frame: "/obj/item/wallframe/fish",
@@ -233,8 +240,14 @@ fn mount(world: &mut World, client: Entity, mob: Entity, frame: Entity, wall: Ti
     }
     take_out(world, mob, frame);
     crate::service::picture_frame_moved(world, frame, Some(built), at);
+    // `wallframe/after_attach`; a flasher frame's channel (`wallframe/flasher/after_attach`).
+    crate::forensics::server::transfer_fingerprints_to(world, frame, built);
+    let channel = world.get::<controls::FrameChannel>(frame).cloned();
     world.despawn(frame);
     init_built(world, built, at);
+    if let Some(controls::FrameChannel(id)) = channel {
+        controls::set_channel(world, built, id);
+    }
     playsound(world, PlaySound::new(at, CLICK, 75.0, true));
     let (user, name) = (
         crate::medical::name_of(world, mob),
@@ -280,9 +293,9 @@ fn init_built(world: &mut World, e: Entity, at: TilePos) {
         controls::add_button(world, e, &dm);
     } else if is_under(path, ss13_mapload::wallmount::FLASHER_ROOT) {
         controls::add_flasher(world, e, &dm);
-        // `if(mapload) bulb = new(src)`: a built flasher has no bulb and never flashes.
+        // `if(mapload) bulb = new(src)`: a built flasher has no bulb until one goes in.
         if let Some(mut flasher) = world.get_mut::<controls::Flasher>(e) {
-            flasher.burnt_out = true;
+            flasher.bulb = false;
         }
     } else if is_under(path, ss13_mapload::wallmount::EXTINGUISHER_CABINET_ROOT) {
         // `if(!mapload) opened = TRUE`, no extinguisher.

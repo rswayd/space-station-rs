@@ -2,17 +2,23 @@
 //! blood DNA, fibers) and `code/modules/detectivework` (the detective's forensic scanner, its scan
 //! log and printed report, evidence bags).
 //!
-//! [`server`] keeps the traces on atoms and runs the scanner and the bags, [`client`] draws the
-//! scanner's tgui `ForensicScanner` window. This module holds what both halves share: the
-//! window's data and acts.
+//! [`server`] keeps the traces on atoms and runs the scanner and the bags, [`spoofer`] the
+//! syndicate forensics spoofer (`/obj/item/forensics_spoofer`), [`board`] the detective's notice
+//! board (`/obj/structure/detectiveboard`); [`client`] draws their tgui windows
+//! (`ForensicScanner`, `ForensicsSpoofer`, `DetectiveBoard`). This module holds what both halves
+//! share: the windows' data and acts.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
 
+#[cfg(feature = "server")]
+pub mod board;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+pub mod spoofer;
 
 pub struct ForensicScannerUi;
 
@@ -147,3 +153,91 @@ pub const PRINT: &str = "print";
 pub const INDEX: &str = "index";
 
 pub use ss13_shared::capitalize;
+
+// ---------------------------------------------------------------------------------------------
+// The forensics spoofer (`ForensicsSpoofer.tsx`).
+
+pub struct ForensicsSpooferUi;
+
+impl UiInterface for ForensicsSpooferUi {
+    const NAME: &'static str = "ForensicsSpoofer";
+    type Data = SpooferData;
+    type StaticData = SpooferStatic;
+}
+
+/// `/obj/item/forensics_spoofer/ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpooferStatic {
+    pub max_storage: u32,
+}
+
+/// `/obj/item/forensics_spoofer/ui_data`: tg's assoc `fingerprints` as (print, owner's name).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpooferData {
+    pub scanmode: bool,
+    pub silent: bool,
+    pub fibers: Vec<String>,
+    pub fingerprints: Vec<(String, String)>,
+    pub chosen_fiber: Option<String>,
+    pub chosen_fingerprint: Option<String>,
+}
+
+/// `ui_act` actions; `choose` and `delete` take the print or fiber as `chosen`.
+pub const SPOOF_SCANMODE: &str = "scanmode";
+pub const SPOOF_STEALTH: &str = "stealth";
+pub const SPOOF_CHOOSE: &str = "choose";
+pub const SPOOF_DELETE: &str = "delete";
+pub const SPOOF_CHOSEN: &str = "chosen";
+
+// ---------------------------------------------------------------------------------------------
+// The detective board (`DetectiveBoard/`).
+
+pub struct DetectiveBoardUi;
+
+impl UiInterface for DetectiveBoardUi {
+    const NAME: &'static str = "DetectiveBoard";
+    type Data = DetectiveBoardData;
+    type StaticData = ();
+}
+
+/// `/obj/structure/detectiveboard/ui_data`; `current_case` is 0-based (tg's is 1-based).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DetectiveBoardData {
+    pub cases: Vec<BoardCase>,
+    pub current_case: usize,
+}
+
+/// `/datum/case`: `ref` is its id on the board.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoardCase {
+    pub id: u32,
+    pub name: String,
+    pub color: String,
+    pub evidences: Vec<BoardEvidence>,
+}
+
+/// `/datum/evidence`: a pinned photo or paper; `connections` are evidence ids of its case.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BoardEvidence {
+    pub id: u32,
+    pub name: String,
+    pub description: String,
+    pub photo: bool,
+    /// A paper's first text input (`raw_text_inputs[1].raw_text`).
+    pub text: String,
+    pub connections: Vec<u32>,
+}
+
+/// `ui_act` actions and their params (ids as numbers).
+pub const BOARD_ADD_CASE: &str = "add_case";
+pub const BOARD_SET_CASE: &str = "set_case";
+pub const BOARD_REMOVE_CASE: &str = "remove_case";
+pub const BOARD_RENAME_CASE: &str = "rename_case";
+pub const BOARD_LOOK: &str = "look_evidence";
+pub const BOARD_REMOVE_EVIDENCE: &str = "remove_evidence";
+pub const BOARD_CONNECT: &str = "add_connection";
+pub const BOARD_CASE: &str = "case";
+pub const BOARD_CASE_REF: &str = "case_ref";
+pub const BOARD_EVIDENCE_REF: &str = "evidence_ref";
+pub const BOARD_FROM_REF: &str = "from_ref";
+pub const BOARD_TO_REF: &str = "to_ref";

@@ -993,10 +993,12 @@ mod tests {
         let done = PrisonerCard {
             goal: 100,
             points: 100,
+            ..Default::default()
         };
         let short = PrisonerCard {
             goal: 100,
             points: 99,
+            ..Default::default()
         };
         assert!(can_reclaim(None, Some(&done)));
         assert!(!can_reclaim(None, Some(&short)));

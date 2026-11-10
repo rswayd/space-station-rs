@@ -19,6 +19,8 @@ pub mod labor;
 #[cfg(feature = "server")]
 pub mod prisoner;
 #[cfg(feature = "server")]
+pub mod sentence;
+#[cfg(feature = "server")]
 pub mod timer;
 
 /// The brig on the server: cell timers and the prisoner management console.
@@ -33,6 +35,7 @@ impl bevy::prelude::Plugin for BrigServerPlugin {
             prisoner::PrisonerConsolePlugin,
             gulag::GulagPlugin,
             labor::LaborPlugin,
+            sentence::SentencePlugin,
         ));
     }
 }

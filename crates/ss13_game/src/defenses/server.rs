@@ -23,10 +23,20 @@
 //!   (`setState`). It opens for anyone; an ID with its access (AI upload) locks and unlocks it,
 //!   a silicon toggles the lock from the window; locked, only silicons change it. An emag
 //!   unlocks it for good; an EMP may scramble it.
+//! - Damage (`crate::obj_damage`, 160 integrity) may spark and makes a turret that is on shoot
+//!   anyone without its access for 6 s (`TURRET_FLAG_SHOOT_ALL_REACT`); at half it breaks
+//!   (`_broken`, off for good, sparks), a crowbar (2 s) then salvages it: 70 % the gun, maybe
+//!   iron and a prox sensor. A wrench bolts or unbolts a turret that is off and down (a loose one
+//!   is a closed cover and does nothing). A multitool remembers an unlocked turret; on a control
+//!   panel it links that turret. The AI alt-clicks a panel for stun/lethal, ctrl-clicks it on
+//!   and off.
+//! - The syndicate shuttle turret fires three more shots at 0.5 s intervals at its target; the
+//!   ruin's energy turret shoots whoever's worn ID lacks its access.
 // The windows' settings are refused on the server while locked (tg only greys the buttons out).
-// shortcut: no wrenching, crowbar salvage, damage or breaking (the
-// `_REACT` anger on damage, the broken sprite), wall turrets shooting from the next tile,
-// manual (AI) control, mechs and blobs as targets, power drawn per shot; the cover is the
+// shortcut: no manual (AI) control (`turret_toggle`, silicon group), mechs and blobs as
+// targets, cyborg alt/ctrl clicks on the panel, `wall_turret_direction` (no map sets it: a
+// turret in a wall searches its free neighbour); projectiles hit it through its melee armor
+// (`crate::projectile`); the cover is the
 // turret's own sprite (`turretCover` / `openTurretCover` under the gun) without the pop-up
 // animation; the perp's record is found by its real name (tg: the face/ID name).
 // Cost: every 2 s per turret that is on (~100 on a station), one `in_radius(scan_range)` of the
@@ -71,6 +81,17 @@ const REDTAG_SUIT: &str = "/obj/item/clothing/suit/redtag";
 const BLUETAG_SUIT: &str = "/obj/item/clothing/suit/bluetag";
 const REDTAG_GUN: &str = "/obj/item/gun/energy/laser/redtag";
 const BLUETAG_GUN: &str = "/obj/item/gun/energy/laser/bluetag";
+pub const TURRET_ROOT: &str = "/obj/machinery/porta_turret";
+const SHUTTLE_TURRET: &str = "/obj/machinery/porta_turret/syndicate/shuttle";
+const RUIN_TURRET: &str = "/obj/machinery/porta_turret/syndicate/energy/ruin";
+/// `reset_attacked` after `addtimer(..., 6 SECONDS)`.
+const REACT_SECS: f64 = 6.0;
+/// `syndicate/shuttle/target`: three more shots after the first.
+const VOLLEY: [f64; 3] = [0.5, 1.0, 1.5];
+/// `crowbar_act`: `use_tool(src, user, 20)`.
+pub const SALVAGE_DS: f32 = 20.0;
+const IRON: &str = "/obj/item/stack/sheet/iron";
+const PROX_SENSOR: &str = "/obj/item/assembly/prox_sensor";
 
 /// A turret's live state (tg vars).
 #[derive(Component, Clone, Debug, PartialEq)]
@@ -93,6 +114,12 @@ pub struct Turret {
     /// `set_disabled(will_restart)`: turned back on at this time.
     pub restart_at: Option<f64>,
     pub next_process: f64,
+    /// `machine_stat & BROKEN`.
+    pub broken: bool,
+    /// `TURRET_FLAG_SHOOT_ALL_REACT` is on until then (damage taken while on).
+    pub react_until: Option<f64>,
+    /// The shuttle turret's queued shots: (when, at whom).
+    pub volley: Vec<(f64, Entity)>,
 }
 
 /// The turret control panel (tg `/obj/machinery/turretid`).
@@ -160,6 +187,9 @@ impl Plugin for DefensesPlugin {
                         .before(crate::projectile::ProjectileSystems),
                     turret_acts.in_set(UiSystems::Handle),
                     panel_acts.in_set(UiSystems::Handle),
+                    super::turret_build::rename_answers
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
                     emp_turrets.in_set(EmpSystems::Effects),
                 ),
             )
@@ -217,6 +247,9 @@ pub fn setup_turret(world: &mut World, e: Entity, next_process: f64) {
             disabled_until: 0.0,
             restart_at: None,
             next_process,
+            broken: false,
+            react_until: None,
+            volley: Vec::new(),
         },
         Faction(faction_of(&dm.path)),
         // Map load skips it (`invisibility` while under its cover): the cover is its sprite.
@@ -291,10 +324,13 @@ pub fn refresh_look(world: &mut World, e: Entity) {
         return;
     };
     let powered = world.get::<Unpowered>(e).is_none();
+    let anchored = crate::obj_damage::anchored(world, e);
     let gun = format!(
         "{}_{}",
         dm.base_icon_state,
-        if !powered || !t.on || !t.raised {
+        if t.broken {
+            "broken"
+        } else if !powered || !t.on || !t.raised {
             "off"
         } else if t.lethal {
             "lethal"
@@ -302,7 +338,11 @@ pub fn refresh_look(world: &mut World, e: Entity) {
             "stun"
         }
     );
-    let (base, over) = if !dm.has_cover {
+    // `update_icon_state`: loose, the closed cover; broken, the bare wreck (`atom_break` drops
+    // the cover).
+    let (base, over) = if !anchored {
+        ("turretCover".to_owned(), None)
+    } else if !dm.has_cover || t.broken {
         (gun, None)
     } else if t.raised {
         ("openTurretCover".to_owned(), Some(gun))
@@ -357,7 +397,7 @@ pub fn toggle_on(world: &mut World, e: Entity, turn_on: bool) {
     let Some(mut t) = world.get_mut::<Turret>(e) else {
         return;
     };
-    if t.on == turn_on || (turn_on && t_now < t.disabled_until) {
+    if t.on == turn_on || (turn_on && (t_now < t.disabled_until || t.broken)) {
         return;
     }
     t.on = turn_on;
@@ -436,6 +476,21 @@ fn item_under(world: &World, item: Option<Entity>, root: &str) -> bool {
 /// tg `assess_perp(perp)` of the turret's type: the threat a human is (4 or more: a target).
 pub fn assess_perp(world: &World, turret: &Turret, dm: &DmTurret, perp: Entity) -> i32 {
     let path = dm.path.as_str();
+    if is_under(path, RUIN_TURRET) {
+        // `energy/ruin/assess_perp`: `check_access(perp.wear_id?.GetID())`.
+        let access = world
+            .get::<Inventory>(perp)
+            .and_then(|i| i.id)
+            .and_then(|id| crate::inventory::get_id(world, id))
+            .and_then(|c| world.get::<IdCard>(c))
+            .map(|c| c.access.clone())
+            .unwrap_or_default();
+        return if check_access(&dm.req_access, &[], &access) {
+            0
+        } else {
+            10
+        };
+    }
     if is_under(path, "/obj/machinery/porta_turret/syndicate")
         || is_under(path, "/obj/machinery/porta_turret/ai")
     {
@@ -601,6 +656,30 @@ fn process_turrets(world: &mut World) {
             }
             toggle_on(world, e, true);
         }
+        // `reset_attacked`.
+        if t.react_until.is_some_and(|at| t_now >= at)
+            && let Some(mut t) = world.get_mut::<Turret>(e)
+        {
+            t.react_until = None;
+            t.flags &= !TURRET_FLAG_SHOOT_ALL_REACT;
+        }
+        // The shuttle turret's queued `shootAt`s.
+        let due: Vec<Entity> = t
+            .volley
+            .iter()
+            .filter(|(at, _)| t_now >= *at)
+            .map(|&(_, target)| target)
+            .collect();
+        if !due.is_empty() {
+            if let Some(mut t) = world.get_mut::<Turret>(e) {
+                t.volley.retain(|(at, _)| t_now < *at);
+            }
+            for target in due {
+                if world.get_entity(target).is_ok() {
+                    shoot_at(world, e, target);
+                }
+            }
+        }
         if t_now < t.next_process {
             continue;
         }
@@ -616,8 +695,13 @@ fn process(world: &mut World, e: Entity) {
     let Some(t) = world.get::<Turret>(e) else {
         return;
     };
-    // Off or unpowered: down, also when it was still popping up as it went off.
-    if !t.on || world.get::<Unpowered>(e).is_some() {
+    // Off, broken, loose or unpowered: down, also when it was still popping up as it went off
+    // (`check_should_process`).
+    if !t.on
+        || t.broken
+        || !crate::obj_damage::anchored(world, e)
+        || world.get::<Unpowered>(e).is_some()
+    {
         pop_down(world, e);
         return;
     }
@@ -643,9 +727,242 @@ fn process(world: &mut World, e: Entity) {
         world.entity_mut(e).insert(Facing(dir));
     }
     shoot_at(world, e, target);
+    // `syndicate/shuttle/target`: three more after the first.
+    let shuttle = world
+        .get::<DmTurret>(e)
+        .is_some_and(|d| is_under(&d.path, SHUTTLE_TURRET));
+    if shuttle {
+        let t_now = now(world);
+        if let Some(mut t) = world.get_mut::<Turret>(e) {
+            t.volley.extend(VOLLEY.iter().map(|d| (t_now + d, target)));
+        }
+    }
 }
 
-/// `shootAt`: raised, after `shot_delay` (emagged: no delay), the mode's projectile.
+// ---------------------------------------------------------------------------------------------
+// Damage and tools
+
+/// The turret types `crate::obj_damage` gives integrity.
+pub fn breakable(path: &str) -> bool {
+    is_under(path, TURRET_ROOT)
+}
+
+/// `porta_turret/take_damage` of a hit that left it standing: 30 % sparks; on, not emagged and
+/// not already angry, it shoots everyone without its access for 6 s.
+pub fn damaged(world: &mut World, e: Entity) {
+    let Some(t) = world.get::<Turret>(e).cloned() else {
+        return;
+    };
+    if world.resource_mut::<CombatRng>().chance(30.0) {
+        crate::emp::sparks(world, e);
+    }
+    if t.on && t.flags & TURRET_FLAG_SHOOT_ALL_REACT == 0 && !t.emagged {
+        let until = now(world) + REACT_SECS;
+        if let Some(mut t) = world.get_mut::<Turret>(e) {
+            t.flags |= TURRET_FLAG_SHOOT_ALL_REACT;
+            t.react_until = Some(until);
+        }
+    }
+}
+
+/// `porta_turret/atom_break`: off for good, sparks, the cover gone. True when `e` is a turret.
+pub fn atom_break(world: &mut World, e: Entity) -> bool {
+    let Some(mut t) = world.get_mut::<Turret>(e) else {
+        return false;
+    };
+    t.broken = true;
+    t.on = false;
+    t.raised = false;
+    t.raising = None;
+    t.volley.clear();
+    crate::emp::sparks(world, e);
+    refresh_look(world, e);
+    true
+}
+
+/// `porta_turret/wrench_act` (off and down: bolted or loose) and `crowbar_act` (broken: the
+/// salvage). `None`: not the turret's tool.
+fn turret_tool(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> Option<bool> {
+    let t = world.get::<Turret>(target)?.clone();
+    match crate::tools::tool_of(world, held)?.0 {
+        crate::tools::ToolKind::Wrench => {
+            if t.on || t.raised || t.raising.is_some() {
+                return None;
+            }
+            let pos = *world.get::<TilePos>(target)?;
+            let anchored = crate::obj_damage::anchored(world, target);
+            let in_space = crate::construction::turf_at(world, pos)
+                .and_then(|turf| crate::construction::path_of(world, turf))
+                .is_some_and(|p| is_under(&p, "/turf/open/space"));
+            if !anchored && !in_space {
+                crate::obj_damage::set_anchored(world, target, true);
+                tell(
+                    world,
+                    client,
+                    Span::Notice,
+                    "Вы затягиваете внешние болты турели.",
+                );
+            } else if anchored {
+                crate::obj_damage::set_anchored(world, target, false);
+                tell(
+                    world,
+                    client,
+                    Span::Notice,
+                    "Вы ослабляете внешние болты турели.",
+                );
+            }
+            refresh_look(world, target);
+            Some(true)
+        }
+        crate::tools::ToolKind::Crowbar if t.broken => {
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы начинаете снимать металлическую обшивку...",
+            );
+            crate::tools::use_tool(
+                world,
+                crate::tools::Actor {
+                    client,
+                    mob,
+                    item: Some(held),
+                },
+                target,
+                SALVAGE_DS,
+                0,
+                crate::construction::Job::TurretBuild(super::turret_build::TurretBuildJob::Salvage),
+            );
+            Some(true)
+        }
+        crate::tools::ToolKind::Multitool if !t.locked => {
+            crate::tools::set_multitool_buffer(world, held, target);
+            crate::balloon::balloon_alert(world, mob, target, "saved to multitool buffer");
+            Some(true)
+        }
+        _ => None,
+    }
+}
+
+/// The end of the crowbar on a broken turret: 70 % the gun, then 50 % 1-4 iron and 50 % a prox
+/// sensor; the turret is gone either way.
+pub fn finish_salvage(world: &mut World, client: Entity, turret: Entity) {
+    let Some(t) = world.get::<Turret>(turret) else {
+        return;
+    };
+    if !t.broken {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(turret) else {
+        return;
+    };
+    let gun = world
+        .get::<crate::storage::Stored>(turret)
+        .and_then(|s| s.items().first().copied());
+    let (salvaged, iron, sensor, sheets) = {
+        let mut rng = world.resource_mut::<CombatRng>();
+        (
+            rng.chance(70.0),
+            rng.chance(50.0),
+            rng.chance(50.0),
+            rng.range(1, 4),
+        )
+    };
+    if salvaged {
+        if let Some(gun) = gun {
+            crate::storage::take_out(world, gun, pos);
+        }
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы снимаете турель и спасаете часть деталей.",
+        );
+        if iron {
+            crate::construction::spawn_stack(world, IRON, pos, sheets);
+        }
+        if sensor {
+            crate::construction::spawn_obj(world, PROX_SENSOR, pos);
+        }
+    } else {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы снимаете турель, но ничего не удаётся спасти.",
+        );
+    }
+    world.despawn(turret);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// `turretid/multitool_act`: the turret in the multitool's buffer joins the panel.
+fn link_buffer(world: &mut World, client: Entity, held: Entity, panel: Entity) -> bool {
+    let Some(buffered) = crate::tools::multitool_buffer(world, held) else {
+        return false;
+    };
+    if world.get::<Turret>(buffered).is_none() {
+        return false;
+    }
+    let Some(mut p) = world.get_mut::<TurretControl>(panel) else {
+        return false;
+    };
+    if !p.turrets.contains(&buffered) {
+        p.turrets.push(buffered);
+    }
+    let (what, name) = (plain_name(world, buffered), plain_name(world, panel));
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы связываете {what} с {name}."),
+    );
+    true
+}
+
+/// tg `turretid/ai_click_alt` (stun/lethal) and `AICtrlClick` (on/off) of the AI looking
+/// through `eye`, unless the panel is closed to it (`is_ai_locked`). True when `target` is a
+/// panel.
+pub fn ai_panel_click(world: &mut World, eye: Entity, target: Entity, lethal: bool) -> bool {
+    let Some(p) = world.get::<TurretControl>(target).cloned() else {
+        return false;
+    };
+    if p.ailock {
+        return true;
+    }
+    let text = if lethal {
+        if p.lethal {
+            "safeties enabled"
+        } else {
+            "safeties disabled"
+        }
+    } else if p.enabled {
+        "disabled"
+    } else {
+        "enabled"
+    };
+    if let Some(mut p) = world.get_mut::<TurretControl>(target) {
+        if lethal {
+            p.lethal = !p.lethal;
+        } else {
+            p.enabled = !p.enabled;
+        }
+    }
+    crate::balloon::balloon_alert(world, eye, target, text);
+    crate::forensics::server::add_hiddenprint(world, target, eye);
+    update_turrets(world, target);
+    true
+}
+
+/// `shootAt`: raised, after `shot_delay` (emagged: no delay), the mode's projectile; a turret in
+/// a wall shoots from the free tile towards the target (straight or 45 degrees off); a shot
+/// draws `reqpower` (twice in lethal mode).
 pub fn shoot_at(world: &mut World, e: Entity, target: Entity) -> bool {
     let t_now = now(world);
     let (Some(t), Some(dm)) = (world.get::<Turret>(e), world.get::<DmTurret>(e)) else {
@@ -657,18 +974,24 @@ pub fn shoot_at(world: &mut World, e: Entity, target: Entity) -> bool {
     if !t.emagged && t.last_fired + f64::from(dm.shot_delay) / 10.0 > t_now {
         return false;
     }
-    let (data, sound) = if t.lethal {
-        (dm.lethal.clone(), dm.lethal_sound.clone())
+    let (data, sound, energy) = if t.lethal {
+        (
+            dm.lethal.clone(),
+            dm.lethal_sound.clone(),
+            dm.reqpower * 2.0,
+        )
     } else {
-        (dm.stun.clone(), dm.stun_sound.clone())
+        (dm.stun.clone(), dm.stun_sound.clone(), dm.reqpower)
     };
-    let (Some(&from), Some(&to)) = (world.get::<TilePos>(e), world.get::<TilePos>(target)) else {
+    let (Some(&at), Some(&to)) = (world.get::<TilePos>(e), world.get::<TilePos>(target)) else {
         return false;
     };
     if let Some(mut t) = world.get_mut::<Turret>(e) {
         t.last_fired = t_now;
     }
-    crate::sound::playsound(world, crate::sound::PlaySound::new(from, sound, 75.0, true));
+    let from = wall_shot_origin(world, at, to);
+    crate::sound::playsound(world, crate::sound::PlaySound::new(at, sound, 75.0, true));
+    crate::power::machine_use_energy(world, e, energy, false);
     crate::projectile::fire(
         world,
         crate::projectile::Shot {
@@ -685,6 +1008,38 @@ pub fn shoot_at(world: &mut World, e: Entity, target: Entity) -> bool {
         },
     );
     true
+}
+
+/// `shootAt` of a turret on a dense turf: the first free neighbour towards the target (0, -45,
+/// +45 degrees); its own tile otherwise.
+// No mapped turret sets `wall_turret_direction`; the search covers them all.
+fn wall_shot_origin(world: &World, at: TilePos, to: TilePos) -> TilePos {
+    use ss13_shared::Dir;
+    const CLOCKWISE: [Dir; 8] = [
+        Dir::North,
+        Dir::NorthEast,
+        Dir::East,
+        Dir::SouthEast,
+        Dir::South,
+        Dir::SouthWest,
+        Dir::West,
+        Dir::NorthWest,
+    ];
+    let dense = crate::construction::turf_at(world, at)
+        .is_some_and(|t| world.get::<ss13_world::Density>(t).is_some());
+    if !dense {
+        return at;
+    }
+    let Some(i) =
+        crate::pull::dir_between(at, to).and_then(|d| CLOCKWISE.iter().position(|c| *c == d))
+    else {
+        return at;
+    };
+    [0, 7, 1]
+        .into_iter()
+        .map(|k| at.step(CLOCKWISE[(i + k) % 8]))
+        .find(|&p| !crate::construction::tile_blocked(world, p))
+        .unwrap_or(at)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -765,6 +1120,15 @@ pub fn item_interaction(
     let panel = world.get::<TurretControl>(target).is_some();
     if !turret && !panel {
         return false;
+    }
+    if turret && let Some(handled) = turret_tool(world, client, mob, held, target) {
+        return handled;
+    }
+    if panel
+        && crate::tools::tool_of(world, held)
+            .is_some_and(|(k, _)| k == crate::tools::ToolKind::Multitool)
+    {
+        return link_buffer(world, client, held, target);
     }
     if crate::emag::is_emag(world, held) {
         if crate::emag::can_emag(world, mob, held, target) {
@@ -1137,6 +1501,9 @@ mod tests {
             disabled_until: 0.0,
             restart_at: None,
             next_process: 0.0,
+            broken: false,
+            react_until: None,
+            volley: Vec::new(),
         }
     }
 

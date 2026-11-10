@@ -145,6 +145,14 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
     if crate::defenses::server::attack_ai(world, client, user, target) {
         return true;
     }
+    // Brig cell timers (`crate::brig::timer`).
+    if crate::brig::timer::attack_ai(world, client, user, target) {
+        return true;
+    }
+    // Mounted flashers fire (`flasher/attack_ai`).
+    if crate::wallmount::controls::attack_ai(world, target) {
+        return true;
+    }
     crate::atmos_machinery::windows::interact(
         world,
         client,

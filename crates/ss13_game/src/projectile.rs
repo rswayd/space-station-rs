@@ -578,8 +578,16 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         return;
     }
     if world.get::<Turf>(target).is_none() && matches!(kind, DamageType::Brute | DamageType::Burn) {
-        // shortcut: objects check their melee armor, not the projectile's flag.
-        crate::obj_damage::take_damage(world, target, p.data.damage, kind);
+        // shortcut: objects check their melee armor, not the projectile's flag, but for the
+        // security barrier (`crate::defenses::barricades::projectile_armor`).
+        match crate::defenses::barricades::projectile_armor(world, target, &p.data.armor_flag) {
+            Some(armor) => {
+                crate::obj_damage::take_damage_armor(world, target, p.data.damage, kind, armor);
+            }
+            None => {
+                crate::obj_damage::take_damage(world, target, p.data.damage, kind);
+            }
+        }
     }
 }
 

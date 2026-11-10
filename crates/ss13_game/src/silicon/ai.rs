@@ -494,12 +494,18 @@ fn ai_clicks(world: &mut World, mut clicks: Local<MessageCursor<AiClick>>) {
         } else if m.alt {
             if door {
                 toggle_shock(world, click.client, click.target);
+            } else {
+                // `turretid/ai_click_alt`: stun or lethal.
+                crate::defenses::server::ai_panel_click(world, click.eye, click.target, true);
             }
         } else if m.ctrl {
             if door {
                 toggle_bolt(world, click.client, click.target);
             } else if apc {
                 toggle_breaker(world, click.client, click.target);
+            } else if crate::defenses::server::ai_panel_click(world, click.eye, click.target, false)
+            {
+                // `turretid/AICtrlClick`: on or off.
             } else {
                 super::holopad::ai_ctrl_click(world, click.eye, click.target);
             }

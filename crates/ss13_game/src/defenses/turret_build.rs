@@ -6,8 +6,13 @@
 //! it out), a prox sensor (likewise), screwdriver (reversible), 2 iron (a crowbar pries it
 //! off), welder: the finished turret (`setup(installed_gun)`, unlocked) replaces the frame. The
 //! crowbar takes an unbolted frame apart. Lasertag guns make a lasertag turret of that team.
-// shortcut: no `UNIQUE_RENAME` of the frame (`finish_name`, the port has no renaming pens for
-// machines), the turret keeps its prototype's name; add with the pen rename mechanic.
+//!
+//! A pen renames the frame (`UNIQUE_RENAME | RENAME_NO_DESC`, `tool_renaming`): the finished
+//! turret takes that name (`finish_name`); "Reset" gives both their own back.
+//!
+//! A broken turret's crowbar salvage ends here too ([`TurretBuildJob::Salvage`]).
+// The pen rename is the frame's own: tg's generic `tool_renaming` of every `UNIQUE_RENAME`
+// object belongs to the items group.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -35,6 +40,11 @@ const REDTAG_GUN: &str = "/obj/item/gun/energy/laser/redtag";
 const TURRET: &str = "/obj/machinery/porta_turret";
 const LASERTAG_RED: &str = "/obj/machinery/porta_turret/lasertag/red";
 const LASERTAG_BLUE: &str = "/obj/machinery/porta_turret/lasertag/blue";
+const PEN: &str = "/obj/item/pen";
+/// `MAX_NAME_LEN`.
+const MAX_NAME_LEN: u32 = 42;
+const OPTION_RENAME: &str = "Rename";
+const OPTION_RESET: &str = "Reset";
 
 /// `PTURRET_*`.
 const UNSECURED: u8 = 0;
@@ -71,6 +81,118 @@ pub enum TurretBuildJob {
     RemoveInterior,
     /// The exterior armour is welded: the turret is done.
     Finish,
+    /// A crowbar on a broken turret (`porta_turret/crowbar_act`, `super::server`).
+    Salvage,
+}
+
+/// The frame's pen name (`finish_name`) and the name it had before.
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub struct FinishName {
+    pub name: String,
+    pub original: String,
+}
+
+/// On a prompt: the frame being renamed, and whether the name itself is asked.
+#[derive(Component, Clone, Copy, Debug)]
+struct RenameAsk {
+    frame: Entity,
+    naming: bool,
+}
+
+/// The rename prompts of [`item_interaction`] answered, after their sleep: the frame is still
+/// in reach.
+pub fn rename_answers(
+    world: &mut World,
+    mut cursor: Local<bevy::ecs::message::MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world};
+    let answered: Vec<(Entity, Entity, Entity, Option<PromptAnswer>)> = cursor
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, mob, answer) in answered {
+        let Some(RenameAsk { frame, naming }) = world.get::<RenameAsk>(prompt).copied() else {
+            continue;
+        };
+        if world.get::<TurretFrame>(frame).is_none() || !crate::storage::in_reach(world, mob, frame)
+        {
+            continue;
+        }
+        let current = crate::examine::name_of(world, frame);
+        match (naming, answer) {
+            (false, Some(PromptAnswer::Item(0))) => {
+                let prompt = ask_world(
+                    world,
+                    Ask::new(
+                        client,
+                        mob,
+                        "Object Name",
+                        format!("What do you want to name {current}?"),
+                        PromptKind::Text {
+                            default: current,
+                            max_length: MAX_NAME_LEN,
+                            multiline: false,
+                        },
+                    ),
+                );
+                world.entity_mut(prompt).insert(RenameAsk {
+                    frame,
+                    naming: true,
+                });
+            }
+            (false, Some(PromptAnswer::Item(1))) => {
+                if let Some(old) = world.get::<FinishName>(frame).cloned() {
+                    set_name(world, frame, &old.original);
+                    world.entity_mut(frame).remove::<FinishName>();
+                }
+                tell(
+                    world,
+                    client,
+                    Span::Notice,
+                    format!("You have successfully reset {current}'s name."),
+                );
+            }
+            (true, Some(PromptAnswer::Text(text))) => {
+                let input = crate::records::console::sanitize(&text, MAX_NAME_LEN as usize);
+                if input.is_empty() || input == current {
+                    tell(
+                        world,
+                        client,
+                        Span::Notice,
+                        format!("You changed {current} to... well... {current}."),
+                    );
+                    continue;
+                }
+                let original = world
+                    .get::<FinishName>(frame)
+                    .map_or_else(|| current.clone(), |f| f.original.clone());
+                world.entity_mut(frame).insert(FinishName {
+                    name: input.clone(),
+                    original,
+                });
+                set_name(world, frame, &input);
+                tell(
+                    world,
+                    client,
+                    Span::Notice,
+                    format!("You have successfully renamed the {current} to {input}."),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The atom's shown name, its description kept.
+fn set_name(world: &mut World, e: Entity, name: &str) {
+    let desc = world
+        .get::<ss13_mapload::DmName>(e)
+        .map(|n| n.desc.clone())
+        .unwrap_or_default();
+    world.entity_mut(e).insert(ss13_mapload::DmName {
+        name: name.to_owned(),
+        desc,
+    });
 }
 
 fn frame_of(world: &mut World, target: Entity) -> Option<TurretFrame> {
@@ -127,6 +249,27 @@ pub fn item_interaction(
         .get::<DmItem>(held)
         .map(|i| i.path.clone())
         .unwrap_or_default();
+    // `tool_renaming`: rename or reset (`RENAME_NO_DESC`: no description).
+    if is_under(&path, PEN) {
+        let prompt = ss13_tgui::prompt::ask_world(
+            world,
+            ss13_tgui::prompt::Ask::new(
+                client,
+                mob,
+                "Customization",
+                "What would you like to edit?",
+                ss13_tgui::prompt::PromptKind::List {
+                    items: vec![OPTION_RENAME.to_owned(), OPTION_RESET.to_owned()],
+                    default: None,
+                },
+            ),
+        );
+        world.entity_mut(prompt).insert(RenameAsk {
+            frame: target,
+            naming: false,
+        });
+        return true;
+    }
     match frame.step {
         BOLTED if is_under(&path, IRON) => sheets(
             world,
@@ -327,6 +470,10 @@ fn welder(world: &mut World, actor: Actor, target: Entity, frame: TurretFrame) -
 /// End of a welder step; the frame's state is checked again here.
 pub fn complete(world: &mut World, action: &crate::tools::DoAfter, job: TurretBuildJob) {
     let target = action.target;
+    if job == TurretBuildJob::Salvage {
+        super::server::finish_salvage(world, action.client, target);
+        return;
+    }
     let Some(&frame) = world.get::<TurretFrame>(target) else {
         return;
     };
@@ -345,6 +492,7 @@ pub fn complete(world: &mut World, action: &crate::tools::DoAfter, job: TurretBu
             );
             spawn_stack(world, IRON, action.target_pos, SHEETS);
         }
+        TurretBuildJob::Salvage => {}
         TurretBuildJob::Finish => {
             if frame.step != START_EXTERNAL_ARMOUR {
                 return;
@@ -389,6 +537,13 @@ fn finish(world: &mut World, frame_entity: Entity, frame: TurretFrame, pos: Tile
     setup_turret(world, turret, 0.0);
     if let Some(mut t) = world.get_mut::<Turret>(turret) {
         t.locked = false;
+    }
+    // `turret.name = finish_name`.
+    if let Some(name) = world
+        .get::<FinishName>(frame_entity)
+        .map(|f| f.name.clone())
+    {
+        set_name(world, turret, &name);
     }
     world.entity_mut(frame_entity).despawn();
     crate::construction::tile_changed(world, pos);

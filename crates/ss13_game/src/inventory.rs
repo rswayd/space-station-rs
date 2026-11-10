@@ -605,6 +605,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::devices::broadcast_camera::rename(world, client, mob, item)
             {
                 // A broadcast camera's name.
+            } else if slot == active
+                && let Some(item) = inventory.slot(slot)
+                && crate::forensics::spoofer::toggle_mode(world, mob, item)
+            {
+                // The forensics spoofer scans or applies.
             } else if let Some(item) = inventory.slot(slot) {
                 // A jumpsuit's sensors (`attack_self_secondary`, `attack_hand_secondary`).
                 crate::clothing::right_click_slot(world, client, mob, item);
@@ -1290,6 +1295,10 @@ fn refresh_mobs(
                 sprites
             })
             .unwrap_or_default();
+        let blood = icons
+            .as_deref()
+            .map(|icons| worn.blood(&shown, icons))
+            .unwrap_or_default();
         // tg `update_worn_handcuffs`.
         if cuffed && let Some(cuffs) = icons.as_deref().and_then(crate::restraints::overlay) {
             sprites.push(cuffs);
@@ -1304,7 +1313,7 @@ fn refresh_mobs(
         {
             sprites.push(overlay);
         }
-        match humans.dressed(&look, &sprites) {
+        match humans.dressed_with(&look, &sprites, &blood) {
             Ok(dressed) => {
                 appearance.set_if_neq(dressed);
             }

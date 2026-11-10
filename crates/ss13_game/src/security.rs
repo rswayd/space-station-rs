@@ -102,7 +102,7 @@ pub struct Flash {
     pub times_used: u32,
     pub burnt_out: bool,
     /// `last_used`, `Time::elapsed_secs_f64`.
-    last_used: f64,
+    pub last_used: f64,
 }
 
 /// `TRAIT_IWASBATONED`: who batoned this mob, until when.

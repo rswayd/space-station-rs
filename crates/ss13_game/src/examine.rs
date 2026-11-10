@@ -137,6 +137,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::wallmount::examine_lines(world, target, &mut lines);
     crate::power::lighting::examine_lines(world, target, &mut lines);
     crate::brig::timer::examine_lines(world, target, &mut lines);
+    crate::brig::sentence::examine_lines(world, target, &mut lines);
     crate::furniture::examine_lines(world, target, &mut lines);
     crate::vehicles::examine_lines(world, target, &mut lines);
     crate::mecha::panel::examine_lines(world, target, &mut lines);
@@ -340,6 +341,8 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
                 message,
             });
         }
+        // Hidden prints for admins only (`R_ADMIN` checked inside).
+        crate::forensics::server::admin_examine(world, click.client, click.target);
         crate::quirks::examined(world, click.examiner, click.target);
         // `photo/examine` and `picture_frame/examine` show the picture.
         crate::service::photo_examined(world, click.client, click.examiner, click.target);

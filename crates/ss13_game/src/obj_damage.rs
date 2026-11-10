@@ -10,7 +10,8 @@
 //!
 //! Every structure and machine also gets [`Anchored`] (tg `anchored`), which pulling reads; a
 //! dense loose one is [`Pushable`] (`sync_pushable`).
-// shortcut: only windows, grilles, girders, frames, gas machines and vendors take damage; other
+// shortcut: only windows, grilles, girders, frames, gas machines, vendors and turrets take
+// damage; other
 // structures and machines (tables, closets, doors) wait for their own
 // `atom_break`/`atom_deconstruct`.
 
@@ -216,7 +217,8 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         || crate::decor::breakable(&obj.path)
         || crate::tank_storage::breakable(&obj.path)
         || crate::displaycase::breakable(&obj.path)
-        || crate::spawners::breakable(&obj.path);
+        || crate::spawners::breakable(&obj.path)
+        || crate::defenses::server::breakable(&obj.path);
     if !breakable {
         return;
     }
@@ -392,6 +394,8 @@ fn apply_damage(
     if hit.destroyed {
         deconstruct(world, target, false);
     } else {
+        // `porta_turret/take_damage`: sparks and anger.
+        crate::defenses::server::damaged(world, target);
         refresh_look(world, target);
     }
     hit
@@ -410,6 +414,25 @@ pub fn take_damage_flagless(world: &mut World, target: Entity, amount: f32) -> H
     obj.armor_melee = 0.0;
     obj.damage_deflection = 0.0;
     apply_damage(world, target, &obj, amount, DamageType::Brute)
+}
+
+/// tg `take_damage` with an armour rating other than the melee one (a projectile's flag).
+pub fn take_damage_armor(
+    world: &mut World,
+    target: Entity,
+    amount: f32,
+    damtype: DamageType,
+    armor: f32,
+) -> Hit {
+    let Some(mut obj) = world.get::<DmObj>(target).cloned() else {
+        return Hit {
+            damage: 0.0,
+            broke: false,
+            destroyed: false,
+        };
+    };
+    obj.armor_melee = armor;
+    apply_damage(world, target, &obj, amount, damtype)
 }
 
 /// tg `take_damage(amount, BRUTE, BOMB)`: through the `bomb` armor, no deflection
@@ -442,7 +465,10 @@ fn atom_break(world: &mut World, target: Entity, obj: &DmObj) {
         crate::vending::atom_break(world, target);
         return;
     }
-    if crate::decor::atom_break(world, target) || crate::displaycase::atom_break(world, target) {
+    if crate::decor::atom_break(world, target)
+        || crate::displaycase::atom_break(world, target)
+        || crate::defenses::server::atom_break(world, target)
+    {
         return;
     }
     if !is_under(&obj.path, GRILLE) {

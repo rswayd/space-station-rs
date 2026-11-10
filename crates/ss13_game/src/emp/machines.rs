@@ -414,7 +414,10 @@ fn wall_mounts(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
             if powered {
                 crate::wallmount::machines::ignite(world, e);
             }
-        } else if world.get::<Flasher>(e).is_some_and(|f| !f.burnt_out) {
+        } else if world
+            .get::<Flasher>(e)
+            .is_some_and(|f| f.bulb && !f.burnt_out)
+        {
             if powered && prob(world, 75.0 / sev) {
                 crate::wallmount::controls::flash(world, e);
                 if let Some(mut f) = world.get_mut::<Flasher>(e) {

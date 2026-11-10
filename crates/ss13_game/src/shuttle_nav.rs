@@ -701,6 +701,10 @@ fn tick_flights(world: &mut World) {
         .collect();
     for (port, nav) in due {
         let next = match nav.flight {
+            // `COMSIG_SHUTTLE_SHOULD_MOVE`: the labour camp console may abort (`crate::brig`).
+            Flight::Igniting { .. } if crate::brig::labor::takeoff_blocked(world, port) => {
+                Flight::Idle
+            }
             Flight::Igniting { dest, .. } => {
                 let moved = initiate_docking(world, port, nav.transit);
                 info!("shuttle {port} into transit: {moved:?}");

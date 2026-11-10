@@ -10,8 +10,9 @@
 //! BandaStation's 5/10/15 minute presets.
 //!
 //! Cost: a pass over the running timers per tick (a handful per map).
+// Silicons open it from afar (`attack_ai`) and pass its access check.
 // shortcut: the display's text is not drawn (no maptext; examine reads it); no AAS config
-// of the announcement (tg's default line), no investigate logs, no silicon access. tg breaks a
+// of the announcement (tg's default line), no investigate logs. tg breaks a
 // timer that links only lockers (`atom_break` when no doors and no flashers); not ported, the
 // lockers still follow it.
 
@@ -276,11 +277,14 @@ fn apply(
     if world.get::<Unpowered>(timer).is_some() {
         return Err("unpowered");
     }
-    if !check_access(
-        &state.req_access,
-        &state.req_one_access,
-        &access_of(world, user),
-    ) {
+    // `allowed(usr)`: silicons pass (`crate::silicon::interact`).
+    if !crate::silicon::interact::has_silicon_access(world, user)
+        && !check_access(
+            &state.req_access,
+            &state.req_one_access,
+            &access_of(world, user),
+        )
+    {
         crate::tools::tell(world, client, Span::Warning, "Доступ запрещен.");
         return Err("no access");
     }
@@ -379,6 +383,19 @@ pub fn timer_end(world: &mut World, timer: Entity, forced: bool) -> bool {
     }
     for closet in closets {
         crate::closets::timer_unlock(world, closet);
+    }
+    true
+}
+
+/// tg `attack_ai` -> `ui_interact` of a powered timer (`crate::silicon::interact`). True when
+/// `target` is a timer.
+pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity) -> bool {
+    if world.get::<DoorTimer>(target).is_none() {
+        return false;
+    }
+    if world.get::<Unpowered>(target).is_none() {
+        let title = name_of(world, target);
+        world.write_message(OpenUi::new::<BrigTimerUi>(client, user, target, title));
     }
     true
 }

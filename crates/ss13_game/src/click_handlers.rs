@@ -25,7 +25,7 @@
 //! | 210 | `t_scanner::toggle` |
 //! | 220 | `inducer::attack_self` (the cell out of an open hatch) |
 //! | 300 | `holosign::attack_self` |
-//! | 400 | `forensics::server::attack_self` |
+//! | 400 | `forensics::server::attack_self` (scanner window, evidence bag, forensics spoofer window) |
 //! | 500 | `antag::cult::server::attack_self` |
 //! | 600 | `antag::heretic::server::attack_self` |
 //! | 601 | `antag::heretic::server::items::attack_self` (the crimson medallion squeezed, a crucible brew or the ether drunk) |
@@ -115,6 +115,7 @@
 //! | 3309 | `kitchen_ware::attack_self` (pizza boxes open and close, tongs drop or clack) |
 //! | 3319 | `toys::toggle_sword` (a toy sword flicks out and in) |
 //! | 3325 | `cargo::black_market::attack_self` (the market uplink's window) |
+//! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -127,7 +128,7 @@
 //! | 100 | `modsuit::server::hand_interaction` |
 //! | 150 | `silicon::mmi::item_interaction` |
 //! | 200 | `bots::construction::item_interaction` |
-//! | 300 | `forensics::server::item_interaction` |
+//! | 300 | `forensics::server::item_interaction` (scanner, evidence bag, forensics spoofer) |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
@@ -152,6 +153,7 @@
 //! | 901 | `service::cards::item_interaction`, `attack_hand` (empty active hand: draw from the deck) |
 //! | 909 | `service::photo::frame_take_photo` (empty active hand: the photo out of a held picture frame) |
 //! | 1000 | `antag::uplink::item_interaction` |
+//! | 1009 | `brig::sentence::set_sentence` (an ID on the prisoner ID in the other hand: the sentence) |
 //! | 1100 | `antag::syndie_items::item_interaction` |
 //! | 1150 | `emag::interact_with_atom` on a modular computer (`modpc::pda`) |
 //! | 1200 | `modpc::pda::item_interaction` |
@@ -263,6 +265,7 @@
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter), `fishing::mount::interact` (a trophy off its mount) |
 //! | 3300 | `defenses::server::interact` |
 //! | 3305 | `defenses::turret_build::attack_hand` (a frame's gun or sensor back out) |
+//! | 3309 | `forensics::board::attack_hand` (the detective board's window) |
 //! | 3400 | `silicon::law_rack::interact` |
 //! | 3470 | `station_goals::interact` (satellites) |
 //! | 3473 | `devices::beacons::attack_self` (right click toggles a tracking beacon) |
@@ -336,9 +339,10 @@
 //! | 707 | `modsuit::pathfinder::attack` (the MOD pathfinder module implants a human) |
 //! | 800 | `defenses::server::item_interaction` (turrets, panels, cameras, scanner gates) |
 //! | 805 | `defenses::turret_build::item_interaction` (a frame's parts and tools) |
+//! | 809 | `forensics::board::item_interaction` (papers and photos pinned to the detective board, its wrench) |
 //! | 815 | `defenses::barricades::item_interaction` (welder and crowbar on barricades, planks on doors and windows) |
 //! | 900 | `silicon::law_rack::item_interaction` |
-//! | 1000 | `forensics::server::item_interaction` |
+//! | 1000 | `forensics::server::item_interaction` (scanner, evidence bag, forensics spoofer) |
 //! | 1100 | `explosions::sources::c4_interact` |
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |

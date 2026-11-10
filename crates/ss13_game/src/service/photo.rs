@@ -947,7 +947,7 @@ pub(super) fn ranged_snaps(
 // --- Photos and frames --------------------------------------------------------------------
 
 /// `photo/show`: the window, or "blank" without a picture.
-fn show(world: &mut World, client: Entity, mob: Entity, photo: Entity) {
+pub fn show(world: &mut World, client: Entity, mob: Entity, photo: Entity) {
     let name = name_of(world, photo);
     if world
         .get::<Photo>(photo)
