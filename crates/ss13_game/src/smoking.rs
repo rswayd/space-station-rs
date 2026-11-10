@@ -772,7 +772,7 @@ fn check_oxygen(world: &World, item: Entity) -> bool {
         return true;
     }
     atmos
-        .moles(pos, ss13_atmos::GasId::Oxygen)
+        .moles(pos, ss13_atmos::GasId::O2)
         .is_some_and(|m| m >= 1.0)
 }
 
