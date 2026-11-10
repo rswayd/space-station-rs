@@ -537,6 +537,7 @@ impl Loader<'_> {
                 .or_else(|| crate::silicon::field_dmm(&obj.path, var, value))
                 .or_else(|| crate::wallmount::field_dmm(&obj.path, var, value))
                 .or_else(|| crate::airlock_control::field_dmm(&obj.path, var, value))
+                .or_else(|| crate::transport::field_dmm(&obj.path, var, value))
                 .unwrap_or_else(|| field_for(&obj.path, var, Val::from_dmm(value)));
             match field {
                 Ok(f) => fields.push(f),

@@ -521,6 +521,8 @@ impl Plugin for ShuttleServerPlugin {
                 crate::mining_shuttles::MiningShuttlesPlugin,
                 crate::away_shuttles::AwayShuttlesPlugin,
                 crate::shuttle_remote::ShuttleRemotePlugin,
+                crate::transport::TransportPlugin,
+                crate::shuttle_docker::ShuttleDockerPlugin,
             ));
     }
 }
@@ -1020,6 +1022,66 @@ pub fn setup_template_copy(
         level_z,
         transit_z,
     })
+}
+
+/// tg `/obj/docking_port/mobile/Initialize(mapload)` of a port mapped in place rather than
+/// loaded from a template: its size from its own vars, `shuttle_areas` from the `/area/shuttle`
+/// areas of its rectangle (`area_type`), docked on the stationary port under it (`get_docked`).
+/// False when it has no size or no shuttle area.
+// shortcut: its turfs in those areas get the shuttle skipover on top of their baseturfs, as a
+// template's do, so they move with it (tg moves only turfs mapped with a skipover baseturf).
+pub fn register_mapped_port(world: &mut World, port: Entity, id: &str) -> bool {
+    let (Some(dm), Some(&pos)) = (
+        world.get::<DmDockingPort>(port).cloned(),
+        world.get::<TilePos>(port),
+    ) else {
+        return false;
+    };
+    let size = PortSize {
+        width: dm.width,
+        height: dm.height,
+        dwidth: dm.dwidth,
+        dheight: dm.dheight,
+    };
+    if size.width <= 0 || size.height <= 0 {
+        return false;
+    }
+    let dir = dir_of(world, port);
+    let mut areas = Vec::new();
+    for p in ordered_turfs(pos, dir, size) {
+        let Some(area) = world.resource::<Areas>().area_at(p) else {
+            continue;
+        };
+        if !area_path(world, area).is_some_and(|a| is_under(a, SHUTTLE_AREA)) {
+            continue;
+        }
+        if !areas.contains(&area) {
+            areas.push(area);
+        }
+        if let Some(turf) = turf_at(world, p) {
+            let mut stack = baseturfs_of(world, turf);
+            if !stack.iter().any(|b| b == SHUTTLE_SKIPOVER) {
+                stack.push(SHUTTLE_SKIPOVER.to_owned());
+                world.entity_mut(turf).insert(Baseturfs(stack));
+            }
+        }
+    }
+    if areas.is_empty() {
+        return false;
+    }
+    let docked = {
+        let mut q = world.query_filtered::<(Entity, &TilePos), With<StationaryDock>>();
+        q.iter(world).find(|(_, p)| **p == pos).map(|(e, _)| e)
+    };
+    world.entity_mut(port).insert(MobileDock {
+        id: id.into(),
+        dir,
+        size,
+        areas,
+        underlying: HashMap::new(),
+        docked,
+    });
+    true
 }
 
 /// A space level just big enough for the shuttle, with its transit dock.

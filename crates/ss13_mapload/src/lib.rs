@@ -70,6 +70,7 @@ pub mod smooth;
 pub mod sound;
 pub mod spawner;
 pub mod stack_recipe_types;
+pub mod transport;
 pub mod triggers;
 pub mod turf_damage;
 pub mod undertile;
@@ -132,6 +133,7 @@ pub use silicon::{DmAiSlipper, DmCamera, DmCameraConsole};
 pub use smartfridge::DmSmartFridge;
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
+pub use transport::DmTransport;
 pub use triggers::DmTrigger;
 pub use undertile::{DmTurf, DmUndertile, HiddenUnderTile};
 pub use vending::{DmPrice, DmVending, DmVendingRefill, VendCategory, VendProduct};
@@ -388,6 +390,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmDockingPort>("dm_docking_port")
             .register_proto_component::<DmMailSort>("dm_mail_sort")
             .register_proto_component::<DmNavBeacon>("dm_navbeacon")
+            .register_proto_component::<DmTransport>("dm_transport")
             .register_proto_component::<DmTrigger>("dm_trigger")
             .register_proto_component::<DmPuzzle>("dm_puzzle")
             .register_proto_component::<DmTool>(construct::TOOL_COMPONENT)

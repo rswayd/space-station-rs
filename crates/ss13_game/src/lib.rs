@@ -584,6 +584,8 @@ pub mod shuttle_console_client;
 #[cfg(feature = "server")]
 pub mod shuttle_console_server;
 #[cfg(feature = "server")]
+pub mod shuttle_docker;
+#[cfg(feature = "server")]
 pub mod shuttle_nav;
 #[cfg(feature = "server")]
 pub mod shuttle_remote;
@@ -667,6 +669,11 @@ pub mod throw;
 pub mod tools;
 #[cfg(feature = "server")]
 pub mod transform;
+#[cfg(feature = "server")]
+pub mod transport;
+pub mod transport_ui;
+#[cfg(feature = "client")]
+pub mod transport_ui_client;
 #[cfg(feature = "server")]
 pub mod traps;
 #[cfg(feature = "server")]

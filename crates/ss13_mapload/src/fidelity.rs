@@ -303,6 +303,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::disposal::type_fields(self.types, path));
         fields.extend(crate::engmisc::type_fields(self.types, path));
         fields.extend(crate::bots::type_fields(self.types, path));
+        fields.extend(crate::transport::type_fields(self.types, path));
         fields.extend(crate::mobs::type_fields(self.types, path));
         fields.extend(crate::wallmount::type_fields(self.types, path));
         fields.extend(crate::airlock_control::type_fields(self.types, path));

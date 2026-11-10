@@ -20,6 +20,7 @@
 //! burn its bulb out (`flash_recharge(30)`: 3% per recent use), then flashes every living mob
 //! that sees it within `flash_range`: the bulb's targeted `flash_mob` (from the flasher, no
 //! user; `strength * 1.5` confusion) and `strength` of paralysis on success.
+// Elevator and tram call buttons hand over to `crate::transport`.
 // shortcut: curtain, crematorium, photobooth and ticket buttons do nothing; no panel (devices and boards in and
 // out, renaming, skins), no shuttle id prefixes (`connect_to_shuttle`), the airlock controller's
 // shock bit sets the intended toggle (tg's `secondsElectrified` check is inverted). Flashers:
@@ -60,6 +61,9 @@ const IGNITER_CONTROL: &str = "/obj/item/assembly/control/igniter";
 const FLASHER_CONTROL: &str = "/obj/item/assembly/control/flasher";
 const BLAST_DOOR_CONTROL: &str = "/obj/item/assembly/control/blast_door";
 const AIRLOCK_CONTROL: &str = "/obj/item/assembly/control/airlock";
+/// `elev_controller.dm`, `tram_machinery.dm` (`crate::transport`).
+const ELEVATOR_CONTROL: &str = "/obj/item/assembly/control/elevator";
+const TRAM_CALL: &str = "/obj/item/assembly/control/transport/call_button";
 /// `/obj/machinery/flasher`: `flash_cooldown_duration`, `flash_recharge(30)`, `use_energy`.
 const FLASH_COOLDOWN: f64 = 15.0;
 const FLASH_RECHARGE: f64 = 30.0;
@@ -78,6 +82,10 @@ pub enum Device {
     MassDriver,
     Igniter,
     Flasher,
+    /// Elevator call button: calls the lift with its `id` to the button's level.
+    Elevator,
+    /// Tram call button: sends the tram to the platform its `id` names.
+    TramCall,
     /// A controller this server does not run (curtain, crematorium, ...).
     Other,
 }
@@ -91,6 +99,7 @@ impl Device {
             Self::MassDriver => 8.0,
             Self::Igniter => 3.0,
             Self::Flasher => 5.0,
+            Self::Elevator | Self::TramCall => 2.0,
             Self::Other => 0.0,
         }
     }
@@ -214,6 +223,10 @@ pub(super) fn add_button(world: &mut World, e: Entity, dm: &DmWallMount) {
         Some(Device::BlastDoor { sync: true })
     } else if is_under(&dm.device_type, AIRLOCK_CONTROL) {
         Some(Device::Airlock { functions: OPEN })
+    } else if is_under(&dm.device_type, ELEVATOR_CONTROL) {
+        Some(Device::Elevator)
+    } else if is_under(&dm.device_type, TRAM_CALL) {
+        Some(Device::TramCall)
     } else {
         Some(Device::Other)
     };
@@ -302,7 +315,7 @@ pub fn attempt_press(world: &mut World, client: Entity, mob: Entity, button: Ent
         if let Some(mut b) = world.get_mut::<Button>(button) {
             b.ready_at = t + device.cooldown();
         }
-        activate(world, button, device, &id, t);
+        activate(world, mob, button, device, &id, t);
     }
     true
 }
@@ -316,8 +329,12 @@ fn flick(world: &mut World, button: Entity, success: bool, t: f64) {
 }
 
 /// The controller's `activate()`.
-fn activate(world: &mut World, button: Entity, device: Device, id: &str, t: f64) {
+fn activate(world: &mut World, mob: Entity, button: Entity, device: Device, id: &str, t: f64) {
     match device {
+        Device::Elevator => {
+            crate::transport::elevator::call_elevator(world, mob, button, id);
+        }
+        Device::TramCall => crate::transport::tram::call_button(world, button, id),
         Device::BlastDoor { sync } => blast_doors(world, id, sync),
         Device::Airlock { functions } => airlocks(world, id, functions),
         Device::MassDriver => {
