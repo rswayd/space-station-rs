@@ -812,6 +812,8 @@ fn roll_up(world: &mut World, mob: Entity, poster: Entity, path: &str) {
         name: name_of(world, poster),
         desc: String::new(),
     });
+    // A wanted poster's photo (`crate::records::posters`) goes with it.
+    let photo = world.get::<crate::service::Photo>(poster).cloned();
     let rolled_state = if is_under(path, POSTER_OFFICIAL) {
         "rolled_legit"
     } else {
@@ -836,6 +838,9 @@ fn roll_up(world: &mut World, mob: Entity, poster: Entity, path: &str) {
             name,
         },
     ));
+    if let Some(photo) = photo {
+        world.entity_mut(item).insert(photo);
+    }
     crate::obj_damage::set_icon_state(world, item, rolled_state);
     if let Some(inventory) = world.get::<crate::inventory::Inventory>(mob).cloned() {
         crate::storage::put_in_hands(world, mob, &inventory, item);
@@ -932,6 +937,9 @@ fn finish_hanging(world: &mut World, mob: Entity, action: &DoAfter) {
         *n = Name::new(crate::obj_damage::strip(&rolled.name.name).to_owned());
     }
     world.entity_mut(poster).insert(rolled.name);
+    if let Some(photo) = world.get::<crate::service::Photo>(item).cloned() {
+        world.entity_mut(poster).insert(photo);
+    }
     world.despawn(item);
     tell(world, action.client, Span::Notice, "Вы вешаете плакат!");
 }

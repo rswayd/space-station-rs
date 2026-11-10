@@ -6,9 +6,13 @@
 //!
 //! Every act but `login` needs the console to be logged in (tg checks only in the UI), and
 //! `purge_records` needs armory access (tg only disables the button).
-// shortcut: no character preview, printing (rapsheets, wanted posters), new records from
-// photos, EMP scrambling, citation PDA alerts or fine payments; `purge_records` is immediate
-// (tg: a 5 s `do_after`); the UI's `station_z` is always true (the acts check the level).
+//! `print_record` prints a rapsheet paper or a wanted/missing poster
+//! ([`super::posters`]) with the record's photo; a new citation alerts the fined person's PDA
+//! (`alert_owner`); fines are paid at the warrant console ([`super::warrant`]).
+//! An EMP scrambles the security records (`security/emp_act`).
+// shortcut: no character preview or new records from photos; `purge_records` is
+// immediate (tg: a 5 s `do_after`); a print appears at once with a 2 s busy time (tg: after
+// 2 s); the UI's `station_z` is always true (the acts check the level).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -19,7 +23,7 @@ use ss13_mapload::fidelity::is_under;
 use ss13_shared::chat::Span;
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 
-use super::manifest::{Crime, Manifest, MedicalNote, round_timestamp};
+use super::manifest::{Crime, Manifest, MedicalNote, alert_owner, record_photo, round_timestamp};
 use super::*;
 use crate::click::{ClickResolved, ResolveClicks};
 use crate::id_access::ACCESS_ARMORY;
@@ -35,7 +39,18 @@ const MAX_MESSAGE_LEN: usize = 1024;
 const MAX_BROADCAST_LEN: usize = 512;
 const MAX_DESC_LEN: usize = 4096;
 /// `CONFIG_GET(number/maxfine)` default.
-const MAX_FINE: u32 = 1000;
+pub const MAX_FINE: u32 = 1000;
+/// `MAX_NAME_LEN`.
+const MAX_NAME_LEN: usize = 42;
+/// The print's `addtimer(..., 2 SECONDS)`.
+const PRINT_SECS: f64 = 2.0;
+const PAPER: &str = "/obj/item/paper";
+const SOUND_ERROR: &str = "sound/machines/terminal/terminal_error.ogg";
+const SOUND_PRINT: &str = "sound/machines/printer.ogg";
+
+/// A security console's `printing`: game seconds until the printer is free.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct RecordsPrinter(pub f64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordsKind {
@@ -88,6 +103,7 @@ impl Plugin for RecordsConsolePlugin {
                 (
                     open_console.after(ResolveClicks).before(UiSystems::Open),
                     (security_acts, medical_acts).in_set(UiSystems::Handle),
+                    records_emps.in_set(crate::emp::EmpSystems::Effects),
                 ),
             );
     }
@@ -329,6 +345,14 @@ pub enum RecordsAct {
     SetMental(u32, String),
     SetCauseOfDeath(u32, String),
     SetBloodType(u32, String),
+    /// `print_record`: `kind` is [`PRINT_MISSING`], [`PRINT_WANTED`] or [`PRINT_RAPSHEET`].
+    Print {
+        record: u32,
+        kind: String,
+        alias: String,
+        desc: String,
+        head: String,
+    },
 }
 
 fn id_param(params: &UiParams, key: &str) -> Result<u32, UiReject> {
@@ -385,6 +409,13 @@ fn parse(action: &str, params: &UiParams) -> Result<RecordsAct, UiReject> {
         SET_MENTAL_STATUS => RecordsAct::SetMental(record()?, text(params, "mental_status")),
         SET_CAUSE_OF_DEATH => RecordsAct::SetCauseOfDeath(record()?, text(params, "cause")),
         SET_BLOOD_TYPE => RecordsAct::SetBloodType(record()?, text(params, "blood_type")),
+        PRINT_RECORD => RecordsAct::Print {
+            record: record()?,
+            kind: text(params, "type"),
+            alias: text(params, "alias"),
+            desc: text(params, "desc"),
+            head: text(params, "head"),
+        },
         _ => return Err(UiReject::UnknownAction),
     })
 }
@@ -513,6 +544,27 @@ fn apply(
             crate::tools::tell(world, client, Span::Warning, "Слишком далеко!");
             return Err("off station");
         }
+        RecordsAct::Print {
+            record,
+            kind: print_kind,
+            alias,
+            desc,
+            head,
+        } => {
+            if kind != RecordsKind::Security {
+                return Err("security only");
+            }
+            return print_record(
+                world,
+                user,
+                console,
+                record,
+                &print_kind,
+                &alias,
+                &desc,
+                &head,
+            );
+        }
         RecordsAct::Purge => {
             if !armory(world, user) {
                 return Err("no armory access");
@@ -551,10 +603,13 @@ fn apply(
             return Err("security only");
         }
         manifest.general.retain(|r| r.id != id);
+        manifest.photos.retain(|(r, _), _| *r != id);
         return Ok(());
     }
     let next_id = manifest.next_id();
     let record = manifest.get_mut(id).ok_or("no such record")?;
+    // `new_citation.alert_owner(...)`, sent once the records are no longer borrowed.
+    let mut alert = None;
     match (kind, act) {
         (_, RecordsAct::EditField { field, value, .. }) => edit_field(record, &field, &value)?,
         (_, RecordsAct::Expunge(_)) => expunge(record, kind),
@@ -595,6 +650,15 @@ fn apply(
                 record.crimes.push(crime);
                 record.wanted_status = WANTED_ARREST.to_owned();
             } else {
+                alert = Some((
+                    record.name.clone(),
+                    format!(
+                        "Вам был выставлен штраф в размере {fine}{} за '{}'. Штраф может быть \
+                         оплачен у отдела безопасности.",
+                        crate::cargo::MONEY_SYMBOL,
+                        crime.name
+                    ),
+                ));
                 record.citations.push(crime);
             }
         }
@@ -706,7 +770,180 @@ fn apply(
         }
         _ => return Err("not an act of this console"),
     }
+    if let Some((name, message)) = alert {
+        alert_owner(world, console, &name, &message);
+    }
     Ok(())
+}
+
+/// `print_record(user, target, params)` of a logged-in security console.
+#[allow(clippy::too_many_arguments)]
+fn print_record(
+    world: &mut World,
+    user: Entity,
+    console: Entity,
+    record: u32,
+    kind: &str,
+    alias: &str,
+    desc: &str,
+    head: &str,
+) -> Result<(), &'static str> {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let sound = |world: &mut World, file: &str| {
+        if let Some(&pos) = world.get::<ss13_shared::TilePos>(console) {
+            crate::sound::playsound(world, crate::sound::PlaySound::new(pos, file, 100.0, true));
+        }
+    };
+    if world
+        .get::<RecordsPrinter>(console)
+        .is_some_and(|p| now < p.0)
+    {
+        crate::balloon::balloon_alert(world, user, console, "принтер занят");
+        sound(world, SOUND_ERROR);
+        return Err("printer busy");
+    }
+    let target = world
+        .resource::<Manifest>()
+        .get(record)
+        .cloned()
+        .ok_or("no such record")?;
+    let poster = match kind {
+        PRINT_MISSING => Some(super::posters::PosterKind::Missing),
+        PRINT_WANTED => Some(super::posters::PosterKind::Wanted),
+        PRINT_RAPSHEET => None,
+        _ => return Err("unknown print type"),
+    };
+    if kind != PRINT_MISSING && target.crimes.is_empty() {
+        crate::balloon::balloon_alert(world, user, console, "нет преступлений");
+        return Err("no crimes");
+    }
+    let pos = world
+        .get::<ss13_shared::TilePos>(console)
+        .copied()
+        .ok_or("off the map")?;
+    let alias = Some(sanitize(alias, MAX_NAME_LEN))
+        .filter(|a| !a.is_empty())
+        .unwrap_or_else(|| target.name.clone());
+    let mut description = Some(sanitize(desc, MAX_BROADCAST_LEN))
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| "No further details.".to_owned());
+    let header = Some(sanitize(head, 8))
+        .filter(|h| !h.is_empty())
+        .unwrap_or_else(|| ss13_shared::capitalize(kind));
+    world
+        .entity_mut(console)
+        .insert(RecordsPrinter(now + PRINT_SECS));
+    crate::balloon::balloon_alert(world, user, console, "распечатывание");
+    sound(world, SOUND_PRINT);
+    match poster {
+        Some(poster) => {
+            if poster == super::posters::PosterKind::Wanted {
+                description.push_str("\n\nРАЗЫСКИВАЕТСЯ:");
+                for incident in &target.crimes {
+                    if !incident.valid {
+                        description.push_str("--РЕДАКТИРОВАНО--");
+                        continue;
+                    }
+                    description.push_str(&format!(
+                        "\nПреступление: {}\nДетали: {}\n",
+                        incident.name, incident.details
+                    ));
+                }
+            }
+            let photo = record_photo(world, record, true);
+            super::posters::print_poster(world, pos, poster, photo, &alias, &description, &header)
+                .ok_or("no poster type")?;
+        }
+        None => {
+            let n = {
+                let mut count =
+                    world.get_resource_or_insert_with(crate::service::RapsheetCount::default);
+                count.0 += 1;
+                count.0
+            };
+            let text = format!(
+                "<center><b>SR-{n}: {header}</b></center><br>{}",
+                super::manifest::rapsheet_text(&target, &alias, &description)
+            );
+            let paper = crate::construction::spawn_obj(world, PAPER, pos).ok_or("no paper")?;
+            world.entity_mut(paper).insert(ss13_mapload::DmName {
+                name: format!("SR-{n} '{}'", target.name),
+                desc: String::new(),
+            });
+            crate::service::write_printed(world, paper, text);
+        }
+    }
+    Ok(())
+}
+
+/// `security/emp_act` of powered security consoles.
+fn records_emps(world: &mut World, mut cursor: Local<MessageCursor<crate::emp::EmpAct>>) {
+    for ev in crate::emp::emp_acts(world, &mut cursor) {
+        let security = world
+            .get::<RecordsConsole>(ev.target)
+            .is_some_and(|c| c.kind == RecordsKind::Security);
+        if security && ev.hits_self() && world.get::<Unpowered>(ev.target).is_none() {
+            scramble_records(world, ev.severity);
+        }
+    }
+}
+
+/// Each record: at `10 / severity` % one field scrambled (a random name, gender, age 5-85,
+/// wanted status or species), else at 1 % the record deleted.
+pub fn scramble_records(world: &mut World, severity: u8) {
+    const GENDERS: [&str; 3] = ["Male", "Female", "Other"];
+    let ids: Vec<u32> = world
+        .resource::<Manifest>()
+        .general
+        .iter()
+        .map(|r| r.id)
+        .collect();
+    let species: Vec<&'static str> = crate::species::SpeciesId::roundstart()
+        .map(|s| s.def().name)
+        .collect();
+    world.init_resource::<crate::emp::EmpRng>();
+    for id in ids {
+        let mut rng = world.resource_mut::<crate::emp::EmpRng>();
+        let scrambled = rng.prob(10.0 / f64::from(severity.max(1)));
+        if !scrambled {
+            if rng.prob(1.0) {
+                world
+                    .resource_mut::<Manifest>()
+                    .general
+                    .retain(|r| r.id != id);
+            }
+            continue;
+        }
+        let which = rng.range(1, 5);
+        let pick = rng.range(0, 1000) as usize;
+        let age = rng.range(5, 85) as u32;
+        let name = if which == 1 {
+            world
+                .get_resource_mut::<crate::jobs::Jobs>()
+                .and_then(|mut j| j.random_name(&Default::default()))
+        } else {
+            None
+        };
+        let mut manifest = world.resource_mut::<Manifest>();
+        let Some(r) = manifest.get_mut(id) else {
+            continue;
+        };
+        match which {
+            1 => {
+                if let Some(name) = name {
+                    r.name = name;
+                }
+            }
+            2 => r.gender = GENDERS[pick % GENDERS.len()].to_owned(),
+            3 => r.age = age,
+            4 => r.wanted_status = WANTED_STATUSES[pick % WANTED_STATUSES.len()].to_owned(),
+            _ => {
+                if !species.is_empty() {
+                    r.species = species[pick % species.len()].to_owned();
+                }
+            }
+        }
+    }
 }
 
 /// `edit_field`: the fields the windows edit; the value as `reject_bad_name` leaves it, or
@@ -983,6 +1220,36 @@ mod tests {
                 RecordsAct::SetNote(id, "y".into())
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn a_strong_emp_scrambles_or_deletes_records() {
+        let (mut world, _, _) = setup();
+        let mut manifest = world.resource_mut::<Manifest>();
+        for n in 0..200 {
+            manifest.inject(Joiner {
+                name: &format!("Член экипажа {n}"),
+                assignment: "Ассистент",
+                job: None,
+                mob: Entity::PLACEHOLDER,
+            });
+        }
+        let before = manifest.general.clone();
+        world.insert_resource(crate::emp::EmpRng(ss13_mapload::spawner::Rng::new(3)));
+        scramble_records(&mut world, 1);
+        let after = &world.resource::<Manifest>().general;
+        // About 10 % of 201 changed, about 1 % of the rest gone; ages stay in range.
+        let changed = after
+            .iter()
+            .filter(|r| before.iter().find(|b| b.id == r.id) != Some(*r))
+            .count();
+        assert!((5..=40).contains(&changed), "{changed}");
+        assert!(after.len() <= before.len());
+        assert!(
+            after
+                .iter()
+                .all(|r| (5..=85).contains(&r.age) || r.age == 30)
         );
     }
 

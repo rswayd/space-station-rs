@@ -30,7 +30,80 @@ pub struct ExamineServerPlugin;
 
 impl Plugin for ExamineServerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, examine.after(ResolveClicks));
+        app.init_resource::<ChatLinks>()
+            .add_message::<ChatLinkClicked>()
+            .add_systems(
+                Update,
+                (
+                    examine.after(ResolveClicks),
+                    forward_links.in_set(ChatLinkSystems),
+                ),
+            );
+    }
+}
+
+/// Links older than this are forgotten (tg keeps hrefs forever, the HUD links refuse after a
+/// minute; this only bounds the table).
+const LINK_FORGET_SECS: f64 = 600.0;
+
+/// The chat links given out (tg hrefs in `to_chat`): by id, the client it was sent to, what it
+/// means to the code that made it, and when (game seconds).
+#[derive(Resource, Default)]
+pub struct ChatLinks {
+    next: u32,
+    links: std::collections::HashMap<u32, (Entity, String, f64)>,
+}
+
+/// A client clicked a link it was given (BYOND `Topic(href)`): `topic` is what [`chat_link`]
+/// was given, `age` the seconds since (tg `examine_time`). The owner of the topic checks
+/// everything again.
+#[derive(Message, Clone, Debug, PartialEq)]
+pub struct ChatLinkClicked {
+    pub client: Entity,
+    pub topic: String,
+    pub age: f64,
+}
+
+/// [`ChatLinkClicked`] is written here; readers run after it.
+#[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ChatLinkSystems;
+
+/// A link for `client` meaning `topic`: put it in a chat segment as `Span::Link(id)`.
+pub fn chat_link(world: &mut World, client: Entity, topic: impl Into<String>) -> u32 {
+    let now = world
+        .get_resource::<Time>()
+        .map_or(0.0, Time::elapsed_secs_f64);
+    let mut links = world.get_resource_or_insert_with(ChatLinks::default);
+    links
+        .links
+        .retain(|_, (_, _, at)| now - *at < LINK_FORGET_SECS);
+    links.next = links.next.wrapping_add(1);
+    let id = links.next;
+    links.links.insert(id, (client, topic.into(), now));
+    id
+}
+
+/// `ClientIntent::ChatLink`: only a link given to that client counts.
+fn forward_links(
+    mut intents: MessageReader<ss13_net::server::IntentReceived>,
+    links: Res<ChatLinks>,
+    time: Res<Time>,
+    mut clicked: MessageWriter<ChatLinkClicked>,
+) {
+    let now = time.elapsed_secs_f64();
+    for i in intents.read() {
+        let ss13_shared::protocol::ClientIntent::ChatLink(id) = i.intent else {
+            continue;
+        };
+        if let Some((client, topic, at)) = links.links.get(&id)
+            && *client == i.client
+        {
+            clicked.write(ChatLinkClicked {
+                client: *client,
+                topic: topic.clone(),
+                age: now - at,
+            });
+        }
     }
 }
 
@@ -340,6 +413,18 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
                 message,
             });
         }
+        // `get_hud_examine_info`: the security HUD lines and their links.
+        for message in crate::records::sechud::examine_messages(
+            world,
+            click.client,
+            click.examiner,
+            click.target,
+        ) {
+            world.write_message(SendChat {
+                clients: vec![click.client],
+                message,
+            });
+        }
         crate::quirks::examined(world, click.examiner, click.target);
         // `photo/examine` and `picture_frame/examine` show the picture.
         crate::service::photo_examined(world, click.client, click.examiner, click.target);
@@ -349,6 +434,37 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_chat_link_answers_only_the_client_it_was_sent_to() {
+        use bevy::ecs::system::RunSystemOnce;
+        use ss13_net::server::IntentReceived;
+        use ss13_shared::protocol::ClientIntent;
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        world.init_resource::<Messages<IntentReceived>>();
+        world.init_resource::<Messages<ChatLinkClicked>>();
+        let (a, b) = (world.spawn_empty().id(), world.spawn_empty().id());
+        let id = chat_link(&mut world, a, "sechud:view:1");
+        for client in [b, a] {
+            world.write_message(IntentReceived {
+                client,
+                intent: ClientIntent::ChatLink(id),
+            });
+        }
+        world.write_message(IntentReceived {
+            client: a,
+            intent: ClientIntent::ChatLink(id + 1),
+        });
+        world.run_system_once(forward_links).unwrap();
+        let clicked: Vec<ChatLinkClicked> = world
+            .resource_mut::<Messages<ChatLinkClicked>>()
+            .drain()
+            .collect();
+        assert_eq!(clicked.len(), 1);
+        assert_eq!(clicked[0].client, a);
+        assert_eq!(clicked[0].topic, "sechud:view:1");
+    }
 
     #[test]
     fn sizes_follow_tg() {

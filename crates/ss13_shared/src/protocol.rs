@@ -111,6 +111,9 @@ pub enum ClientIntent {
     /// tg `/datum/keybinding/living/give` (key V): offers the active hand's item to whoever is
     /// next to the mob.
     GiveItem,
+    /// A click on a chat link ([`crate::chat::Span::Link`]): BYOND's `Topic` of an href the
+    /// server put in a chat line. The server checks the id was given to this client.
+    ChatLink(u32),
 }
 
 /// One end of a [`ClientIntent::Drag`].

@@ -152,6 +152,38 @@ impl Messenger {
         id
     }
 
+    /// `receive_message` of a fake sender (`automated`, `fakename`, `fakejob`): the chat with
+    /// no messenger behind it under that name (no reply), one more unread.
+    pub fn incoming_fake(&mut self, name: &str, job: &str, text: &str, ts: &str) -> u32 {
+        let i = match self
+            .chats
+            .iter()
+            .position(|c| c.recipient.is_none() && c.cached_name == name)
+        {
+            Some(i) => i,
+            None => {
+                let id = self.next_chat;
+                self.next_chat += 1;
+                self.chats.push(Chat {
+                    id,
+                    recipient: None,
+                    cached_name: name.to_owned(),
+                    cached_job: job.to_owned(),
+                    messages: Vec::new(),
+                    visible: false,
+                    can_reply: false,
+                    unread: 0,
+                });
+                self.chats.len() - 1
+            }
+        };
+        let chat = &mut self.chats[i];
+        chat.messages.push(message(text, false, ts));
+        chat.visible = true;
+        chat.unread += 1;
+        chat.id
+    }
+
     /// `COOLDOWN_FINISHED(src, last_text)`.
     pub fn off_cooldown(&self, now: f64) -> bool {
         self.last_text
@@ -359,6 +391,63 @@ pub fn send_message(
         ring(world, peer, &ringtone);
     }
     Ok(())
+}
+
+/// An automated message (`tablet_message` with `automated`) from `source` to the messenger
+/// imprinted for `target_name` (the first one, as tg's `break`): through telecomms like any
+/// message, then the holder's chat line and the ring. False when nothing received it.
+pub fn send_automated(
+    world: &mut World,
+    source: Entity,
+    target_name: &str,
+    fake_name: &str,
+    fake_job: &str,
+    text: &str,
+) -> bool {
+    let mut q = world.query::<(Entity, &ModularComputer, &Messenger)>();
+    let mut pdas: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, c, _)| c.saved_identification.as_deref() == Some(target_name))
+        .map(|(e, _, _)| e)
+        .collect();
+    pdas.sort_unstable();
+    let Some(pda) = pdas.first().copied() else {
+        return false;
+    };
+    let from = turf_of(world, source);
+    if crate::telecomms::deliver_message(world, from) == Some(false) {
+        return false;
+    }
+    let ts = timestamp(world);
+    let Some(mut messenger) = world.get_mut::<Messenger>(pda) else {
+        return false;
+    };
+    if !messenger.sending_and_receiving {
+        return false;
+    }
+    messenger.incoming_fake(fake_name, fake_job, text, &ts);
+    let (ringtone, silenced) = (messenger.ringtone.clone(), messenger.alert_silenced);
+    let reader = holder_mob(world, pda).filter(|&m| world.get::<Stat>(m) == Some(&Stat::Conscious));
+    if let Some(client) = reader
+        .and_then(|m| world.get::<PlayerMob>(m))
+        .map(|p| p.client)
+    {
+        let title = pda_target(fake_name, fake_job);
+        world.write_message(SendChat {
+            clients: vec![client],
+            message: ChatMessage {
+                channel: ChatChannel::System,
+                segments: vec![
+                    ChatSegment::new(Span::Bold, format!("PDA message from {title}, ")),
+                    ChatSegment::new(Span::Plain, format!("\"{text}\" [Automated Message]")),
+                ],
+            },
+        });
+    }
+    if !silenced {
+        ring(world, pda, &ringtone);
+    }
+    true
 }
 
 /// `/obj/item/modular_computer/proc/ring`: `*ringtone*` to everyone who hears the PDA.

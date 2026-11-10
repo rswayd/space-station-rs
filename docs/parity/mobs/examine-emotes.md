@@ -13,7 +13,7 @@ _«Осмотр (examine)» описано в [../ui/examine.md](../ui/examine.m
 С медицинским или охранным HUD осмотр человека добавляет статус из записей экипажа и ссылки на изменение статуса/записей.
 
 - **Код:** [`human/get_medhud_examine_info()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/examine.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — охранная часть с ссылками готова (`crates/ss13_game/src/records/sechud.rs`, ссылки чата `examine::chat_link`; см. ../security/records-huds.md «Изменение статуса через HUD при осмотре»); нет медицинской части (физический/ментальный статус, обследование, черты) — группа medical, механизм ссылок можно взять готовый
 
 _«Панель осмотра и флавор-текст (BandaStation)» описано в [../ui/examine.md](../ui/examine.md)._
 

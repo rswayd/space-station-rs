@@ -1,7 +1,10 @@
 //! Client half of the records: the `SecurityRecords` and `MedicalRecords` windows (tgui
 //! `SecurityRecords/*`, `MedicalRecords/*`) and the data HUD images over mobs.
-// shortcut: no character preview, no print screen, no search by fingerprint; crimes are listed
-// open (tg: collapsibles); the editable fields save on Enter (tg `EditableText` on blur).
+//! Also the `WarrantConsole` window.
+// shortcut: no character preview, no search by fingerprint; crimes and citations are listed
+// open (tg: collapsibles); the editable fields save on Enter (tg `EditableText` on blur); the
+// print screen has one print button per kind instead of tabs and keeps no defaults in its
+// fields (empty fields print the server's defaults).
 
 use bevy::app::Propagate;
 use bevy::scene::{EntityScene, SceneList};
@@ -27,6 +30,7 @@ impl Plugin for RecordsClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<SecurityRecordsUi>()
             .register_ui_view::<MedicalRecordsUi>()
+            .register_ui_view::<WarrantConsoleUi>()
             .register_ui_headless::<DataHudUi>()
             .init_resource::<DataHud>()
             .add_observer(act_with_local)
@@ -41,6 +45,12 @@ const CRIME_TAB: &str = "selectedTab";
 const CRIME_NAME: &str = "crimeName";
 const CRIME_DETAILS: &str = "crimeDetails";
 const CRIME_FINE: &str = "crimeFine";
+const PRINT_OPEN: &str = "printOpen";
+const PRINT_HEAD: &str = "printHead";
+const PRINT_ALIAS: &str = "printAlias";
+const PRINT_DESC: &str = "printDesc";
+const WARRANT_RECORD: &str = "warrantRecord";
+const WARRANT_AMOUNT: &str = "warrantAmount";
 
 /// On a button: `act(action, {...params, [param]: local[key]...})`, then the keys are cleared
 /// and `then` is set (tg `CrimeAuthor`'s `createCrime` + `reset`).
@@ -363,7 +373,8 @@ fn security_record(
         Node { flex_direction: FlexDirection::Row }
         Children [
             @ss13_ui_kit::Button { @icon: "print", @content: "Распечатать" }
-            ss13_ui_kit::Button { disabled: true }
+            SetLocal { key: {PRINT_OPEN.to_owned()}, value: {"1".to_owned()}, rerender: true }
+            Name("records: print")
             --
             @ss13_ui_kit::Button { @icon: "trash", @content: "Удалить", @tooltip: "Удаляет запись." }
             Act({DELETE_RECORD.to_owned()})
@@ -390,7 +401,11 @@ fn security_record(
             editable(&crew, "security_note", r.note.clone()),
         ),
     ];
-    let watcher = EntityScene(crime_watcher(data, r, local));
+    let watcher: Box<dyn SceneList> = if local.get(PRINT_OPEN) == "1" {
+        Box::new(EntityScene(record_print(r)))
+    } else {
+        Box::new(EntityScene(crime_watcher(data, r, local)))
+    };
     bsn! {
         Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, row_gap: px(6), min_height: px(0) }
         Children [
@@ -410,6 +425,74 @@ fn security_record(
             Children [
                 @Section { @fill: true, @scrollable: true }
                 Children [ @LabeledList Children [ {fields} ] ]
+            ]
+        ]
+    }
+}
+
+/// `RecordPrint`: the header, alias and description, then a print button per kind (a rapsheet
+/// and a wanted poster need crimes).
+fn record_print(r: &SecurityRecord) -> impl Scene + use<> {
+    let innocent = r.crimes.is_empty();
+    let print = |kind: &str, label: &str, icon: &str, disabled: bool| {
+        let submit = ActWithLocal {
+            action: PRINT_RECORD.to_owned(),
+            params: vec![
+                ("crew_ref".to_owned(), r.crew_ref.clone()),
+                ("type".to_owned(), kind.to_owned()),
+            ],
+            local: vec![
+                ("head".to_owned(), PRINT_HEAD.to_owned()),
+                ("alias".to_owned(), PRINT_ALIAS.to_owned()),
+                ("desc".to_owned(), PRINT_DESC.to_owned()),
+            ],
+            then: Some((PRINT_OPEN.to_owned(), String::new())),
+        };
+        let (label, icon) = (label.to_owned(), icon.to_owned());
+        let node = format!("print: {kind}");
+        bsn! {
+            @ss13_ui_kit::Button { @icon: icon, @content: label }
+            ss13_ui_kit::Button { disabled: disabled }
+            submit
+            Name(node)
+        }
+    };
+    let buttons = vec![
+        print(PRINT_MISSING, "Пропажа", "question", false),
+        print(PRINT_RAPSHEET, "Уголовное дело", "file-alt", innocent),
+        print(PRINT_WANTED, "Розыск", "handcuffs", innocent),
+    ];
+    let alias = r.name.clone();
+    let title = "Печать записи".to_owned();
+    bsn! {
+        @Section { @fill: true, @title: title }
+        Children [
+            Node { flex_direction: FlexDirection::Column, row_gap: px(6) }
+            Children [
+                Node Children [ Text("Введите заголовок:") ]
+                --
+                Input { placeholder: {"Заголовок".to_owned()}, max_length: {Some(7)} }
+                LocalOnInput({PRINT_HEAD.to_owned()})
+                Name("print: head")
+                --
+                Node Children [ Text("Введите псевдоним:") ]
+                --
+                Input { placeholder: alias, max_length: {Some(42)} }
+                LocalOnInput({PRINT_ALIAS.to_owned()})
+                Name("print: alias")
+                --
+                Node Children [ Text("Введите описание:") ]
+                --
+                Input { placeholder: {"Описание".to_owned()}, fluid: true, max_length: {Some(150)} }
+                LocalOnInput({PRINT_DESC.to_owned()})
+                Name("print: desc")
+                --
+                Node { flex_direction: FlexDirection::Row } Children [ {buttons} ]
+                --
+                @ss13_ui_kit::Button { @icon: "times", @content: "Отмена" }
+                ss13_ui_kit::Button { color: UiColor::Bad }
+                SetLocal { key: {PRINT_OPEN.to_owned()}, value: {String::new()}, rerender: true }
+                Name("print: cancel")
             ]
         ]
     }
@@ -596,6 +679,150 @@ fn crime_author(crew: &str) -> impl Scene + use<> {
             @ss13_ui_kit::Button { @icon: "plus", @content: "Создать" }
             submit
             Name("crime: create")
+        ]
+    }
+}
+
+impl ClientUi for WarrantConsoleUi {
+    const WIDTH: f32 = 500.0;
+    const HEIGHT: f32 = 500.0;
+
+    fn content(_: &(), data: &WarrantData) -> impl Scene {
+        warrant_view(data, &UiLocalState::default())
+    }
+
+    fn content_local(_: &(), data: &WarrantData, local: &UiLocalState) -> impl Scene {
+        warrant_view(data, local)
+    }
+}
+
+/// `getFineColor`.
+fn fine_color(fine: u32) -> UiColor {
+    match fine {
+        0 => UiColor::Grey,
+        f if f > 700 => UiColor::Bad,
+        f if f > 300 => UiColor::Average,
+        _ => UiColor::Default,
+    }
+}
+
+/// `WarrantConsole`: `RecordList`, and `ViewRecord` of the selected record.
+fn warrant_view(data: &WarrantData, local: &UiLocalState) -> impl Scene + use<> {
+    let selected = local.get(WARRANT_RECORD).to_owned();
+    let mut records: Vec<&WarrantRecord> = data.records.iter().collect();
+    records.sort_by(|a, b| a.crew_name.cmp(&b.crew_name));
+    let empty = records
+        .is_empty()
+        .then(|| EntityScene(bsn! { @NoticeBox Children [ Text("Штрафы не выписаны.") ] }));
+    let tabs: Vec<_> = records
+        .iter()
+        .map(|r| {
+            let sel = r.crew_ref == selected;
+            let value = if sel {
+                String::new()
+            } else {
+                r.crew_ref.clone()
+            };
+            let label = format!("{}: {}", r.crew_name, r.citations.len());
+            bsn! {
+                @TabsTab { @content: label }
+                TabsTab { selected: sel }
+                SetLocal { key: {WARRANT_RECORD.to_owned()}, value: value, rerender: true }
+                Name("warrant: record")
+            }
+        })
+        .collect();
+    let refresh: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+        @ss13_ui_kit::Button { @icon: "sync", @tooltip: "Обновить" }
+        Act({REFRESH.to_owned()})
+    }));
+    let list_title = "Штрафы".to_owned();
+    let view = records.iter().find(|r| r.crew_ref == selected).map(|r| {
+        let citations: Vec<_> = r
+            .citations
+            .iter()
+            .map(|c| citation_manager(&r.crew_ref, c))
+            .collect();
+        let title = r.crew_name.clone();
+        EntityScene(bsn! {
+            Node { flex_grow: 3.0, flex_basis: px(0), flex_direction: FlexDirection::Column, min_width: px(0) }
+            Children [
+                @Section { @fill: true, @scrollable: true, @title: title }
+                Children [ Node { flex_direction: FlexDirection::Column, row_gap: px(6) } Children [ {citations} ] ]
+            ]
+        })
+    });
+    bsn! {
+        @WindowContent
+        Children [
+            Node { flex_direction: FlexDirection::Row, flex_grow: 1.0, column_gap: px(6), min_height: px(0) }
+            Children [
+                Node { flex_grow: 2.0, flex_basis: px(0), flex_direction: FlexDirection::Column, min_width: px(0) }
+                Children [
+                    @Section { @fill: true, @scrollable: true, @title: list_title, @buttons: refresh }
+                    Children [ {empty} -- @Tabs { @vertical: true } Children [ {tabs} ] ]
+                ]
+                --
+                {view}
+            ]
+        ]
+    }
+}
+
+/// `CitationManager`: the citation, its print button and, while unpaid, the payment.
+fn citation_manager(crew: &str, c: &WarrantCitation) -> impl Scene + use<> {
+    let print = p(&[("crew_ref", crew), ("fine_ref", &c.fine_ref)]);
+    let print_disabled = c.fine == 0;
+    let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+        @ss13_ui_kit::Button { @icon: "print", @content: "Печать" }
+        ss13_ui_kit::Button { disabled: print_disabled }
+        Act({PRINT.to_owned()})
+        print
+        Name("warrant: print")
+    }));
+    let items: Vec<_> = [
+        ("Детали", c.details.clone()),
+        ("Автор", c.author.clone()),
+        ("Время", c.time.clone()),
+        ("Штраф", c.fine.to_string()),
+        ("Оплачено", c.paid.to_string()),
+    ]
+    .into_iter()
+    .map(|(label, value)| bsn! { @LabeledListItem { @label: label, @content: value } })
+    .collect();
+    let pay = (c.fine > 0).then(|| {
+        let submit = ActWithLocal {
+            action: PAY.to_owned(),
+            params: vec![
+                ("crew_ref".to_owned(), crew.to_owned()),
+                ("fine_ref".to_owned(), c.fine_ref.clone()),
+            ],
+            local: vec![("amount".to_owned(), WARRANT_AMOUNT.to_owned())],
+            then: None,
+        };
+        let max = c.fine.to_string();
+        EntityScene(bsn! {
+            Node { flex_direction: FlexDirection::Row, column_gap: px(6), margin: UiRect::top(px(4)) }
+            Children [
+                Input { placeholder: max, max_length: {Some(5)} }
+                LocalOnInput({WARRANT_AMOUNT.to_owned()})
+                Name("warrant: amount")
+                --
+                @ss13_ui_kit::Button { @icon: "money-bill", @content: "Оплатить" }
+                submit
+                Name("warrant: pay")
+            ]
+        })
+    });
+    let title = c.fine_name.clone();
+    let color = fine_color(c.fine);
+    bsn! {
+        @Section { @title: title, @buttons: buttons }
+        Propagate::<TextColor>(TextColor({color.text().unwrap_or(Color::WHITE)}))
+        Children [
+            @LabeledList Children [ {items} ]
+            --
+            {pay}
         ]
     }
 }
