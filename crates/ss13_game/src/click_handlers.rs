@@ -104,6 +104,7 @@
 //! | 3275 | `extinguisher::attack_self` (the safety) |
 //! | 3277 | `antag::revenant::scatter_residue` (the glimmering residue scattered by hand) |
 //! | 3285 | `recycling::conveyor::attack_self` (a switch assembly links nearby belt stacks) |
+//! | 3301 | `antag::wizard::server::runic::attack_self` (the scepter's recharge) |
 //! | 3295 | `power::cable_coil::attack_self` (the layer menu) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -246,6 +247,7 @@
 //! | 3475 | `science::teleportation` (teleporter station toggle; teleporter, launchpad, satellite and gateway consoles; away gateways) |
 //! | 3485 | `science::teleportation::hand_tele::portal_hand` (through an adjacent portal) |
 //! | 3450 | `vehicles::attack_hand` |
+//! | 3451 | `antag::wizard::server::ritual::interact` (a wizard invokes a grand rune) |
 //! | 3460 | `wiremod::server::attack_hand` |
 //! | 3455 | `clothing::sensors::interact` (crew console) |
 //! | 3456 | `devices::flashlight::toggle_light` (right click) |
@@ -403,6 +405,7 @@
 //! | 3429 | `safes::item_interaction` (a stethoscope on a closed safe, items into an open one) |
 //! | 3439 | `traps::item_interaction` (tripwire posts and cables: tying, wiring, cutting, wrench) |
 //! | 3440 | `tank_storage::item_interaction` |
+//! | 3451 | `antag::wizard::server::runic::held_on_target` (the scepter of vendormancy, a screwdriver on a runic vendor) |
 //! | 3441 | `displaycase::item_interaction` (display cases, their chassis) |
 //! | 3442 | `fireplace::item_interaction` (fuel, lighting, bonfire rods and grill) |
 //! | 3447 | `instruments::item_interaction` (a wrench on pianos and jukeboxes, music tapes into boomboxes) |

@@ -34,8 +34,12 @@
 // own buttons (`crate::actions::set_buttons` replaces the row: a heretic wizard loses the spell
 // buttons until the next spell refresh).
 
+pub mod cone;
+pub mod conjure;
 pub mod effects;
 pub mod magic_guns;
+pub mod shapeshift;
+pub mod telepathy;
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -93,6 +97,8 @@ pub enum Invocation {
     None,
     Shout,
     Whisper,
+    /// `INVOCATION_EMOTE`: `invocation` seen by others, `invocation_self_message` by the caster.
+    Emote,
 }
 
 /// How the spell picks what it is cast on.
@@ -125,6 +131,40 @@ pub enum Spell {
     Swap,
     SummonItem,
     Charge,
+    Bees,
+    Carp,
+    Cheese,
+    ConstructShell,
+    ConstructShellLesser,
+    Creature,
+    CultFloor,
+    CultWall,
+    EdSwarm,
+    InvisibleChair,
+    InvisibleWall,
+    LinkWorlds,
+    Presents,
+    Simian,
+    Soulstone,
+    SoulstoneCult,
+    SoulstoneNoncult,
+    SoulstonePurified,
+    SoulstoneMystic,
+    TheTraps,
+    InfiniteGuns,
+    ArcaneBarrage,
+    InvisibleBox,
+    SpellPacket,
+    Snowball,
+    DragonForm,
+    GorillaForm,
+    PolarBearForm,
+    WolfForm,
+    WildShapeshift,
+    ConeOfCold,
+    TeslaBlast,
+    GauntletEcho,
+    Telepathy,
 }
 
 /// A spell type's vars.
@@ -152,6 +192,15 @@ pub struct SpellDef {
     pub deactive_msg: &'static str,
     /// `active_overlay_icon_state`.
     pub active_border: &'static str,
+    /// `button_icon`; empty: [`SPELLS_DMI`].
+    pub dmi: &'static str,
+    /// `background_icon_state`, `overlay_icon_state`.
+    pub background: &'static str,
+    pub overlay: &'static str,
+    /// `garbled_invocation_prob != 0`.
+    pub garble: bool,
+    /// `invocation_self_message` of an emote invocation.
+    pub emote_self: &'static str,
 }
 
 const fn def(spell: Spell, path: &'static str, name: &'static str) -> SpellDef {
@@ -173,11 +222,16 @@ const fn def(spell: Spell, path: &'static str, name: &'static str) -> SpellDef {
         active_msg: "",
         deactive_msg: "",
         active_border: "bg_spell_border_active_red",
+        dmi: "",
+        background: "bg_spell",
+        overlay: "bg_spell_border",
+        garble: true,
+        emote_self: "",
     }
 }
 
 /// Every ported spell, in [`Spell`] order.
-pub const SPELLS: [SpellDef; 16] = [
+pub const SPELLS: [SpellDef; 50] = [
     SpellDef {
         desc: "This spell fires several, slow moving, magic projectiles at nearby targets.",
         icon: "magicm",
@@ -423,6 +477,508 @@ pub const SPELLS: [SpellDef; 16] = [
             "Charge",
         )
     },
+    SpellDef {
+        desc: "This spell magically kicks a transdimensional beehive, instantly summoning a \
+               swarm of bees to your location. These bees are NOT friendly to anyone.",
+        icon: "bee",
+        sound: "sound/mobs/humanoids/moth/scream_moth.ogg",
+        cooldown: 60.0,
+        cooldown_reduction_per_rank: 10.0,
+        invocation: "NOT THE BEES!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::Bees,
+            "/datum/action/cooldown/spell/conjure/bee",
+            "Lesser Summon Bees",
+        )
+    },
+    SpellDef {
+        desc: "This spell conjures a simple carp.",
+        sound: "sound/effects/magic/summon_karp.ogg",
+        cooldown: 120.0,
+        invocation: "NOUK FHUNMM SACP RISSKA!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::Carp,
+            "/datum/action/cooldown/spell/conjure/carp",
+            "Summon Carp",
+        )
+    },
+    SpellDef {
+        desc: "This spell conjures a bunch of cheese wheels. What the hell?",
+        icon: "cheese",
+        sound: "sound/effects/magic/summonitems_generic.ogg",
+        cooldown: 60.0,
+        requirements: 0,
+        invocation: "PL'YR DOT PL'CTM' OOO'B'ABEE G!",
+        invocation_type: Invocation::Shout,
+        garble: false,
+        ..def(
+            Spell::Cheese,
+            "/datum/action/cooldown/spell/conjure/cheese",
+            "Summon Cheese",
+        )
+    },
+    SpellDef {
+        desc: "This spell conjures a construct which may be controlled by Shades.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "artificer",
+        sound: "sound/effects/magic/summonitems_generic.ogg",
+        cooldown: 60.0,
+        requirements: 0,
+        ..def(
+            Spell::ConstructShell,
+            "/datum/action/cooldown/spell/conjure/construct",
+            "Summon Construct Shell",
+        )
+    },
+    SpellDef {
+        desc: "This spell conjures a construct which may be controlled by Shades.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "artificer",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/effects/magic/summonitems_generic.ogg",
+        cooldown: 180.0,
+        requirements: 0,
+        ..def(
+            Spell::ConstructShellLesser,
+            "/datum/action/cooldown/spell/conjure/construct/lesser",
+            "Create Construct Shell",
+        )
+    },
+    SpellDef {
+        desc: "This spell tears the fabric of reality, allowing horrific daemons to spill forth.",
+        sound: "sound/effects/magic/summonitems_generic.ogg",
+        cooldown: 120.0,
+        requirements: 0,
+        invocation: "IA IA!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::Creature,
+            "/datum/action/cooldown/spell/conjure/creature",
+            "Summon Creature Swarm",
+        )
+    },
+    SpellDef {
+        desc: "This spell constructs a cult floor.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "floorconstruct",
+        background: "bg_cult",
+        overlay: "bg_cult_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 2.0,
+        requirements: 0,
+        ..def(
+            Spell::CultFloor,
+            "/datum/action/cooldown/spell/conjure/cult_floor",
+            "Summon Cult Floor",
+        )
+    },
+    SpellDef {
+        desc: "This spell constructs a cult wall.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "lesserconstruct",
+        background: "bg_cult",
+        overlay: "bg_cult_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 10.0,
+        requirements: 0,
+        ..def(
+            Spell::CultWall,
+            "/datum/action/cooldown/spell/conjure/cult_wall",
+            "Summon Cult Wall",
+        )
+    },
+    SpellDef {
+        desc: "This spell dispenses wizard justice.",
+        sound: "sound/items/tools/welder.ogg",
+        ..def(
+            Spell::EdSwarm,
+            "/datum/action/cooldown/spell/conjure/summon_ed_swarm",
+            "Dispense Wizard Justice",
+        )
+    },
+    SpellDef {
+        desc: "The mime's performance transmutates a chair into physical reality.",
+        dmi: "icons/mob/actions/actions_mime.dmi",
+        icon: "invisible_chair",
+        background: "bg_mime",
+        overlay: "bg_mime_border",
+        cooldown: 30.0,
+        max_level: 1,
+        invocation: "%CASTER pulls out an invisible chair and sits down.",
+        invocation_type: Invocation::Emote,
+        emote_self: "You conjure an invisible chair and sit down.",
+        requirements: SPELL_REQUIRES_HUMAN,
+        antimagic: 0,
+        ..def(
+            Spell::InvisibleChair,
+            "/datum/action/cooldown/spell/conjure/invisible_chair",
+            "Invisible Chair",
+        )
+    },
+    SpellDef {
+        desc: "The mime's performance transmutates a wall into physical reality.",
+        dmi: "icons/mob/actions/actions_mime.dmi",
+        icon: "invisible_wall",
+        background: "bg_mime",
+        overlay: "bg_mime_border",
+        cooldown: 30.0,
+        max_level: 1,
+        invocation: "%CASTER looks as if a wall is in front of %PRONOUN_them.",
+        invocation_type: Invocation::Emote,
+        emote_self: "You form a wall in front of yourself.",
+        requirements: SPELL_REQUIRES_HUMAN,
+        antimagic: 0,
+        ..def(
+            Spell::InvisibleWall,
+            "/datum/action/cooldown/spell/conjure/invisible_wall",
+            "Invisible Wall",
+        )
+    },
+    SpellDef {
+        desc: "A whole new dimension for you to play with! They won't be happy about it, though.",
+        dmi: "icons/mob/simple/lavaland/nest.dmi",
+        icon: "nether",
+        sound: "sound/items/weapons/marauder.ogg",
+        cooldown: 60.0,
+        cooldown_reduction_per_rank: 10.0,
+        invocation: "FL'NT N' ST'L!",
+        invocation_type: Invocation::Shout,
+        requirements: 0,
+        ..def(
+            Spell::LinkWorlds,
+            "/datum/action/cooldown/spell/conjure/link_worlds",
+            "Link Worlds",
+        )
+    },
+    SpellDef {
+        desc: "This spell lets you reach into S-space and retrieve presents! Yay!",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 60.0,
+        cooldown_reduction_per_rank: 13.75,
+        invocation: "HO HO HO!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::Presents,
+            "/datum/action/cooldown/spell/conjure/presents",
+            "Conjure Presents!",
+        )
+    },
+    SpellDef {
+        desc: "This spell reaches deep into the elemental plane of bananas (the monkey one, not \
+               the clown one), and summons monkeys and gorillas that will promptly flip out and \
+               attack everything in sight. Fun! Their lesser, easily manipulable minds will be \
+               convinced you are one of their allies, but only for a minute. Unless you also are \
+               a monkey.",
+        icon: "simian",
+        sound: "sound/music/antag/monkey.ogg",
+        cooldown: 90.0,
+        cooldown_reduction_per_rank: 15.0,
+        invocation: "OOGA OOGA OOGA!!!!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::Simian,
+            "/datum/action/cooldown/spell/conjure/simian",
+            "Summon Simians",
+        )
+    },
+    SpellDef {
+        desc: "This spell reaches into Nar'Sie's realm, summoning one of the legendary fragments \
+               across time and space.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "summonsoulstone",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 240.0,
+        requirements: 0,
+        ..def(
+            Spell::Soulstone,
+            "/datum/action/cooldown/spell/conjure/soulstone",
+            "Summon Soulstone",
+        )
+    },
+    SpellDef {
+        desc: "This spell reaches into Nar'Sie's realm, summoning one of the legendary fragments \
+               across time and space.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "summonsoulstone",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 360.0,
+        requirements: 0,
+        ..def(
+            Spell::SoulstoneCult,
+            "/datum/action/cooldown/spell/conjure/soulstone/cult",
+            "Create Nar'sian Soulstone",
+        )
+    },
+    SpellDef {
+        desc: "This spell reaches into Nar'Sie's realm, summoning one of the legendary fragments \
+               across time and space.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "summonsoulstone",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 240.0,
+        requirements: 0,
+        ..def(
+            Spell::SoulstoneNoncult,
+            "/datum/action/cooldown/spell/conjure/soulstone/noncult",
+            "Create Soulstone",
+        )
+    },
+    SpellDef {
+        desc: "This spell reaches into Nar'Sie's realm, summoning one of the legendary fragments \
+               across time and space.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "summonsoulstone",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 240.0,
+        requirements: 0,
+        ..def(
+            Spell::SoulstonePurified,
+            "/datum/action/cooldown/spell/conjure/soulstone/purified",
+            "Create Purified Soulstone",
+        )
+    },
+    SpellDef {
+        desc: "This spell reaches into Nar'Sie's realm, summoning one of the legendary fragments \
+               across time and space.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "summonsoulstone",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 240.0,
+        requirements: 0,
+        ..def(
+            Spell::SoulstoneMystic,
+            "/datum/action/cooldown/spell/conjure/soulstone/mystic",
+            "Create Mystic Soulstone",
+        )
+    },
+    SpellDef {
+        desc: "Summon a number of traps around you. They will damage and enrage any enemies that \
+               step on them.",
+        icon: "the_traps",
+        sound: "sound/items/tools/welder.ogg",
+        cooldown: 25.0,
+        cooldown_reduction_per_rank: 5.0,
+        invocation: "CAVERE INSIDIAS!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::TheTraps,
+            "/datum/action/cooldown/spell/conjure/the_traps",
+            "The Traps!",
+        )
+    },
+    SpellDef {
+        desc: "Why reload when you have infinite guns? Summons an unending stream of bolt action \
+               rifles that deal little damage, but will knock targets down. Requires both hands \
+               free to use. Learning this spell makes you unable to learn Arcane Barrage.",
+        icon: "bolt_action",
+        cooldown: 75.0,
+        cooldown_reduction_per_rank: 18.5,
+        ..def(
+            Spell::InfiniteGuns,
+            "/datum/action/cooldown/spell/conjure_item/infinite_guns/gun",
+            "Lesser Summon Guns",
+        )
+    },
+    SpellDef {
+        desc: "Fire a torrent of arcane energy at your foes with this (powerful) spell. Deals \
+               much more damage than Lesser Summon Guns, but won't knock targets down. Requires \
+               both hands free to use. Learning this spell makes you unable to learn Lesser \
+               Summon Gun.",
+        icon: "arcane_barrage",
+        cooldown: 75.0,
+        cooldown_reduction_per_rank: 18.5,
+        ..def(
+            Spell::ArcaneBarrage,
+            "/datum/action/cooldown/spell/conjure_item/infinite_guns/arcane_barrage",
+            "Arcane Barrage",
+        )
+    },
+    SpellDef {
+        desc: "The mime's performance transmutates a box into physical reality.",
+        dmi: "icons/mob/actions/actions_mime.dmi",
+        icon: "invisible_box",
+        background: "bg_mime",
+        overlay: "bg_mime_border",
+        cooldown: 30.0,
+        max_level: 1,
+        invocation: "%CASTER moves %PRONOUN_their hands in the shape of a box, pressing a \
+                     box out of the air.",
+        invocation_type: Invocation::Emote,
+        emote_self: "You conjure up an invisible box, large enough to store a few things.",
+        requirements: SPELL_REQUIRES_HUMAN,
+        antimagic: 0,
+        ..def(
+            Spell::InvisibleBox,
+            "/datum/action/cooldown/spell/conjure_item/invisible_box",
+            "Invisible Box",
+        )
+    },
+    SpellDef {
+        desc: "Forged from eldrich energies, a packet of pure power, known as a spell packet \
+               will appear in your hand, that - when thrown - will stun the target.",
+        icon: "thrownlightning",
+        cooldown: 1.0,
+        max_level: 1,
+        ..def(
+            Spell::SpellPacket,
+            "/datum/action/cooldown/spell/conjure_item/spellpacket",
+            "Thrown Lightning",
+        )
+    },
+    SpellDef {
+        desc: "Concentrates cryokinetic forces to create snowballs, useful for throwing at \
+               people.",
+        dmi: "icons/obj/toys/toy.dmi",
+        icon: "snowball",
+        cooldown: 1.5,
+        requirements: 0,
+        antimagic: 0,
+        ..def(
+            Spell::Snowball,
+            "/datum/action/cooldown/spell/conjure_item/snowball",
+            "Snowball",
+        )
+    },
+    SpellDef {
+        desc: "Take on the shape a lesser ash drake.",
+        icon: "shapeshift",
+        cooldown: 10.0,
+        requirements: 0,
+        invocation: "%CASTER lets out a mighty roar!",
+        invocation_type: Invocation::Emote,
+        emote_self: "You let out a mighty roar!",
+        ..def(
+            Spell::DragonForm,
+            "/datum/action/cooldown/spell/shapeshift/dragon",
+            "Dragon Form",
+        )
+    },
+    SpellDef {
+        desc: "Take on the shape of a powerful gorilla.",
+        icon: "return_to_monkey",
+        cooldown: 10.0,
+        requirements: 0,
+        invocation: "B'NA NAH-SLEMA!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::GorillaForm,
+            "/datum/action/cooldown/spell/shapeshift/gorilla",
+            "Gorilla Form",
+        )
+    },
+    SpellDef {
+        desc: "Take on the shape of a polar bear.",
+        icon: "shapeshift",
+        cooldown: 10.0,
+        requirements: 0,
+        invocation: "%CASTER lets out a mighty roar!",
+        invocation_type: Invocation::Emote,
+        emote_self: "You let out a mighty roar!",
+        ..def(
+            Spell::PolarBearForm,
+            "/datum/action/cooldown/spell/shapeshift/polar_bear",
+            "Polar Bear Form",
+        )
+    },
+    SpellDef {
+        desc: "Take on the shape a wolf.",
+        icon: "shapeshift",
+        cooldown: 10.0,
+        requirements: 0,
+        invocation: "%CASTER lets out a mighty growl!",
+        invocation_type: Invocation::Emote,
+        emote_self: "You let out a mighty growl!",
+        ..def(
+            Spell::WolfForm,
+            "/datum/action/cooldown/spell/shapeshift/wolf",
+            "Wolf Form",
+        )
+    },
+    SpellDef {
+        desc: "Take on the shape of another for a time to use their natural abilities. Once \
+               you've made your choice, it cannot be changed.",
+        icon: "shapeshift",
+        cooldown: 20.0,
+        cooldown_reduction_per_rank: 8.0,
+        max_level: 3,
+        invocation: "RAC'WA NO!",
+        invocation_type: Invocation::Shout,
+        requirements: SPELL_REQUIRES_NO_ANTIMAGIC,
+        ..def(
+            Spell::WildShapeshift,
+            "/datum/action/cooldown/spell/shapeshift/wizard",
+            "Wild Shapeshift",
+        )
+    },
+    SpellDef {
+        desc: "Shoots out a freezing cone in front of you.",
+        cooldown: 30.0,
+        cooldown_reduction_per_rank: 4.0,
+        invocation: "ISAGE!",
+        invocation_type: Invocation::Shout,
+        ..def(
+            Spell::ConeOfCold,
+            "/datum/action/cooldown/spell/cone/staggered/cone_of_cold",
+            "Cone of Cold",
+        )
+    },
+    SpellDef {
+        desc: "Charge up a tesla arc and release it at random nearby targets! You can move \
+               freely while it charges. The arc jumps between targets and can knock them down.",
+        icon: "lightning",
+        sound: "sound/effects/magic/lightningbolt.ogg",
+        cooldown: 30.0,
+        cooldown_reduction_per_rank: 6.75,
+        invocation: "UN'LTD P'WAH!",
+        invocation_type: Invocation::Shout,
+        active_border: "bg_spell_border_active_yellow",
+        ..def(
+            Spell::TeslaBlast,
+            "/datum/action/cooldown/spell/charged/beam/tesla",
+            "Tesla Blast",
+        )
+    },
+    SpellDef {
+        desc: "Channels energy into your gauntlet - firing its essence forward in a slow moving, \
+               yet devastating, attack.",
+        dmi: "icons/mob/actions/actions_cult.dmi",
+        icon: "cultfist",
+        background: "bg_demon",
+        overlay: "bg_demon_border",
+        sound: "sound/items/weapons/resonator_blast.ogg",
+        cooldown: 35.0,
+        requirements: 0,
+        ..def(
+            Spell::GauntletEcho,
+            "/datum/action/cooldown/spell/basic_projectile/juggernaut",
+            "Gauntlet Echo",
+        )
+    },
+    SpellDef {
+        desc: "Телепатически передает сообщение цели.",
+        dmi: "icons/mob/actions/actions_revenant.dmi",
+        icon: "r_transmit",
+        requirements: SPELL_REQUIRES_NO_ANTIMAGIC,
+        antimagic: MAGIC_RESISTANCE_MIND,
+        ..def(
+            Spell::Telepathy,
+            "/datum/action/cooldown/spell/list_target/telepathy",
+            "Telepathy",
+        )
+    },
 ];
 
 impl Spell {
@@ -479,6 +1035,10 @@ pub struct KnownSpell {
     /// `spell_requirements &= ~SPELL_REQUIRES_WIZARD_GARB` (Robeless Casting,
     /// `crate::events::wizard`).
     pub robeless: bool,
+    /// Conjured items of a `delete_old` spell (`item_refs`).
+    pub conjured: Vec<Entity>,
+    /// A shapeshift spell's `shapeshift_type`.
+    pub shape: Option<&'static str>,
 }
 
 impl KnownSpell {
@@ -500,6 +1060,8 @@ pub struct Spells {
     pub aiming: Option<Spell>,
     /// Swap's `second_target`.
     pub second_target: Option<Entity>,
+    /// Telepathy's `message`: read by its `cast` right after the prompts.
+    pub message: Option<String>,
 }
 
 impl Spells {
@@ -541,6 +1103,8 @@ impl Plugin for SpellsPlugin {
                     trigger_buttons,
                     pointed_clicks,
                     teleport_answers.after(PromptSystems::Answer),
+                    shapeshift::answers.after(PromptSystems::Answer),
+                    telepathy::answers.after(PromptSystems::Answer),
                 )
                     .in_set(UiSystems::Handle),
             )
@@ -558,6 +1122,19 @@ impl Plugin for SpellsPlugin {
                     .before(crate::health::HealthSystems),
             )
             .add_systems(Update, (effects::jaunt_look, refresh_on_change))
+            .add_systems(
+                Update,
+                (
+                    conjure::tick,
+                    cone::tick.before(crate::health::HealthSystems),
+                ),
+            )
+            .add_systems(
+                Update,
+                shapeshift::form_clicks
+                    .after(crate::click::ResolveClicks)
+                    .before(crate::health::HealthSystems),
+            )
             .add_plugins(magic_guns::MagicGunsPlugin);
     }
 }
@@ -585,10 +1162,16 @@ pub fn learn(world: &mut World, mob: Entity, spell: Spell) -> Learned {
                 marked: None,
                 hand: None,
                 robeless: false,
+                conjured: Vec::new(),
+                shape: None,
             });
             Learned::New
         }
     };
+    if matches!(result, Learned::Leveled(l) if spell == Spell::Simian && l == spell.def().max_level)
+    {
+        conjure::simian_mastery(world, mob);
+    }
     refresh(world, mob);
     result
 }
@@ -637,8 +1220,6 @@ pub fn refresh(world: &mut World, mob: Entity) {
             .get_resource::<IconIndex>()
             .and_then(|i| i.get(dmi, state))
     };
-    let background = icon(world, BACKGROUNDS_DMI, "bg_spell");
-    let border = icon(world, BACKGROUNDS_DMI, "bg_spell_border");
     let mut buttons: Vec<(ActionButton, f64)> = world
         .get::<ActionButtons>(mob)
         .map(|b| {
@@ -651,17 +1232,27 @@ pub fn refresh(world: &mut World, mob: Entity) {
     for known in &spells.known {
         let def = known.spell.def();
         let active = spells.aiming == Some(known.spell) || known.hand.is_some();
-        let border = if active {
-            icon(world, BACKGROUNDS_DMI, def.active_border)
+        let background = icon(world, BACKGROUNDS_DMI, def.background);
+        let border = icon(
+            world,
+            BACKGROUNDS_DMI,
+            if active {
+                def.active_border
+            } else {
+                def.overlay
+            },
+        );
+        let dmi = if def.dmi.is_empty() {
+            SPELLS_DMI
         } else {
-            border
+            def.dmi
         };
         let available = can_cast(world, mob, known.spell).is_ok();
         buttons.push((
             ActionButton {
                 id: known.spell.button_id(),
                 name: known.name(),
-                icon: icon(world, SPELLS_DMI, def.icon),
+                icon: icon(world, dmi, def.icon),
                 background,
                 border,
                 available,
@@ -916,31 +1507,36 @@ pub fn start_cooldown(world: &mut World, mob: Entity, spell: Spell, secs: Option
 
 /// `invocation()`: the words, said or whispered; half the time garbled.
 pub fn invoke(world: &mut World, mob: Entity, kind: Invocation, words: &str) {
-    if words.is_empty() || kind == Invocation::None {
+    let garbled = world
+        .resource_mut::<crate::combat::CombatRng>()
+        .chance(GARBLED_INVOCATION_PROB);
+    if garbled {
+        say_invocation(world, mob, kind, &words.replace(' ', "`"));
+    } else {
+        say_invocation(world, mob, kind, words);
+    }
+}
+
+/// `invocation()` with `garbled_invocation_prob = 0`; also the Grand Ritual's magic words.
+pub fn say_invocation(world: &mut World, mob: Entity, kind: Invocation, text: &str) {
+    if text.is_empty() || kind == Invocation::None {
         return;
     }
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return;
     };
-    let garbled = world
-        .resource_mut::<crate::combat::CombatRng>()
-        .chance(GARBLED_INVOCATION_PROB);
-    let text = if garbled {
-        words.replace(' ', "`")
-    } else {
-        words.to_owned()
-    };
     let name = crate::medical::name_of(world, mob);
     let (clients, message) = match kind {
         Invocation::Shout => (
             crate::chem::clients_near(world, pos, None),
-            say_message(&name, &text),
+            say_message(&name, text),
         ),
         Invocation::Whisper => (
             crate::obj_damage::clients_in_range(world, pos, 1, &[]),
-            whisper_message(&name, &text),
+            whisper_message(&name, text),
         ),
-        Invocation::None => return,
+        // `INVOCATION_EMOTE`: seen only (`custom_emote`); handled by `spell_emote`.
+        Invocation::Emote | Invocation::None => return,
     };
     world.write_message(SendChat { clients, message });
 }
@@ -948,12 +1544,14 @@ pub fn invoke(world: &mut World, mob: Entity, kind: Invocation, words: &str) {
 /// `spell_feedback`: the invocation and the sound.
 fn feedback(world: &mut World, mob: Entity, spell: Spell, words: Option<&str>) {
     let def = spell.def();
-    invoke(
-        world,
-        mob,
-        def.invocation_type,
-        words.unwrap_or(def.invocation),
-    );
+    let words = words.unwrap_or(def.invocation);
+    if def.invocation_type == Invocation::Emote {
+        spell_emote(world, mob, def);
+    } else if def.garble {
+        invoke(world, mob, def.invocation_type, words);
+    } else {
+        say_invocation(world, mob, def.invocation_type, words);
+    }
     if !def.sound.is_empty()
         && let Some(&pos) = world.get::<TilePos>(mob)
     {
@@ -962,6 +1560,22 @@ fn feedback(world: &mut World, mob: Entity, spell: Spell, words: Option<&str>) {
             crate::sound::PlaySound::new(pos, def.sound, 50.0, true),
         );
     }
+}
+
+/// `invocation()` of `INVOCATION_EMOTE`: `%CASTER` named, the caster's own text.
+fn spell_emote(world: &mut World, mob: Entity, def: &SpellDef) {
+    let name = crate::medical::name_of(world, mob);
+    let others = def
+        .invocation
+        .replace("%CASTER", &name)
+        .replace("%PRONOUN_their", "their")
+        .replace("%PRONOUN_them", "them");
+    let own = if def.emote_self.is_empty() {
+        others.clone()
+    } else {
+        def.emote_self.to_owned()
+    };
+    crate::medical::visible(world, mob, &own, &others, Span::Notice);
 }
 
 /// `before_cast` of a shouted or whispered spell: a human without a tongue fails it.
@@ -1095,6 +1709,21 @@ fn trigger(world: &mut World, client: Entity, mob: Entity, spell: Spell) {
         Targeting::Caster if spell == Spell::Teleport => {
             if ready(world, mob, spell) && checked(world, mob, spell) {
                 open_teleport_prompt(world, client, mob, None);
+            }
+        }
+        Targeting::Caster if spell == Spell::WildShapeshift => {
+            if ready(world, mob, spell) && checked(world, mob, spell) {
+                shapeshift::trigger_wild(world, client, mob);
+            }
+        }
+        Targeting::Caster if spell == Spell::Telepathy => {
+            if ready(world, mob, spell) && checked(world, mob, spell) {
+                telepathy::open_list(world, client, mob);
+            }
+        }
+        Targeting::Caster if spell == Spell::TeslaBlast => {
+            if ready(world, mob, spell) && checked(world, mob, spell) {
+                cone::begin_channel(world, client, mob, spell);
             }
         }
         Targeting::Caster => {

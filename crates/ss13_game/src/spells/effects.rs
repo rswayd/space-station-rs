@@ -113,6 +113,10 @@ pub enum BoltKind {
     Teleport,
     Safety,
     Door,
+    /// `/obj/projectile/magic/arcane_barrage`.
+    ArcaneBarrage,
+    /// `/obj/projectile/magic/aoe/juggernaut`.
+    GauntletEcho,
 }
 
 /// On a flying magic projectile: what its hit does (read by `crate::projectile`).
@@ -128,7 +132,7 @@ pub struct MagicBolt {
 // ---------------------------------------------------------------------------------------------
 // Helpers
 
-fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
+pub(super) fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
     let (Some(mut health), Some(mut stat)) = (
         world.get::<Health>(mob).cloned(),
         world.get::<Stat>(mob).copied(),
@@ -142,7 +146,7 @@ fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {
     }
 }
 
-fn play(world: &mut World, pos: TilePos, sound: &str) {
+pub(super) fn play(world: &mut World, pos: TilePos, sound: &str) {
     crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 50.0, true));
 }
 
@@ -154,7 +158,7 @@ fn rng_range(world: &mut World, low: u32, high: u32) -> u32 {
     world.resource_mut::<CombatRng>().range(low, high)
 }
 
-fn pick<T: Copy>(world: &mut World, list: &[T]) -> Option<T> {
+pub(super) fn pick<T: Copy>(world: &mut World, list: &[T]) -> Option<T> {
     if list.is_empty() {
         return None;
     }
@@ -178,7 +182,7 @@ fn teleport(world: &mut World, mover: Entity, dest: TilePos, forced: bool) -> bo
 }
 
 /// The hands of `mob`: `item` into an empty one, the active first (`put_in_hands`).
-fn put_in_hands(world: &mut World, mob: Entity, item: Entity) -> bool {
+pub(super) fn put_in_hands(world: &mut World, mob: Entity, item: Entity) -> bool {
     let Some(inventory) = world.get::<Inventory>(mob) else {
         return false;
     };
@@ -221,7 +225,7 @@ fn sparks(world: &mut World, at: Entity) {
 /// `cast()` of `spell` at `level`. False when it had no effect that starts the cooldown.
 pub(super) fn cast(
     world: &mut World,
-    _client: Entity,
+    client: Entity,
     mob: Entity,
     spell: Spell,
     level: u8,
@@ -311,6 +315,14 @@ pub(super) fn cast(
             charge(world, mob);
             true
         }
+        (Spell::ConeOfCold, _) => super::cone::cone_of_cold(world, mob, pos),
+        (Spell::TeslaBlast, _) => super::cone::tesla_blast(world, mob, pos),
+        (Spell::GauntletEcho, _) => super::cone::gauntlet_echo(world, mob, pos, level),
+        (Spell::Telepathy, CastOn::Atom { target, .. }) => {
+            super::telepathy::send(world, mob, target)
+        }
+        (s, _) if super::shapeshift::handles(s) => super::shapeshift::cast(world, client, mob, s),
+        (s, _) if super::conjure::handles(s) => super::conjure::cast(world, mob, s, level, pos),
         _ => false,
     }
 }
@@ -391,6 +403,21 @@ pub fn bolt_data(kind: BoltKind, level: u8) -> ProjectileData {
             path: "/obj/projectile/magic/door".into(),
             ..base
         },
+        BoltKind::ArcaneBarrage => ProjectileData {
+            path: "/obj/projectile/magic/arcane_barrage".into(),
+            damage: 20.0,
+            damage_type: "burn".into(),
+            ..base
+        },
+        BoltKind::GauntletEcho => ProjectileData {
+            path: "/obj/projectile/magic/aoe/juggernaut".into(),
+            damage: 30.0,
+            damage_type: "brute".into(),
+            speed: 0.15,
+            range: 105.0,
+            knockdown: 50.0,
+            ..base
+        },
     }
 }
 
@@ -463,7 +490,11 @@ pub fn apply_bolt(world: &mut World, kind: BoltKind, firer: Entity, target: Enti
         return;
     };
     match kind {
-        BoltKind::Nothing | BoltKind::MagicMissile => {}
+        BoltKind::Nothing | BoltKind::MagicMissile | BoltKind::ArcaneBarrage => {}
+        // `juggernaut/on_hit`: the impact (the dense objects within a tile are not ported).
+        BoltKind::GauntletEcho => {
+            play(world, at, "sound/items/weapons/resonator_blast.ogg");
+        }
         BoltKind::Fireball => {
             // "between this 10 burn, the 10 brute, the explosion brute, and the onfire burn".
             if living(world, target) {
@@ -674,7 +705,7 @@ fn door_bolt(world: &mut World, target: Entity, at: TilePos) {
 }
 
 /// `COMSIG_ATOM_MAGICALLY_UNLOCKED` of a door: unbolted and opened.
-fn open_door(world: &mut World, door: Entity) {
+pub(crate) fn open_door(world: &mut World, door: Entity) {
     crate::doors::with_door(world, door, |door, appearance, ctx| {
         door.locked = false;
         let opened = ctx.open(door, appearance, true);

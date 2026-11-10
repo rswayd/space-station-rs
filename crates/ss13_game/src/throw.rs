@@ -655,6 +655,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         mob_impact(world, item, hit);
         return;
     }
+    if crate::spells::conjure::packet_thrown(world, item, hit) {
+        return;
+    }
     let Some(hit) = hit else {
         // `/obj/item/light/throw_impact`: a bulb shatters where it lands.
         crate::power::lighting::thrown(world, item);

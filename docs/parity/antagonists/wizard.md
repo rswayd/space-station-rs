@@ -17,19 +17,19 @@ TGUI `Spellbook`: 10 очков на заклинания и артефакты,
 Огненный шар, карты заклинаний, форма жезла, Smite, призыв обезьян, слепота, завязать шнурки, мутация, плоть в камень, удар Теслы, молния, пушки, арканный залп, проклятие скотного двора, кровавые заклинания, посохи хаоса/перемен/сжатия, Мьёльнир, молот сингулярности, клинок заклинаний, высокочастотный клинок.
 
 - **Код:** [`offensive.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/equipment/spellbook_entries/offensive.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — огненный шар, Smite, слепота, молния, посох хаоса (случайный из перенесённых снарядов: смерть, дверь, огненный шар, воскрешение, телепорт); остальные записи (карты, форма жезла, обезьяны, шнурки, мутация, плоть в камень, удар Теслы, пушки, залп, скотный двор, кровавые заклинания, посохи перемен/сжатия, молоты, клинки) — нет
+- **Статус в ss13-rs:** 🟡 частично — огненный шар, Smite, слепота, молния, посох хаоса (случайный из перенесённых снарядов: смерть, дверь, огненный шар, воскрешение, телепорт); остальные записи (карты, форма жезла, шнурки, мутация, плоть в камень, скотный двор, кровавые заклинания, посохи перемен/сжатия, молоты, клинки) — нет
 
 ### Защитные записи книги
 Магическая ракета, отключение техники, отталкивание, остановка времени, дым, силовая стена, связать душу (лич), Chuuni, искажение пространства, ловушки, пчёлы, проклятая сумка, посохи лечения и шкафчика, шар провидения, жезлы, мастерская броня.
 
 - **Код:** [`defensive.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/equipment/spellbook_entries/defensive.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — магическая ракета, отключение техники, отталкивание, дым, силовая стена, посох лечения, набор палочек (смерть, лечение, телепорт, дверь, огненный шар; превращение и сжатие стреляют впустую); остановка времени, лич, Chuuni, искажение, ловушки, пчёлы, сумка, посох шкафчика, шар, броня — нет
+- **Статус в ss13-rs:** 🟡 частично — магическая ракета, отключение техники, отталкивание, дым, силовая стена, посох лечения, набор палочек (смерть, лечение, телепорт, дверь, огненный шар; превращение и сжатие стреляют впустую); остановка времени, лич, Chuuni, искажение, сумка, посох шкафчика, шар, броня — нет
 
 ### Мобильность и помощь
 Обмен разумом, Knock, Blink, телепорт, эфирный джаунт, обмен местами, свисток-варп, посох дверей, телепорт-жезл, «Покинуть тело»; призыв предмета, перезарядка, оборотничество, Soul Tap, посох анимации, камни душ, некромантский камень, контракт ученика, колода стражей, бутылки демонов, скипетр вендомантии.
 
 - **Код:** [`mobility.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/equipment/spellbook_entries/mobility.dm#L1), [`assistance.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/equipment/spellbook_entries/assistance.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — Knock, Blink, телепорт, эфирный джаунт, обмен местами, посох дверей, призыв предмета, перезарядка, контракт ученика; обмен разумом, свисток, телепорт-жезл, «Покинуть тело», оборотничество, Soul Tap, посох анимации, камни душ, некромантский камень, колода стражей, бутылки демонов, скипетр — нет
+- **Статус в ss13-rs:** 🟡 частично — Knock, Blink, телепорт, эфирный джаунт, обмен местами, посох дверей, призыв предмета, перезарядка, контракт ученика; обмен разумом, свисток, телепорт-жезл, «Покинуть тело», Soul Tap, посох анимации, камни душ, некромантский камень, колода стражей — нет; добавлены Wild Shapeshift, бутылки демонов, скипетр
 
 ### Перки, призывы и испытания
 Перки (рождённый червём, дежавю, лотерея, азарт, пожиратель сердец, друзья-слаймы, прозрачность, магнетизм); глобальные призывы (призраки, оружие, магия, события, безумие, массовое обучение); испытания (мультивселенский меч, анти-маг).
@@ -47,16 +47,16 @@ TGUI `Spellbook`: 10 очков на заклинания и артефакты,
 Маг рисует руны в случайных зонах станции; каждая руна даёт побочные эффекты (аномалии, ЭМИ, перемешивание полов, оркестр, дождь еды...); седьмая — финал на выбор: бессмертие экипажа, всеобщий доступ, Мидас, сыр, клоун-мир, узурпация капитанства, армагеддон.
 
 - **Код:** [`/datum/action/cooldown/grand_ritual`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/grand_ritual/grand_ritual.dm#L23), [`/obj/effect/grand_rune`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/grand_ritual/grand_rune.dm#L13), [`/datum/grand_side_effect`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/grand_ritual/grand_side_effect.dm#L4), [`/datum/grand_finale`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/grand_ritual/finales/grand_ritual_finale.dm#L4), [`/datum/grand_finale/immortality`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/grand_ritual/finales/immortality.dm#L10), [`/datum/grand_finale/armageddon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/grand_ritual/finales/armageddon.dm#L6)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/wizard/server/ritual.rs`: кнопка и указание зоны (белый и чёрный списки), рисование 4 с с испарением препятствий, инвокация 3 раза, сыр, объявления по потенции, случайное событие по потенции (порт. события из tg-таблицы), побочные эффекты (аномалии, ЭМИ, перестановка, смазка, призыв члена экипажа, дым, кровь, еда, портальные мобы, тема), разрывы еретика, финалы Connection, Annihilation, Jubilation, Perpetuation, Transformation, Cheese, цель мага и отчёт; нет: Evolution (`summon_magic`), пространственной нестабильности, оркестра, обмундирования и манифеста Usurpation (только оглушение и сообщение), воскрешения разорванных, антаг-датума вендетты (только сообщение), радиального меню (список)
 
 ### Демоны резни и смеха, бесёнок
 Антаг-датумы демонов из бутылки (кровавый джаунт, поедание тел; демон смеха возвращает съеденных) и бесёнка.
 
 - **Код:** [`/datum/antagonist/slaughter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/slaughter_antag.dm#L1), [`/datum/antagonist/slaughter/laughter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/slaughter_antag.dm#L68), [`/datum/antagonist/imp`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/imp_antag.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/slaughter.rs`: демон и кровавый джаунт уже были; добавлены цель и подсказка в приветствии, бутылки крови и щекотки (в книге, `use_bottle`: первый согласный призрак вместо опроса 5 с); нет окна `AntagInfoDemon`; бесёнка не переносим: в tg `/datum/antagonist/imp` ничем не создаётся
 
 ### Рунический торговый автомат
 Скипетр мага ставит временный рунический автомат с волшебной одеждой: при появлении отталкивает людей вокруг, через 30 с распадается, скипетр (или отвёртка) взрывает его. Общая механика автомата — ../cargo/vending.md.
 
 - **Код:** [`/obj/machinery/vending/runic_vendor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/vending/runic_vendor.dm#L3), [`/obj/item/runic_vendor_scepter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/wizard/equipment/artefact.dm#L398)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/wizard/server/runic.rs`: скипетр (3 заряда, 1 с на призыв, дальность 7, 5 с перезарядка, Charge), автомат с одним из трёх наборов (баг `pick(1,3)` не перенесён), отталкивание на 2 тайла, распад через 30 с, взрыв скипетром или отвёрткой, бросок по ПКМ

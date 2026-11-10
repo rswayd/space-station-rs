@@ -349,6 +349,8 @@ pub enum Job {
     },
     /// A space dragon's rift, meal, wall tearing or airlock prying ([`crate::antag::space_dragon`]).
     SpaceDragon(crate::antag::space_dragon::DragonJob),
+    /// The Grand Ritual and the Scepter of Vendormancy.
+    Wizard(crate::antag::wizard::server::WizardJob),
     /// Fixing a Radiation Leak's machine ([`crate::events::radiation_leak`]).
     RadiationLeak,
     /// An anomaly releaser on a core ([`crate::events::anomalies`]).
@@ -1469,6 +1471,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Xeno(job) => crate::antag::xeno::abilities::complete(world, mob, action, job),
         &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),
         &Job::SpaceDragon(job) => crate::antag::space_dragon::complete(world, mob, action, job),
+        &Job::Wizard(job) => crate::antag::wizard::server::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),
         &Job::FieldGenerator(job) => {
             crate::power::field_generator::complete(world, client, target, job, consume)

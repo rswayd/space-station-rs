@@ -1,6 +1,10 @@
 //! The spellbook: buying and refunding entries, and the rituals.
 
 use super::*;
+use crate::spells::knows;
+
+/// `no_coexistence_typecache` of the entries.
+const NO_COEXISTENCE: [(Spell, Spell); 1] = [(Spell::InfiniteGuns, Spell::ArcaneBarrage)];
 
 /// The book is on `mob` (in its hands, worn or in a bag it carries).
 pub(super) fn holds(world: &World, mob: Entity, item: Entity) -> bool {
@@ -30,6 +34,19 @@ pub fn purchase(world: &mut World, mob: Entity, book: Entity, id: &str) -> bool 
         return false;
     }
     let bought = match def.kind {
+        EntryKind::Spell(spell)
+            if NO_COEXISTENCE.iter().any(|&(a, b)| {
+                (a == spell && knows(world, mob, b)) || (b == spell && knows(world, mob, a))
+            }) =>
+        {
+            chat_to(
+                world,
+                mob,
+                Span::Warning,
+                "Это заклинание несовместимо с уже изученным!",
+            );
+            false
+        }
         EntryKind::Spell(spell) => {
             let before = world
                 .get::<Spells>(mob)
@@ -286,6 +303,9 @@ pub(super) fn book_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed
 /// `attack_self` of the wizard's items: the spellbook binds or opens, the scroll and the
 /// contract ask. `false` for other items.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    if crate::antag::slaughter::use_bottle(world, mob, item) {
+        return true;
+    }
     if let Some(book) = world.get::<Spellbook>(item).cloned() {
         let name = name_of(world, item);
         match book.owner {

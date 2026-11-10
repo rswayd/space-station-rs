@@ -17,9 +17,15 @@
 //!   health. Entering or leaving: faster (-1 ds) for 6 s.
 //! - **Attacks**: a click bites the living; a right click is the body slam (20 brute, thrown 10
 //!   tiles, 45 s cooldown).
+//! - **The bottles** ([`use_bottle`], `/obj/item/antag_spawner/slaughter_demon`): shattered on
+//!   the station, a willing ghost becomes the demon in the blood where it broke.
+//! - **Antagonist** (`/datum/antagonist/slaughter`): the "kill everyone" objective and the
+//!   slam hint in the greeting (no summoner: tg's bottles never set one). `/datum/antagonist/imp`
+//!   has no port: nothing in tg creates it.
 //! - **Death** (`DEL_ON_DEATH`, [`on_death`]): blood, innards and a demon heart are left (the
 //!   laughter demon leaves a kitten named Laughter instead).
-// shortcut: no hit streak wound bonus, no blood colour
+// shortcut: the bottle takes the first willing ghost at once (tg polls for 5 s); the objective
+// is told in chat (no `AntagInfoDemon` window); no hit streak wound bonus, no blood colour
 // on leaving, the blood hands of carbon crawlers and the laughter demon's devastation rule; a
 // failed meal lets the victim out where the demon is; the revived friends of the laughter demon
 // get their ghost back only through `crate::ghost::return_to_body`.
@@ -52,6 +58,8 @@ pub use super::ROLE_SLAUGHTER_DEMON;
 pub const SLAUGHTER: &str = "/mob/living/basic/demon/slaughter";
 pub const LAUGHTER: &str = "/mob/living/basic/demon/slaughter/laughter";
 const JOB: &str = "/datum/job/slaughter_demon";
+pub const BLOOD_BOTTLE: &str = "/obj/item/antag_spawner/slaughter_demon";
+pub const HUG_BOTTLE: &str = "/obj/item/antag_spawner/slaughter_demon/laughter";
 const ROUNDEND_CATEGORY: &str = "Демоны";
 /// `grant_loot` of the slaughter demon; the laughter demon's kitten.
 pub const BLOOD: &str = "/obj/effect/decal/cleanable/blood";
@@ -236,7 +244,106 @@ pub fn make_demon(world: &mut World, mob: Entity) -> bool {
             Span::Bold,
             "You are currently not currently in the same plane of existence as the station. Use your Blood Crawl ability near a pool of blood to manifest and wreak havoc.",
         );
+        tell(world, client, Span::Bold, objective_text(laughter));
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "You have a powerful alt-attack that slams people backwards that you can activate by right-clicking your target!",
+        );
     }
+    true
+}
+
+/// `forge_objectives` without a summoner.
+pub fn objective_text(laughter: bool) -> &'static str {
+    if laughter {
+        "Hug and tickle everyone."
+    } else {
+        "Kill everyone."
+    }
+}
+
+/// `/obj/item/antag_spawner/slaughter_demon/attack_self`: true when `item` is a bottle.
+pub fn use_bottle(world: &mut World, mob: Entity, item: Entity) -> bool {
+    let Some(path) =
+        crate::construction::path_of(world, item).filter(|p| is_under(p, BLOOD_BOTTLE))
+    else {
+        return false;
+    };
+    let Some(pos) = crate::explosions::turf_of(world, mob) else {
+        return true;
+    };
+    if !crate::events::controller::station_levels(world).contains(&pos.z) {
+        tell_mob(
+            world,
+            mob,
+            Span::Warning,
+            "You should probably wait until you reach the station.",
+        );
+        return true;
+    }
+    let laughter = is_under(&path, HUG_BOTTLE);
+    let mut ghosts: Vec<(Entity, Entity)> = world
+        .query_filtered::<(Entity, &PlayerMob), With<crate::ghost::Ghost>>()
+        .iter(world)
+        .map(|(g, p)| (g, p.client))
+        .collect();
+    ghosts.sort();
+    let chosen = ghosts.into_iter().find(|&(_, c)| {
+        world
+            .get::<super::dynamic::AntagPreferences>(c)
+            .is_some_and(|p| p.wants(ROLE_SLAUGHTER_DEMON))
+    });
+    let spawned = chosen.and_then(|(ghost, client)| {
+        let demon =
+            crate::mobs::spawn::spawn_mob(world, if laughter { LAUGHTER } else { SLAUGHTER }, pos)?;
+        if !crate::medical::brainmob::possess(world, client, ghost, demon) {
+            world.despawn(demon);
+            return None;
+        }
+        world.try_despawn(ghost).ok();
+        Some(demon)
+    });
+    let Some(demon) = spawned else {
+        tell_mob(
+            world,
+            mob,
+            Span::Warning,
+            "The bottle's contents usually pop and boil constantly, but right now they're eerily still and calm. Perhaps you should try again later.",
+        );
+        return true;
+    };
+    make_demon(world, demon);
+    enter_blood(world, demon, pos);
+    tell_mob(
+        world,
+        mob,
+        Span::Notice,
+        "You shatter the bottle, no turning back now!",
+    );
+    tell_mob(
+        world,
+        mob,
+        Span::Warning,
+        if laughter {
+            "You sense an adorable presence lurking just beyond the veil..."
+        } else {
+            "You sense a dark presence lurking just beyond the veil..."
+        },
+    );
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, "sound/effects/glass/glassbr1.ogg", 100.0, true),
+    );
+    if let Some(mut inventory) = world.get_mut::<crate::inventory::Inventory>(mob) {
+        for hand in inventory.hands.iter_mut() {
+            if *hand == Some(item) {
+                *hand = None;
+            }
+        }
+    }
+    world.despawn(item);
     true
 }
 

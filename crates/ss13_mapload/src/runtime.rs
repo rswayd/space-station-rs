@@ -1493,6 +1493,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         GIFT_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
+    // Conjured things, the Grand Ritual, the runic scepter, the demon bottles (`ss13_game`).
+    out.extend(antag::SPELL_RUNTIME_TYPES);
     // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).
     out.extend(mobs::LAVALAND_RUNTIME_TYPES);
     // The lavaland bosses, their bolts and chests (`ss13_game::mobs::megafauna`).

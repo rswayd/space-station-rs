@@ -48,29 +48,29 @@ Blink (короткий прыжок), телепорт в выбранную з
 Пчёлы, карпы, сыр, конструкты, существа, культовые полы, рой, невидимые стул и стена, связь миров, подарки, обезьяны, камни душ, ловушки, слуга.
 
 - **Код:** [`code/modules/spells/spell_types/conjure`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/conjure), [`code/modules/spells/spell_types/summon`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/summon)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/conjure.rs`: механизм `conjure` (радиус, количество, плотность, срок жизни) и данные всех заклинаний группы, кроме слуги; в книге мага пчёлы, ловушки (1 заряд), обезьяны (+1 за уровень, союз на минуту, на максимуме без робы и Gorilla Form); нет: слуга (нужны кость судьбы и датум слуги), снаряжение обезьян, `immune_minds` ловушек, усадка на стул мима, лазер ED-209; выдача заклинаний мима, конструктов и гранты (`summon_cheese`) — в группах профессий и культа
 
 ### Призыв предметов
 Бесконечные пушки, невидимая коробка, пакет молний, снежки.
 
 - **Код:** [`code/modules/spells/spell_types/conjure_item`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/conjure_item)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/conjure.rs`, `spells/magic_guns.rs`: `conjure_item` (`delete_old`, `requires_hands`), Lesser Summon Guns и Arcane Barrage (30 зарядов, взаимоисключаются в книге), Thrown Lightning (`throw.rs`: 80 шока, антимагия), снежки, невидимая коробка (50 с); нет: саморазрушения и смены зачарованных винтовок, автоогня и выпадения пустого барража, очистки коробки, режима броска после заклинания
 
 ### Превращения
 Облики дракона, гориллы, белого медведя, волка; общий шейпшифт.
 
 - **Код:** [`code/modules/spells/spell_types/shapeshift`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/shapeshift)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/spells/shapeshift.rs`: облики дракона, гориллы, медведя, волка и Wild Shapeshift (6 форм, выбор один раз); разум в новом мобе, тело внутри него, заклинания и кнопка следуют за формой, доля урона в обе стороны, смерть формы убивает мага, ближний бой формы; `crate::transform::is_transforming` запрещает превращение в процессе (постоянный `transform_into_mob` не подходит: удаляет старое тело); нет радиального меню (список), вентиляций, уведомления `shapeshifted`; выдача форм волка, медведя и дракона предметами — их группы
 
 ### Конусы, заряжаемые и снаряды
 Конус холода, удар Теслы (заряжаемый), снарядные заклинания (рывок джаггернаута).
 
 - **Код:** [`code/modules/spells/spell_types/cone`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/cone), [`code/modules/spells/spell_types/charged`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/charged), [`code/modules/spells/spell_types/projectile`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/projectile)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/spells/cone.rs`: Cone of Cold (форма конуса по tg, 4 уровня с задержкой, стены, мерзлота 45 с, 10+20 урона, заморозка предметов на 20 с), Tesla Blast (канал 10 с в движении, 5 отскоков, антимагия), Gauntlet Echo (`BoltKind::GauntletEcho`); заморозка мобов — паралич 20 с (статус `freon` не перенесён), цели по радиусу без `view`/`get_path_to`; выдача Gauntlet Echo — конструкты (культ)
 
 ### Телепатия
 Отправка мысленного сообщения выбранному существу.
 
 - **Код:** [`telepathy.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/list_target/telepathy.dm#L1)
 - **BandaStation:** [`telepathy.dm#L46`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/list_target/telepathy.dm#L46) — озвучка телепатии через TTS
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/spells/telepathy.rs`: список целей, ввод текста, проверки после ожиданий, антимагия разума, сообщения мага, цели и призраков; нет TTS-озвучки BandaStation (в порте нет TTS); выдача заклинания — мутация, еретик, ревенант (их группы)

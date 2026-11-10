@@ -12,8 +12,7 @@
 //!
 //! These guns are `/obj/item/gun` prototypes, so `crate::guns` gives them its `Gun` state on
 //! spawn: [`MagicGun`] takes it away again, and `crate::guns` leaves them alone.
-// shortcut: the bolts of change, animation, shrinking, the locker, the spellblade and the arcane
-// barrage are not ported (their staves and wands fire nothing); no intruder effects of staves
+// shortcut: the bolts of change, animation, shrinking, the locker and the spellblade are not ported (their staves and wands fire nothing); no intruder effects of staves
 // in non-wizard hands, no suicides, no drained icon state, no pitch by charges.
 
 use bevy::ecs::message::MessageCursor;
@@ -79,7 +78,15 @@ const WAND: MagicGunDef = MagicGunDef {
 };
 
 /// The ported magic guns, most specific first; the bases catch the rest.
-pub const MAGIC_GUNS: [MagicGunDef; 13] = [
+pub const MAGIC_GUNS: [MagicGunDef; 14] = [
+    MagicGunDef {
+        path: "/obj/item/gun/magic/wand/arcane_barrage",
+        shot: MagicShot::Bolt(BoltKind::ArcaneBarrage),
+        max_charges: 30,
+        variable_charges: false,
+        fire_sound: "sound/items/weapons/emitter.ogg",
+        ..WAND
+    },
     MagicGunDef {
         path: "/obj/item/gun/magic/staff/healing",
         shot: MagicShot::Bolt(BoltKind::Resurrection),
@@ -445,6 +452,9 @@ pub enum Charged {
 /// The charge spell on `item`: a magic gun refills (a wand may lose a charge for good, 80%), an
 /// energy gun's cell fills.
 pub fn magically_charge(world: &mut World, item: Entity) -> Charged {
+    if crate::antag::wizard::server::magic_recharge(world, item) {
+        return Charged::Charged;
+    }
     if world.get::<MagicGun>(item).is_some() {
         let loses = world.resource_mut::<CombatRng>().chance(80.0);
         let mut gun = world.get_mut::<MagicGun>(item).expect("checked");
