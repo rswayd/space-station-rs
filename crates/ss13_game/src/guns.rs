@@ -16,8 +16,15 @@
 //!   locked bolt or racks it (ejecting the chambered round); a click on the held gun with the
 //!   other hand empty takes the magazine out. Each shot ejects its casing onto the floor and
 //!   chambers the next round; a locking bolt (pistols) locks back on the last one. Revolvers keep
-//!   their spent casings in the cylinder until emptied (Z) and load from speedloaders and boxes
-//!   of their caliber.
+//!   their spent casings in the cylinder until emptied (Z); a cylinder has a slot per chamber,
+//!   so an empty one clicks and turns. They load from speedloaders, boxes and loose rounds of
+//!   their caliber into empty or spent chambers (the spent casing falls out). The dual-tube
+//!   shotgun switches tubes with Z when a round is chambered.
+//! - **Misfires** (`can_misfire` guns and rounds): `misfire_probability`% of trigger pulls
+//!   fire into the user instead (`blow_up`); each shot adds `misfire_percentage_increment` and
+//!   the round's `misfire_increment`, up to `misfire_probability_cap`. A sawn-off gun spreads
+//!   `SAWN_OFF_ACC_PENALTY` more and kicks `sawoff_bonus_recoil` harder. Fire modes, revolver
+//!   spins and sawing off are `crate::gun_modes`.
 //! - **Energy**: a cell (starts full) pays each shot's `e_cost`; Z switches the fire mode
 //!   (disable/kill on the energy gun); rechargers charge it (`crate::power::chargers`).
 //!
@@ -30,10 +37,9 @@
 //! Messages are BandaStation's translation.
 //! Gunpoint holds are `crate::gunpoint`; a gun in the mouth is `handle_suicide`; seclites,
 //! suppressors, bayonets and scopes are `crate::gun_attachments`.
-// shortcut: no
-// misfires, sawing off, fire mode toggles (burst guns always burst) or charge overlays (a clumsy
-// user's botch is `check_botched`; of a burst only the first round is aimed at the leg); pins cannot be removed or swapped. Add them
-// as their mechanics land.
+// shortcut: no charge overlays (a clumsy user's botch is `check_botched`; of a burst only the
+// first round is aimed at the leg); pins cannot be removed or swapped. Add them as their
+// mechanics land.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -67,11 +73,29 @@ pub const BOLT_TYPE_LOCKING: u32 = 4;
 const MINDSHIELD_PIN: &str = "/obj/item/firing_pin/implant/mindshield";
 const SYNDICATE_PIN: &str = "/obj/item/firing_pin/implant/pindicate";
 
-/// One cartridge: live until fired.
+/// One cartridge: live until fired. A revolver's empty chamber is a round without a casing
+/// ([`Round::empty`], tg's `null` in a cylinder's `stored_ammo`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Round {
     pub casing: CasingData,
     pub live: bool,
+}
+
+/// `/obj/item/ammo_box/magazine/internal/cylinder`: keeps a slot for every chamber.
+pub const CYLINDER: &str = "/obj/item/ammo_box/magazine/internal/cylinder";
+
+impl Round {
+    /// An empty chamber of a cylinder.
+    pub fn empty() -> Self {
+        Self {
+            casing: CasingData::default(),
+            live: false,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.casing.path.is_empty()
+    }
 }
 
 /// The rounds in a magazine, a revolver's cylinder, a speedloader or an ammo box (tg
@@ -83,41 +107,76 @@ pub struct Magazine {
 }
 
 impl Magazine {
-    /// A new magazine: full unless `start_empty`.
+    /// A new magazine: full unless `start_empty` (a cylinder's chambers are then empty).
     pub fn new(data: &MagazineData) -> Self {
-        let n = if data.start_empty { 0 } else { data.max_ammo };
+        let full = |_| Round {
+            casing: data.ammo.clone(),
+            live: true,
+        };
+        let rounds = if !data.start_empty {
+            (0..data.max_ammo).map(full).collect()
+        } else if is_under(&data.path, CYLINDER) {
+            (0..data.max_ammo).map(|_| Round::empty()).collect()
+        } else {
+            Vec::new()
+        };
         Self {
             data: data.clone(),
-            rounds: (0..n)
-                .map(|_| Round {
-                    casing: data.ammo.clone(),
-                    live: true,
-                })
-                .collect(),
+            rounds,
         }
     }
 
-    /// tg `ammo_count(countempties)`.
+    /// A revolver's cylinder: a fixed number of chambers, empty or not.
+    pub fn is_cylinder(&self) -> bool {
+        is_under(&self.data.path, CYLINDER)
+    }
+
+    /// tg `ammo_count(countempties)`; a cylinder's empty chambers are not rounds.
     pub fn ammo_count(&self, count_empties: bool) -> usize {
         self.rounds
             .iter()
-            .filter(|r| count_empties || r.live)
+            .filter(|r| !r.is_empty() && (count_empties || r.live))
             .count()
     }
 
-    /// tg `try_load` from another box: rounds of this caliber while there is room.
-    pub fn load_from(&mut self, other: &mut Magazine) -> u32 {
+    /// tg `give_round`: `None` when it does not fit. A cylinder takes it into its first empty
+    /// or spent chamber and hands back the spent casing it replaced (`Some(Some(..))`).
+    pub fn give_round(&mut self, round: Round) -> Option<Option<Round>> {
+        if round.casing.caliber != self.data.caliber {
+            return None;
+        }
+        if self.is_cylinder() {
+            let slot = self.rounds.iter().position(|r| !r.live)?;
+            let old = std::mem::replace(&mut self.rounds[slot], round);
+            return Some((!old.is_empty()).then_some(old));
+        }
+        if self.rounds.len() >= self.data.max_ammo as usize {
+            return None;
+        }
+        self.rounds.push(round);
+        Some(None)
+    }
+
+    /// tg `try_load` from another box: rounds of this caliber while there is room; the spent
+    /// casings a cylinder gives up go to `spent`.
+    pub fn load_from(&mut self, other: &mut Magazine, spent: &mut Vec<Round>) -> u32 {
         let mut loaded = 0;
-        while self.rounds.len() < self.data.max_ammo as usize {
-            let Some(i) = other
-                .rounds
-                .iter()
-                .rposition(|r| r.casing.caliber == self.data.caliber)
-            else {
-                break;
-            };
-            self.rounds.push(other.rounds.remove(i));
-            loaded += 1;
+        while let Some(i) = other
+            .rounds
+            .iter()
+            .rposition(|r| !r.is_empty() && r.casing.caliber == self.data.caliber)
+        {
+            let round = other.rounds.remove(i);
+            match self.give_round(round.clone()) {
+                Some(old) => {
+                    spent.extend(old);
+                    loaded += 1;
+                }
+                None => {
+                    other.rounds.insert(i, round);
+                    break;
+                }
+            }
         }
         loaded
     }
@@ -142,6 +201,24 @@ pub struct Gun {
     /// (`crate::gun_attachments`); a built-in one has no item.
     pub suppressed: u32,
     pub suppressor: Option<Entity>,
+    /// `burst_select` switched a burst gun to single shots (`burst_size = 1`, `fire_delay = 0`).
+    pub single_fire: bool,
+    /// `sawn_off`.
+    pub sawn_off: bool,
+    /// `misfire_probability`, percent.
+    pub misfire: f32,
+    /// The dual-tube shotgun's other tube (`alternate_magazine`) and `toggled` (tube B in use).
+    pub alt_magazine: Option<Magazine>,
+    pub toggled: bool,
+}
+
+/// tg `burst_size` and `fire_delay` (deciseconds) of a gun as its fire mode has them.
+pub fn burst_and_delay(dm: &DmGun, gun: &Gun) -> (u32, f32) {
+    if gun.single_fire {
+        (1, 0.0)
+    } else {
+        (dm.burst_size, dm.fire_delay)
+    }
 }
 
 /// A change to the chambered round's projectile before it is fired (tg edits
@@ -217,6 +294,7 @@ impl Plugin for GunsServerPlugin {
         crate::taser::plugin(app);
         crate::gunpoint::plugin(app);
         crate::gun_attachments::plugin(app);
+        crate::gun_modes::plugin(app);
         crate::gunhud::plugin(app);
         crate::guns_special::plugin(app);
         app.init_resource::<Bursts>()
@@ -244,6 +322,8 @@ fn add_gun_state(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Command
         pin: dm.pin.clone(),
         suppressed: dm.suppressed,
         charge: dm.cell_maxcharge,
+        misfire: dm.misfire_probability,
+        alt_magazine: (!dm.alt_magazine.path.is_empty()).then(|| Magazine::new(&dm.alt_magazine)),
         ..default()
     };
     if dm.ballistic {
@@ -262,6 +342,10 @@ fn add_gun_state(add: On<Add<DmGun>>, guns: Query<&DmGun>, mut commands: Command
         }
     }
     commands.entity(add.entity).insert_if_new(gun);
+    if dm.spawn_sawn_off {
+        let gun = add.entity;
+        commands.queue(move |world: &mut World| crate::gun_modes::do_sawoff(world, gun));
+    }
 }
 
 fn add_magazine_state(add: On<Add<DmMagazine>>, mags: Query<&DmMagazine>, mut commands: Commands) {
@@ -621,7 +705,7 @@ pub fn complete_suicide(world: &mut World, mob: Entity, action: &crate::tools::D
     world.entity_mut(gun).remove::<ChamberBoost>();
     if fired {
         let now = world.resource::<Time>().elapsed_secs_f64();
-        let delay = f64::from(dm.fire_delay) / 10.0;
+        let delay = f64::from(burst_and_delay(&dm, &state).1) / 10.0;
         if let Some(mut g) = world.get_mut::<Gun>(gun) {
             g.ready_at = now + delay;
         }
@@ -859,6 +943,17 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
     if now < gun.ready_at {
         return false;
     }
+    if misfires(world, mob, gun_entity, &dm, &gun, aim) {
+        return true;
+    }
+    let (burst_size, fire_delay) = burst_and_delay(&dm, &gun);
+    // `SAWN_OFF_ACC_PENALTY`.
+    let bonus = bonus
+        + if gun.sawn_off {
+            SAWN_OFF_ACC_PENALTY
+        } else {
+            0.0
+        };
     let (total, spread_mult) = {
         let rng = &mut world.resource_mut::<CombatRng>();
         let bonus = rng.range(0, bonus.max(0.0) as u32) as f32;
@@ -869,13 +964,13 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
         };
         ((bonus + own).max(0.0), rng.unit())
     };
-    let sprd = if dm.burst_size > 1 {
+    let sprd = if burst_size > 1 {
         burst_spread(
             &mut world.resource_mut::<CombatRng>(),
             dm.randomspread,
             total,
             spread_mult,
-            dm.burst_size,
+            burst_size,
             1,
         )
     } else {
@@ -887,18 +982,18 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
     let delay = f64::from(if dm.energy {
         dm.shots.get(gun.select).map_or(dm.fire_delay, |s| s.delay)
     } else {
-        dm.fire_delay
+        fire_delay
     }) / 10.0;
     if let Some(mut g) = world.get_mut::<Gun>(gun_entity) {
         g.ready_at = now + delay;
     }
-    if dm.burst_size > 1 {
+    if burst_size > 1 {
         world.resource_mut::<Bursts>().0.push(Burst {
             gun: gun_entity,
             mob,
             aim,
             at: now + f64::from(dm.burst_delay) / 10.0,
-            left: dm.burst_size - 1,
+            left: burst_size - 1,
             delay: f64::from(dm.burst_delay) / 10.0,
             spread: total,
             spread_mult,
@@ -907,6 +1002,60 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
         });
     }
     true
+}
+
+/// `SAWN_OFF_ACC_PENALTY`, degrees.
+const SAWN_OFF_ACC_PENALTY: f32 = 25.0;
+
+/// `/obj/item/gun/ballistic/process_fire`'s misfire: a gun (or a round) that `can_misfire`
+/// goes off at its user `misfire_probability`% of the time (`blow_up`). True when it did.
+fn misfires(
+    world: &mut World,
+    mob: Entity,
+    gun_entity: Entity,
+    dm: &DmGun,
+    gun: &Gun,
+    aim: Aim,
+) -> bool {
+    if !dm.ballistic || aim.target == mob || gun.misfire <= 0.0 {
+        return false;
+    }
+    let Some(round) = ready_round(dm, gun) else {
+        return false;
+    };
+    if !(dm.can_misfire || round.can_misfire)
+        || !world.resource_mut::<CombatRng>().chance(gun.misfire)
+    {
+        return false;
+    }
+    let Some(&at) = world.get::<TilePos>(mob) else {
+        return false;
+    };
+    if !blow_up(world, mob, gun_entity, at) {
+        return false;
+    }
+    if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
+        let name = ss13_shared::capitalize(&name_of(world, gun_entity));
+        tell(world, client, Span::Danger, format!("{name} даёт осечку!"));
+    }
+    true
+}
+
+/// tg `blow_up`: the chambered live round fires at the user (`process_fire(user, user, FALSE)`).
+pub fn blow_up(world: &mut World, mob: Entity, gun: Entity, at: TilePos) -> bool {
+    let live = world
+        .get::<DmGun>(gun)
+        .zip(world.get::<Gun>(gun))
+        .is_some_and(|(dm, g)| dm.ballistic && ready_round(dm, g).is_some());
+    if !live {
+        return false;
+    }
+    let aim = Aim {
+        target: mob,
+        target_pos: at,
+        pixel: [0, 0],
+    };
+    shoot(world, mob, gun, aim, false, 0.0)
 }
 
 /// tg `process_fire`'s single shot spread: `round((rand(0, 1) - 0.5) *
@@ -1118,6 +1267,17 @@ fn shoot(
             .check_zone()
     };
     let hit_prone = world.get::<CombatMode>(mob).is_some_and(|c| c.0);
+    // `/obj/item/gun/ballistic/shoot_live_shot`: the gun and the round wear it towards a
+    // misfire.
+    if dm.ballistic {
+        let cap = dm.misfire_probability_cap;
+        if dm.can_misfire {
+            gun.misfire = (gun.misfire + dm.misfire_percentage_increment).clamp(0.0, cap);
+        }
+        if casing.can_misfire {
+            gun.misfire = (gun.misfire + casing.misfire_increment).clamp(0.0, cap);
+        }
+    }
     // The round is spent before the projectile flies (a point blank hit can change the gun's
     // holder).
     if dm.energy {
@@ -1214,7 +1374,12 @@ fn shoot(
     }
     // `shoot_live_shot` -> `simulate_recoil` -> `calculate_recoil`.
     // shortcut: the `min_recoil_multiplier` preference is always its default (100%).
-    let recoil = dm.recoil.max(dm.min_recoil);
+    let sawn = world
+        .get::<Gun>(gun_entity)
+        .is_some_and(|g| g.sawn_off)
+        .then_some(dm.sawoff_bonus_recoil)
+        .unwrap_or(0.0);
+    let recoil = (dm.recoil + sawn).max(dm.min_recoil);
     if recoil > 0.0 {
         let deviation = dm.recoil_deviation.max(0.0) as u32;
         let jitter =
@@ -1348,7 +1513,10 @@ fn run_bursts(world: &mut World) {
             return false;
         }
         b.iteration += 1;
-        let size = world.get::<DmGun>(b.gun).map_or(1, |d| d.burst_size);
+        let size = world
+            .get::<DmGun>(b.gun)
+            .zip(world.get::<Gun>(b.gun))
+            .map_or(1, |(d, g)| burst_and_delay(d, g).0);
         let randomspread = world.get::<DmGun>(b.gun).is_some_and(|d| d.randomspread);
         let sprd = burst_spread(
             &mut world.resource_mut::<CombatRng>(),
@@ -1369,7 +1537,8 @@ fn run_bursts(world: &mut World) {
 }
 
 /// tg `attack_self` of a gun: a ballistic gun ejects an empty magazine, unloads a revolver,
-/// drops a locked bolt or racks; an energy gun switches its fire mode. True when it was a gun.
+/// drops a locked bolt or racks (the dual-tube shotgun switches tubes when chambered); an
+/// energy gun switches its fire mode. True when it was a gun.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     let (Some(dm), Some(mut gun)) = (
         world.get::<DmGun>(item).cloned(),
@@ -1391,6 +1560,25 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
                 format!("выбран режим: {}", mode_name(name)),
             );
             world.entity_mut(item).insert(gun);
+        } else if is_under(&dm.path, PULSE_DESTROYER) {
+            // `/obj/item/gun/energy/pulse/destroyer/attack_self`.
+            let name = crate::obj_damage::strip(&name_of(world, item)).to_owned();
+            tell(
+                world,
+                client,
+                Span::Danger,
+                format!("У {name} три режима, и все они — УНИЧТОЖЕНИЕ."),
+            );
+        }
+        return true;
+    }
+    // `/obj/item/gun/ballistic/shotgun/automatic/dual_tube/attack_self`.
+    if gun.alt_magazine.is_some() {
+        let ammo = gun.magazine.as_ref().map_or(0, |m| m.ammo_count(true));
+        if gun.chambered.is_none() && ammo > 0 {
+            rack(world, client, item);
+        } else {
+            crate::gun_modes::toggle_tube(world, client, item);
         }
         return true;
     }
@@ -1399,12 +1587,21 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         return true;
     }
     if dm.bolt_type == BOLT_TYPE_NO_BOLT {
-        // tg `unload_ammo`: every casing in it falls out.
-        let rounds = gun
+        // tg `unload_ammo`: every casing in it falls out (a cylinder keeps its chambers, empty).
+        let rounds: Vec<Round> = gun
             .magazine
             .as_mut()
-            .map(|m| std::mem::take(&mut m.rounds))
-            .unwrap_or_default();
+            .map(|m| {
+                let taken = std::mem::take(&mut m.rounds);
+                if m.is_cylinder() {
+                    m.rounds = taken.iter().map(|_| Round::empty()).collect();
+                }
+                taken
+            })
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| !r.is_empty())
+            .collect();
         if rounds.is_empty() {
             tell(world, client, Span::Warning, "пуст!");
         } else {
@@ -1448,7 +1645,28 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         world.entity_mut(item).insert(gun);
         return true;
     }
-    // tg `rack`.
+    rack(world, client, item);
+    true
+}
+
+/// `/obj/item/gun/energy/pulse/destroyer`.
+const PULSE_DESTROYER: &str = "/obj/item/gun/energy/pulse/destroyer";
+
+/// tg `rack(user)`: the chambered round out onto the gun's tile, the next one in; a locking bolt
+/// locks back on an empty gun.
+pub fn rack(world: &mut World, client: Entity, item: Entity) {
+    let (Some(dm), Some(mut gun)) = (
+        world.get::<DmGun>(item).cloned(),
+        world.get::<Gun>(item).cloned(),
+    ) else {
+        return;
+    };
+    if dm.bolt_type == BOLT_TYPE_NO_BOLT {
+        return;
+    }
+    let Some(at) = crate::modpc::pda::turf_of(world, item) else {
+        return;
+    };
     if dm.bolt_type == BOLT_TYPE_OPEN {
         if !gun.bolt_locked {
             tell(
@@ -1457,7 +1675,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
                 Span::Warning,
                 "повторный взвод затвора невозможен!",
             );
-            return true;
+            return;
         }
         gun.bolt_locked = false;
     }
@@ -1483,7 +1701,6 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         );
     }
     world.entity_mut(item).insert(gun);
-    true
 }
 
 /// BandaStation's `ammo_mode_translations`.
@@ -1596,13 +1813,17 @@ pub fn item_interaction(
         let Some(mag) = gun.magazine.as_mut() else {
             return true;
         };
-        if casing.caliber != mag.data.caliber || mag.rounds.len() >= mag.data.max_ammo as usize {
-            return true;
-        }
-        mag.rounds.push(Round {
+        let round = Round {
             live: !casing.projectile.path.is_empty(),
             casing,
-        });
+        };
+        // A cylinder's spent casing falls out of the chamber it frees.
+        let Some(spent) = mag.give_round(round) else {
+            return true;
+        };
+        if let (Some(spent), Some(at)) = (spent, crate::modpc::pda::turf_of(world, target)) {
+            drop_casing(world, &spent, at);
+        }
         if gun.chambered.is_none() && dm.bolt_type == BOLT_TYPE_NO_BOLT && !is_revolver(&dm) {
             chamber_round(&dm, &mut gun);
         }
@@ -1690,9 +1911,15 @@ pub fn item_interaction(
         let Some(mag) = gun.magazine.as_mut() else {
             return true;
         };
-        let loaded = mag.load_from(&mut ammo) as usize;
+        let mut spent = Vec::new();
+        let loaded = mag.load_from(&mut ammo, &mut spent) as usize;
         if loaded == 0 {
             return true;
+        }
+        if let Some(at) = crate::modpc::pda::turf_of(world, target) {
+            for round in &spent {
+                drop_casing(world, round, at);
+            }
         }
         if gun.chambered.is_none() && dm.bolt_type == BOLT_TYPE_NO_BOLT && !is_revolver(&dm) {
             chamber_round(&dm, &mut gun);
@@ -1910,6 +2137,7 @@ mod tests {
             data: data.clone(),
             rounds: Vec::new(),
         };
+        let mut spent = Vec::new();
         let mut box_ = Magazine::new(&MagazineData {
             caliber: ".38".into(),
             max_ammo: 5,
@@ -1920,7 +2148,8 @@ mod tests {
             casing: casing("9mm"),
             live: true,
         });
-        assert_eq!(cylinder.load_from(&mut box_), 2);
+        assert_eq!(cylinder.load_from(&mut box_, &mut spent), 2);
+        assert!(spent.is_empty());
         assert_eq!(box_.rounds.len(), 4);
         gun.magazine = Some(cylinder);
         assert!(ready_round(&dm, &gun).is_some());

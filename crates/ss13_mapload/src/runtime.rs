@@ -21,6 +21,9 @@ pub const CLUSTERBUSTER_SEGMENT: &str = "/obj/item/grenade/clusterbuster/segment
 /// The fragmentation grenades' shrapnel (`ss13_game::grenades`).
 pub const SHRAPNEL: &str = "/obj/projectile/bullet/shrapnel";
 pub const SHRAPNEL_MEGA: &str = "/obj/projectile/bullet/shrapnel/mega";
+/// The stingbangs' and the rotsting's stingballs (`ss13_game::grenades`).
+pub const STINGBALL: &str = "/obj/projectile/bullet/pellet/stingball";
+pub const STINGBALL_MEGA: &str = "/obj/projectile/bullet/pellet/stingball/mega";
 /// The smoke of smoke grenades (`ss13_game::grenades`).
 pub const SMOKE_BAD: &str = "/obj/effect/particle_effect/fluid/smoke/bad";
 /// A newscaster's printed newspaper (`ss13_game::newscaster_server`).
@@ -885,6 +888,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/floodlight_frame",
     SHRAPNEL,
     SHRAPNEL_MEGA,
+    STINGBALL,
+    STINGBALL_MEGA,
     SMOKE_BAD,
     // The effect systems' particles, smoke, foam and foam results (`ss13_game::effects`).
     "/obj/effect/particle_effect/sparks",

@@ -16,13 +16,20 @@
 //!   with their `ex_*` ranges and the frag ones fire shrapnel at every tile of the ring at
 //!   `shrapnel_radius` (`pellet_cloud`); a clusterbang throws 4-8 payload grenades (35% each
 //!   turn into a segment that throws 4-8 more), each armed for 1.5-6 s.
+//! - The stingbang (and its mega kind) goes off in the holder's hand tearing that arm off, then
+//!   "POP"s the mobs on and next to its tile (paralysis and knockdown by distance; on the tile a
+//!   soundbang and 10 brute + 10 burn) and fires stingballs at the ring at 5 (12) tiles. The
+//!   rotfrag and rotsting grenades (`primer`) count turns in hand after arming (from 1): shrapnel
+//!   (or stingballs) at the ring at `turns / rots_per_mag` tiles, rounded down. Flashbangs and stingbangs
+//!   spark (5-9) when they go off.
 //! - A grenade destroyed by a blast goes off (`atom_deconstruct(disassembled = FALSE)`,
 //!   [`on_destroyed`]).
 //!
 //! Cost: one pass over armed grenades per tick, only while any exist.
 // shortcut: no clumsy fumbles or sticky tape (`botch_check`: no clumsiness in the port), no
 // projectile hit setting a held grenade off (`hit_reaction`), no ranged click throwing an armed
-// grenade, no fantasy bonuses, no cosmic fields, no flashbang light or sparks, no pellet cloud
+// grenade, no fantasy bonuses, no cosmic fields, no flashbang lights (arming and the flash), no
+// stingball embedding, no pellet cloud
 // martyrs or aggregate hit messages, no blob damage from smoke; arming is logged to the server
 // log, not to admins (`log_bomber`).
 
@@ -56,6 +63,19 @@ const BARRIER: &str = "/obj/item/grenade/barrier";
 const CLUSTER_SEGMENT: &str = ss13_mapload::runtime::CLUSTERBUSTER_SEGMENT;
 const SHRAPNEL: &str = ss13_mapload::runtime::SHRAPNEL;
 const SHRAPNEL_MEGA: &str = ss13_mapload::runtime::SHRAPNEL_MEGA;
+const STINGBANG: &str = "/obj/item/grenade/stingbang";
+const STINGBANG_MEGA: &str = "/obj/item/grenade/stingbang/mega";
+const PRIMER: &str = "/obj/item/grenade/primer";
+const PRIMER_STING: &str = "/obj/item/grenade/primer/stingbang";
+const STINGBALL: &str = ss13_mapload::runtime::STINGBALL;
+const STINGBALL_MEGA: &str = ss13_mapload::runtime::STINGBALL_MEGA;
+const BOX_DEPLOY: &str = "sound/misc/box_deploy.ogg";
+/// The stingbang's `flashbang_range`, `shrapnel_radius` (mega: 12).
+const STINGBANG_RANGE: u32 = 1;
+const STINGBANG_SHRAPNEL: u32 = 5;
+const STINGBANG_MEGA_SHRAPNEL: u32 = 12;
+/// `CLICK_CD_RAPID`, seconds.
+const CLICK_CD_RAPID: f64 = 0.2;
 
 const ARM_SOUND: &str = "sound/items/weapons/armbomb.ogg";
 const FLASHBANG_SOUND: &str = "sound/items/weapons/flashbang.ogg";
@@ -111,6 +131,24 @@ pub enum Kind {
     Chem,
     /// `/obj/item/grenade/barrier` (`crate::defenses::barricades`).
     Barrier,
+    /// `/obj/item/grenade/stingbang` (`mega`: its stingballs bounce more, 12 tiles out).
+    Stingbang {
+        mega: bool,
+    },
+    /// `/obj/item/grenade/primer`: stingballs (`sting`) or shrapnel, `rots_per_mag` turns a tile.
+    Primer {
+        sting: bool,
+        rots_per_mag: u32,
+    },
+}
+
+/// Which shrapnel a grenade's pellet cloud fires.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pellet {
+    Shrapnel,
+    ShrapnelMega,
+    Stingball,
+    StingballMega,
 }
 
 /// A grenade's state (tg vars of `/obj/item/grenade`).
@@ -125,6 +163,8 @@ pub struct Grenade {
     pub used: bool,
     /// `type_cluster`: not logged when armed.
     pub cluster: bool,
+    /// The primer's `rots` (1 when made).
+    pub rots: u32,
 }
 
 /// An armed grenade (`active`): it goes off at `at` (game seconds).
@@ -203,6 +243,16 @@ pub fn kind_of(path: &str) -> Option<(Kind, &'static [f64])> {
         explosive([0, 1, 3, 4], 4, false)
     } else if is_under(path, BARRIER) {
         Kind::Barrier
+    } else if is_under(path, STINGBANG) {
+        Kind::Stingbang {
+            mega: is_under(path, STINGBANG_MEGA),
+        }
+    } else if is_under(path, PRIMER) {
+        let sting = is_under(path, PRIMER_STING);
+        Kind::Primer {
+            sting,
+            rots_per_mag: if sting { 2 } else { 3 },
+        }
     } else if is_under(path, CLUSTER) {
         let segment = is_under(path, CLUSTER_SEGMENT);
         let payload = match path.strip_prefix(CLUSTER).unwrap_or("") {
@@ -236,6 +286,7 @@ pub fn grenade(world: &mut World, item: Entity) -> Option<Grenade> {
         fuses,
         used: false,
         cluster: false,
+        rots: 1,
     };
     world.entity_mut(item).insert(g.clone());
     Some(g)
@@ -255,6 +306,20 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     }
     if world.get::<Armed>(item).is_none() {
         arm(world, item, Some((client, mob)), None);
+    } else if world
+        .get::<Grenade>(item)
+        .is_some_and(|g| matches!(g.kind, Kind::Primer { .. }))
+    {
+        // `/obj/item/grenade/primer/attack_self`: one more turn.
+        if let Some(mut g) = world.get_mut::<Grenade>(item) {
+            g.rots += 1;
+        }
+        let at = world.get::<TilePos>(mob).copied();
+        crate::hallucination::play_local(world, mob, at, BOX_DEPLOY, 50.0, true);
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        world
+            .entity_mut(mob)
+            .insert(crate::combat::NextMove(now + CLICK_CD_RAPID));
     }
     true
 }
@@ -386,7 +451,12 @@ pub fn detonate(world: &mut World, item: Entity) -> bool {
         } => {
             if let Some(pos) = crate::explosions::turf_of(world, item) {
                 if shrapnel > 0 {
-                    fire_shrapnel(world, item, pos, shrapnel, mega);
+                    let pellet = if mega {
+                        Pellet::ShrapnelMega
+                    } else {
+                        Pellet::Shrapnel
+                    };
+                    fire_shrapnel(world, item, pos, shrapnel, pellet);
                 }
                 let name = name_of(world, item);
                 crate::explosions::explosion(
@@ -404,6 +474,23 @@ pub fn detonate(world: &mut World, item: Entity) -> bool {
             }
         }
         Kind::Cluster { payload, segment } => cluster(world, item, &payload, segment),
+        Kind::Stingbang { mega } => stingbang(world, item, mega),
+        Kind::Primer {
+            sting,
+            rots_per_mag,
+        } => {
+            let radius = primer_radius(g.rots, rots_per_mag);
+            if radius > 0
+                && let Some(pos) = crate::explosions::turf_of(world, item)
+            {
+                let pellet = if sting {
+                    Pellet::Stingball
+                } else {
+                    Pellet::Shrapnel
+                };
+                fire_shrapnel(world, item, pos, radius, pellet);
+            }
+        }
         // The casing stays (a screwdriver resets its trigger).
         Kind::Chem => {
             crate::assemblies::chem_grenade::splash(world, item);
@@ -469,6 +556,8 @@ fn flashbang(world: &mut World, item: Entity) {
     let soundbang = world
         .get_resource::<ss13_atmos::Atmos>()
         .is_none_or(|a| a.pressure(pos).is_some_and(|p| p >= SOUND_MINIMUM_PRESSURE));
+    let sparks = world.resource_mut::<CombatRng>().range(5, 9);
+    crate::effects::particles::do_sparks(world, sparks, false, pos);
     crate::sound::playsound(
         world,
         crate::sound::PlaySound::new(pos, FLASHBANG_SOUND, 100.0, true)
@@ -478,6 +567,111 @@ fn flashbang(world: &mut World, item: Entity) {
     for mob in hearers(world, pos, FLASHBANG_RANGE) {
         bang(world, pos, mob, soundbang);
     }
+}
+
+/// The primer's `shrapnel_radius = round(rots / rots_per_mag)` (DM's one-argument `round`
+/// floors).
+pub fn primer_radius(rots: u32, rots_per_mag: u32) -> u32 {
+    rots / rots_per_mag.max(1)
+}
+
+/// `/obj/item/grenade/stingbang/detonate`: in a hand it tears that arm off first.
+fn stingbang(world: &mut World, item: Entity, mega: bool) {
+    use crate::zone::BodyZone;
+    if let Some(mob) = world.get::<CarriedBy>(item).map(|c| c.0)
+        && let Some(hand) = world
+            .get::<Inventory>(mob)
+            .and_then(|i| i.hands.iter().position(|&h| h == Some(item)))
+    {
+        let zone = [BodyZone::LArm, BodyZone::RArm][hand];
+        update_mob(world, item);
+        let torn = crate::medical::bodyparts::dismember(world, mob, zone, false);
+        if let Some(&at) = world.get::<TilePos>(mob) {
+            let (user, name) = (crate::security::name_of(world, mob), name_of(world, item));
+            let arm = if hand == 0 {
+                "левую руку"
+            } else {
+                "правую руку"
+            };
+            let (others, own) = if torn {
+                (
+                    format!("{name} взрывается в руке {user}, разрывая {arm} в клочья!"),
+                    format!("{name} взрывается у вас в руке, разрывая вашу {arm} в клочья!"),
+                )
+            } else {
+                (
+                    format!("{name} взрывается в руке {user}!"),
+                    format!("{name} взрывается у вас в руке!"),
+                )
+            };
+            crate::security::show(
+                world,
+                at,
+                crate::health::COMBAT_MESSAGE_RANGE,
+                ss13_shared::chat::ChatChannel::Combat,
+                (Span::Danger, others),
+                &[(mob, Span::BoldWarning, own)],
+            );
+        }
+    }
+    let Some(pos) = crate::explosions::turf_of(world, item) else {
+        return;
+    };
+    let (radius, pellet) = if mega {
+        (STINGBANG_MEGA_SHRAPNEL, Pellet::StingballMega)
+    } else {
+        (STINGBANG_SHRAPNEL, Pellet::Stingball)
+    };
+    fire_shrapnel(world, item, pos, radius, pellet);
+    let sparks = world.resource_mut::<CombatRng>().range(5, 9);
+    crate::effects::particles::do_sparks(world, sparks, false, pos);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, FLASHBANG_SOUND, 50.0, true)
+            .extrarange(8.0)
+            .falloff_exponent(0.9),
+    );
+    for mob in hearers(world, pos, STINGBANG_RANGE) {
+        pop(world, pos, mob);
+    }
+}
+
+/// `/obj/item/grenade/stingbang/proc/pop` on `mob`.
+fn pop(world: &mut World, at: TilePos, mob: Entity) {
+    use crate::health::DamageType;
+    if world.get::<Stat>(mob).is_none_or(|s| *s == Stat::Dead) {
+        return;
+    }
+    if crate::sound::can_hear(world, mob) {
+        tell_mob(world, mob, Span::Warning, "POP");
+    }
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    let distance = at.chebyshev(pos).unwrap_or(0);
+    let d = distance.max(1) as f32;
+    if crate::vision::flash_act(world, mob, 1, false, false, 2.5) {
+        // `Paralyze(max(10 / distance, 5))`, `Knockdown(max(100 / distance, 60))` (ds).
+        crate::status_effects::apply(world, mob, Incap::Paralyze, (10.0 / d).max(5.0) / 10.0);
+        crate::status_effects::knockdown(world, mob, (100.0 / d).max(60.0) / 10.0, 0.0);
+    }
+    if distance > 0 {
+        return;
+    }
+    crate::status_effects::apply(world, mob, Incap::Paralyze, 2.0);
+    crate::status_effects::knockdown(world, mob, 20.0, 0.0);
+    if crate::sound::can_hear(world, mob) {
+        // `soundbang_act(SOUNDBANG_NORMAL, 200, 10, 15)`.
+        crate::explosions::ex_act::soundbang_act(world, mob, SOUNDBANG_NORMAL, 20.0, 10.0, DEAFEN);
+    }
+    crate::mobs::defense::hurt(world, mob, DamageType::Brute, 10.0, None);
+    crate::mobs::defense::hurt(world, mob, DamageType::Burn, 10.0, None);
+    tell_mob(
+        world,
+        mob,
+        Span::BoldWarning,
+        "Взрыв стингбэнга оставляет на вас ушибы и ожоги!",
+    );
 }
 
 /// `get_hearers_in_view(range, turf)`: the living mobs on the tiles seen from `pos`.
@@ -623,6 +817,33 @@ pub fn shrapnel_data(mega: bool) -> ProjectileData {
     }
 }
 
+/// `/obj/projectile/bullet/pellet/stingball` (and `/mega`) with what it inherits from
+/// `/obj/projectile/bullet/pellet`, `/obj/projectile/bullet` and `/obj/projectile`.
+pub fn stingball_data(mega: bool) -> ProjectileData {
+    ProjectileData {
+        path: if mega { STINGBALL_MEGA } else { STINGBALL }.to_owned(),
+        damage: 3.0,
+        stamina: 8.0,
+        damage_type: "brute".into(),
+        armor_flag: "bullet".into(),
+        speed: 1.25,
+        range: 50.0,
+        pass_flags: crate::projectile::PASSTABLE,
+        accurate_range: 100.0,
+        accuracy_falloff: 7.0,
+        ricochets_max: if mega { 6 } else { 4 },
+        ricochet_chance: if mega { 110.0 } else { 66.0 },
+        ricochet_decay_chance: 1.0,
+        ricochet_decay_damage: 0.9,
+        ricochet_incidence_leeway: 0.0,
+        damage_falloff_tile: -0.25,
+        wound_falloff_tile: -5.0,
+        // `SHARP_POINTY`.
+        sharpness: 2,
+        ..default()
+    }
+}
+
 /// The tiles of the square ring `radius` tiles out (`RANGE_TURFS(r) - RANGE_TURFS(r - 1)`).
 pub fn ring(center: TilePos, radius: u32) -> Vec<TilePos> {
     let r = radius as i32;
@@ -638,8 +859,13 @@ pub fn ring(center: TilePos, radius: u32) -> Vec<TilePos> {
 }
 
 /// `pellet_cloud/create_blast_pellets`: one pellet at every tile of the ring.
-fn fire_shrapnel(world: &mut World, grenade: Entity, pos: TilePos, radius: u32, mega: bool) {
-    let data = shrapnel_data(mega);
+fn fire_shrapnel(world: &mut World, grenade: Entity, pos: TilePos, radius: u32, pellet: Pellet) {
+    let data = match pellet {
+        Pellet::Shrapnel => shrapnel_data(false),
+        Pellet::ShrapnelMega => shrapnel_data(true),
+        Pellet::Stingball => stingball_data(false),
+        Pellet::StingballMega => stingball_data(true),
+    };
     for target in ring(pos, radius) {
         crate::projectile::fire(
             world,
@@ -936,6 +1162,33 @@ mod tests {
         );
         assert_eq!(kind_of("/obj/item/grenade/chem_grenade/metalfoam"), None);
         assert_eq!(kind_of("/obj/item/toy"), None);
+        assert_eq!(
+            kind_of("/obj/item/grenade/stingbang/mega").map(|k| k.0),
+            Some(Kind::Stingbang { mega: true })
+        );
+        assert_eq!(
+            kind_of("/obj/item/grenade/primer/stingbang").map(|k| k.0),
+            Some(Kind::Primer {
+                sting: true,
+                rots_per_mag: 2
+            })
+        );
+    }
+
+    #[test]
+    fn a_primer_grows_a_tile_every_few_turns() {
+        // Armed and never turned: `round(1 / 3)` is no shrapnel at all.
+        assert_eq!(primer_radius(1, 3), 0);
+        assert_eq!(primer_radius(5, 3), 1);
+        assert_eq!(primer_radius(6, 3), 2);
+        assert_eq!(primer_radius(5, 2), 2);
+        // Stingballs hurt little and bounce far more than shrapnel.
+        let sting = stingball_data(false);
+        assert_eq!(
+            (sting.damage, sting.stamina, sting.ricochets_max),
+            (3.0, 8.0, 4)
+        );
+        assert_eq!(stingball_data(true).ricochets_max, 6);
     }
 
     #[test]

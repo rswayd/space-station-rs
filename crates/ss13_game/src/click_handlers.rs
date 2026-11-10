@@ -171,6 +171,7 @@
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1477 | `security::item_interaction` (a screwdriver, cell, conversion kit, crystal or diamond onto a baton in the other hand) |
+//! | 1483 | `gun_modes::try_sawoff` (a saw on the gun) |
 //! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
 //! | 1493 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
@@ -481,6 +482,7 @@
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
 //! | 4287 | `security::item_interaction` (the same onto a baton lying around) |
 //! | 4291 | `gun_attachments::attach` (a seclite, bayonet or screwdriver on a gun lying around) |
+//! | 4293 | `gun_modes::try_sawoff` (a saw on a gun lying around) |
 //! | 4300 | `tables::item_interaction` |
 //! | 4313 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |
