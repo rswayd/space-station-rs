@@ -838,6 +838,18 @@ fn camera_console_moves_the_viewer() {
     let (window, st, _): (u32, CameraConsoleStatic, _) = s.window::<CameraConsoleUi>().unwrap();
     assert_eq!(st.cameras.len(), 1);
     assert_eq!(st.cameras[0].name, "Room One");
+    // BandaStation's `mapData`: the one-level fixture station, no mining level.
+    let map = &st.map_data;
+    assert_eq!(
+        (
+            map.min_floor,
+            map.main_floor,
+            map.max_floor,
+            map.lavaland_level
+        ),
+        (1, 1, 1, None)
+    );
+    assert_eq!(map.levels(), [1]);
     // A ref outside the console's list is refused.
     s.send(ClientIntent::UiAct {
         window,

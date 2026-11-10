@@ -1,8 +1,9 @@
 //! Client: atlas sprites inside tgui windows and chat emojis. `ss13_tgui` places [`UiSprite`]
 //! nodes and `ss13_chat` [`ChatEmoji`] ones (neither knows the atlas); this gives each its
-//! `ImageNode` from the icon atlas once, when it appears. The atlas
-//! page loads on demand and the image shows when it arrives; the node's handle keeps the page
-//! resident while the window shows it.
+//! `ImageNode` from the icon atlas once, when it appears. The atlas page loads on demand and the
+//! image shows when it arrives; the node's handle keeps the page resident while the window shows
+//! it. The nanomap images of the camera console and crew monitor are resolved here too
+//! (`crate::nanomap`).
 
 use bevy::prelude::*;
 use ss13_chat::client::panel::ChatEmoji;
@@ -15,7 +16,15 @@ pub struct UiSpritesPlugin;
 
 impl Plugin for UiSpritesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostUpdate, (resolve_sprites, resolve_emojis));
+        app.init_resource::<crate::nanomap::NanomapImages>()
+            .add_systems(
+                PostUpdate,
+                (
+                    resolve_sprites,
+                    resolve_emojis,
+                    crate::nanomap::resolve_images,
+                ),
+            );
     }
 }
 

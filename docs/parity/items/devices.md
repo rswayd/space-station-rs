@@ -56,7 +56,7 @@ _«Лампозаменитель» описано в [../power/lighting.md](../
 
 - **Код:** [`/obj/item/sensor_device`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/sensor_device.dm#L1)
 - **BandaStation:** [`sensor_device.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/sensor_device.dm#L18) — заменён форковым монитором с NanoMap (`CrewConsole220`)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/devices/mod.rs` (`HandheldMonitor`): в руке открывает окно консоли (`crates/ss13_game/src/clothing/sensors.rs`, `show`) по уровню, где находится монитор, обновление раз в 10 с; окно активно, пока монитор у пользователя (или рядом на полу). Как у консоли, NanoMap — обычный список tg; нет `drag_to_activate`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/devices/mod.rs` (`HandheldMonitor`): в руке открывает окно консоли (`crates/ss13_game/src/clothing/sensors.rs`, `show`) по уровню, где находится монитор, обновление раз в 10 с; окно активно, пока монитор у пользователя (или рядом на полу). Окно как у консоли (вкладки «List» и «Map» с наномапой); нет `drag_to_activate`
 
 ### Маяки и маяки выбора
 Маяк-цель для телепортов и подов; маяки выбора (музыкальный инструмент, герой, оружие ГСБ) дают выбрать предмет и присылают его подом.

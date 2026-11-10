@@ -1,7 +1,8 @@
 //! BandaStation `/datum/computer_file/program/navigator` (`NtosNavigator`): where the user is
 //! (tile, facing, area) by the device's NTNet signal, and the ladders and stairs
 //! (`get_map_ui_data`'s `stairs`) of the user's level.
-// shortcut: no nanomap images in the port, so the map is a list: the user's position and the
+// shortcut: the map is a list (the nanomap view, `crate::nanomap`, has no zoom or stairs yet): the
+// user's position and the
 // nearest [`MAX_STAIRS`] ladders and stairs of the level with their distance and direction. A
 // low signal rounds the position to [`LOW_SIGNAL_STEP`] tiles server-side instead of the
 // client's ±5 tile jitter (which handed the exact position to the client).

@@ -51,13 +51,14 @@ pub mod traits;
 #[cfg(feature = "server")]
 pub use server::*;
 
-/// tgui `CrewConsole` (`tgui/packages/tgui/interfaces/CrewConsole.tsx`).
+/// tgui `CrewConsole` (`tgui/packages/tgui/interfaces/CrewConsole.tsx`) with BandaStation's map
+/// tab (`CrewConsole220`, `mapData` in the static data).
 pub struct CrewConsoleUi;
 
 impl UiInterface for CrewConsoleUi {
     const NAME: &'static str = "CrewConsole";
     type Data = CrewConsoleData;
-    type StaticData = ();
+    type StaticData = crate::nanomap::MapUiData;
 }
 
 /// `/datum/crewmonitor/ui_data`.
@@ -84,6 +85,8 @@ pub struct CrewSensor {
     pub vitals: Option<CrewVitals>,
     /// The area from "tracking" sensors.
     pub area: Option<String>,
+    /// BandaStation's `position` x, y, z from "tracking" sensors (the map tab's marker).
+    pub pos: Option<ss13_shared::TilePos>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -8,7 +8,8 @@ The game's assets (icons, sounds) are not stored in this repository. They are ge
 checkout of [BandaStation](https://github.com/ss220club/BandaStation), a fork of
 [tgstation](https://github.com/tgstation/tgstation), by the converters (`ss13-import dmi`,
 `ss13-mapload convert`; see `docs/RUNNING.md`). Every generated set names the source commit it
-was made from: `ICON-SOURCES.txt` and `sound/SOURCES.txt` in the assets directory. The current
+was made from: `ICON-SOURCES.txt`, `sound/SOURCES.txt` and `nanomap/SOURCES.txt` in the assets
+directory. The current
 reference commit is
 [`ce5b1f159748db35281bd3b673551598807f4a0b`](https://github.com/ss220club/BandaStation/commit/ce5b1f159748db35281bd3b673551598807f4a0b).
 
@@ -22,7 +23,10 @@ copy every such file that applies to a converted asset, at its source path, next
 
 - sounds: `sound/<source path>/` (listed in `sound/SOURCES.txt`);
 - icons: `licenses/icons/<source path>/` (atlas pages and their source `.dmi` files are listed in
-  `ICON-SOURCES.txt`).
+  `ICON-SOURCES.txt`);
+- station map images: `nanomap/licenses/<source path>/` (the images, copied from
+  `icons/_nanomaps/` under BandaStation's asset keys, are listed in `nanomap/SOURCES.txt`). They are
+  rendered from the station maps by BandaStation's NanoMap bot and are licensed like the icons.
 
 [`docs/ASSET-AUDIT.md`](docs/ASSET-AUDIT.md) lists the converted assets whose files name other
 terms (CC0, CC BY, non-commercial, site licenses, no stated license) with the risk of each.

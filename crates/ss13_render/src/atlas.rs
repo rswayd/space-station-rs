@@ -140,6 +140,12 @@ impl IconAtlas {
         })
     }
 
+    /// The generated assets directory the atlas was opened from (other client files, such as
+    /// the nanomap images, live there too).
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     /// The state and its page's handle; starts loading the page if it is not resident.
     pub fn state(&mut self, id: IconStateId) -> Option<(&IconStateInfo, Handle<Image>)> {
         let page = self.manifest.get(id)?.atlas as usize;

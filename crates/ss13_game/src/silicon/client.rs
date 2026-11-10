@@ -4,8 +4,9 @@
 //!   view there (BYOND `client.eye`), and the tiles of the box the camera (or the AI's camera
 //!   network) does not see are drawn as static over everything below the HUD (tg
 //!   `CAMERA_STATIC_PLANE`);
-//! - the camera console window (`CameraConsole220`): the Map tab (a marker per camera of the
-//!   chosen level), the List tab (search field and rows), prev/next and the active camera's name;
+//! - the camera console window (`CameraConsole220`): the Map tab (the station image of the
+//!   chosen level with a marker per camera, `crate::nanomap`), the List tab (search field and
+//!   rows), prev/next and the active camera's name;
 //! - `ListInputModal` (tg `tgui_input_list`): one button per choice;
 //! - `StationAlertConsole`: a section per alarm type, the alarmed areas, and for the AI each
 //!   area's camera button.
@@ -265,10 +266,6 @@ impl ClientUi for CameraConsoleUi {
 const LOCAL_TAB: &str = "tab";
 const LOCAL_SEARCH: &str = "search";
 const LOCAL_Z: &str = "z";
-/// BYOND `world.maxx` / `maxy` of the station levels; the NanoMap is that square.
-const NANOMAP_TILES: i32 = 255;
-/// Pixels per tile of the NanoMap.
-const NANOMAP_SCALE: f32 = 2.0;
 const NANOMAP_MARKER: f32 = 8.0;
 
 /// tgui `selectCameras`: named cameras matching `search` (`createSearch`: case-insensitive
@@ -282,8 +279,8 @@ pub fn select_cameras<'a>(cameras: &'a [CameraEntry], search: &str) -> Vec<&'a C
         .collect()
 }
 
-/// `mapData.mainFloor` stand-in: the level holding most cameras (the station's), the lowest on
-/// a tie.
+/// `mapData.mainFloor` stand-in without map data: the level holding most cameras (the
+/// station's), the lowest on a tie.
 pub fn main_floor(cameras: &[CameraEntry]) -> Option<u16> {
     let mut counts: Vec<(u16, usize)> = Vec::new();
     for c in cameras {
@@ -362,30 +359,44 @@ fn camera_list(
     }
 }
 
-/// `CameraMapSelector`: a marker per camera of the chosen level at its coordinates, red when
-/// off, and the level tabs (`NanoMap`'s `onLevelChange`).
-// shortcut: no station map image under the markers (the port has no nanomap images) and no
-// zoom or panning; the level shown first is the one with most cameras, not `mapData.mainFloor`.
+/// `CameraMapSelector`: the station image of the chosen level with a marker per camera on it,
+/// red when off, and the level selector (`NanoMap`'s `onLevelChange`), from `mapData`.
+// shortcut: without map data (a station-less fixture) the levels are those holding cameras and
+// the first shown is the one with most cameras.
 fn camera_map(
     st: &CameraConsoleStatic,
     active: Option<&ActiveCamera>,
     local: &UiLocalState,
 ) -> impl Scene + use<> {
     let cameras = select_cameras(&st.cameras, "");
-    let mut levels: Vec<u16> = cameras.iter().map(|c| c.z).collect();
-    levels.sort_unstable();
-    levels.dedup();
+    let map = &st.map_data;
+    let mut levels = map.levels();
+    let fallback = levels.is_empty();
+    if fallback {
+        levels = cameras.iter().map(|c| c.z).collect();
+        levels.sort_unstable();
+        levels.dedup();
+    }
+    let main = if fallback {
+        main_floor(&st.cameras)
+    } else {
+        Some(map.main_floor)
+    };
     let level = local
         .value(LOCAL_Z)
         .and_then(|z| z.parse::<u16>().ok())
         .filter(|z| levels.contains(z))
-        .or_else(|| main_floor(&st.cameras));
+        .or(main);
     let tabs: Vec<_> = levels
         .iter()
         .map(|&z| {
             let pick = set_local(LOCAL_Z, z.to_string());
             let selected = level == Some(z);
-            let label = format!("Уровень {z}");
+            let label = if fallback {
+                format!("Уровень {z}")
+            } else {
+                map.level_label(z)
+            };
             bsn! {
                 @TabsTab { @content: label }
                 TabsTab { selected: selected }
@@ -403,8 +414,7 @@ fn camera_map(
             } else {
                 UiColor::Bad
             };
-            let x = (c.x.clamp(1, NANOMAP_TILES) - 1) as f32 * NANOMAP_SCALE;
-            let y = (NANOMAP_TILES - c.y.clamp(1, NANOMAP_TILES)) as f32 * NANOMAP_SCALE;
+            let (x, y) = crate::nanomap::tile_px(c.x, c.y);
             let half = NANOMAP_MARKER / 2.0;
             let name = Name::new(format!("camera marker: {}", c.name));
             let params = switch(c.cam_ref.clone());
@@ -426,9 +436,7 @@ fn camera_map(
             }
         })
         .collect();
-    let side = NANOMAP_TILES as f32 * NANOMAP_SCALE;
-    let backdrop = BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.35));
-    let map_name = Name::new("camera nanomap");
+    let area = crate::nanomap::map_area(map, level, markers);
     bsn! {
         @Stack { @vertical: true, @fill: true }
         Children [
@@ -438,12 +446,7 @@ fn camera_map(
             Node { min_height: px(0) }
             Children [
                 @Section { @fill: true, @scrollable: true }
-                Children [
-                    Node { width: px(side), height: px(side) }
-                    backdrop
-                    map_name
-                    Children [ {markers} ]
-                ]
+                Children [ {EntityScene(area)} ]
             ]
         ]
     }
