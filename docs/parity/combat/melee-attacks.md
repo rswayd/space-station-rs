@@ -35,13 +35,13 @@
 Атакующий дёргается к цели, над целью — эффект удара (кулак, пинок, укус, когти) или иконка предмета.
 
 - **Код:** [`living/do_attack_animation()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L765)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/animation.rs` (`do_attack_animation_with`, `item_sweep`, `effect_sweep`), вызов из `crates/ss13_game/src/combat.rs`: рывок атакующего к цели и временный спрайт на тайле цели (`ss13_shared::animation::Animation::Transform` по сети, клиент — `animation_client.rs`): предмет летит удар/укол/разрез по `sharpness` (`animate_attack`: blunt/pierce/slash), без оружия — `punch`/`kick` из `effects.dmi`; нет затухания альфы (спрайт исчезает в конце анимации tg), `icon_angle`/`attack_icon` предметов не импортируются (спрайт повёрнут как смотрящий на восток), укусы и когти — с видами без рук
 
 ### Блоки и щиты
 `check_block` перед попаданием спрашивает у предметов в руках и надетого (`hit_reaction`): щиты, энергомечи, некоторые боевые искусства блокируют атаки и снаряды с `block_chance`; щит может сломаться.
 
 - **Код:** [`proc/check_block()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/living_defense.dm#L928), [`human/check_block()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/human_defense.dm#L79), [`proc/hit_reaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items.dm#L622), [`proc/on_shield_block()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/shields.dm#L89)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weapons/block.rs` (`held_block`, `against`, `on_block`), `combat.rs`, `projectile.rs` (`hit_living`), `throw.rs` (`hit_living`): блок предметами в руках против ударов, снарядов (`PROJECTILE_ATTACK`: −½ `armour_penetration` снаряда, прозрачный щит пропускает `PASSGLASS`-лучи, двуручный меч и энергощит оставляют отражаемые выстрелы отражению, сабли/клейморы/посохи из `NO_PROJECTILE_BLOCK` не блокируют выстрелы) и брошенного (`THROWN_PROJECTILE_ATTACK`: щиты +30, реактивная броня тоже), жёлтое свечение `block`, звук, износ и поломка щита; нет `armour_penetration` предметов, прыжков/сокрушающих атак, отражения выстрелов предметами в руках (`IsReflect` — у агента оружия), щит принимает выстрелы своей `melee`-бронёй
 
 ### Выбор зоны (zone selector)
 Селектор зон на HUD и клавиши нумпада выбирают часть тела (голова, глаза, рот, грудь, пах, руки, ноги), куда направлены атаки, лечение и операции.
@@ -59,13 +59,13 @@
 Клоуны и мобы с `TRAIT_CLUMSY` иногда бьют себя своим оружием, стреляют себе в ногу, роняют предметы.
 
 - **Код:** [`proc/check_botched()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L458)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/genetics/mod.rs` (мутация `/datum/mutation/clumsy`, `is_clumsy`, `make_clown_clumsy`; клоун получает её при спавне — `jobs.rs`), `guns.rs` (`check_botched`: 40% выстрел себе в ногу и оружие падает; кроме магических и игрушечных), `security.rs` (`clumsy_baton`: 50% дубинка бьёт по своей голове, 2×force), `restraints.rs` (50% наручники на себя); нет квирка Clumsy, проклятия голода и наркотического источника черты; неуклюжесть остальных предметов (гранаты, вспышка, двуручный меч, удар в глаз, бумага, мышеловки…) — с их механиками у агентов items/security
 
 ### Подсечка коленей (kneecapping)
 Атака по ногам лежачего острым оружием с задержкой ломает кости.
 
 - **Код:** [`/datum/element/kneecapping`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/kneecapping.dm#L17)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weapons/kneecap.rs` (`try_start`, `complete`), `combat.rs`: ПКМ бейсбольной битой по ноге (зона — нога) лежащего/обездвиженного/пристёгнутого карбона — 3 с `do_after` (`Job::Kneecap`), затем урон `force` в ногу без брони с `wound_bonus` между порогами тяжёлой и критической тупой раны (+10), крик, анимация, звук; условия проверяются заново по окончании
 
 ### Удар о стол
 Агрессивно захваченного можно бросить на стол (оглушение), ударить головой о стол или придавить конечность.

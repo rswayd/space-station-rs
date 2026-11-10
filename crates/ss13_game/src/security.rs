@@ -430,6 +430,13 @@ fn baton_attack(
         return !harm && (state.active || !combat);
     }
     let attack_speed = world.get::<DmItem>(baton).map_or(8.0, |i| i.attack_speed);
+    // Clumsy people redirect the attack: the stun and twice the force on their own head.
+    if crate::genetics::is_clumsy(world, actor.mob)
+        && world.resource_mut::<CombatRng>().chance(50.0)
+    {
+        clumsy_baton(world, actor, baton, &dm, now, attack_speed, &user, &item);
+        return true;
+    }
     if !harm {
         // The stun replaces the hit: force 0, no hit message, the attack cooldown.
         world
@@ -491,6 +498,52 @@ fn baton_attack(
         );
     }
     !harm
+}
+
+/// `/obj/item/melee/baton/pre_attack` of a clumsy user (`TRAIT_CLUMSY`, `prob(50)`).
+#[allow(clippy::too_many_arguments)]
+fn clumsy_baton(
+    world: &mut World,
+    actor: Actor,
+    baton: Entity,
+    dm: &DmBaton,
+    now: f64,
+    attack_speed: f32,
+    user: &str,
+    item: &str,
+) {
+    let mob = actor.mob;
+    crate::chem::visible(
+        world,
+        mob,
+        &format!("Вы случайно бьёте себя по голове {item}!"),
+        &format!("{user} случайно бьёт себя по голове {item}! Что за придурок!"),
+        Span::Danger,
+    );
+    finalize_baton_attack(world, baton, dm, mob, mob, now);
+    let force = world.get::<DmItem>(baton).map_or(0.0, |i| i.force);
+    if let Ok(mut entity) = world.get_entity_mut(mob)
+        && let Ok((mut health, mut stat)) = entity.get_components_mut::<(&mut Health, &mut Stat)>()
+    {
+        let mut new = *stat;
+        crate::health::apply_damage_zone(
+            &mut health,
+            &mut new,
+            crate::zone::BodyZone::Head,
+            crate::health::DamageType::Brute,
+            2.0 * force,
+        );
+        stat.set_if_neq(new);
+    }
+    crate::animation::do_attack_animation_with(
+        world,
+        mob,
+        mob,
+        crate::animation::AttackVisual::Item(baton),
+    );
+    world
+        .entity_mut(mob)
+        .insert(NextMove(now + f64::from(attack_speed) / 10.0));
 }
 
 /// tg `affect_cyborg`: only the contractor baton has it.

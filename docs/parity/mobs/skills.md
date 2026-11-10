@@ -17,7 +17,7 @@
 Опыт за тренажёры; уменьшает усталость и усиливает эффект тренировки.
 
 - **Код:** [`/datum/skill/athletics`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/athletics.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/skills.rs`, `crates/ss13_game/src/tables.rs`: опыт и ускорение за подъём на столы и стеллажи, модификаторы уровней; тренажёры, `exercised`, бокс, перенос на плечах и осмотр физформы — с их механиками
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/skills.rs`, `crates/ss13_game/src/tables.rs`: опыт и ускорение за подъём на столы и стеллажи, модификаторы уровней, `exercised` и опыт атлетики во сне (`crates/ss13_game/src/buffs.rs`); тренажёры, бокс, перенос на плечах и осмотр физформы — с их механиками
 
 ### Навык добычи (Mining)
 Опыт за копание руды; ускоряет кирку и бур.

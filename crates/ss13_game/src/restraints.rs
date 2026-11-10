@@ -21,7 +21,7 @@
 //!   off by any path drops what the wearer holds (`doUnEquip`: "suit is restraining").
 // shortcut: the straight jacket's `equip_delay_self` (5 s) and `strip_delay` (6 s) are not
 // ported: the inventory has no self-equip delays and the strip menu uses tg's defaults.
-// shortcut: no clumsy self-cuffing, no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
+// shortcut: no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
 // on weak cuffs.
 
 use bevy::prelude::*;
@@ -173,6 +173,27 @@ pub fn attempt_to_cuff(world: &mut World, actor: Actor, cuffs: Entity, victim: E
     };
     // `iscarbon(target_mob) || used`: anything else is not the cuffs' business.
     if world.get::<Inventory>(victim).is_none() || dm.used {
+        return true;
+    }
+    // `handcuffs_clumsiness_check`: a clumsy carbon cuffs itself half the time.
+    if world.get::<Inventory>(actor.mob).is_some()
+        && crate::genetics::is_clumsy(world, actor.mob)
+        && world
+            .resource_mut::<crate::combat::CombatRng>()
+            .chance(50.0)
+    {
+        tell(
+            world,
+            actor.client,
+            Span::Warning,
+            "Э-э... как эти штуки работают?!",
+        );
+        if world.get::<Handcuffed>(actor.mob).is_none()
+            && let Some(&pos) = world.get::<TilePos>(actor.mob)
+        {
+            crate::inventory::put_down(world, cuffs, pos);
+            apply_cuffs(world, cuffs, actor.mob);
+        }
         return true;
     }
     if world.get::<Handcuffed>(victim).is_some() {

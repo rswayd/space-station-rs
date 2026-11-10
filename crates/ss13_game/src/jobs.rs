@@ -549,6 +549,10 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     crate::quirks::assign(world, client, mob);
     // `/datum/preference/personality/apply_to_human`.
     crate::personality::assign(world, client, mob);
+    // `/datum/outfit/job/clown/post_equip`: the clown is clumsy.
+    if def.outfit.as_ref().is_some_and(|o| o.path == CLOWN_OUTFIT) {
+        crate::genetics::make_clown_clumsy(world, mob);
+    }
     // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
     crate::service::chaplain_spawned(world, client, mob);
     crate::records::manifest::inject_joiner(world, mob, job);
@@ -568,6 +572,8 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     mob
 }
 
+/// `/datum/job/clown`'s `outfit`.
+const CLOWN_OUTFIT: &str = "/datum/outfit/job/clown";
 /// tg `JOB_CAPTAIN` (`is_captain_job`).
 const CAPTAIN: &str = "Captain";
 /// The jobs' `head_announce`: the channel announcing a new head of that department.

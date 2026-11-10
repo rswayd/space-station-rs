@@ -25,6 +25,7 @@
 //! ([`Shot::pixel`], tg `ICON_X`/`ICON_Y`), turned by the spread ([`Shot::deviation`]). Hard
 //! surfaces (walls, windows) can bounce bullets (`handle_ricochet`), and hits on mobs roll
 //! wounds with the projectile's `wound_bonus`/`sharpness` (`crate::medical::wounds`).
+// Held shields and swords block it (`crate::weapons::block::held_block`).
 // shortcut: no reflection by held items (worn ablative armor reflects: `crate::clothing::ablative`), ricochet auto-aim, embedding, dismemberment, impact visuals, hitscan
 // beams, homing or projectile sounds; add them with the guns that need them.
 
@@ -645,6 +646,20 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     }
     if blocked {
         return;
+    }
+    // ... then the held items (`PROJECTILE_ATTACK`): a shield, a sword.
+    if !own_shot {
+        let attack = crate::weapons::block::AttackType::Projectile {
+            reflectable: p.data.reflectable,
+            pass_flags: p.data.pass_flags,
+            armour_penetration: p.data.armour_penetration,
+        };
+        if let Some(item) = crate::weapons::block::held_block(world, target, p.data.damage, attack)
+        {
+            let kind = DamageType::from_dm(&p.data.damage_type).unwrap_or(DamageType::Brute);
+            crate::weapons::block::on_block(world, target, item, name, p.data.damage, kind);
+            return;
+        }
     }
     incendiary_hit(world, p, target);
     let distance = p.start.chebyshev(at).unwrap_or(0) as f32;

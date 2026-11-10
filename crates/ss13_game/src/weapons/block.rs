@@ -9,8 +9,17 @@
 //! its `max_integrity` (`on_shield_block`, `atom_destruction`: its `shield_break_sound`, its
 //! `shield_break_leftover`, "щит сломан!"). Hitting a bashable shield with a `/obj/item/melee`
 //! (`item_interaction`) bangs it: `shield_bash_sound`, an emote, a 3 s cooldown.
-// shortcut: no `armour_penetration`, block effect visual, thrown or projectile blocks (the
-// riot shield's `transparent`), shake of the basher, or shield repair; add with projectiles.
+//!
+//! Projectiles (`/mob/living/carbon/human/bullet_act`, `PROJECTILE_ATTACK`) and thrown things
+//! (`/mob/living/hitby`, `THROWN_PROJECTILE_ATTACK`) are blocked the same way through
+//! [`held_block`]: the projectile's `armour_penetration` takes half off the chance, shields get
+//! +30 against thrown things, the riot shield (`transparent`) lets `PASSGLASS` beams through,
+//! the double-bladed sword and the energy shield leave reflectable shots to reflection
+//! (double-bladed: −25 against the others), swords and staffs of [`NO_PROJECTILE_BLOCK`] block
+//! no shots. A block shows the yellow `block` glow on the holder's tile.
+// shortcut: no `armour_penetration` of items (melee hits pierce nothing), no leap or
+// overwhelming attacks, shake of the basher, or shield repair; a shield takes shots through its
+// `melee` armor (only that one is imported).
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -76,6 +85,126 @@ pub fn chance(
     Some(melee.block_chance)
 }
 
+/// tg `attack_type` of a `check_block`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum AttackType {
+    /// `MELEE_ATTACK`, `UNARMED_ATTACK`.
+    Melee,
+    /// `THROWN_PROJECTILE_ATTACK`.
+    Thrown,
+    /// `PROJECTILE_ATTACK` of a projectile with these vars.
+    Projectile {
+        reflectable: bool,
+        pass_flags: u32,
+        armour_penetration: f32,
+    },
+}
+
+/// `/obj/item/shield/riot` (`transparent = TRUE`).
+const RIOT_SHIELD: &str = "/obj/item/shield/riot";
+/// `/obj/item/shield/energy`.
+const ENERGY_SHIELD: &str = "/obj/item/shield/energy";
+/// The `hit_reaction`s that set `final_block_chance = 0` against `PROJECTILE_ATTACK`.
+pub const NO_PROJECTILE_BLOCK: &[&str] = &[
+    "/obj/item/melee/sabre",
+    "/obj/item/melee/parsnip_sabre",
+    "/obj/item/claymore",
+    "/obj/item/nullrod/claymore",
+    "/obj/item/nullrod/bostaff",
+    "/obj/item/gun/magic/staff/spellblade",
+    "/obj/item/cursed_katana",
+    "/obj/item/chainsaw/dual",
+    "/obj/item/melee/beesword",
+    "/obj/item/melee/cleric_mace",
+    "/obj/item/bambostaff",
+    "/obj/item/melee/energy/sword/nullrod",
+    "/obj/item/melee/baton/nunchaku",
+];
+
+/// The `hit_reaction` overrides of `path` against `attack`, from tg's `final_block_chance`
+/// (`check_block`'s); `None` when the item does not react at all.
+pub fn against(path: &str, final_chance: f32, attack: AttackType) -> Option<f32> {
+    let shield = is_under(path, SHIELD_ROOT);
+    let mut chance = final_chance;
+    if let AttackType::Projectile {
+        reflectable,
+        pass_flags,
+        armour_penetration,
+    } = attack
+    {
+        // `check_block`: `block_chance - clamp((armour_penetration - item AP) / 2, 0, 100)`.
+        chance -= (armour_penetration / 2.0).clamp(0.0, 100.0);
+        if is_under(path, RIOT_SHIELD) && pass_flags & crate::projectile::PASSGLASS != 0 {
+            return None;
+        }
+        if NO_PROJECTILE_BLOCK.iter().any(|p| is_under(path, p)) {
+            chance = 0.0;
+        }
+        if is_under(path, crate::weapons::energy::DUALSABER) {
+            chance = if reflectable { 0.0 } else { chance - 25.0 };
+        }
+        if is_under(path, ENERGY_SHIELD) && reflectable {
+            chance = 0.0;
+        }
+    }
+    if shield && attack == AttackType::Thrown {
+        chance += 30.0;
+    }
+    if shield {
+        chance = chance.clamp(0.0, 100.0);
+    }
+    Some(chance)
+}
+
+/// tg human `check_block` over the held items against a non-melee attack of `damage`: the item
+/// that blocks it (its `hit_reaction` effects not yet applied: see [`on_block`]).
+pub fn held_block(
+    world: &mut World,
+    owner: Entity,
+    damage: f32,
+    attack: AttackType,
+) -> Option<Entity> {
+    let hands = world.get::<crate::inventory::Inventory>(owner)?.hands;
+    let read: &World = world;
+    let chances: Vec<(Entity, f32)> = hands
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            let path = &read.get::<DmItem>(item)?.path;
+            let base = chance(
+                path,
+                read.get::<DmMelee>(item)?,
+                read.get::<ss13_mapload::DmClothing>(item).is_some(),
+                crate::weapons::two_handed::is_wielded(read, item),
+                read.get::<crate::antag::syndie_items::EnergyBlade>(item)
+                    .map(|b| b.active),
+            )?;
+            let c = against(path, final_block_chance(base, damage), attack)?;
+            Some((item, c))
+        })
+        .collect();
+    let mut rng = world.get_resource_or_init::<crate::combat::CombatRng>();
+    chances
+        .into_iter()
+        .find(|&(_, c)| c > 0.0 && rng.chance(c))
+        .map(|(item, _)| item)
+}
+
+/// `/obj/effect/temp_visual/block` in `COLOR_YELLOW`: 0.67 s, `pixel_x = rand(-12, 12)`,
+/// `pixel_y = rand(-9, 0)`.
+fn block_glow(world: &mut World, pos: TilePos) {
+    use crate::effects::temp_visual::{Visual, spawn};
+    let (x, y) = {
+        let mut rng = world.get_resource_or_init::<crate::combat::CombatRng>();
+        (rng.range(0, 24) as i16 - 12, rng.range(0, 9) as i16 - 9)
+    };
+    let mut v = Visual::new("icons/effects/effects.dmi", "block", 0.67);
+    v.dir = Some(ss13_shared::Dir::South);
+    v.color = Some([0xFF, 0xFF, 0x00, 0xFF]);
+    v.offset = [x, y];
+    spawn(world, pos, v);
+}
+
 /// tg `hit_reaction` succeeding: the message, the sound, then the shield's damage.
 pub fn on_block(
     world: &mut World,
@@ -100,6 +229,7 @@ pub fn on_block(
         .map(|m| m.block_sound.clone())
         .unwrap_or_default();
     if let Some(pos) = crate::explosions::turf_of(world, owner) {
+        block_glow(world, pos);
         crate::sound::playsound(
             world,
             crate::sound::PlaySound::new(pos, sound, BLOCK_SOUND_VOLUME, true),
@@ -236,6 +366,48 @@ mod tests {
         assert_eq!(
             chance("/obj/item/pen", &melee(0.0), false, false, None),
             None
+        );
+    }
+
+    /// The `hit_reaction` overrides against shots and thrown things.
+    #[test]
+    fn shots_and_throws_follow_hit_reaction() {
+        use crate::projectile::PASSGLASS;
+        let shot = |reflectable, pass_flags, armour_penetration| AttackType::Projectile {
+            reflectable,
+            pass_flags,
+            armour_penetration,
+        };
+        let riot = "/obj/item/shield/riot";
+        // The riot shield lets lasers through, stops bullets (AP halves off), +30 vs throws.
+        assert_eq!(against(riot, 50.0, shot(true, PASSGLASS, 0.0)), None);
+        assert_eq!(against(riot, 50.0, shot(false, 0, 20.0)), Some(40.0));
+        assert_eq!(against(riot, 80.0, AttackType::Thrown), Some(100.0));
+        assert_eq!(against(riot, 50.0, AttackType::Melee), Some(50.0));
+        // The double-bladed sword leaves lasers to reflection, bullets at -25.
+        let saber = "/obj/item/dualsaber/green";
+        assert_eq!(against(saber, 75.0, shot(true, PASSGLASS, 0.0)), Some(0.0));
+        assert_eq!(against(saber, 75.0, shot(false, 0, 0.0)), Some(50.0));
+        // Sabres do not block shots, only blows; a plain item keeps its chance.
+        assert_eq!(
+            against("/obj/item/melee/sabre", 50.0, shot(false, 0, 0.0)),
+            Some(0.0)
+        );
+        assert_eq!(
+            against(
+                "/obj/item/melee/energy/sword/saber",
+                50.0,
+                shot(false, 0, 0.0)
+            ),
+            Some(50.0)
+        );
+        assert_eq!(
+            against(
+                "/obj/item/melee/energy/sword/saber",
+                50.0,
+                AttackType::Thrown
+            ),
+            Some(50.0)
         );
     }
 

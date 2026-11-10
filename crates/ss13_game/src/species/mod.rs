@@ -1452,7 +1452,10 @@ pub fn def_of(world: &World, mob: Entity) -> &'static SpeciesDef {
 
 /// tg `HAS_TRAIT(mob, trait)` for the traits species and their organs give.
 pub fn has_trait(world: &World, mob: Entity, t: Trait) -> bool {
-    if def_of(world, mob).has(t) || crate::antag::zombie::grants(world, mob, t) {
+    if def_of(world, mob).has(t)
+        || crate::antag::zombie::grants(world, mob, t)
+        || crate::medical::bioware::grants(world, mob, t)
+    {
         return true;
     }
     world.get::<organs::Organs>(mob).is_some_and(|owned| {

@@ -259,7 +259,7 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists, artists, mut reactive, blockers, staminas, bayonets): (
+    (mut sounds, pacifists, artists, mut reactive, blockers, staminas, bayonets, buckled): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
         Query<&crate::martial::MartialArts>,
@@ -267,6 +267,7 @@ fn melee(
         Query<Blocker>,
         Query<&crate::status_effects::StatusEffects>,
         Query<&crate::gun_attachments::BayonetMount>,
+        Query<(), With<crate::medical::surgery::Buckled>>,
     ),
     mut commands: Commands,
 ) {
@@ -279,7 +280,10 @@ fn melee(
             continue;
         }
         // Only living mobs are attacked here; everything else is someone else's click.
-        let Ok(lying) = mobs.get(target).map(|m| m.2.lying()) else {
+        let Ok((lying, target_down, target_carbon)) = mobs
+            .get(target)
+            .map(|m| (m.2.lying(), *m.1 != Stat::Conscious, m.5.is_some()))
+        else {
             continue;
         };
         let Ok((own, stat, _, &combat, mut next_move, inventory, facing, zone, _)) =
@@ -362,6 +366,28 @@ fn melee(
                 continue;
             }
         }
+        // `/datum/element/kneecapping` (`COMSIG_ITEM_ATTACK_SECONDARY`): a right click with the
+        // bat at the leg of a helpless carbon aims a swing instead of attacking.
+        if click.modifiers.right
+            && target_carbon
+            && let (Some(w), Some((item, _, _))) = (&weapon, held)
+            && crate::weapons::kneecap::kneecaps(&item.path)
+        {
+            use crate::weapons::kneecap::can_kneecap;
+            let helpless = target_down
+                || staminas
+                    .get(target)
+                    .is_ok_and(|e| e.floored() || e.immobilized())
+                || buckled.contains(target);
+            let limbs = mobs.get(target).ok().and_then(|m| m.8.cloned());
+            if can_kneecap(zone, limbs.as_ref(), helpless) {
+                let (client, bat) = (click.client, w.entity);
+                commands.queue(move |world: &mut World| {
+                    crate::weapons::kneecap::try_start(world, client, attacker, target, bat, zone);
+                });
+                continue;
+            }
+        }
         // BandaStation `stamina_cost_per_hit` (the sledgehammers): too tired, no attack.
         if let (Some(w), Some((item, _, _))) = (&weapon, held)
             && let Some(cost) = crate::weapons::stamina_cost::cost_per_hit(
@@ -417,10 +443,20 @@ fn melee(
         let mut wound_hit: Option<(BodyZone, crate::medical::wounds::Hit)> = None;
         // Written back only on a change: `Changed<Stat>` readers act on stat transitions.
         let mut new_stat = *target_stat;
-        // tg item `attack` and unarmed `harm` lunge at the target, hit or miss.
-        if weapon.is_some() || combat.0 {
+        // tg item `attack` (the item's image) and unarmed `harm` (the limb's
+        // `unarmed_attack_effect`) lunge at the target, hit or miss.
+        let visual = match &weapon {
+            Some(w) => Some(crate::animation::AttackVisual::Item(w.entity)),
+            None if combat.0 => Some(crate::animation::AttackVisual::Effect(if lying {
+                crate::animation::ATTACK_EFFECT_KICK
+            } else {
+                crate::animation::ATTACK_EFFECT_PUNCH
+            })),
+            None => None,
+        };
+        if let Some(visual) = visual {
             commands.queue(move |world: &mut World| {
-                crate::animation::do_attack_animation(world, attacker, target);
+                crate::animation::do_attack_animation_with(world, attacker, target, visual);
             });
         }
         let seen = match weapon {

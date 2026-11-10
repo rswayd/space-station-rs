@@ -3,13 +3,12 @@
 //! (`loom.dm`, `/datum/element/loomable`).
 //!
 //! - An empty hand punches the bag (a random hit sound); a human pays 3 stamina (2 in boxing
-//!   gloves) and gains 0.3 athletics. A wrench right click secures or frees it at once; a
+//!   gloves), gains 0.3 athletics and is exercised (`crate::buffs::exercise`). A wrench right click secures or frees it at once; a
 //!   crowbar right click takes a loose one apart in 10 s (2 iron, a rod, a pillow).
 //! - Cotton (and durathread, wool) used on a secured loom weaves 4 into one cloth (durathread
 //!   into durathread) a second at a time while the stack lasts. A wrench (0.5 s) fastens the loom.
 //! - A wrench takes a chess piece apart in 0.5 s (2 iron; a holodeck one cannot be).
-// shortcut: no heavy gravity, spine implant or `TRAIT_STRENGTH` modifiers, no `exercised`
-// status, no punch flick; every woven sheet is its own stack on the loom's tile.
+// shortcut: no heavy gravity, spine implant or `TRAIT_STRENGTH` modifiers, no punch flick; every woven sheet is its own stack on the loom's tile.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -116,6 +115,7 @@ fn punch(world: &mut World, user: Entity, bag: Entity) -> bool {
     let cost = punch_cost(world, user);
     crate::status_effects::adjust_stamina(world, user, cost);
     crate::skills::adjust_experience(world, user, crate::skills::Skill::Athletics, 0.3, false);
+    crate::buffs::exercise(world, user, 0.0);
     true
 }
 

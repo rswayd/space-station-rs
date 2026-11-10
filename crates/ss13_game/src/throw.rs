@@ -770,6 +770,20 @@ fn hit_living(world: &mut World, item: Entity, thrown: &Thrown, mob: Entity) {
         }
         return;
     }
+    // `hitby` -> `check_block(THROWN_PROJECTILE_ATTACK)`, not of one's own throw: the worn
+    // reactive armor, then the held items. Blocked: no catch, no damage, no push.
+    if thrown.thrower != Some(mob) {
+        let kind = DamageType::from_dm(&dm.damtype).unwrap_or(DamageType::Brute);
+        if crate::clothing::reactive::hit_reaction(world, mob, Some(item), &thing) {
+            return;
+        }
+        let attack = crate::weapons::block::AttackType::Thrown;
+        if let Some(blocker) = crate::weapons::block::held_block(world, mob, dm.throwforce, attack)
+        {
+            crate::weapons::block::on_block(world, mob, blocker, &thing, dm.throwforce, kind);
+            return;
+        }
+    }
     let chat = visible_message(
         world,
         at,
