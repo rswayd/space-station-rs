@@ -661,6 +661,10 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         return;
     }
     let Some(hit) = hit else {
+        // Toys, plates and pizza boxes (`crate::toys::thrown`).
+        if crate::toys::thrown(world, item, None) {
+            return;
+        }
         // `/obj/item/light/throw_impact`: a bulb shatters where it lands.
         crate::power::lighting::thrown(world, item);
         // `frozen/shatter_on_landed`.
@@ -687,6 +691,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         if world.get_entity(item).is_err() {
             return;
         }
+        if world.get::<CarriedBy>(item).is_none() && crate::toys::thrown(world, item, Some(hit)) {
+            return;
+        }
         // `frozen/shatter_on_throw`: not caught.
         if world.get_entity(item).is_ok() && crate::effects::frozen::shatter(world, item) {
             return;
@@ -709,6 +716,13 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     } else if crate::disposals::hitby(world, item, hit) {
     } else if world.get::<DmCloset>(hit).is_some_and(|c| !c.wall_mounted) {
         push(world, hit, thrown);
+    }
+    if world.get::<Health>(hit).is_none()
+        && world.get_entity(item).is_ok()
+        && world.get::<TilePos>(item).is_some()
+        && crate::toys::thrown(world, item, Some(hit))
+    {
+        return;
     }
     if world.get::<Health>(hit).is_none()
         && world.get_entity(item).is_ok()

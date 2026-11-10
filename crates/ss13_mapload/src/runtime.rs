@@ -74,6 +74,28 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `smoking`: butts (`type_butt`), rollies from rolling paper.
+    "/obj/item/cigbutt",
+    "/obj/item/cigbutt/roach",
+    "/obj/item/cigbutt/cigarbutt",
+    "/obj/item/cigbutt/cigarbutt/cohiba",
+    "/obj/item/cigbutt/cigarbutt/havana",
+    "/obj/item/food/candy_trash",
+    "/obj/item/food/candy_trash/nicotine",
+    "/obj/item/cigarette/rollie",
+    // `kitchen_ware`: plate shards, the pizzas of pizza boxes and the infinite box.
+    "/obj/item/plate_shard",
+    "/obj/item/food/pizza/margherita",
+    "/obj/item/food/pizza/margherita/robo",
+    "/obj/item/food/pizza/vegetable",
+    "/obj/item/food/pizza/mushroom",
+    "/obj/item/food/pizza/meat",
+    "/obj/item/food/pizza/pineapple",
+    "/obj/item/food/pizza/sassysage",
+    "/obj/item/food/pizza/donkpocket",
+    "/obj/item/food/pizza/dank",
+    // `toys`: two toy swords joined.
+    "/obj/item/dualsaber/toy",
     // `transform`, `health::gib_with`/`dust_with`: gorillas, gibs of carbons and aliens, remains.
     "/mob/living/basic/gorilla",
     "/mob/living/basic/gorilla/genetics",

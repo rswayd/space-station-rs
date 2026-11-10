@@ -193,7 +193,10 @@ impl ToolInfo {
             toolspeed: tool.map_or(1.0, |t| t.speed),
             sharpness: world.get::<DmWounding>(item).map_or(0, |w| w.sharpness),
             force: world.get::<DmItem>(item).map_or(0.0, |i| i.force),
-            temperature: if lit {
+            // Matches and smokables are hot while lit (`crate::smoking`).
+            temperature: if let Some(heat) = crate::smoking::lit_heat(world, item) {
+                heat
+            } else if lit {
                 tool.map_or(0.0, |t| t.heat)
             } else {
                 0.0

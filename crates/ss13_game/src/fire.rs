@@ -19,10 +19,10 @@
 //! - gas tanks react their contents (`/obj/item/tank/process`);
 //! - space wind (tg `high_pressure_movements`): every [`PressureDifference`] pushes the
 //!   unanchored, unpulled movables on its tile one step with tg's `move_prob`.
-// shortcut: no lighters, matches or cigarettes as flame sources (no lit state for them yet; igniters
-// and sparkers are `crate::wallmount::machines`, firelocks closing on hot air
-// `crate::wallmount::firelock`), no burning items or clothing (`burn_clothing`, ash): add with
-// their items. Wet stacks: no `TRAIT_WET_FOR_LONGER`, `TRAIT_SLIPPERY_WHEN_WET`, droplet
+// shortcut: lighters are welders here; matches and cigarettes burn as flame sources in
+// `crate::smoking` (igniters and sparkers are `crate::wallmount::machines`, firelocks closing on
+// hot air `crate::wallmount::firelock`); no burning items or clothing (`burn_clothing`, ash):
+// add with their items. Wet stacks: no `TRAIT_WET_FOR_LONGER`, `TRAIT_SLIPPERY_WHEN_WET`, droplet
 // particles or freezing into the freon status (`WATER_VAPOR_DEPOSITION_POINT`); a negative
 // `adjust_wet_stacks` on a dry mob does nothing (tg's `max(fire_stacks, stacks)` turns it into
 // positive wet stacks that douse a burning mob, an obvious accident).
@@ -222,7 +222,7 @@ fn network_hotspot(add: On<Add<HotspotEffect>>, mut commands: Commands) {
 
 /// Where an item's flame touches the air: its own tile, or its holder's when held in a hand or
 /// worn on the mask (`open_flame`'s `mob_slots`).
-fn flame_turf(world: &World, item: Entity) -> Option<TilePos> {
+pub(crate) fn flame_turf(world: &World, item: Entity) -> Option<TilePos> {
     if let Some(&pos) = world.get::<TilePos>(item) {
         return Some(pos);
     }
@@ -328,6 +328,10 @@ pub fn fire_act(world: &mut World, thing: Entity, temperature: f64) {
         // `combustible_flooder/flame_react`: plasma statues flood and are gone.
     } else if crate::hazard_decals::fire_act(world, thing) {
         // `fuel_pool/fire_act`: it lights.
+    } else if crate::smoking::fire_act(world, thing) {
+        // Matches and cigarettes light.
+    } else if crate::toys::fire_act(world, thing) {
+        // Snap pops pop.
     } else if world.get::<DmObj>(thing).is_some() {
         obj_fire_act(world, thing, temperature);
     }

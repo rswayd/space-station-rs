@@ -266,9 +266,15 @@ fn can_consume(world: &mut World, actor: Actor, eater: Entity) -> bool {
     true
 }
 
-/// tg `TryToEat` up to its `do_after`.
-fn try_to_eat(world: &mut World, actor: Actor, eater: Entity) {
-    let food = actor.item.expect("held food");
+/// The food a held item eats with: itself, what tongs hold or a plate's first food
+/// (`crate::kitchen_ware`).
+fn food_of(world: &World, item: Entity) -> Entity {
+    crate::kitchen_ware::held_food(world, item).unwrap_or(item)
+}
+
+/// tg `TryToEat` up to its `do_after`. `actor.item` is the food, or tongs or a plate with it.
+pub(crate) fn try_to_eat(world: &mut World, actor: Actor, eater: Entity) {
+    let food = food_of(world, actor.item.expect("held food"));
     if food_gone(world, food) || !can_consume(world, actor, eater) {
         return;
     }
@@ -352,7 +358,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: FoodJob) 
     match job {
         FoodJob::Bite => self_bite(world, actor),
         FoodJob::Feed => {
-            let (Some(food), eater) = (action.item, action.target) else {
+            let (Some(food), eater) = (action.item.map(|i| food_of(world, i)), action.target)
+            else {
                 return;
             };
             if food_gone(world, food) || !can_consume(world, actor, eater) {
@@ -385,7 +392,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: FoodJob) 
 /// tg `TryToEat` after the eater's own `do_after`: the fullness message, the bite and the next
 /// bite.
 fn self_bite(world: &mut World, actor: Actor) {
-    let Some(food) = actor.item else {
+    let Some(food) = actor.item.map(|i| food_of(world, i)) else {
         return;
     };
     let eater = actor.mob;

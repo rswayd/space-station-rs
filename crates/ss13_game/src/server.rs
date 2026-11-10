@@ -404,6 +404,11 @@ impl Plugin for GameServerPlugin {
             crate::eng_machines::EngMachinesPlugin,
         ))
         .add_plugins((
+            crate::smoking::SmokingPlugin,
+            crate::kitchen_ware::KitchenWarePlugin,
+            crate::toys::ToysPlugin,
+        ))
+        .add_plugins((
             crate::projectile::ProjectileServerPlugin,
             crate::guns::GunsServerPlugin,
         ))

@@ -66,6 +66,7 @@ pub mod security;
 pub mod service;
 pub mod silicon;
 pub mod smartfridge;
+pub mod smoking;
 pub mod smooth;
 pub mod sound;
 pub mod spawner;
@@ -131,6 +132,7 @@ pub use security::{DmBaton, DmHandcuffs, DmLegcuffs};
 pub use service::DmService;
 pub use silicon::{DmAiSlipper, DmCamera, DmCameraConsole};
 pub use smartfridge::DmSmartFridge;
+pub use smoking::DmSmokable;
 pub use smooth::DmSmooth;
 pub use spawner::{DmSpawner, LootEntry};
 pub use transport::DmTransport;
@@ -407,6 +409,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmChemDispenser>(dispenser::DISPENSER_COMPONENT)
             .register_proto_component::<DmSmartFridge>(smartfridge::FRIDGE_COMPONENT)
             .register_proto_component::<DmGlass>(drinks::GLASS_COMPONENT)
+            .register_proto_component::<DmSmokable>(smoking::SMOKABLE_COMPONENT)
             .register_proto_component::<DmBarsign>(barsign::BARSIGN_COMPONENT)
             .register_proto_component::<DmService>(service::SERVICE_COMPONENT)
             .register_proto_component::<DmFish>(fishing::FISH_COMPONENT)

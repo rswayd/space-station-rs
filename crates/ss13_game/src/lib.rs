@@ -427,6 +427,8 @@ pub mod keycard;
 pub mod keycard_client;
 #[cfg(feature = "server")]
 pub mod kitchen;
+#[cfg(feature = "server")]
+pub mod kitchen_ware;
 pub mod language_menu;
 #[cfg(feature = "client")]
 pub mod language_menu_client;
@@ -598,6 +600,8 @@ pub mod slot_machine_client;
 #[cfg(feature = "server")]
 pub mod smartfridge;
 #[cfg(feature = "server")]
+pub mod smoking;
+#[cfg(feature = "server")]
 pub mod sound;
 #[cfg(feature = "client")]
 pub mod sound_client;
@@ -667,6 +671,8 @@ pub mod testing;
 pub mod throw;
 #[cfg(feature = "server")]
 pub mod tools;
+#[cfg(feature = "server")]
+pub mod toys;
 #[cfg(feature = "server")]
 pub mod transform;
 #[cfg(feature = "server")]
