@@ -1464,7 +1464,10 @@ pub fn can_cast(world: &World, mob: Entity, spell: Spell) -> Result<(), Option<S
         }
     }
     // `/datum/action/cooldown/spell/jaunt/can_cast_spell`.
-    if spell == Spell::EtherealJaunt && no_teleport(world, pos) {
+    // `check_teleport_valid(owner, ...)` also refuses `TRAIT_NO_TELEPORT`.
+    if spell == Spell::EtherealJaunt
+        && (no_teleport(world, pos) || world.get::<crate::teleport::NoTeleport>(mob).is_some())
+    {
         return Err(Some(
             "Some dull, universal force is stopping you from jaunting here.".into(),
         ));
@@ -1625,8 +1628,14 @@ pub enum CastOn {
 /// `Activate`: the checks, `before_cast`, the feedback, the effect, the cooldown and
 /// `after_cast`. True when it was cast.
 pub fn cast(world: &mut World, client: Entity, mob: Entity, spell: Spell, on: CastOn) -> bool {
-    if !ready(world, mob, spell) || !checked(world, mob, spell) || !tongue_check(world, mob, spell)
-    {
+    if !ready(world, mob, spell) {
+        return false;
+    }
+    // `jaunt/PreActivate`: `COMSIG_MOB_PRE_JAUNT` (the bluespace grounding implant).
+    if spell == Spell::EtherealJaunt && crate::implants::jaunt_blocked(world, mob) {
+        return false;
+    }
+    if !checked(world, mob, spell) || !tongue_check(world, mob, spell) {
         return false;
     }
     let level = world

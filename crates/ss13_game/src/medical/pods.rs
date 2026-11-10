@@ -1,6 +1,7 @@
 //! Enclosed medical machines (server): tg `/obj/machinery` `state_open`/`occupant`
 //! (`open_machine`, `close_machine`, `relaymove`, `container_resist_act`) shared by the sleeper
-//! ([`super::sleeper`]), the lipid extractor (`/obj/machinery/fat_sucker`,
+//! ([`super::sleeper`]), the implant chairs (`crate::implants::chair`), the lipid extractor
+//! (`/obj/machinery/fat_sucker`,
 //! `code/game/machinery/fat_sucker.dm`) and the organ harvester (`/obj/machinery/harvester`,
 //! `code/game/machinery/harvester.dm`).
 //!
@@ -181,6 +182,12 @@ fn attach(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
             Pod { open: true },
             crate::cryosleep::Cryopod::of_path(&o.path),
         ));
+    } else if is_under(&o.path, crate::implants::chair::CHAIR_ROOT) {
+        // `implantchair/Initialize`: `open_machine()`.
+        commands.entity(e).insert_if_new((
+            Pod { open: true },
+            crate::implants::chair::ImplantChair::of_path(&o.path),
+        ));
     } else if is_under(&o.path, HARVESTER_ROOT) {
         commands
             .entity(e)
@@ -291,6 +298,11 @@ pub fn refresh_look(world: &mut World, pod: Entity) {
         crate::cryosleep::refresh_look(world, pod);
     } else if world.get::<FatSucker>(pod).is_some() {
         fat_look(world, pod);
+    } else if world
+        .get::<crate::implants::chair::ImplantChair>(pod)
+        .is_some()
+    {
+        crate::implants::chair::refresh_look(world, pod);
     } else if let Some(h) = world.get::<Harvester>(pod).cloned() {
         let state = if panel_open(world, pod) {
             "harvester-o"
@@ -321,6 +333,13 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         fat_interact(world, client, target);
         return true;
     }
+    if world
+        .get::<crate::implants::chair::ImplantChair>(target)
+        .is_some()
+    {
+        crate::implants::chair::interact(world, client, mob, target);
+        return true;
+    }
     if let Some(h) = world.get::<Harvester>(target).cloned() {
         if is_open(world, target) {
             close_pod(world, target, None);
@@ -348,6 +367,13 @@ pub fn mouse_drop_receive(
     }
     if world.get::<crate::cryosleep::Cryopod>(target).is_some() {
         crate::cryosleep::mouse_drop_receive(world, user, target, dragged);
+        return true;
+    }
+    if world
+        .get::<crate::implants::chair::ImplantChair>(target)
+        .is_some()
+    {
+        crate::implants::chair::mouse_drop_receive(world, target, dragged);
         return true;
     }
     if world.get::<super::sleeper::Sleeper>(target).is_none() {
@@ -506,6 +532,11 @@ fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove
             super::sleeper::open(world, pod);
         } else if world.get::<crate::cryosleep::Cryopod>(pod).is_some() {
             crate::cryosleep::resist(world, mob, pod);
+        } else if world
+            .get::<crate::implants::chair::ImplantChair>(pod)
+            .is_some()
+        {
+            crate::implants::chair::relaymove(world, mob, pod);
         } else if world.get::<super::cryo::CryoCell>(pod).is_some() {
             super::cryo::container_resist(world, mob, pod);
         } else if let Some(fat) = world.get::<FatSucker>(pod).cloned() {

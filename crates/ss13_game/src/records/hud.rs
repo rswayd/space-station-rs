@@ -194,6 +194,11 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
                     crate::implants::ImplantKind::Tracking => {
                         sec.extend(icon("hud_imp_tracking"));
                     }
+                    crate::implants::ImplantKind::Exile => sec.extend(icon("hud_imp_exile")),
+                    crate::implants::ImplantKind::TeleportBlocker => {
+                        sec.extend(icon("hud_imp_noteleport"));
+                    }
+                    crate::implants::ImplantKind::Beacon => sec.extend(icon("hud_imp_beacon")),
                     _ => {}
                 }
             }

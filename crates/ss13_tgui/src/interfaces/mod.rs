@@ -23,6 +23,8 @@ pub mod electrolyzer;
 pub mod gas_analyzer;
 pub mod gps;
 pub mod holodeck;
+pub mod implant_chair;
+pub mod implant_pad;
 #[cfg(feature = "client")]
 pub(crate) mod input_buttons;
 pub mod iv_drip;

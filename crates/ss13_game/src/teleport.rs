@@ -6,15 +6,18 @@
 //! - With a `precision` the landing is a random tile within that range of the destination that
 //!   is not in a `NOTELEPORT` area or across a `LOCAL_TELEPORT` boundary (any tile when
 //!   `forced`); without one, the destination itself.
-//! - Unless `forced`: neither the origin's nor the landing's area may be `NOTELEPORT`, and a
-//!   `LOCAL_TELEPORT` area on either side keeps the teleport inside that area. A refused mob is
-//!   told "something holds you back!".
+//! - Unless `forced`: neither the origin's nor the landing's area may be `NOTELEPORT`, a
+//!   `LOCAL_TELEPORT` area on either side keeps the teleport inside that area, and the mover may
+//!   not have [`NoTeleport`] (`TRAIT_NO_TELEPORT`, the anti-teleportation implant). A refused mob
+//!   is told "something holds you back!".
+//! - Then `COMSIG_MOVABLE_TELEPORTING`, forced or not: a bluespace grounding implant
+//!   (`crate::implants::teleport_blocked`) flings its host back.
 //! - Ghosts just move. Others get the channel's sparks (bluespace: sparks, quantum: rainbow
 //!   sparks, unless `no_effects`) and the optional sounds at both ends; a mob buckled to the
 //!   teleported thing goes along (to the same landing when it can, else it is off its seat).
-// shortcut: no `TRAIT_NO_TELEPORT`, no bag-of-holding bluespace interference (neither the trait
-// nor its items are ported), no reservation check (no reserved levels), no map-edge transition
-// turfs, no `COMSIG_MOVABLE_TELEPORTING` interceptors; things in a hand or a container (no
+// shortcut: no `TRAIT_NO_TELEPORT` on turfs, no bag-of-holding bluespace interference (neither
+// the trait nor its items are ported), no reservation check (no reserved levels), no map-edge
+// transition turfs, no `COMSIG_ATOM_INTERCEPT_TELEPORTING`; things in a hand or a container (no
 // tile) are not teleported. Upgrade with the first item or area that needs them.
 
 use bevy::prelude::*;
@@ -25,6 +28,10 @@ use ss13_world::SpatialIndex;
 
 use crate::effects::particles::{Kind, start};
 use crate::obj_damage::is_under;
+
+/// `TRAIT_NO_TELEPORT` on a mob (the anti-teleportation implant, `crate::implants`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NoTeleport;
 
 /// `area_flags`: `NOTELEPORT`, `LOCAL_TELEPORT`.
 pub const NOTELEPORT: u32 = 1 << 2;
@@ -148,7 +155,10 @@ pub fn do_teleport(world: &mut World, mover: Entity, dest: TilePos, tele: Tele) 
     } else {
         None
     };
-    let valid = landing.is_some_and(|l| tele.forced || check_teleport_valid(&*world, from, l));
+    let valid = landing.is_some_and(|l| {
+        tele.forced
+            || (world.get::<NoTeleport>(mover).is_none() && check_teleport_valid(&*world, from, l))
+    });
     let (Some(landing), true) = (landing, valid) else {
         if let Some(client) = world
             .get::<crate::server::PlayerMob>(mover)
@@ -158,6 +168,10 @@ pub fn do_teleport(world: &mut World, mover: Entity, dest: TilePos, tele: Tele) 
         }
         return false;
     };
+    // `COMSIG_MOVABLE_TELEPORTING`.
+    if crate::implants::teleport_blocked(world, mover) {
+        return false;
+    }
     if world.get::<crate::ghost::Ghost>(mover).is_some() {
         world.entity_mut(mover).insert(landing);
         return true;

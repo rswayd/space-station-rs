@@ -662,6 +662,8 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         }
     }
     incendiary_hit(world, p, target);
+    // `/obj/projectile/bullet/c38/trac/on_hit`: a tracking implant.
+    crate::implants::trac_hit(world, &p.data.path, target);
     let distance = p.start.chebyshev(at).unwrap_or(0) as f32;
     let accuracy = (p.data.accurate_range - p.data.accuracy_falloff * distance).clamp(5.0, 100.0);
     let zone =

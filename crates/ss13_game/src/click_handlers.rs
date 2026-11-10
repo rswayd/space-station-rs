@@ -115,6 +115,7 @@
 //! | 3309 | `kitchen_ware::attack_self` (pizza boxes open and close, tongs drop or clack) |
 //! | 3319 | `toys::toggle_sword` (a toy sword flicks out and in) |
 //! | 3325 | `cargo::black_market::attack_self` (the market uplink's window) |
+//! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -334,7 +335,7 @@
 //! | 560 | `wiremod::server::item_interaction` |
 //! | 600 | `grenades::item_interaction` |
 //! | 603 | `science::cell_lines::swab_interaction` (swabs and biopsy tools: sampling, onto petri dishes) |
-//! | 700 | `implants::item_interaction` |
+//! | 700 | `implants::item_interaction` (an implanter on a case, a case into the implant pad) |
 //! | 707 | `modsuit::pathfinder::attack` (the MOD pathfinder module implants a human) |
 //! | 800 | `defenses::server::item_interaction` (turrets, panels, cameras, scanner gates) |
 //! | 805 | `defenses::turret_build::item_interaction` (a frame's parts and tools) |
