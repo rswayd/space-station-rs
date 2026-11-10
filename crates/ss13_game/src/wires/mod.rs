@@ -79,7 +79,7 @@ pub use sets::{
     colors_for, vending_set,
 };
 use shock::*;
-pub(crate) use shock::{electrocute_act, electrocute_from_node};
+pub(crate) use shock::{electrocute_act, electrocute_from_area, electrocute_from_node};
 pub use shock::{interactable, shock};
 
 pub const WIRE_AI: &str = "AI Connection";

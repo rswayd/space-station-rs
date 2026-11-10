@@ -1566,6 +1566,16 @@ pub const SECDEF_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/barricade/wooden/crude",
     "/obj/item/stack/sheet/mineral/wood",
     "/obj/item/stack/sheet/iron",
+    // `ss13_game::security`: the conversion kit's police baton, the upgraded stunprods, the
+    // cells batons are loaded with (taken out with a screwdriver).
+    "/obj/item/melee/baton",
+    "/obj/item/melee/baton/security/cattleprod/teleprod",
+    "/obj/item/melee/baton/security/cattleprod/telecrystalprod",
+    "/obj/item/stock_parts/power_store/cell",
+    "/obj/item/stock_parts/power_store/cell/high",
+    "/obj/item/stock_parts/power_store/cell/super",
+    "/obj/item/stock_parts/power_store/cell/hyper",
+    "/obj/item/stock_parts/power_store/cell/bluespace",
 ];
 
 /// Every DM type the game spawns by a constant path: the tables above and every

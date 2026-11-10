@@ -104,6 +104,8 @@ pub const SPECS: &[Spec] = &[
     required("/obj/item/flatpack", Force::Same),
     // `binoculars.dm`: their wield is `crate::devices::binoculars::on_wield`.
     spec("/obj/item/binoculars", Force::Fixed(8.0, 12.0), false),
+    // BandaStation `electrostaff.dm`: its look and switch are `crate::security::on_wield`.
+    spec(crate::security::ELECTROSTAFF, Force::TwoHandForce, false),
 ];
 
 /// The spec of an item type.
@@ -293,6 +295,7 @@ pub fn wield(world: &mut World, client: Option<Entity>, mob: Entity, item: Entit
         );
     }
     crate::devices::binoculars::on_wield(world, mob, item, true);
+    crate::security::on_wield(world, client, item, true);
     play(world, mob, th.spec.wieldsound);
     true
 }
@@ -309,6 +312,7 @@ pub fn unwield(world: &mut World, item: Entity, client: Option<Entity>, can_drop
     }
     crate::weapons::energy::on_wield(world, item, false);
     crate::devices::binoculars::on_wield(world, wielded.mob, item, false);
+    crate::security::on_wield(world, client, item, false);
     if world.get_entity(wielded.offhand).is_ok() {
         world.despawn(wielded.offhand);
     }

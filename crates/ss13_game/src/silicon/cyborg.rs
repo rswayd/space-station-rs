@@ -30,9 +30,9 @@
 // the third module slot shares the right hand's cell, see `ModuleSlots`), no broken slots
 // (`break_cyborg_slot`), no lamp, ion thrusters, model transform animation, skins, tipping,
 // model traits or actions (`borg_meson`, auto-wash); the syndicate models have no thermal
-// vision, chameleon projector, syndicate access or factions; consumables are not respawned at
-// the station (nor their 0.5% of the charge drawn, which tg takes only when something was
-// restocked).
+// vision, chameleon projector, syndicate access or factions; consumables but the flashes are
+// not respawned at the station (nor their 0.5% of the charge drawn, which tg takes only when
+// something was restocked).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -1015,6 +1015,7 @@ fn charge_occupants(
         Option<&crate::stock_parts::PartRatings>,
     )>,
     mut borgs: Query<(&mut Cyborg, &TilePos)>,
+    mut commands: Commands,
 ) {
     let dt = time.delta_secs_f64();
     for (mut station, pos, unpowered, parts) in &mut stations {
@@ -1038,6 +1039,10 @@ fn charge_occupants(
         // A mapped station without refreshed parts has its board's defaults.
         let speed = parts.map_or(RECHARGE_SPEED, recharge_speed);
         cyborg.charge = (cyborg.charge + speed * dt).min(cyborg.max_charge);
+        // `respawn_consumable`: the flashes are whole again.
+        commands.queue(move |world: &mut World| {
+            crate::security::restock_flashes(world, occupant);
+        });
     }
 }
 

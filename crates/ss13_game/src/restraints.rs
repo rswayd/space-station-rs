@@ -19,12 +19,22 @@
 //!   breakouttime` -> `TRAIT_RESTRAINED`): hands blocked, pulling stops. Resisting is a 5 minute
 //!   `do_after`, after which it drops at the wearer's feet (`cuff_resist(wear_suit)`); taking it
 //!   off by any path drops what the wearer holds (`doUnEquip`: "suit is restraining").
+//! - Only a mob with both hands can be cuffed (`canBeHandcuffed`), checked again at the end.
+//!   The cuffs' sound plays at the start and the end; a blind victim feels them dig in.
+//! - Cuffsnapping (`/datum/element/cuffsnapping`): a right click of wirecutters on a cuffed mob
+//!   cuts weak cuffs (cable, zipties, fakes) at once; alien wirecutters cut handcuffs in 1 s,
+//!   the jaws of life in cutter mode at once; else "but fails" ([`cuffsnap`]).
+//! - Cult shackles and hard-light energy cuffs (abductor, voidwalker) shatter when they come off
+//!   (`on_uncuffed`).
+//! - `cuff_break`: a Hulk breaks its cuffs in 5 s (`FAST_CUFFBREAK`, with a roar), an adult
+//!   alien at once (`INSTANT_CUFFBREAK`); broken cuffs are gone.
 // shortcut: the straight jacket's `equip_delay_self` (5 s) and `strip_delay` (6 s) are not
 // ported: the inventory has no self-equip delays and the strip menu uses tg's defaults.
-// shortcut: no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
-// on weak cuffs.
+// shortcut: no boxcutter cuffsnapping, no cuffed items (`/datum/status_effect/cuffed_item`), no
+// `resist_cooldown` of the fake cuffs.
 
 use bevy::prelude::*;
+use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{DmAtom, DmHandcuffs, DmName, IconIndex};
 use ss13_shared::chat::{ChatChannel, Span};
 use ss13_shared::{Appearance, IconStateId, TilePos};
@@ -42,6 +52,31 @@ pub const HANDCUFF_OVERLAY: (&str, &str) = ("icons/mob/simple/mob.dmi", "handcuf
 /// Zipties turn into used ones when they come off (`/obj/item/restraints/handcuffs/cable/
 /// zipties/on_uncuffed`).
 const ZIPTIES: &str = "/obj/item/restraints/handcuffs/cable/zipties";
+/// `HANDCUFFS_TYPE_WEAK` cuffs: cable (zipties included) and the fakes.
+const CABLE_CUFFS: &str = "/obj/item/restraints/handcuffs/cable";
+const FAKE_CUFFS: &str = "/obj/item/restraints/handcuffs/fake";
+/// Cuffs that shatter when they come off (`cult/on_uncuffed`, `energy/on_uncuffed`).
+const CULT_CUFFS: &str = "/obj/item/restraints/handcuffs/cult";
+const ENERGY_CUFFS: &str = "/obj/item/restraints/handcuffs/energy";
+/// `cuffsound` (cable restraints: `cablecuff.ogg`), `cuffsuccesssound`.
+const CUFF_SOUND: &str = "sound/items/weapons/handcuffs.ogg";
+const CABLE_CUFF_SOUND: &str = "sound/items/weapons/cablecuff.ogg";
+const CUFF_SUCCESS_SOUND: &str = "sound/items/handcuff_finish.ogg";
+/// Cuffsnapping tools: alien wirecutters (`snap_time_strong_handcuffs = 1 SECONDS`) and the
+/// jaws of life (0 for both).
+const ABDUCTOR_WIRECUTTERS: &str = "/obj/item/wirecutters/abductor";
+const JAWS_OF_LIFE: &str = "/obj/item/crowbar/power";
+/// `FAST_CUFFBREAK`'s 5 s, deciseconds.
+const FAST_CUFFBREAK_DS: f32 = 50.0;
+/// The Hulk's roars of `human/cuff_resist`.
+// shortcut: said aloud, not over the common radio (tg's `;` prefix).
+const HULK_ROARS: [&str; 5] = [
+    "RAAAAAAAARGH!",
+    "HNNNNNNNNNGGGGGGH!",
+    "GWAAAAAAAARRRHHH!",
+    "NNNNNNNNGGGGGGGGHH!",
+    "AAAAAAARRRGH!",
+];
 
 /// tg `handcuffed`: the cuffs the mob wears (they carry [`CarriedBy`] the mob, outside every
 /// inventory slot).
@@ -69,6 +104,10 @@ pub enum RestraintJob {
     ResistSuit { suit: Entity },
     /// The actor gets out of the leg restraints (`crate::legcuffs`).
     ResistLegs { cuffs: Entity },
+    /// The actor breaks its hand or leg `cuffs` (`FAST_CUFFBREAK`).
+    Break { cuffs: Entity },
+    /// The actor cuts the target's `cuffs` with the held cutter (cuffsnapping).
+    Snap { cuffs: Entity },
 }
 
 pub struct RestraintsPlugin;
@@ -200,6 +239,10 @@ pub fn attempt_to_cuff(world: &mut World, actor: Actor, cuffs: Entity, victim: E
         tell(world, actor.client, Span::Warning, "Уже в наручниках!");
         return true;
     }
+    if !can_be_handcuffed(world, victim) {
+        tell(world, actor.client, Span::Warning, "нельзя заковать!");
+        return true;
+    }
     if world.get::<DoAfter>(actor.mob).is_some() {
         return true;
     }
@@ -250,7 +293,157 @@ pub fn attempt_to_cuff(world: &mut World, actor: Actor, cuffs: Entity, victim: E
             format!("{user} пытается надеть {item} на вас!"),
         )],
     );
+    if crate::vision::is_blind(world, victim)
+        && let Some(client) = world
+            .get::<crate::server::PlayerMob>(victim)
+            .map(|p| p.client)
+    {
+        tell(
+            world,
+            client,
+            Span::BoldWarning,
+            format!("Кто-то хватает вас за запястья, и {item} впиваются в вашу кожу!"),
+        );
+    }
+    let sound = if is_under(&dm.path, CABLE_CUFFS) && !is_under(&dm.path, ZIPTIES) {
+        CABLE_CUFF_SOUND
+    } else {
+        CUFF_SOUND
+    };
+    play(world, at, sound);
     true
+}
+
+/// `playsound(loc, sound, 30, TRUE, -2)` of the cuffs.
+fn play(world: &mut World, at: TilePos, sound: &str) {
+    let mut sound = crate::sound::PlaySound::new(at, sound, 30.0, true);
+    sound.extrarange = -2.0;
+    crate::sound::playsound(world, sound);
+}
+
+/// tg human `canBeHandcuffed`: both hands (`num_hands >= 2`).
+fn can_be_handcuffed(world: &World, victim: Entity) -> bool {
+    (0..2).all(|h| crate::medical::bodyparts::has_hand(world, victim, h))
+}
+
+/// `HANDCUFFS_TYPE_WEAK` (`restraint_strength`).
+fn weak_cuffs(world: &World, cuffs: Entity) -> bool {
+    world
+        .get::<DmHandcuffs>(cuffs)
+        .is_some_and(|c| is_under(&c.path, CABLE_CUFFS) || is_under(&c.path, FAKE_CUFFS))
+}
+
+/// `/datum/element/cuffsnapping` of `cutter`: the deciseconds it takes to cut weak cuffs and
+/// strong ones (`None`: it cannot).
+fn snap_times(world: &World, cutter: Entity) -> Option<(f32, Option<f32>)> {
+    let (kind, _) = crate::tools::tool_of(world, cutter)?;
+    if kind != crate::tools::ToolKind::Wirecutters {
+        return None;
+    }
+    let path = world.get::<ss13_mapload::DmItem>(cutter)?.path.clone();
+    Some(if is_under(&path, JAWS_OF_LIFE) {
+        (0.0, Some(0.0))
+    } else if is_under(&path, ABDUCTOR_WIRECUTTERS) {
+        (0.0, Some(10.0))
+    } else {
+        (0.0, None)
+    })
+}
+
+/// `cuffsnapping/try_cuffsnap_target`: a right click of a cutter on a cuffed mob. True when it
+/// took the click.
+pub fn cuffsnap(world: &mut World, actor: Actor, cutter: Entity, target: Entity) -> bool {
+    let Some(Handcuffed(cuffs)) = world.get::<Handcuffed>(target).copied() else {
+        return false;
+    };
+    let Some((weak_time, strong_time)) = snap_times(world, cutter) else {
+        return false;
+    };
+    if world.get::<DoAfter>(actor.mob).is_some() {
+        return true;
+    }
+    let time = if weak_cuffs(world, cuffs) {
+        Some(weak_time)
+    } else {
+        strong_time
+    };
+    let Some(time) = time else {
+        // `check_cuffs_strength`.
+        let (user, victim, tool) = (
+            name_of(world, actor.mob),
+            name_of(world, target),
+            name_of(world, cutter),
+        );
+        if let Some(&at) = world.get::<TilePos>(target) {
+            show(
+                world,
+                at,
+                DEFAULT_MESSAGE_RANGE,
+                ChatChannel::Combat,
+                (
+                    Span::Notice,
+                    format!(
+                        "{user} пытается перерезать наручники {victim} с помощью {tool}, но безуспешно!"
+                    ),
+                ),
+                &[],
+            );
+        }
+        return true;
+    };
+    if time > 0.0 {
+        do_after(
+            world,
+            actor,
+            target,
+            time,
+            0,
+            crate::construction::Job::Restraints(RestraintJob::Snap { cuffs }),
+        );
+    } else {
+        snap(world, actor.mob, cutter, target, cuffs);
+    }
+    true
+}
+
+/// `do_snip_snap`: the cuffs are cut (gone).
+fn snap(world: &mut World, user: Entity, cutter: Entity, target: Entity, cuffs: Entity) {
+    if world.get::<Handcuffed>(target) != Some(&Handcuffed(cuffs)) {
+        return;
+    }
+    crate::animation::do_attack_animation_with(
+        world,
+        user,
+        target,
+        crate::animation::AttackVisual::Item(cutter),
+    );
+    let (name_user, victim, tool) = (
+        name_of(world, user),
+        name_of(world, target),
+        name_of(world, cutter),
+    );
+    world.entity_mut(target).remove::<Handcuffed>();
+    world.despawn(cuffs);
+    if let Some(mut inventory) = world.get_mut::<Inventory>(target) {
+        inventory.set_changed();
+    }
+    if let Some(&at) = world.get::<TilePos>(target) {
+        show(
+            world,
+            at,
+            DEFAULT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (
+                Span::Notice,
+                format!("{name_user} перерезает наручники {victim} с помощью {tool}!"),
+            ),
+            &[],
+        );
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(at, "sound/items/tools/wirecutter.ogg", 50.0, true),
+        );
+    }
 }
 
 /// End of a [`RestraintJob`] `do_after` (already checked by `crate::tools`: same tiles, same
@@ -264,6 +457,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Restraint
             };
             if world.get::<Handcuffed>(target).is_some()
                 || world.get::<DmHandcuffs>(cuffs).is_none_or(|c| c.used)
+                || !can_be_handcuffed(world, target)
             {
                 tell(
                     world,
@@ -294,6 +488,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Restraint
                 cuffs
             };
             apply_cuffs(world, worn, target);
+            play(world, action.target_pos, CUFF_SUCCESS_SOUND);
             let (user, victim) = (name_of(world, mob), name_of(world, target));
             show(
                 world,
@@ -346,6 +541,12 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Restraint
                 &[(mob, Span::Notice, format!("Вы успешно снимаете {item}."))],
             );
         }
+        RestraintJob::Snap { cuffs } => {
+            if let Some(cutter) = action.item {
+                snap(world, mob, cutter, target, cuffs);
+            }
+        }
+        RestraintJob::Break { cuffs } => break_restraint(world, mob, cuffs, action.user_pos),
         RestraintJob::Resist { cuffs } => {
             if world.get::<Handcuffed>(mob) != Some(&Handcuffed(cuffs)) {
                 return;
@@ -408,6 +609,67 @@ pub fn uncuff(world: &mut World, mob: Entity, pos: TilePos) {
     if ziptie {
         used_zipties(world, cuffs);
     }
+    shatter_on_uncuff(world, mob, cuffs, pos);
+}
+
+/// `cult/on_uncuffed` and `energy/on_uncuffed`: the cuffs are gone in a discharge.
+fn shatter_on_uncuff(world: &mut World, wearer: Entity, cuffs: Entity, pos: TilePos) {
+    let Some(path) = world.get::<DmHandcuffs>(cuffs).map(|c| c.path.clone()) else {
+        return;
+    };
+    let (who, item) = (name_of(world, wearer), cuffs_name(world, cuffs));
+    let (others, own) = if is_under(&path, CULT_CUFFS) {
+        (
+            format!("Оковы {who} рассыпаются в разряде тёмной магии!"),
+            format!("Ваши {item} рассыпаются в разряде тёмной магии!"),
+        )
+    } else if is_under(&path, ENERGY_CUFFS) {
+        crate::effects::particles::do_sparks(world, 4, false, pos);
+        (
+            format!("{item} {who} разрушается в разряде энергии!"),
+            format!("{item} {who} разрушается в разряде энергии!"),
+        )
+    } else {
+        return;
+    };
+    world.despawn(cuffs);
+    show(
+        world,
+        pos,
+        DEFAULT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (Span::Danger, others),
+        &[(wearer, Span::BoldWarning, own)],
+    );
+}
+
+/// `clear_cuffs(cuffs, cuff_break)`: broken hand or leg cuffs are gone.
+fn break_restraint(world: &mut World, mob: Entity, cuffs: Entity, pos: TilePos) {
+    let item = cuffs_name(world, cuffs);
+    if world.get::<Handcuffed>(mob) == Some(&Handcuffed(cuffs)) {
+        world.entity_mut(mob).remove::<Handcuffed>();
+        if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
+            inventory.set_changed();
+        }
+    } else if world.get::<crate::legcuffs::Legcuffed>(mob)
+        == Some(&crate::legcuffs::Legcuffed(cuffs))
+    {
+        crate::legcuffs::remove(world, mob, pos);
+    } else {
+        return;
+    }
+    if world.get_entity(cuffs).is_ok() {
+        world.despawn(cuffs);
+    }
+    let user = name_of(world, mob);
+    show(
+        world,
+        pos,
+        DEFAULT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (Span::Danger, format!("{user} ломает {item}!")),
+        &[(mob, Span::Notice, format!("Вы успешно ломаете {item}."))],
+    );
 }
 
 /// `zipties/on_uncuffed`: "A pair of broken zipties.", `cuff_used`, `used`.
@@ -456,6 +718,19 @@ pub fn resist_restraints(world: &mut World, client: Entity, mob: Entity) {
             return;
         };
     let item = cuffs_name(world, cuffs);
+    // `cuff_break`: an adult alien (`INSTANT_CUFFBREAK`), a Hulk (`FAST_CUFFBREAK`); not out of
+    // a straight jacket.
+    let breakable = !matches!(job, RestraintJob::ResistSuit { .. });
+    let alien = world
+        .get::<crate::antag::xeno::Xeno>(mob)
+        .is_some_and(|x| x.caste != crate::antag::xeno::Caste::Larva);
+    if breakable && alien {
+        if let Some(&pos) = world.get::<TilePos>(mob) {
+            break_restraint(world, mob, cuffs, pos);
+        }
+        return;
+    }
+    let hulk = breakable && crate::genetics::effects::is_hulk(world, mob);
     if world.get::<DoAfter>(mob).is_some() {
         // `DOING_INTERACTION(src, REF(cuffs))`.
         tell(
@@ -471,6 +746,36 @@ pub fn resist_restraints(world: &mut World, client: Entity, mob: Entity) {
         mob,
         item: None,
     };
+    if hulk {
+        let roar = {
+            let mut rng = world.resource_mut::<crate::combat::CombatRng>();
+            HULK_ROARS[rng.range(0, HULK_ROARS.len() as u32 - 1) as usize]
+        };
+        crate::spells::say_invocation(world, mob, crate::spells::Invocation::Shout, roar);
+        let job = crate::construction::Job::Restraints(RestraintJob::Break { cuffs });
+        if !do_after(world, actor, mob, FAST_CUFFBREAK_DS, 0, job) {
+            return;
+        }
+        let Some(&at) = world.get::<TilePos>(mob) else {
+            return;
+        };
+        let user = name_of(world, mob);
+        show(
+            world,
+            at,
+            DEFAULT_MESSAGE_RANGE,
+            ChatChannel::Combat,
+            (Span::Warning, format!("{user} пытается сломать {item}!")),
+            &[(
+                mob,
+                Span::Notice,
+                format!(
+                    "Вы пытаетесь сломать {item}... (Это займет примерно 5 секунд, и вы не должны двигаться.)"
+                ),
+            )],
+        );
+        return;
+    }
     let job = crate::construction::Job::Restraints(job);
     if !do_after(world, actor, mob, breakout, 0, job) {
         return;

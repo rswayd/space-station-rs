@@ -46,6 +46,7 @@ use crate::storage::{Stored, StoredIn, put_inside, spawn_contents, take_out};
 
 pub mod air;
 pub mod kinds;
+pub mod picklock;
 
 pub use kinds::ClosetKind;
 
@@ -932,6 +933,13 @@ fn closet_clicks(world: &mut World, mut clicks: Local<MessageCursor<ClickResolve
         }
         let user = Some(click.mob);
         if kinds::intercept_click(world, &click, &state, inventory.active_item()) {
+            continue;
+        }
+        // BandaStation lock picking: screwdriver, wirecutters, multitool.
+        if let Some(held) = inventory.active_item()
+            && !state.opened
+            && picklock::tool_click(world, &click, held)
+        {
             continue;
         }
         match inventory.active_item() {

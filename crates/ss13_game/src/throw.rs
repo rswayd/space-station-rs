@@ -661,6 +661,8 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         return;
     }
     let Some(hit) = hit else {
+        // A boomerang baton flies back (`crate::security::thrown`).
+        crate::security::thrown(world, item, None, thrown.thrower);
         // Toys, plates and pizza boxes (`crate::toys::thrown`).
         if crate::toys::thrown(world, item, None) {
             return;
@@ -681,9 +683,16 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         }
         return;
     };
+    if world.get::<Health>(hit).is_none() {
+        crate::security::thrown(world, item, Some(hit), thrown.thrower);
+    }
     if world.get::<Health>(hit).is_some() {
         hit_living(world, item, thrown, hit);
         crate::holodeck::dodgeball_hit(world, item, hit);
+        // `security/throw_impact` (not caught), a boomerang's rebound.
+        if world.get_entity(item).is_ok() {
+            crate::security::thrown(world, item, Some(hit), thrown.thrower);
+        }
         // `bola/throw_impact`: not caught.
         if world.get_entity(item).is_ok() && world.get::<CarriedBy>(item).is_none() {
             crate::legcuffs::thrown(world, item, hit);
