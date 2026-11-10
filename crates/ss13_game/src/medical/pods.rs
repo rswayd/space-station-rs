@@ -176,6 +176,11 @@ fn attach(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
         commands
             .entity(e)
             .insert_if_new((Pod { open: false }, FatSucker::default()));
+    } else if is_under(&o.path, crate::cryosleep::CRYOPOD_ROOT) {
+        commands.entity(e).insert_if_new((
+            Pod { open: true },
+            crate::cryosleep::Cryopod::of_path(&o.path),
+        ));
     } else if is_under(&o.path, HARVESTER_ROOT) {
         commands
             .entity(e)
@@ -282,6 +287,8 @@ pub fn refresh_look(world: &mut World, pod: Entity) {
         super::sleeper::refresh_look(world, pod);
     } else if world.get::<super::cryo::CryoCell>(pod).is_some() {
         super::cryo::refresh_look(world, pod);
+    } else if world.get::<crate::cryosleep::Cryopod>(pod).is_some() {
+        crate::cryosleep::refresh_look(world, pod);
     } else if world.get::<FatSucker>(pod).is_some() {
         fat_look(world, pod);
     } else if let Some(h) = world.get::<Harvester>(pod).cloned() {
@@ -337,6 +344,10 @@ pub fn mouse_drop_receive(
         if is_open(world, target) && occupant(world, target).is_none() {
             super::cryo::mouse_drop_receive(world, user, target, dragged);
         }
+        return true;
+    }
+    if world.get::<crate::cryosleep::Cryopod>(target).is_some() {
+        crate::cryosleep::mouse_drop_receive(world, user, target, dragged);
         return true;
     }
     if world.get::<super::sleeper::Sleeper>(target).is_none() {
@@ -493,6 +504,8 @@ fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove
         if world.get::<super::sleeper::Sleeper>(pod).is_some() {
             emerges(world, mob, pod);
             super::sleeper::open(world, pod);
+        } else if world.get::<crate::cryosleep::Cryopod>(pod).is_some() {
+            crate::cryosleep::resist(world, mob, pod);
         } else if world.get::<super::cryo::CryoCell>(pod).is_some() {
             super::cryo::container_resist(world, mob, pod);
         } else if let Some(fat) = world.get::<FatSucker>(pod).cloned() {

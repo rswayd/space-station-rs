@@ -27,6 +27,10 @@ pub const SSD_SLEEP_SECS: f32 = 7.0;
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ssd;
 
+/// BandaStation `/mob/Logout`'s `logout_time` (game seconds), for `crate::cryosleep`.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct LoggedOutAt(pub f64);
+
 pub struct SsdPlugin;
 
 impl Plugin for SsdPlugin {
@@ -42,12 +46,13 @@ impl Plugin for SsdPlugin {
 fn on_logout(
     remove: On<Remove<PlayerMob>>,
     living: Query<(), (With<Health>, Without<Ghost>)>,
+    time: Res<Time>,
     mut commands: Commands,
 ) {
     if living.contains(remove.entity)
         && let Ok(mut mob) = commands.get_entity(remove.entity)
     {
-        mob.try_insert(Ssd);
+        mob.try_insert((Ssd, LoggedOutAt(time.elapsed_secs_f64())));
     }
 }
 

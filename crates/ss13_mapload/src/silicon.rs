@@ -53,13 +53,14 @@ pub const CAMERA_RUNTIME_TYPES: [&str; 3] = [
 /// Spawned at runtime by the silicon jobs: the mobs and the borg's cell; by carding, shunting
 /// and AI core construction (`ss13_game::silicon::ai_core`): the core, its board and what it
 /// comes apart into.
-pub const SILICON_TYPES: [&str; 9] = [
+pub const SILICON_TYPES: [&str; 10] = [
     AI_TYPE,
     ROBOT_TYPE,
     AI_EYE_TYPE,
     ROBOT_CELL,
     ROBOT_SYNDICATE_CELL,
     "/obj/structure/ai_core",
+    "/obj/structure/ai_core/latejoin_inactive",
     "/obj/item/circuitboard/aicore",
     "/obj/item/stack/sheet/rglass",
     "/obj/item/stack/sheet/plasteel",

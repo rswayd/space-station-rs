@@ -41,6 +41,12 @@ pub const OOC_VERB_IGNORE: &str = "Игнорировать";
 pub const OOC_VERB_UNIGNORE: &str = "Перестать игнорировать";
 pub const OOC_VERB_MOTD: &str = "MOTD";
 pub const OOC_VERB_ADMIN_NOTICE: &str = "Уведомление администрации";
+/// `/mob/vote` (`crate::votes`).
+pub const OOC_VERB_VOTE: &str = "Голосование";
+/// tg's `"AI Commands"` verb category.
+pub const AI_TAB: &str = "Команды ИИ";
+/// BandaStation `ai_cryo` (`crate::cryosleep`).
+pub const AI_VERB_UNLOAD: &str = "Выгрузиться на сервер хранения";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatPanelData {
@@ -339,16 +345,24 @@ mod server {
                 tabs.push((EMOTES_TAB, verbs));
             }
         }
-        tabs.push((
-            OOC_TAB,
-            vec![
-                OOC_VERB_IGNORE,
-                OOC_VERB_UNIGNORE,
-                OOC_VERB_MOTD,
-                OOC_VERB_ADMIN_NOTICE,
-            ],
-        ));
+        if world.get::<crate::silicon::ai::AiCore>(mob).is_some()
+            || world.get::<crate::silicon::ai::AiEye>(mob).is_some()
+        {
+            tabs.push((AI_TAB, vec![AI_VERB_UNLOAD]));
+        }
+        tabs.push((OOC_TAB, ooc_verbs()));
         tabs
+    }
+
+    /// The OOC tab, which also lobby clients have (tg's client verbs need no mob).
+    fn ooc_verbs() -> Vec<&'static str> {
+        vec![
+            OOC_VERB_IGNORE,
+            OOC_VERB_UNIGNORE,
+            OOC_VERB_MOTD,
+            OOC_VERB_ADMIN_NOTICE,
+            OOC_VERB_VOTE,
+        ]
     }
 
     /// tg `SSstatpanels` `global_data`: what every Status tab shows.
@@ -402,6 +416,12 @@ mod server {
                             verbs: verbs.into_iter().map(str::to_owned).collect(),
                         }),
                 );
+            } else {
+                tabs.push(StatTab {
+                    name: OOC_TAB.to_owned(),
+                    lines: Vec::new(),
+                    verbs: ooc_verbs().into_iter().map(str::to_owned).collect(),
+                });
             }
             let data = StatPanelData { tabs };
             if let Some(mut host) = world.get_mut::<StatPanelHost>(host)
