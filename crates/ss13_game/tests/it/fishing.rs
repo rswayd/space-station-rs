@@ -1,6 +1,6 @@
 //! Fishing over a loopback server: a goldfish goes into an aquarium, a rod cast at the
 //! aquarium hooks it after the bite, an instant win is refused and a win after the minimum
-//! time puts the fish in hand; a cast at water starts fishing, a click while waiting is a
+//! time puts the fish in hand and teaches fishing; a cast at water starts fishing, a click while waiting is a
 //! miss that delays the bite, and using the rod stops.
 
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ use ss13_game::fishing::FishingMinigameUi;
 use ss13_game::fishing::fish::Fish;
 use ss13_game::fishing::server::{Fishing, Phase};
 use ss13_game::inventory::{CarriedBy, Inventory};
+use ss13_game::skills::{Skill, Skills};
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::DmItem;
@@ -281,6 +282,10 @@ fn a_rod_catches_the_aquarium_fish_after_the_minigame() {
     assert!(s.fishing().is_none());
     assert!(s.try_get::<StoredIn>(goldfish).is_none());
     assert!(s.get::<Fish>(goldfish).alive);
+    // ~13 s in the minigame: fishing experience (`FISHING_SKILL_EXP_PER_SECOND`), still Novice-
+    // or-less.
+    let exp = s.get::<Skills>(mob).exp(Skill::Fishing);
+    assert!(exp > 30.0 && exp < 100.0, "{exp}");
 }
 
 #[test]
@@ -310,4 +315,10 @@ fn a_cast_at_water_waits_misses_and_stops() {
     let slot = s.active_slot();
     s.send(0, ClientIntent::ClickSlot(slot));
     s.run_until("fishing stops", |s| s.fishing().is_none());
+    // No minigame, no experience.
+    let mob = s.mob();
+    assert!(
+        s.try_get::<Skills>(mob)
+            .is_none_or(|k| k.exp(Skill::Fishing) == 0.0)
+    );
 }

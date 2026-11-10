@@ -408,7 +408,9 @@ pub fn turf_of(world: &World, item: Entity) -> Option<TilePos> {
         at = world
             .get::<CarriedBy>(at)
             .map(|c| c.0)
-            .or_else(|| world.get::<StoredIn>(at).map(|s| s.0))?;
+            .or_else(|| world.get::<StoredIn>(at).map(|s| s.0))
+            // A MOD module (the internal GPS) is in its control unit.
+            .or_else(|| world.get::<crate::modsuit::server::InSuit>(at).map(|s| s.0))?;
     }
     None
 }

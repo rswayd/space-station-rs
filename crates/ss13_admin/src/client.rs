@@ -1181,6 +1181,10 @@ fn game_tab(ui: &mut egui::Ui, state: &mut AdminUi, out: &mut Vec<AdminRequest>)
                 if ui.small_button("Воздух под собой").clicked() {
                     out.push(AdminRequest::AirStatus);
                 }
+                // tg "Fishing Calculator".
+                if ui.small_button("Калькулятор рыбалки").clicked() {
+                    out.push(AdminRequest::FishingCalculator);
+                }
                 ui.add(
                     egui::TextEdit::singleline(&mut state.gas_text)
                         .hint_text("o2=22;n2=82;TEMP=293.15")

@@ -578,7 +578,7 @@ pub fn required_rights(request: &AdminRequest) -> Option<u32> {
         | ToggleLooc => R_ADMIN,
         AdminList | SetAdminRank { .. } | RemoveAdmin(_) => R_PERMISSIONS,
         PlaySound { .. } => R_SOUND,
-        AirStatus | SpawnAir(_) | VvTile | ViewVariables(_) => R_DEBUG,
+        AirStatus | SpawnAir(_) | FishingCalculator | VvTile | ViewVariables(_) => R_DEBUG,
         EditVariable { .. } => R_VAREDIT,
         Ban { .. } | Unban(_) => R_BAN,
         FindPrototypes(_) | Spawn(_) | Subtypes(_) => R_SPAWN,
@@ -1148,6 +1148,7 @@ fn answer(world: &mut World, client: Entity, request: AdminRequest) -> AnswerRes
             scope,
         } => crate::verbs::play_sound(world, client, &key, &file, volume, scope),
         AdminRequest::AirStatus => crate::verbs::air_status(world, client),
+        AdminRequest::FishingCalculator => crate::verbs::fishing_calculator(world, client),
         AdminRequest::SpawnAir(text) => crate::verbs::spawn_air(world, client, &key, &text),
         AdminRequest::GiveAi {
             template,

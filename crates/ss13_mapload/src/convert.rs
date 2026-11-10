@@ -204,6 +204,7 @@ pub fn convert<'a>(
             .chain(loot.iter().map(String::as_str)),
     );
     loot.extend(machines);
+    loot.extend(crate::fishing::fish_closure(types));
     let mut closure = BTreeSet::new();
     let mut bad = Vec::new();
     for path in needed

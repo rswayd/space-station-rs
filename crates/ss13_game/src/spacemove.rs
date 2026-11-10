@@ -134,11 +134,16 @@ pub fn negates_gravity(world: &World, e: Entity) -> bool {
         || has_trait(world, e, NEGATES_GRAVITY)
 }
 
-/// `!has_gravity()` of `e` at `pos`: `mob_negates_gravity` counts.
+/// `!has_gravity()` of `e` at `pos`: `mob_negates_gravity` counts, and a forced gravity of 0
+/// (the MOD anti-gravity module, `/datum/element/forced_gravity`) floats it anywhere.
 pub fn weightless_at(world: &World, e: Entity, pos: TilePos) -> bool {
-    !crate::multiz::has_gravity(world, pos)
-        && on_space_turf(world, pos)
-        && !negates_gravity(world, e)
+    if negates_gravity(world, e) {
+        return false;
+    }
+    world
+        .get::<crate::gravity::ForcedGravity>(e)
+        .is_some_and(|g| g.0 <= 0.0)
+        || (!crate::multiz::has_gravity(world, pos) && on_space_turf(world, pos))
 }
 
 fn is_lattice(world: &World, e: Entity) -> bool {
@@ -481,7 +486,14 @@ fn track_weightless(
     world: &World,
     mobs: Query<
         (Entity, &TilePos, Option<&Weightless>),
-        (With<Health>, Or<(Changed<TilePos>, With<Weightless>)>),
+        (
+            With<Health>,
+            Or<(
+                Changed<TilePos>,
+                With<Weightless>,
+                Changed<crate::gravity::ForcedGravity>,
+            )>,
+        ),
     >,
     mut commands: Commands,
 ) {

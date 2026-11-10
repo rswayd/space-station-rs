@@ -344,19 +344,37 @@ fn refresh_views(world: &mut World, mut next: Local<f64>) {
 /// (`SStgui.close_uis`).
 fn window_status(
     mut windows: Query<&mut UiWindow>,
-    units: Query<(&Gps, Option<&TilePos>)>,
+    units: Query<(
+        &Gps,
+        Option<&TilePos>,
+        Option<&crate::modsuit::server::InSuit>,
+    )>,
     users: Query<(&Inventory, Option<&Stat>, Option<&TilePos>)>,
+    suits: Query<&crate::modsuit::server::ModSuit>,
 ) {
     for mut window in &mut windows {
         if window.interface != GpsUi::NAME {
             continue;
         }
-        let Ok((gps, at)) = units.get(window.source) else {
+        let Ok((gps, at, in_suit)) = units.get(window.source) else {
             window.cap_status(UiStatus::Close);
             continue;
         };
+        // The MOD internal GPS (`GLOB.deep_inventory_state`): its suit's wearer.
+        let worn_by_user = in_suit
+            .and_then(|s| suits.get(s.0).ok())
+            .is_some_and(|s| s.wearer == Some(window.actor));
         let status = if gps.emped() {
             UiStatus::Close
+        } else if worn_by_user {
+            let conscious = users
+                .get(window.actor)
+                .is_ok_and(|(_, stat, _)| stat.is_none_or(|s| *s == Stat::Conscious));
+            if conscious {
+                UiStatus::Interactive
+            } else {
+                UiStatus::Disabled
+            }
         } else {
             super::item_ui_status(window.source, at, users.get(window.actor).ok())
         };

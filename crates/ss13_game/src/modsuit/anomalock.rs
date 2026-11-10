@@ -9,8 +9,8 @@
 //!   core is not removable (the `locked` and `prototype` kinds);
 //! - `prebuilt` kinds start with a core of an accepted type;
 //! - examine says which core it holds or needs, and the icon gets its `-core` state.
-// shortcut: the modules' own effects (kinesis grabbing, anti-gravity, the teleporter) are not
-// ported, and the module of holding (bluespace core, `storage/holding`) has no lock here: its
+// The modules' own effects are `super::science`.
+// shortcut: the module of holding (bluespace core, `storage/holding`) has no lock here: its
 // storage needs the bag-of-holding rift checks first.
 
 use bevy::prelude::*;

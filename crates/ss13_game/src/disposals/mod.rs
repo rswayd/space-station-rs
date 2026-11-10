@@ -31,7 +31,7 @@
 
 mod bin;
 pub mod build;
-mod mail;
+pub(crate) mod mail;
 pub mod pipes;
 
 use crate::sound::PlaySound;

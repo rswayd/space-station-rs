@@ -193,6 +193,9 @@ pub enum AdminRequest {
     /// `R_DEBUG`: tg `atmos_spawn_air`: a gas string (`o2=22;n2=82;TEMP=293.15`) into the own
     /// tile.
     SpawnAir(String),
+    /// `R_DEBUG`: tg "Fishing Calculator": the `FishingCalculator` window (catch tables and
+    /// difficulties of a fish source with a rod and bait).
+    FishingCalculator,
     /// `R_FUN`: tg "Give AI Controller": a template by its name (`ss13_game` lists them) on
     /// the living mobs of the own tile, optionally turning them hostile.
     GiveAi {

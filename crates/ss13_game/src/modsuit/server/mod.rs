@@ -388,6 +388,9 @@ impl Plugin for ModSuitPlugin {
             crate::modsuit::ai::ModAiPlugin,
             crate::modsuit::link::ModLinkPlugin,
         ));
+        crate::modsuit::supply::plugin(app);
+        crate::modsuit::science::plugin(app);
+        crate::modsuit::pathfinder::plugin(app);
         app.register_ui::<ModSuitUi>()
             .add_systems(Startup, load_db)
             .add_systems(

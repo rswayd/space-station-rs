@@ -29,8 +29,7 @@ const FISH_TARGET_MIN_DISTANCE: f32 = 6.0;
 const FISH_FRICTION_MULT: f32 = 0.9;
 const FISH_SHORT_JUMP_MIN_DISTANCE: f32 = 100.0;
 const FISH_SHORT_JUMP_MAX_DISTANCE: f32 = 200.0;
-/// `/datum/skill/fishing` `SKILL_VALUE_MODIFIER` at `SKILL_LEVEL_NONE` (nobody has the skill
-/// here).
+/// `/datum/skill/fishing` `SKILL_VALUE_MODIFIER` at `SKILL_LEVEL_NONE`.
 pub const NO_SKILL_MODIFIER: f32 = 1.0;
 
 /// The `/datum/fish_movement` subtype.
@@ -104,6 +103,8 @@ pub struct Setup {
     pub lubed: bool,
     pub antigrav: bool,
     pub camo: bool,
+    /// The fisher's fishing `SKILL_VALUE_MODIFIER` (negative at higher levels).
+    pub skill_value: f32,
 }
 
 /// `New` + `start_minigame_phase` + `adjust_to_difficulty`. `rand(low, high)` is DM's.
@@ -113,8 +114,8 @@ pub fn setup(s: &Setup, mut rand: impl FnMut(i32, i32) -> i32) -> MinigameParams
     if s.has_line {
         completion_gain += 1.0;
     }
-    completion_loss += NO_SKILL_MODIFIER / 5.0;
-    completion_gain -= NO_SKILL_MODIFIER / 7.5;
+    completion_loss += s.skill_value / 5.0;
+    completion_gain -= s.skill_value / 7.5;
     let mut reeling_velocity = 1200.0 * s.bait_speed_mult;
     completion_gain *= s.completion_speed_mult;
     let bait_bounce_mult = 0.6 * s.bounciness_mult;
@@ -565,6 +566,7 @@ mod tests {
             lubed: false,
             antigrav: false,
             camo: false,
+            skill_value: NO_SKILL_MODIFIER,
         }
     }
 

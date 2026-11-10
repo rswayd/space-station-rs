@@ -2,8 +2,8 @@
 //! framework (`implant.dm`: `implant()`, `removed()`, `activate()`), the implanter
 //! (`implanter.dm`), the implant case (`implantcase.dm`), the implant pad (`implantpad.dm`) and
 //! the implants the port has: mindshield, tracking, chem, microbomb and macrobomb, EMP,
-//! freedom, firearms authentication, sad trombone and BandaStation's CQC, death alarm and EMP
-//! absorber.
+//! freedom, firearms authentication, sad trombone, the MOD pathfinder's
+//! (`crate::modsuit::pathfinder`) and BandaStation's CQC, death alarm and EMP absorber.
 //!
 //! - An implant is data ([`Implant`]), not an entity: it lives in an implanter or a case
 //!   ([`ImplantHolder`], filled from the container's type, tg `imp_type`) or in a mob
@@ -69,6 +69,8 @@ pub const CQC: &str = "/obj/item/implant/cqc";
 pub const DEATH_ALARM: &str = "/obj/item/implant/death_alarm";
 /// BandaStation `modular_bandastation/objects/code/items/implants/empprotection.dm`.
 pub const EMP_PROTECTION: &str = "/obj/item/implant/empprotection";
+/// The MOD pathfinder module's implant (`crate::modsuit::pathfinder`).
+pub const MOD_PATHFINDER: &str = "/obj/item/implant/mod";
 /// The sad trombone's `death_noise`.
 const SAD_TROMBONE_SOUND: &str = "sound/misc/sadtrombone.ogg";
 /// The death alarm's `channels_for_alert`.
@@ -122,6 +124,9 @@ pub enum ImplantKind {
     DeathAlarm,
     /// BandaStation `empprotection`: `EMP_PROTECT_ALL` on the host.
     EmpProtection,
+    /// `/obj/item/implant/mod`: its button recalls the linked MODsuit
+    /// (`crate::modsuit::pathfinder`).
+    ModPathfinder,
 }
 
 impl ImplantKind {
@@ -138,6 +143,7 @@ impl ImplantKind {
             (CQC, Self::Cqc),
             (DEATH_ALARM, Self::DeathAlarm),
             (EMP_PROTECTION, Self::EmpProtection),
+            (MOD_PATHFINDER, Self::ModPathfinder),
         ]
         .into_iter()
         .find(|(root, _)| is_under(path, root))
@@ -154,7 +160,7 @@ impl ImplantKind {
     fn activated(self) -> bool {
         matches!(
             self,
-            Self::Explosive | Self::Emp | Self::Freedom | Self::Cqc
+            Self::Explosive | Self::Emp | Self::Freedom | Self::Cqc | Self::ModPathfinder
         )
     }
 
@@ -205,6 +211,10 @@ impl ImplantKind {
                 "Обеспечивает защиту нейроинтерфейсов и встроенных компонентов пользователя от \
                  электромагнитных импульсов высокой мощности."
             }
+            Self::ModPathfinder => {
+                "Активируется вручную. Позволяет носителю импланта в любой момент вызвать \
+                 модульный костюм."
+            }
         }
     }
 }
@@ -249,6 +259,7 @@ impl Implant {
             ImplantKind::Cqc => ("CQC имплант", -1),
             ImplantKind::DeathAlarm => ("имплант оповещения о смерти", -1),
             ImplantKind::EmpProtection => ("поглотитель ЭМИ", -1),
+            ImplantKind::ModPathfinder => ("имплант МОД-навигатора", -1),
         };
         let scale = if path == MACROBOMB { 10.0 } else { 1.0 };
         Some(Self {
@@ -602,8 +613,11 @@ pub fn implant(
     if imp.kind.security() && security >= SECURITY_IMPLANT_CAP {
         return Err((imp, Some("Слишком много имплантов охраны!".to_owned())));
     }
-    // A duplicate (`!allow_multiple`): its uses top up the old one's, up to twice the initial.
-    if let Some(other) = implants.0.iter_mut().find(|i| i.path == imp.path) {
+    // A duplicate (`!allow_multiple`; the MOD pathfinder's allows several): its uses top up the
+    // old one's, up to twice the initial.
+    if imp.kind != ImplantKind::ModPathfinder
+        && let Some(other) = implants.0.iter_mut().find(|i| i.path == imp.path)
+    {
         if other.uses < other.initial_uses * 2 {
             other.uses = if imp.uses == -1 {
                 -1
@@ -796,12 +810,19 @@ fn button(world: &World, imp: &Implant) -> (ActionButton, f64) {
         ImplantKind::Freedom => (IMPLANTS_DMI, "freedom"),
         // The CQC implant's own `icon`/`icon_state`.
         ImplantKind::Cqc => ("icons/obj/scrolls.dmi", "scroll2"),
+        // `/datum/action/item_action/mod_recall`.
+        ImplantKind::ModPathfinder => ("icons/mob/actions/actions_mod.dmi", "recall"),
         _ => (IMPLANTS_DMI, "generic"),
+    };
+    let name = if imp.kind == ImplantKind::ModPathfinder {
+        "Вызвать МОД".to_owned()
+    } else {
+        format!("Активировать {}", imp.name)
     };
     (
         ActionButton {
             id: format!("{BUTTON}{}", imp.id),
-            name: format!("Активировать {}", imp.name),
+            name,
             icon: icon(dmi, state),
             background: icon("icons/mob/actions/backgrounds.dmi", "bg_default"),
             border: None,
@@ -871,6 +892,9 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
             ImplantKind::Emp => activate_emp(world, actor, id),
             ImplantKind::Freedom => activate_freedom(world, actor, id),
             ImplantKind::Cqc => activate_cqc(world, actor, id),
+            ImplantKind::ModPathfinder => {
+                crate::modsuit::pathfinder::recall_action(world, actor, id)
+            }
             _ => {}
         }
     }

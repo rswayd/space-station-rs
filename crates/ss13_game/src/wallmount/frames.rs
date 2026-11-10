@@ -40,11 +40,11 @@ pub struct FrameKind {
 }
 
 /// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm`,
-/// `fireaxe.dm`, the photo frame (`photos/frame.dm`, its photo moves along:
-/// [`crate::service::picture_frame_moved`]) and the heretic's eldritch paintings
-/// (`eldritch_painting.dm`, `crate::antag::heretic::server::EldritchPainting`). Subtypes come
-/// before their parents.
-pub static FRAMES: [FrameKind; 13] = [
+/// `fireaxe.dm`, the trophy fish mount (`crate::fishing::mount`), the photo frame
+/// (`photos/frame.dm`, its photo moves along: [`crate::service::picture_frame_moved`]) and the
+/// heretic's eldritch paintings (`eldritch_painting.dm`,
+/// `crate::antag::heretic::server::EldritchPainting`). Subtypes come before their parents.
+pub static FRAMES: [FrameKind; 14] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",
@@ -80,6 +80,12 @@ pub static FRAMES: [FrameKind; 13] = [
         result: "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
         pixel_shift: 32,
         materials: &[(GLASS, 5), (PLASTEEL, 5)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/fish",
+        result: "/obj/structure/fish_mount",
+        pixel_shift: 31,
+        materials: &[(WOOD, 2)],
     },
     FrameKind {
         frame: "/obj/item/wallframe/picture",

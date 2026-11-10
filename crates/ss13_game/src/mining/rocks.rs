@@ -1223,7 +1223,7 @@ pub fn kinetic_prehit(world: &mut World, p: &mut crate::projectile::Projectile, 
     }
 }
 
-pub(super) fn pressure_over(world: &World, pos: TilePos) -> bool {
+pub(crate) fn pressure_over(world: &World, pos: TilePos) -> bool {
     world
         .get_resource::<ss13_atmos::Atmos>()
         .and_then(|a| a.pressure(pos))

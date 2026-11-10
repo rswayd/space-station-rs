@@ -249,7 +249,7 @@ pub(super) fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Mo
             );
             tell(world, client, Span::Notice, "ИИ перенесён на карту");
         }
-        ModJob::RepairCore(_) | ModJob::WireFlower(_) => {}
+        _ => {}
     }
 }
 

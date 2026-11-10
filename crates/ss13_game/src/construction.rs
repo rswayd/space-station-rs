@@ -382,6 +382,8 @@ pub enum Job {
     TapeRespool(Entity),
     /// Fixing, prying, building display cases ([`crate::displaycase`]).
     DisplayCase(crate::displaycase::CaseJob),
+    /// Mounting, taking down and unscrewing trophy fish mounts ([`crate::fishing::mount`]).
+    FishMount(crate::fishing::mount::MountJob),
     /// Linking or unlinking a quantum keycard ([`crate::science::quantum_pad`]).
     QuantumPad(crate::science::quantum_pad::PadJob),
     /// Door seals, table clock repairs, hand gestures ([`crate::devices`]).
@@ -1451,6 +1453,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Sink(job) => crate::plumbing::complete(world, mob, action, job),
         &Job::Decor(job) => crate::decor::complete(world, mob, action, job),
         &Job::DisplayCase(job) => crate::displaycase::complete(world, mob, action, job),
+        &Job::FishMount(job) => crate::fishing::mount::complete(world, mob, action, job),
         &Job::Light(job) => crate::power::lighting::complete(world, action, job),
         Job::Crayon(job) => crate::crayons::complete(world, mob, action, job.clone()),
         &Job::Affliction(job) => crate::afflictions::complete(world, mob, action, job),

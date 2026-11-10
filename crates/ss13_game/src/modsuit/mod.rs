@@ -23,7 +23,13 @@ pub mod modules;
 #[cfg(feature = "server")]
 pub mod paint;
 #[cfg(feature = "server")]
+pub mod pathfinder;
+#[cfg(feature = "server")]
+pub mod science;
+#[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+pub mod supply;
 
 /// The timed MOD steps (`crate::construction::Job::ModSuit`): the thing they act on is in the
 /// job, the `do_after` target is it on the floor or the user when it is held.
@@ -50,6 +56,27 @@ pub enum ModJob {
         minicard: bevy::prelude::Entity,
         card: bevy::prelude::Entity,
     },
+    /// The hydraulic clamp loading the `do_after` target (`clamp/on_select_use`).
+    ClampLoad {
+        control: bevy::prelude::Entity,
+        module: bevy::prelude::Entity,
+    },
+    /// The hydraulic clamp setting its last crate down on the target turf.
+    ClampDrop {
+        control: bevy::prelude::Entity,
+        module: bevy::prelude::Entity,
+    },
+    /// The drill module's `manual_mine` of the target wall (`sphere`: the sphere's
+    /// `exp_multiplier` of 0.2).
+    Drill { sphere: bool },
+    /// The teleporter module's `do_after` before `do_teleport`.
+    Teleport {
+        control: bevy::prelude::Entity,
+        module: bevy::prelude::Entity,
+        dest: ss13_shared::TilePos,
+    },
+    /// The pathfinder module implanting the target (`pathfinder/attack`).
+    PathfinderImplant { module: bevy::prelude::Entity },
 }
 
 /// The end of a [`ModJob`]'s `do_after`.
@@ -66,6 +93,13 @@ pub fn complete(
         }
         ModJob::AiToCard { .. } | ModJob::AiFromCard { .. } | ModJob::MinicardToCard { .. } => {
             ai::complete(world, mob, action, job)
+        }
+        ModJob::ClampLoad { .. } | ModJob::ClampDrop { .. } | ModJob::Drill { .. } => {
+            supply::complete(world, mob, action, job)
+        }
+        ModJob::Teleport { .. } => science::complete(world, mob, action, job),
+        ModJob::PathfinderImplant { module } => {
+            pathfinder::complete_implant(world, mob, action, module)
         }
     }
 }

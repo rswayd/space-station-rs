@@ -334,6 +334,13 @@ pub fn air_status(world: &mut World, client: Entity) -> AnswerResult {
     done(counters)
 }
 
+/// tg "Fishing Calculator": the window for the own mob.
+pub fn fishing_calculator(world: &mut World, client: Entity) -> AnswerResult {
+    let own = own_mob(world, client)?;
+    ss13_game::fishing::admin::open(world, client, own);
+    Ok(None)
+}
+
 /// tg `atmos_spawn_air` on the own tile.
 pub fn spawn_air(world: &mut World, client: Entity, key: &str, text: &str) -> AnswerResult {
     let text = sanitize_text(text, MAX_TEXT);

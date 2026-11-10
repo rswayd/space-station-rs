@@ -850,6 +850,9 @@ pub fn can_weather_act_mob(world: &World, weather: &Weather, mob: Entity, pos: T
 /// helmet reach `FIRE_IMMUNITY_MAX_TEMP_PROTECT`.
 pub fn ash_storm_immune(world: &World, mob: Entity) -> bool {
     world.get::<crate::silicon::Silicon>(mob).is_some()
+        || world
+            .get::<crate::modsuit::supply::AshImmune>(mob)
+            .is_some()
         || world.get::<crate::mecha::core::Pilot>(mob).is_some()
         || world.get::<crate::mobs::BasicMob>(mob).is_some_and(|m| {
             crate::lava::LAVA_IMMUNE_MOBS
