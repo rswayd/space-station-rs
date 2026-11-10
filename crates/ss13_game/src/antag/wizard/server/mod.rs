@@ -32,7 +32,7 @@
 //!   `crate::antag::survivalist`) and Summon Events (each cast turns on or intensifies wizard
 //!   mode, `crate::events::controller::summon_events`).
 //! - [`roundend_report`]: each wizard, its objectives and what it bought.
-// shortcut: no Grand Ritual, perks, Summon Magic or Ghosts or other summons, challenges, loadouts or randomized books, no team
+// shortcut: no perks, Summon Magic or Ghosts or other summons, challenges, loadouts or randomized books, no team
 // HUD between a wizard and its apprentices, no imposters or academy wizards; the book refunds
 // no contract or bottles; the apprentice is the first willing ghost (tg polls them for 15 s);
 // the robeless school's mindswap is not ported (only Knock). Entries whose mechanics are missing
@@ -75,11 +75,14 @@ use crate::tools::tell;
 
 mod den;
 mod gain;
+pub mod ritual;
 mod roundend;
+pub mod runic;
 mod spellbook;
 use den::*;
 pub use gain::*;
 pub use roundend::*;
+pub use runic::magic_recharge;
 pub use spellbook::*;
 
 /// `name = "\proper Космический Волшебник"`, the apprentice's `name`.
@@ -222,7 +225,7 @@ const fn item(
 }
 
 /// The book's entries (`subtypesof(/datum/spellbook_entry)` that are ported), tg's order.
-pub const ENTRIES: [EntryDef; 23] = [
+pub const ENTRIES: [EntryDef; 34] = [
     spell(
         "/datum/spellbook_entry/fireball",
         "Fireball",
@@ -402,6 +405,94 @@ pub const ENTRIES: [EntryDef; 23] = [
         "Магический контракт, привязывающий ученика волшебника к вашей службе, при \
          использовании вызовет его на вашу сторону.",
     ),
+    spell(
+        "/datum/spellbook_entry/summon_simians",
+        "Summon Simians",
+        OFFENSIVE,
+        2,
+        Spell::Simian,
+        "Это заклинание проникает глубоко в элементальный план бананов (обезьяньих, а не клоунских) и вызывает первобытных обезьян и малых горилл, которые тут же выходят из себя и нападают на все вокруг. Веселье! Их слабые, легко манипулируемые умы будут убеждены, что вы один из их союзников, но только на минуту. Если только вы не обезьяна.",
+    ),
+    spell(
+        "/datum/spellbook_entry/teslablast",
+        "Tesla Blast",
+        OFFENSIVE,
+        2,
+        Spell::TeslaBlast,
+        "Зарядите заряд тесла-дуги и выпустите его в случайную ближайшую цель! Пока она заряжается, вы можете свободно перемещаться. Дуга проскакивает между целями и может сбить их с ног.",
+    ),
+    spell(
+        "/datum/spellbook_entry/infinite_guns",
+        "Lesser Summon Guns",
+        OFFENSIVE,
+        3,
+        Spell::InfiniteGuns,
+        "Зачем перезаряжаться, если у вас бесконечное оружие? Вызывает нескончаемый поток винтовок с затвором, которые наносят небольшой урон, но сбивают цели с ног. Изучив это заклинание, вы не сможете выучить Arcane Barrage.",
+    ),
+    spell(
+        "/datum/spellbook_entry/arcane_barrage",
+        "Arcane Barrage",
+        OFFENSIVE,
+        3,
+        Spell::ArcaneBarrage,
+        "Выпустите в противников поток магической энергии с помощью этого (мощного) заклинания. Наносит гораздо больше урона, чем Lesser Summon Guns, но не сбивает цели с ног. Для использования требуются обе свободные руки. Изучив это заклинание, вы не сможете выучить Lesser Summon Gun.",
+    ),
+    spell(
+        "/datum/spellbook_entry/the_traps",
+        "The Traps!",
+        DEFENSIVE,
+        1,
+        Spell::TheTraps,
+        "Вызовите вокруг себя несколько ловушек. Они нанесут урон и разозлят любых врагов, которые на них наступят.",
+    ),
+    spell(
+        "/datum/spellbook_entry/bees",
+        "Lesser Summon Bees",
+        DEFENSIVE,
+        2,
+        Spell::Bees,
+        "Это заклинание магически бьет по транспространственному улью, мгновенно вызывая рой пчел в ваше местоположение. Эти пчелы НЕ дружелюбны ко кому-либо.",
+    ),
+    spell(
+        "/datum/spellbook_entry/spellpacket",
+        "Thrown Lightning",
+        DEFENSIVE,
+        2,
+        Spell::SpellPacket,
+        "Выкованный из мистической энергии, мешочек чистой силы, известный как мешочек заклинаний, появится в вашей руке и при броске оглушит цель.",
+    ),
+    spell(
+        "/datum/spellbook_entry/shapeshift",
+        "Wild Shapeshift",
+        ASSISTANCE,
+        1,
+        Spell::WildShapeshift,
+        "Примите на время облик другого существа, чтобы использовать его способности. После того как вы сделали свой выбор, его нельзя изменить.",
+    ),
+    item(
+        "/datum/spellbook_entry/item/bloodbottle",
+        "Bottle of Blood",
+        ASSISTANCE,
+        2,
+        "/obj/item/antag_spawner/slaughter_demon",
+        "Бутылка с магической кровью, запах которой привлекает внепространственных существ, если ее разбить. Но будьте осторожны, существа, вызываемые магией крови, неизбирательны в своих убийствах, и вы сами можете стать жертвой.",
+    ),
+    item(
+        "/datum/spellbook_entry/item/hugbottle",
+        "Bottle of Tickles",
+        ASSISTANCE,
+        1,
+        "/obj/item/antag_spawner/slaughter_demon/laughter",
+        "Бутылка с волшебным напитком, запах которого притягивает очаровательных внепространственных существ, если его разбить. Эти существа похожи на демонов резни, но они не убивают своих жертв навсегда, вместо этого помещая их во внепространственный мир обьятий, из которого они освобождаются после смерти демона. Хаотично, но не окончательно деструктивно. С другой стороны, реакция экипажа может быть очень разрушительной.",
+    ),
+    item(
+        "/datum/spellbook_entry/item/runic_scepter",
+        "Scepter of Vendormancy",
+        ASSISTANCE,
+        2,
+        runic::SCEPTER,
+        "Скипетр, содержащий силу Рунической Вендормантии. Он может вызвать до 3 рунических вендоров, которые со временем разлагаются, но могут быть брошены в противников или непосредственно взорваны. Если заряды кончатся, после длительного периода времени они восстановятся.",
+    ),
     EntryDef {
         id: "/datum/spellbook_entry/summon/guns",
         name: "Summon Guns",
@@ -503,6 +594,8 @@ pub enum WizardObjective {
         target: Entity,
         text: String,
     },
+    /// `on_ritual_complete`: "Завершите Великий ритуал не менее семи раз."
+    RitualDone,
 }
 
 impl WizardObjective {
@@ -511,6 +604,7 @@ impl WizardObjective {
             Self::Common(o) => o.explanation.clone(),
             Self::Survive => "Оставайтесь в живых до самого конца.".to_owned(),
             Self::Protect { text, .. } => text.clone(),
+            Self::RitualDone => "Завершите Великий ритуал не менее семи раз.".to_owned(),
         }
     }
 
@@ -518,6 +612,7 @@ impl WizardObjective {
         match self {
             Self::Common(o) => o.check_completion(world, &[owner], end),
             Self::Survive => considered_alive(world, owner),
+            Self::RitualDone => true,
             Self::Protect { target, .. } => considered_alive(world, *target),
         }
     }
@@ -747,6 +842,30 @@ impl ServerUi for SpellbookUi {
     }
 }
 
+/// The wizard's `do_after`s (`crate::construction::Job::Wizard`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WizardJob {
+    DrawRune,
+    InvokeRune,
+    SummonVendor(TilePos),
+    RechargeScepter(Entity),
+}
+
+/// A finished [`WizardJob`].
+pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: WizardJob) {
+    match job {
+        WizardJob::DrawRune | WizardJob::InvokeRune => {
+            ritual::complete_job(world, mob, action, job)
+        }
+        WizardJob::SummonVendor(_) => {
+            if let Some(scepter) = action.item {
+                runic::complete_job(world, mob, scepter, job);
+            }
+        }
+        WizardJob::RechargeScepter(item) => runic::complete_job(world, mob, item, job),
+    }
+}
+
 pub struct WizardPlugin;
 
 impl Plugin for WizardPlugin {
@@ -757,6 +876,13 @@ impl Plugin for WizardPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 700, |w, c| {
             crate::antag::wizard::server::attack_self(w, c.client, c.mob, c.target)
         });
+        app.add_click_handler(ClickPhase::AttackSelf, 3301, |w, c| {
+            runic::attack_self(w, c.client, c.mob, c.target)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3451, |w, c| {
+            runic::held_on_target(w, c)
+        });
+        app.add_click_handler(ClickPhase::EmptyHand, 3451, |w, c| ritual::interact(w, c));
         if !app.world().contains_resource::<WizardConfig>() {
             app.init_resource::<WizardConfig>();
         }
@@ -782,8 +908,18 @@ impl Plugin for WizardPlugin {
                     open_info,
                     book_acts,
                     prompt_answers.after(PromptSystems::Answer),
+                    ritual::buttons,
+                    ritual::finale_answers.after(PromptSystems::Answer),
                 )
                     .in_set(UiSystems::Handle),
+            )
+            .add_systems(
+                Update,
+                (
+                    runic::adopt,
+                    (runic::ranged_clicks, runic::tick, ritual::tick)
+                        .after(crate::click::ResolveClicks),
+                ),
             );
     }
 

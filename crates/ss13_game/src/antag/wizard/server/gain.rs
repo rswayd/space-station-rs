@@ -237,6 +237,7 @@ pub fn add_wizard(world: &mut World, mob: Entity) -> bool {
     crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::SPACE_WIZARD);
     crate::species::set_species(world, mob, crate::species::SpeciesId::Human);
     equip(world, mob, false);
+    ritual::grant(world, mob);
     let objectives = with_rng(world, |world, rng| forge_objectives(world, mob, rng));
     let hud_icon = hud_icon(world, "wizard");
     world.entity_mut(mob).insert((

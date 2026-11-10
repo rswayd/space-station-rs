@@ -42,3 +42,5 @@
 
 - **Код:** [`/datum/action/cooldown/spell/forcewall/mime`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/self/forcewall.dm#L45), [`/datum/action/cooldown/spell/conjure_item/invisible_box`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/conjure_item/invisible_box.dm#L3), [`/datum/action/cooldown/spell/conjure/invisible_chair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/conjure/invisible_chair.dm#L1), [`/obj/item/book/granter/action/spell/mime`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/granters/magic/mime.dm#L1)
 - **Статус в ss13-rs:** ❌ нет
+
+> Из `antagonists/spells.md`: заклинания мима (`InvisibleWall`, `InvisibleChair`, `InvisibleBox`) реализованы в `crates/ss13_game/src/spells/conjure.rs`, нужна их выдача мимам и обет (`SPELL_REQUIRES_MIME_VOW`).

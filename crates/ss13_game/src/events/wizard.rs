@@ -815,6 +815,8 @@ mod tests {
             marked: None,
             hand: None,
             robeless: false,
+            conjured: Vec::new(),
+            shape: None,
         };
         // Instant Summons has one level only: never levelled.
         assert_eq!(max, 1);

@@ -44,6 +44,17 @@ pub fn roundend_report(world: &mut World, end: RoundEnd) -> Vec<ChatMessage> {
             ChatSegment::new(Span::RedText, "Волшебник провалился!")
         }]));
         let name = name_of(world, mob);
+        if let Some(ritual) = world.get::<ritual::GrandRitual>(mob)
+            && ritual.times_completed > 0
+        {
+            out.push(ChatMessage {
+                channel: ChatChannel::System,
+                segments: vec![ChatSegment::new(
+                    Span::Bold,
+                    format!("Завершенно Великих ритуалов: {}", ritual.times_completed),
+                )],
+            });
+        }
         if wizard.purchases.is_empty() {
             out.push(line(vec![ChatSegment::new(
                 Span::Bold,
