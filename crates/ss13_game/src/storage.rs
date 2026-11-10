@@ -196,6 +196,9 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
     if crate::cargo::mail::bag_refuses(world, storage, item) {
         return Err(Refusal::CantHold);
     }
+    if crate::implants::parts::pocket_refuses(world, storage, item) {
+        return Err(Refusal::CantHold);
+    }
     let contents: Vec<u8> = world
         .get::<Stored>(storage)
         .map(|s| s.items().iter().map(|&e| w_class(world, e)).collect())
@@ -628,7 +631,9 @@ pub fn reachable(world: &World, mob: Entity, storage: Entity) -> bool {
         return false;
     }
     let holder = crate::clothing::holsters::jumpsuit_of(world, storage).unwrap_or(storage);
-    if world.get::<CarriedBy>(holder).is_some_and(|c| c.0 == mob) {
+    if world.get::<CarriedBy>(holder).is_some_and(|c| c.0 == mob)
+        || crate::implants::parts::host_of(world, storage) == Some(mob)
+    {
         return true;
     }
     in_reach(world, mob, holder)
@@ -756,7 +761,8 @@ fn storage_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<Storage
         // Able to act (tg screen clicks go through `ClickOn`): conscious, hands free, the
         // storage in reach; from inside a closet only what the mob carries (`CanReach`).
         let traits = crate::status_effects::incapacitation(world, mob);
-        let carried = world.get::<CarriedBy>(storage).is_some_and(|c| c.0 == mob);
+        let carried = world.get::<CarriedBy>(storage).is_some_and(|c| c.0 == mob)
+            || crate::implants::parts::host_of(world, storage) == Some(mob);
         if world.get::<crate::health::Stat>(mob) != Some(&crate::health::Stat::Conscious)
             || traits.incapacitated
             || traits.hands_blocked

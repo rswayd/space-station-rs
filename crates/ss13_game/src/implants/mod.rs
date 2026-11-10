@@ -5,12 +5,18 @@
 //! one), chem, exile and anti-teleportation, bluespace grounding, beacon, microbomb, macrobomb,
 //! fake macrobomb and tactical deniability, EMP, smoke, freedom, firearms authentication, sad
 //! trombone, deathrattle, spell, the abductor's recall, the MOD pathfinder's
-//! (`crate::modsuit::pathfinder`) and BandaStation's CQC, death alarm and EMP absorber.
+//! (`crate::modsuit::pathfinder`), storage, internal radio, stealth ([`stealth`]) and
+//! BandaStation's CQC, death alarm and EMP absorber.
 //!
 //! - An implant is data ([`Implant`]), not an entity: it lives in an implanter or a case
 //!   ([`ImplantHolder`], filled from the container's type, tg `imp_type`) or in a mob
 //!   ([`Implants`], tg `implants`). A chem implant's reagents are the case's [`Reagents`] while it
-//!   is in a case (tg `reagents = imp.reagents`), so a syringe fills it there.
+//!   is in a case (tg `reagents = imp.reagents`), so a syringe fills it there; a signaler on the
+//!   case syncs the chem implant to its frequency and code (then the matching signal injects
+//!   everything, and neither death nor the prisoner console does).
+//! - Only the implants whose tg state lives on the implant object get an entity ([`parts`],
+//!   `Implant::part`), made at implantation and despawned at removal: the storage implant's
+//!   bluespace pocket and the internal radio implant's radio.
 //! - The implanter on a living mob ([`implant_clicks`], tg `implanter/attack`): yourself at once,
 //!   someone else after a 5 s `do_after`; then [`implant`] (tg `implant()`): no silicons, at most
 //!   [`SECURITY_IMPLANT_CAP`] security implants, a duplicate (or a subtype of it) tops up its
@@ -37,13 +43,10 @@
 //!   and the TRAC implant (gone after 5 minutes).
 //! - [`remove_implant`] is tg `removed()` (surgery and the console use it); the mindshield's
 //!   removal tells the mob unless dead.
-// shortcut: no implant entities (no implant item to drop, no `ABSTRACT` item in contents), so no
-// storage implant (its bluespace pocket lives on the implant), internal radio implant or
-// tactical map; an implanter or case of a type the port has no implant for is empty; no
-// renaming with a pen, no signaler sync of the chem implant, no admin logs; the ghosts get a
-// chat line instead of a `notify_ghosts` alert.
-// shortcut: the chem implant's injection does not expose blood reagents
-// (`crate::medical::blood::expose_inject`): an implant full of blood only adds blood reagent.
+// shortcut: no implant items (no implant to drop, no `ABSTRACT` item in contents); an
+// implanter or case of a type the port has no implant for is empty (the tactical map implant
+// waits for the minimap); no renaming with a pen, no admin logs; the ghosts get a chat line
+// instead of a `notify_ghosts` alert.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -67,6 +70,8 @@ use crate::tools::{Actor, DoAfter, do_after, tell};
 
 pub mod chair;
 pub mod pad;
+pub mod parts;
+pub mod stealth;
 
 pub const IMPLANTER_ROOT: &str = "/obj/item/implanter";
 pub const CASE_ROOT: &str = "/obj/item/implantcase";
@@ -109,6 +114,10 @@ pub const FAKE_MACROBOMB: &str = "/obj/item/implant/explosive/macro/fake";
 /// `implant_deathrattle.dm`.
 pub const DEATHRATTLE: &str = "/obj/item/implant/deathrattle";
 pub const DEATHRATTLE_LAVALAND: &str = "/obj/item/implant/deathrattle/lavaland";
+pub const STORAGE: &str = "/obj/item/implant/storage";
+pub const STEALTH: &str = "/obj/item/implant/stealth";
+/// The internal radio implant and its subtypes (`parts::RADIO_MINING`, ...).
+pub const RADIO: &str = "/obj/item/implant/radio";
 /// The beacon's and the tracking implant's `lifespan_postmortem`.
 pub const POSTMORTEM_SECS: f64 = 10.0 * 60.0;
 /// The TRAC implant's `lifespan`.
@@ -200,6 +209,12 @@ pub enum ImplantKind {
     Smoke,
     /// `deathrattle`: the deaths of its group's other hosts.
     Deathrattle,
+    /// `storage`: a bluespace pocket ([`parts`]), opened by its button.
+    Storage,
+    /// `stealth`: its button deploys the agent box ([`stealth`]).
+    Stealth,
+    /// `radio`: an internal radio ([`parts`]); its button opens the radio's window.
+    Radio,
 }
 
 impl ImplantKind {
@@ -224,6 +239,9 @@ impl ImplantKind {
             (ABDUCTOR, Self::Abductor),
             (SMOKE, Self::Smoke),
             (DEATHRATTLE, Self::Deathrattle),
+            (STORAGE, Self::Storage),
+            (STEALTH, Self::Stealth),
+            (RADIO, Self::Radio),
         ]
         .into_iter()
         .find(|(root, _)| is_under(path, root))
@@ -247,13 +265,16 @@ impl ImplantKind {
                 | Self::ModPathfinder
                 | Self::Abductor
                 | Self::Smoke
+                | Self::Storage
+                | Self::Stealth
+                | Self::Radio
         )
     }
 
     /// `implant_color` of its case.
     fn color(self) -> &'static str {
         match self {
-            Self::Explosive | Self::Emp | Self::Freedom => "r",
+            Self::Explosive | Self::Emp | Self::Freedom | Self::Storage => "r",
             _ => "b",
         }
     }
@@ -269,7 +290,8 @@ impl ImplantKind {
             }
             Self::Chem => {
                 "Заполняется шприцем, пока лежит в кейсе. Срабатывает при имплантации. \
-                 Позволяет удалённо вводить реагенты носителю."
+                 Позволяет удалённо вводить реагенты носителю. Может синхронизироваться с \
+                 сигналером."
             }
             Self::Explosive => {
                 "Срабатывает при смерти или по сигналу. Подрывает микровзрывчатку. Может \
@@ -325,6 +347,15 @@ impl ImplantKind {
                 "Требует настройки перед имплантацией. Срабатывает при имплантации. Сообщает \
                  носителю о смертях других носителей имплантов той же группы."
             }
+            // The storage implant has no `implant_info` of its own.
+            Self::Storage => "Информация отсутствует.",
+            Self::Stealth => {
+                "Активируется вручную. Создаёт вокруг носителя ужасно хрупкую картонную коробку \
+                 со встроенным постепенным оптическим камуфляжем."
+            }
+            Self::Radio => {
+                "Срабатывает при имплантации. Обеспечивает приём и передачу радиосигналов."
+            }
         }
     }
 }
@@ -356,6 +387,12 @@ pub struct Implant {
     pub ready_at: f64,
     /// The deathrattle's `current_group` ([`DeathrattleGroups`]).
     pub group: Option<u32>,
+    /// The chem implant's synced signaler `frequency` (then `code`); `None`: not synced.
+    pub frequency: Option<u16>,
+    pub code: i32,
+    /// The implant's entity in its host ([`parts`]): the storage implant's pocket, the radio
+    /// implant's radio.
+    pub part: Option<Entity>,
     /// Tells the implant's button apart in its mob.
     pub id: u32,
 }
@@ -394,6 +431,10 @@ impl Implant {
             ImplantKind::DeathAlarm => ("имплант оповещения о смерти", -1),
             ImplantKind::EmpProtection => ("поглотитель ЭМИ", -1),
             ImplantKind::ModPathfinder => ("имплант МОД-навигатора", -1),
+            ImplantKind::Storage => ("имплант-хранилище", -1),
+            ImplantKind::Stealth => ("имплант S3", -1),
+            ImplantKind::Radio if is_under(path, parts::RADIO_SLIME) => ("слаймовое радио", -1),
+            ImplantKind::Radio => ("имплант внутреннего радио", -1),
         };
         let scale = if path == MACROBOMB { 10.0 } else { 1.0 };
         let delay = match path {
@@ -415,6 +456,9 @@ impl Implant {
             granted: false,
             ready_at: 0.0,
             group: None,
+            frequency: None,
+            code: 0,
+            part: None,
             id,
         })
     }
@@ -584,6 +628,7 @@ impl Plugin for ImplantsPlugin {
             );
         chair::build(app);
         pad::build(app);
+        stealth::build(app);
     }
 }
 
@@ -632,6 +677,13 @@ pub fn imp_type(path: &str) -> Option<&'static str> {
         (
             "/obj/item/implantcase/deathrattle/lavaland",
             DEATHRATTLE_LAVALAND,
+        ),
+        ("/obj/item/implanter/storage", STORAGE),
+        ("/obj/item/implanter/stealth", STEALTH),
+        ("/obj/item/implanter/radio", RADIO),
+        (
+            "/obj/item/implanter/radio/syndicate",
+            parts::RADIO_SYNDICATE,
         ),
     ];
     // Exact types: `/obj/item/implanter/tracking/gps` holds a GPS (tg cannot implant it).
@@ -878,6 +930,20 @@ pub fn implant(
     if imp.kind == ImplantKind::Freedom && world.get::<crate::mobs::BasicMob>(target).is_some() {
         return Err((imp, Some("Это было бы пустой тратой!".to_owned())));
     }
+    // `storage/implant`: one already there grows its pocket instead (up to 4 slots); the new
+    // implant is used up.
+    if imp.kind == ImplantKind::Storage
+        && let Some(pocket) = implants
+            .0
+            .iter()
+            .find(|i| i.kind == ImplantKind::Storage)
+            .map(|i| i.part)
+    {
+        if pocket.is_some_and(|p| parts::grow_pocket(world, p)) {
+            return Ok(());
+        }
+        return Err((imp, None));
+    }
     // tg counts the security implants already there for any new implant, so two of them block
     // every other implant too; the cap is meant for security implants (deviation).
     let security = implants.0.iter().filter(|i| i.security()).count();
@@ -912,6 +978,11 @@ pub fn implant(
     }
     if imp.kind == ImplantKind::Chem && imp.reagents.is_none() {
         imp.reagents = Some(chem_holder());
+    }
+    match imp.kind {
+        ImplantKind::Storage => imp.part = Some(parts::spawn_pocket(world, target)),
+        ImplantKind::Radio => imp.part = Some(parts::spawn_radio(world, target, &imp.path)),
+        _ => {}
     }
     let (kind, id, spell) = (imp.kind, imp.id, imp.spell);
     let path = imp.path.clone();
@@ -971,7 +1042,7 @@ pub fn implant(
 pub fn remove_implant(world: &mut World, mob: Entity, id: u32, silent: bool) -> Option<Implant> {
     let mut implants = world.get_mut::<Implants>(mob)?;
     let index = implants.0.iter().position(|i| i.id == id)?;
-    let imp = implants.0.remove(index);
+    let mut imp = implants.0.remove(index);
     world.entity_mut(mob).remove::<Detonation>();
     if imp.kind == ImplantKind::Mindshield {
         world
@@ -1029,6 +1100,15 @@ pub fn remove_implant(world: &mut World, mob: Entity, id: u32, silent: bool) -> 
     {
         world.entity_mut(mob).remove::<TracExpiry>();
     }
+    if let Some(part) = imp.part.take().filter(|&p| world.get_entity(p).is_ok()) {
+        match imp.kind {
+            ImplantKind::Storage => parts::rupture_pocket(world, mob, part),
+            ImplantKind::Radio => parts::remove_radio(world, mob, part),
+            _ => {
+                world.despawn(part);
+            }
+        }
+    }
     refresh_buttons(world, mob);
     Some(imp)
 }
@@ -1060,11 +1140,14 @@ pub fn tracked(world: &mut World, kind: ImplantKind) -> Vec<(Entity, u32)> {
 /// the click was theirs.
 pub fn item_interaction(
     world: &mut World,
-    _client: Entity,
+    client: Entity,
     mob: Entity,
     held: Entity,
     target: Entity,
 ) -> bool {
+    if signaler_sync(world, client, held, target) {
+        return true;
+    }
     let (Some(tool), Some(other)) = (
         world.get::<ImplantHolder>(held).cloned(),
         world.get::<ImplantHolder>(target).cloned(),
@@ -1093,6 +1176,90 @@ pub fn item_interaction(
     true
 }
 
+/// `implantcase/item_interaction` -> `chem/signaler_sync`: a signaler on a case holding a chem
+/// implant gives the implant its frequency and code.
+fn signaler_sync(world: &mut World, client: Entity, signaler: Entity, case: Entity) -> bool {
+    use crate::assemblies::server::{Assembly, Device};
+    let Some(Device::Signaler {
+        frequency, code, ..
+    }) = world.get::<Assembly>(signaler).map(|a| a.device.clone())
+    else {
+        return false;
+    };
+    let Some(mut holder) = world.get_mut::<ImplantHolder>(case) else {
+        return false;
+    };
+    if !holder.case {
+        return false;
+    }
+    let Some(imp) = holder.imp.as_mut().filter(|i| i.kind == ImplantKind::Chem) else {
+        return false;
+    };
+    let first = imp.frequency.is_none();
+    imp.frequency = Some(frequency);
+    imp.code = code;
+    let imp_name = imp.name.clone();
+    let signaler_name = name_of(world, signaler);
+    let rest = if first {
+        ", отключая другие способы активации"
+    } else {
+        ""
+    };
+    tell(
+        world,
+        client,
+        Span::Plain,
+        format!("Вы синхронизируете {imp_name} с кодом и частотой {signaler_name}{rest}."),
+    );
+    true
+}
+
+/// `chem/receive_signal` on the signaler band (`crate::assemblies::server::post_signal`): every
+/// chem implant synced to `frequency` and `code`, within `range` tiles of `from` when `range` is
+/// not 0, injects everything (`activate(reagents.total_volume)`).
+pub fn chem_signal(
+    world: &mut World,
+    frequency: u16,
+    code: i32,
+    from: Option<TilePos>,
+    range: u32,
+) {
+    let hits: Vec<(Entity, u32, f32)> = world
+        .query::<(Entity, &Implants)>()
+        .iter(world)
+        .flat_map(|(mob, implants)| {
+            implants
+                .0
+                .iter()
+                .filter(|i| {
+                    i.kind == ImplantKind::Chem && i.frequency == Some(frequency) && i.code == code
+                })
+                .map(move |i| {
+                    let volume = i.reagents.as_ref().map_or(0.0, |r| r.total_volume);
+                    (mob, i.id, volume)
+                })
+        })
+        .collect();
+    for (mob, id, volume) in hits {
+        if range > 0 {
+            let (Some(from), Some(to)) = (from, crate::explosions::turf_of(world, mob)) else {
+                continue;
+            };
+            if from.chebyshev(to).is_none_or(|d| d > range) {
+                continue;
+            }
+        }
+        chem_inject(world, mob, id, volume);
+    }
+}
+
+/// `chem/is_shown_on_console`'s `!frequency`: a synced chem implant is not on the console.
+pub fn chem_synced(world: &World, mob: Entity, id: u32) -> bool {
+    implants_of(world, mob)
+        .iter()
+        .any(|i| i.id == id && i.frequency.is_some())
+}
+
 // ---------------------------------------------------------------------------------------------
 // Activation
 
@@ -1113,20 +1280,34 @@ fn button(world: &World, imp: &Implant) -> (ActionButton, f64) {
         ImplantKind::Cqc => ("icons/obj/scrolls.dmi", "scroll2"),
         // `/datum/action/item_action/mod_recall`.
         ImplantKind::ModPathfinder => ("icons/mob/actions/actions_mod.dmi", "recall"),
+        ImplantKind::Storage => (IMPLANTS_DMI, "storage"),
+        // `/datum/action/item_action/agent_box`.
+        ImplantKind::Stealth => ("icons/mob/actions/actions_items.dmi", "deploy_box"),
+        // The radio implant's own `icon`/`icon_state`.
+        ImplantKind::Radio if is_under(&imp.path, parts::RADIO_SLIME) => (
+            "icons/obj/medical/organs/organs.dmi",
+            "adamantine_resonator",
+        ),
+        ImplantKind::Radio => ("icons/obj/devices/voice.dmi", "walkietalkie"),
         _ => (IMPLANTS_DMI, "generic"),
     };
-    let name = if imp.kind == ImplantKind::ModPathfinder {
-        "Вызвать МОД".to_owned()
+    let name = match imp.kind {
+        ImplantKind::ModPathfinder => "Вызвать МОД".to_owned(),
+        ImplantKind::Stealth => "Развернуть коробку".to_owned(),
+        _ => format!("Активировать {}", imp.name),
+    };
+    let (background, border) = if imp.kind == ImplantKind::Stealth {
+        ("bg_agent", Some("bg_agent_border"))
     } else {
-        format!("Активировать {}", imp.name)
+        ("bg_default", None)
     };
     (
         ActionButton {
             id: format!("{BUTTON}{}", imp.id),
             name,
             icon: icon(dmi, state),
-            background: icon("icons/mob/actions/backgrounds.dmi", "bg_default"),
-            border: None,
+            background: icon("icons/mob/actions/backgrounds.dmi", background),
+            border: border.and_then(|b| icon("icons/mob/actions/backgrounds.dmi", b)),
             available: true,
             cooldown: 0.0,
             active: false,
@@ -1198,6 +1379,18 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
             }
             ImplantKind::Smoke => activate_smoke(world, actor, id),
             ImplantKind::Abductor => activate_recall(world, actor, id),
+            // `storage/activate`: `atom_storage.open_storage(imp_in)`.
+            ImplantKind::Storage => {
+                if let Some(pocket) = imp.part {
+                    crate::storage::open_view(world, client, actor, pocket);
+                }
+            }
+            ImplantKind::Radio => {
+                if let Some(radio) = imp.part {
+                    parts::open_radio(world, client, actor, radio);
+                }
+            }
+            ImplantKind::Stealth => stealth::activate(world, actor, id),
             _ => {}
         }
     }
@@ -1601,6 +1794,10 @@ fn honkerblast(world: &mut World, at: TilePos, ranges: [f32; 3]) {
 /// tg `chem/activate(amount)`: `amount` units into the host's blood; an empty implant is gone.
 /// The amount injected.
 pub fn chem_inject(world: &mut World, mob: Entity, id: u32, amount: f32) -> f32 {
+    // `if(!cause)`: an empty implant's death or signal does nothing.
+    if amount <= 0.0 {
+        return 0.0;
+    }
     let Some(chem) = world
         .get_resource::<crate::chem::Chem>()
         .map(|c| c.0.clone())
@@ -1613,17 +1810,25 @@ pub fn chem_inject(world: &mut World, mob: Entity, id: u32, amount: f32) -> f32 
     else {
         return 0.0;
     };
+    // Injected blood becomes blood volume (`methods = INJECT`).
+    let blood = chem.id(crate::medical::blood::BLOOD_REAGENT);
+    let blood_before = blood.map_or(0.0, |b| holder.amount(b));
+    let blood_data = blood
+        .and_then(|b| holder.has(b))
+        .and_then(|r| r.data.clone());
     let moved = world
         .get_mut::<crate::chem::MobReagents>(mob)
         .map_or(0.0, |mut m| {
             holder.trans_to(&chem, &mut m.blood, amount, 1.0, None, false, false)
         });
+    let injected = blood_before - blood.map_or(0.0, |b| holder.amount(b));
     let empty = holder.total_volume <= 0.0;
     if let Some(mut implants) = world.get_mut::<Implants>(mob)
         && let Some(imp) = implants.0.iter_mut().find(|i| i.id == id)
     {
         imp.reagents = Some(holder);
     }
+    crate::medical::blood::expose_inject(world, mob, injected, blood_data);
     tell_mob(world, mob, Span::Notice, "Вы слышите тихий писк.");
     if empty {
         tell_mob(
@@ -1668,9 +1873,11 @@ fn on_death(dead: Query<(Entity, &Stat, &Implants), Changed<Stat>>, mut commands
         if *stat != Stat::Dead {
             continue;
         }
+        // A chem implant synced to a signaler did not register for the death (`!frequency`).
         let hits: Vec<(ImplantKind, u32, f32)> = implants
             .0
             .iter()
+            .filter(|i| !(i.kind == ImplantKind::Chem && i.frequency.is_some()))
             .map(|i| {
                 (
                     i.kind,
@@ -2247,5 +2454,94 @@ mod tests {
             implant(&mut world, target, None, imp).unwrap();
         }
         assert_eq!(implants_of(&world, target).len(), 2);
+    }
+
+    /// `storage/implant`: a second storage implant grows the pocket to 4 slots, a third is
+    /// refused; the radio implant's radio is made with it and goes with its removal.
+    #[test]
+    fn storage_pockets_stack_and_radios_go_with_their_implant() {
+        use crate::radio::{ImplantRadio, Radio};
+        let mut world = world();
+        let target = mob(&mut world);
+        let pocket_size = |world: &World, pocket: Entity| {
+            world
+                .get::<crate::storage::Storage>(pocket)
+                .map(|s| (s.max_slots, s.max_total_storage))
+        };
+        implant(&mut world, target, None, Implant::new(STORAGE, 1).unwrap()).unwrap();
+        let pocket = implants_of(&world, target)[0].part.unwrap();
+        assert_eq!(parts::host_of(&world, pocket), Some(target));
+        assert_eq!(pocket_size(&world, pocket), Some((2, 6)));
+        assert!(crate::storage::reachable(&world, target, pocket));
+        implant(&mut world, target, None, Implant::new(STORAGE, 2).unwrap()).unwrap();
+        assert_eq!(pocket_size(&world, pocket), Some((4, 12)));
+        assert!(implant(&mut world, target, None, Implant::new(STORAGE, 3).unwrap()).is_err());
+        assert_eq!(implants_of(&world, target).len(), 1);
+
+        let radio_imp = Implant::new(parts::RADIO_SYNDICATE, 4).unwrap();
+        assert_eq!(radio_imp.kind, ImplantKind::Radio);
+        implant(&mut world, target, None, radio_imp).unwrap();
+        let radio = implants_of(&world, target)
+            .iter()
+            .find(|i| i.kind == ImplantKind::Radio)
+            .and_then(|i| i.part)
+            .unwrap();
+        assert_eq!(world.get::<ImplantRadio>(target).map(|r| r.0), Some(radio));
+        assert!(
+            world
+                .get::<Radio>(radio)
+                .is_some_and(|r| r.receives(ss13_chat::radio::FREQ_SYNDICATE))
+        );
+        remove_implant(&mut world, target, 4, true).unwrap();
+        assert!(world.get_entity(radio).is_err());
+        assert!(world.get::<ImplantRadio>(target).is_none());
+        assert!(world.get::<ss13_chat::speech::EarsWorn>(target).is_none());
+    }
+
+    /// `chem/signaler_sync` through the case: the implant keeps the signaler's frequency and
+    /// code into its host, leaves the console, and an empty one ignores its signal (`!cause`).
+    #[test]
+    fn a_signaler_syncs_the_chem_implant_in_a_case() {
+        use crate::assemblies::server::{Assembly, Attached, Device};
+        let mut world = world();
+        world.init_resource::<Messages<ss13_net::chat::server::SendChat>>();
+        let client = world.spawn_empty().id();
+        let case = world
+            .spawn(ImplantHolder {
+                imp: Implant::new(CHEM, 1),
+                case: true,
+            })
+            .id();
+        let signaler = world
+            .spawn(Assembly {
+                device: Device::Signaler {
+                    frequency: 1457,
+                    code: 30,
+                    range: 0,
+                    locked: false,
+                },
+                secured: true,
+                attached: Attached::None,
+                next_activate: 0.0,
+                send_ready: 0.0,
+            })
+            .id();
+        assert!(signaler_sync(&mut world, client, signaler, case));
+        let imp = world
+            .get::<ImplantHolder>(case)
+            .unwrap()
+            .imp
+            .clone()
+            .unwrap();
+        assert_eq!((imp.frequency, imp.code), (Some(1457), 30));
+        let target = mob(&mut world);
+        implant(&mut world, target, None, imp).unwrap();
+        assert!(chem_synced(&world, target, 1));
+        chem_signal(&mut world, 1457, 30, None, 0);
+        assert_eq!(
+            implants_of(&world, target).len(),
+            1,
+            "empty: nothing happens"
+        );
     }
 }

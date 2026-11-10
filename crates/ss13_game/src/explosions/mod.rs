@@ -478,7 +478,9 @@ pub fn turf_of(world: &World, mut e: Entity) -> Option<TilePos> {
         e = world
             .get::<crate::inventory::CarriedBy>(e)
             .map(|c| c.0)
-            .or_else(|| world.get::<crate::storage::StoredIn>(e).map(|s| s.0))?;
+            .or_else(|| world.get::<crate::storage::StoredIn>(e).map(|s| s.0))
+            // An implant's entity is inside its host (`crate::implants::parts`).
+            .or_else(|| crate::implants::parts::host_of(world, e))?;
     }
     None
 }
