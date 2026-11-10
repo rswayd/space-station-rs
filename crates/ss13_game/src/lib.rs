@@ -372,6 +372,8 @@ pub mod gym;
 #[cfg(feature = "server")]
 pub mod hallucination;
 #[cfg(feature = "server")]
+pub mod hazard_decals;
+#[cfg(feature = "server")]
 pub mod health;
 #[cfg(feature = "client")]
 pub mod health_client;
@@ -603,6 +605,8 @@ pub mod speech;
 #[cfg(feature = "server")]
 pub mod spells;
 #[cfg(feature = "server")]
+pub mod sprays;
+#[cfg(feature = "server")]
 pub mod ssd;
 #[cfg(feature = "server")]
 pub mod stack_recipes;
@@ -674,6 +678,8 @@ pub mod ventcrawl;
 pub mod vision;
 #[cfg(feature = "server")]
 pub mod wallmount;
+#[cfg(feature = "server")]
+pub mod watertank;
 #[cfg(feature = "server")]
 pub mod weapons;
 #[cfg(feature = "server")]

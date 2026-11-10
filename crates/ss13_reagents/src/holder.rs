@@ -434,9 +434,8 @@ impl Holder {
     /// `target_id`), times `multiplier`, keeping purity, pH and the temperature. Reactions in the
     /// target run once after every reagent moved, unless `no_react`. Returns the amount the
     /// target got.
-    // shortcut: `methods` exposure (`expose_mob` on INGEST/INJECT/TOUCH) is not run: tg's
-    // default `penetrates_skin` (VAPOR) adds nothing, and the reagent-specific `expose_*` procs
-    // are not ported.
+    // shortcut: `methods` exposure (`expose_mob`) is the game's, callers run it themselves
+    // (`ss13_game::janitor::expose_by`); this transfer is only the volumes.
     pub fn trans_to(
         &mut self,
         chem: &Chemistry,

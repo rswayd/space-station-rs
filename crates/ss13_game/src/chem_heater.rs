@@ -666,6 +666,7 @@ mod tests {
             boozepwr: 0.0,
             brute_heal: 0.0,
             nutriment_factor: 0.0,
+            penetrates_skin: 4,
             default_container: String::new(),
         }
     }

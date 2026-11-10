@@ -14,6 +14,7 @@
 //!   1000 u of reagents in its colour: each process, every carbon in it without protection
 //!   inhales `2 s / lifetime` of the whole amount into its blood (no `smoke_delay`), and the
 //!   things and the turf under it are exposed to that fraction (`crate::janitor::expose`).
+//! - The smoker is also exposed to it (`SMOKE_MACHINE`: `crate::janitor::expose_by`).
 //! - Freezing smoke ([`do_freezing_smoke`], the nanofrost) first chills the tiles within its
 //!   blast radius: the air goes to 2 K (the decontamination kind: 20 °C, at any distance),
 //!   plasma turns into nitrogen, vents and scrubbers freeze shut (not the decon kind) and
@@ -306,7 +307,7 @@ fn has_smoke(world: &World, pos: TilePos, kind: SmokeKind) -> bool {
 }
 
 /// `get_atmos_adjacent_turfs()`; without the air model, the cardinal tiles whose turf is open.
-fn spread_from(world: &World, pos: TilePos) -> Vec<TilePos> {
+pub(super) fn spread_from(world: &World, pos: TilePos) -> Vec<TilePos> {
     if let Some(atmos) = world.get_resource::<ss13_atmos::Atmos>() {
         return atmos.adjacent_turfs(pos, false);
     }
@@ -509,17 +510,19 @@ fn inhale(world: &mut World, mob: Entity, smoke: &Smoke) {
         return;
     };
     let total = held.total_volume;
+    let fraction = chem_fraction(smoke.kind);
     if let Some(mut m) = world.get_mut::<MobReagents>(mob) {
-        held.trans_to(
-            &chem,
-            &mut m.blood,
-            total,
-            chem_fraction(smoke.kind),
-            None,
-            false,
-            true,
-        );
+        held.trans_to(&chem, &mut m.blood, total, fraction, None, false, true);
     }
+    // `trans_to(..., methods = SMOKE_MACHINE)`: its effect on the smoker.
+    crate::janitor::expose_by(
+        world,
+        mob,
+        &held,
+        fraction,
+        crate::janitor::SMOKE_MACHINE,
+        crate::janitor::WATER_COOLING_TEMPERATURE,
+    );
 }
 
 /// `smoke/chem/process`: the things on the tile (not mobs, not abstract) and the turf.

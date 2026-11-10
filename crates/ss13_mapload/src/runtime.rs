@@ -89,6 +89,13 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/effect/decal/cleanable/blood/gibs/xeno/torso",
     "/obj/effect/decal/cleanable/blood/gibs/xeno/larva",
     "/obj/effect/decal/cleanable/blood/gibs/xeno/larva/body",
+    // `sprays`, `watertank`: the puff, the tanks' nozzles and the resin capsule.
+    "/obj/effect/decal/chempuff",
+    "/obj/item/reagent_containers/spray/mister",
+    "/obj/item/reagent_containers/spray/mister/janitor",
+    "/obj/item/reagent_containers/spray/mister/pepperspray",
+    "/obj/item/extinguisher/mini/nozzle",
+    "/obj/effect/resin_container",
     // `power::singularity`, `power::tesla`: what a delamination or a collapsing tear leaves.
     "/obj/singularity",
     "/obj/tesla_ball",

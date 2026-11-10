@@ -8,7 +8,8 @@
 //!   resin stop it) that have no foam, foaming the mobs there, until the group has its size.
 //! - Every 0.2 s a node loses 0.2 s of lifetime and exposes the objects on its tile and the tile
 //!   to `0.2 × 25 / (initial lifetime × max(25, flood size))` of its reagents (VAPOR,
-//!   `crate::janitor::expose`); each mob in it uses up 0.2 s more instead. Heat over 475 K
+//!   `crate::janitor::expose`); each mob in it is exposed the same way (`foam_mob`) and uses up
+//!   0.2 s more instead. Heat over 475 K
 //!   dissolves it (`prob(T - 475)` a process). Slippery foam slips who walks in (10 s).
 //! - At the end of its lifetime a node leaves its result (`make_result`): foamed metal walls of
 //!   aluminium (20 integrity) or iron (50), smart foam only next to an area border, ATMOS resin
@@ -342,7 +343,17 @@ fn foam_mob(world: &mut World, mob: Entity, foam: &mut Foam, secs: f64) -> bool 
     if foam.lifetime <= 0.0 {
         return false;
     }
-    foam.lifetime -= secs.min(foam.lifetime);
+    let secs = secs.min(foam.lifetime);
+    let group = world.resource::<FluidGroups>().get(foam.group);
+    let total = group.map_or(1, |g| g.total_size);
+    let held = group.and_then(|g| g.reagents.clone());
+    if let Some(held) = held {
+        let fraction = (secs * MINIMUM_DILUTION
+            / (foam.kind.lifetime() * MINIMUM_DILUTION.max(f64::from(total))))
+            as f32;
+        crate::janitor::expose_vapor(world, mob, &held, fraction);
+    }
+    foam.lifetime -= secs;
     true
 }
 

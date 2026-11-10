@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 /// `<assets>/reagents.ron`.
 pub const CHEM_FILE: &str = "reagents.ron";
 
+fn default_penetrates_skin() -> u32 {
+    1 << 2
+}
+
 /// One tg `/datum/reagent` type, every var resolved through inheritance.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ReagentDef {
@@ -47,6 +51,9 @@ pub struct ReagentDef {
     /// `/datum/reagent/consumable/nutriment`: `brute_heal`.
     #[serde(default)]
     pub brute_heal: f32,
+    /// `penetrates_skin`: the exposure methods that soak into the blood (tg default `VAPOR`).
+    #[serde(default = "default_penetrates_skin")]
+    pub penetrates_skin: u32,
     /// `/datum/reagent/consumable`: `nutriment_factor`.
     #[serde(default)]
     pub nutriment_factor: f32,
