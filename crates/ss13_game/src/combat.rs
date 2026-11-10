@@ -408,6 +408,13 @@ fn melee(
                 crate::status_effects::adjust_stamina(world, attacker, cost);
             });
         }
+        // BandaStation `/datum/component/backstabs` (`COMSIG_ITEM_ATTACK`, before blocks).
+        if let Some(w) = &weapon {
+            let item = w.entity;
+            commands.queue(move |world: &mut World| {
+                crate::weapons::backstab::on_attack(world, attacker, target, item);
+            });
+        }
         // tg carbon `attack_hand`: skin-contact diseases pass both ways.
         if weapon.is_none() && attacker != target {
             commands.queue(move |world: &mut World| {

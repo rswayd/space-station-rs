@@ -67,9 +67,11 @@ const INSTANT_PATCH: &str = "/obj/item/reagent_containers/applicator/patch/synth
 const HYPOSPRAY_ROOT: &str = "/obj/item/reagent_containers/hypospray";
 const MEDIPEN_ROOT: &str = "/obj/item/reagent_containers/hypospray/medipen";
 /// Hyposprays with `ignore_flags` (through thick clothing).
-const IGNORE_CLOTHING: [&str; 2] = [
+const IGNORE_CLOTHING: [&str; 3] = [
     MEDIPEN_ROOT,
     "/obj/item/reagent_containers/hypospray/combat",
+    // BandaStation: modular_bandastation/balance/code/containers/reagent_containers.dm.
+    "/obj/item/reagent_containers/hypospray/cmo",
 ];
 const DROPPER_ROOT: &str = "/obj/item/reagent_containers/dropper";
 /// Deciseconds: a patch's `application_delay` and `self_delay`.

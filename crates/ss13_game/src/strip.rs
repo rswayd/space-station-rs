@@ -10,7 +10,8 @@
 //! they are cuffed. Its `use` act on a slot that is neither (tg `ui_act` refuses those):
 //! - with an item there: tg `start_unequip` (a `do_after` of the item's `strip_delay`, 4 s in
 //!   pockets, `POCKET_STRIP_DELAY`), then `finish_unequip` (`doStrip` drops it at their feet,
-//!   handcuffs come off) if it is still the same item and the user still next to them;
+//!   handcuffs come off) if it is still the same item and the user still next to them; a pocket's
+//!   item then goes into a human user's hands (BandaStation `finish_unequip_mob_pocket`);
 //! - empty, with an item in the active hand: tg `start_equip` (a `do_after` of
 //!   `equip_delay_other`, 1 s for pockets), then the item goes into the slot if the slot is still
 //!   empty, the item still fits (`can_equip`, a free hand) and the user still next to them.
@@ -511,6 +512,24 @@ fn refresh(world: &mut World, client: Entity, user: Entity, owner: Entity) {
     world.write_message(OpenUi::new::<StripMenuUi>(client, user, owner, ""));
 }
 
+/// BandaStation `finish_unequip_mob_pocket` after `doStrip`: a human user (`ishuman`) takes
+/// the quietly emptied pocket's item into their hands; the theft is logged.
+fn pocket_to_hands(world: &mut World, user: Entity, owner: Entity, item: Entity) {
+    if world.get::<crate::human::HumanLook>(user).is_some()
+        && let Some(inventory) = world.get::<Inventory>(user).cloned()
+    {
+        crate::storage::put_in_hands(world, user, &inventory, item);
+    }
+    let (who, whom, what) = (
+        name_of(world, user),
+        name_of(world, owner),
+        name_of(world, item),
+    );
+    // shortcut: the server log stands in for tg's per-mob LOG_ATTACK/LOG_VICTIM; move it there
+    // when attack logs exist.
+    info!("{who} has stealthy stripped {whom} of {what}.");
+}
+
 /// End of a [`StripJob`] `do_after` (`crate::tools` checked that neither moved and the user
 /// holds what it held). The rest of tg's `ui_act` after the yield is checked here.
 pub fn complete(world: &mut World, user: Entity, action: &DoAfter, job: StripJob) {
@@ -545,6 +564,11 @@ pub fn complete(world: &mut World, user: Entity, action: &DoAfter, job: StripJob
                 Reach::Slot(slot) => {
                     unequip(world, owner, pos, slot);
                     world.entity_mut(item).remove::<CarriedBy>().insert(pos);
+                    // BandaStation `finish_unequip_mob_pocket`
+                    // (modular_bandastation/balance/code/human_stripping.dm).
+                    if is_pocket(reach) {
+                        pocket_to_hands(world, user, owner, item);
+                    }
                 }
             }
         }
@@ -655,6 +679,32 @@ mod tests {
         );
         assert!(StripMenuUi::parse_act("alt", &UiParams::new(&[])).is_err());
         assert!(is_pocket(ENTRIES[13].1) && is_pocket(ENTRIES[14].1) && !is_pocket(ENTRIES[15].1));
+    }
+
+    #[test]
+    fn emptied_pocket_goes_into_a_human_strippers_hands() {
+        let mut world = World::new();
+        let owner = world.spawn(Inventory::default()).id();
+        let at = TilePos::new(1, 1, 0);
+        let human = world
+            .spawn((
+                Inventory::default(),
+                crate::human::player_body(Entity::PLACEHOLDER, None),
+                at,
+            ))
+            .id();
+        let wallet = world.spawn(at).id();
+        pocket_to_hands(&mut world, human, owner, wallet);
+        assert_eq!(
+            world.get::<Inventory>(human).unwrap().active_item(),
+            Some(wallet)
+        );
+        assert!(world.get::<TilePos>(wallet).is_none());
+        // A non-human user leaves it on the floor (tg `ishuman`).
+        let monkey = world.spawn((Inventory::default(), at)).id();
+        let coin = world.spawn(at).id();
+        pocket_to_hands(&mut world, monkey, owner, coin);
+        assert_eq!(world.get::<TilePos>(coin), Some(&at));
     }
 
     #[test]

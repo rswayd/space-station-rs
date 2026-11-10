@@ -15,7 +15,9 @@
 //! - The round-start report lists the traits with `show_in_report` ([`report_section`]).
 //!
 //! Ported traits are the ones whose mechanism exists here; the pool holds only them (a rolled
-//! trait whose effect does not exist would lie in the report).
+//! trait whose effect does not exist would lie in the report). BandaStation sets weight 0 on
+//! overflow bureaucracy, skub, GMM spotlight, pet day, random spawns and colored assistants
+//! (`modular_bandastation/balance/code/station_traits.dm`): they stay out of the pool for good.
 // shortcut: not in the pool (their systems are not ported): lucky winner, bountiful bounties,
 // glowsticks, premium internals, deathrattle departments, cybernetic revolution, luxury and
 // cramped pods, advanced medbots, shuttle loans, wise cows, ion storms, shuttle sale, missing
