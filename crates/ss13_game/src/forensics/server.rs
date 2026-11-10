@@ -23,14 +23,14 @@
 //! - An evidence bag holds one item up to normal size: clicked on an item it bags it; its sprite
 //!   shows the item, its weight class becomes the item's; used in hand it empties.
 //! - Worn clothes with blood draw tg's `<state>blood` overlay of `icons/effects/blood.dmi` in the
-//!   blood's color ([`blood_overlays`], `get_blood_overlay`); [`transfer_fingerprints_to`] moves
-//!   prints when a thing becomes another (a wall frame mounted); doors take the prints of who
-//!   bumps or clicks them (`try_to_activate_door`).
+//!   blood's color ([`blood_overlays`], `get_blood_overlay`; suits by `blood_overlay_type`:
+//!   `suit`, `armor`, `coat`); an item with blood carries a blood decal ([`item_blood_decals`]);
+//!   [`transfer_fingerprints_to`] moves prints when a thing becomes another (a wall frame mounted);
+//!   doors take the prints of who bumps or clicks them (`try_to_activate_door`).
 //! - An admin (`R_ADMIN`, checked here on the server) examining an atom also gets its hidden
 //!   prints ([`admin_examine`]; tg shows them in the view-variables panel).
-// shortcut: no blood overlay on items on the floor or in hands (tg draws `itemblood` inset into
-// the item's sprite, a blend mode the renderer lacks), every suit bleeds as `suitblood` (no
-// `blood_overlay_type` armor/coat in the converted data), no bloody hands or gloves
+// shortcut: the blood on an item is its own sprite tinted ([`item_blood_decals`], no inset
+// blend in the renderer); no bloody hands or gloves
 // transferring blood to what they touch (tg's `/atom/add_fibers` that would do it is never
 // called), no bloody soles, no blood DNA from blood reagents (they carry only the type), no
 // prints from strip menus or the AI; prints move only on the transfers ported here (most tg
@@ -171,6 +171,7 @@ impl Plugin for ForensicsServerPlugin {
                     ranged_scans.after(ResolveClicks),
                     scanner_timers,
                     evidence_bag_looks.after(crate::inventory::inventory_intents),
+                    item_blood_decals,
                     scanner_acts.in_set(UiSystems::Handle),
                     scanner_status.in_set(UiSystems::StatusHook),
                 ),
@@ -500,15 +501,24 @@ const BLOOD_DMI: &str = "icons/effects/blood.dmi";
 pub fn blood_overlays(
     shown: &Inventory,
     forensics: &Query<&Forensics>,
+    clothing: &Query<&ss13_mapload::DmClothing>,
     icons: &IconIndex,
 ) -> Vec<(f32, Overlay)> {
     use crate::human::layers::{
         FACEMASK_LAYER, GLOVES_LAYER, HEAD_LAYER, NECK_LAYER, SHOES_LAYER, SUIT_LAYER,
         UNIFORM_LAYER,
     };
+    // `/obj/item/clothing/suit` `get_blood_overlay(blood_overlay_type)`: `armor`, `coat` or
+    // `suit`.
+    let suit_type = shown
+        .suit
+        .and_then(|s| clothing.get(s).ok())
+        .map(|c| c.blood_overlay_type.as_str())
+        .filter(|t| !t.is_empty())
+        .unwrap_or("suit");
     let worn = [
         (shown.uniform, UNIFORM_LAYER, "uniform"),
-        (shown.suit, SUIT_LAYER, "suit"),
+        (shown.suit, SUIT_LAYER, suit_type),
         (shown.gloves, GLOVES_LAYER, "glove"),
         (shown.shoes, SHOES_LAYER, "shoe"),
         (shown.head, HEAD_LAYER, "helmet"),
@@ -531,6 +541,58 @@ pub fn blood_overlays(
             ))
         })
         .collect()
+}
+
+/// The blood decal an item draws ([`item_blood_decals`]): the overlay it added.
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct BloodDecal(pub Overlay);
+
+/// The tint's alpha: how much of the blood's color shows over the item.
+const DECAL_ALPHA: u8 = 0x99;
+
+/// The decal an item with `dna` on it draws over its sprite `icon_state`.
+pub fn blood_decal(icon_state: ss13_shared::IconStateId, dna: &[(String, BloodType)]) -> Overlay {
+    let [r, g, b, a] = blood_color(dna);
+    Overlay {
+        color: Some([r, g, b, (u16::from(a) * u16::from(DECAL_ALPHA) / 255) as u8]),
+        ..Overlay::new(icon_state)
+    }
+}
+
+/// `/datum/element/decal/blood` on items (on the floor, in hands, in the HUD): added and
+/// removed as blood DNA comes and goes, in the blood's color.
+// shortcut: tg draws `icons/effects/blood.dmi` `itemblood` with `BLEND_INSET_OVERLAY` (only
+// over the item's opaque pixels); the renderer has no inset blend, so the decal is the item's
+// own sprite tinted in the blood's color. Upgrade when `ss13_render` gets an inset/alpha-mask
+// overlay. A later wholesale rewrite of the item's overlays drops the decal until its blood
+// changes again.
+// Cost: runs only for items whose traces changed this tick.
+#[allow(clippy::type_complexity)]
+fn item_blood_decals(
+    mut items: Query<
+        (Entity, &Forensics, &mut Appearance, Option<&BloodDecal>),
+        (With<DmItem>, Changed<Forensics>),
+    >,
+    mut commands: Commands,
+) {
+    for (item, f, mut look, old) in &mut items {
+        let want = (!f.blood_dna.is_empty()).then(|| blood_decal(look.icon_state, &f.blood_dna));
+        if old.map(|d| &d.0) == want.as_ref() {
+            continue;
+        }
+        if let Some(old) = old {
+            look.overlays.retain(|o| *o != old.0);
+        }
+        match want {
+            Some(decal) => {
+                look.overlays.push(decal.clone());
+                commands.entity(item).try_insert(BloodDecal(decal));
+            }
+            None => {
+                commands.entity(item).try_remove::<BloodDecal>();
+            }
+        }
+    }
 }
 
 /// `/atom/proc/transfer_fingerprints_to`: `from`'s prints and hidden prints (and who touched it
@@ -1305,6 +1367,20 @@ mod tests {
             ("b".into(), BloodType::Lizard),
         ]);
         assert_eq!(mixed, [0x57, 0x35, 0x08, 0xff]);
+    }
+
+    #[test]
+    fn item_decals_tint_the_item_in_the_blood_color() {
+        let id = ss13_shared::IconStateId(7);
+        let decal = blood_decal(id, &[("a".into(), BloodType::APlus)]);
+        assert_eq!(decal.icon_state, id, "the item's own sprite");
+        assert_eq!(decal.color, Some([0xaa, 0x10, 0x10, 0x99]));
+        let water = blood_decal(id, &[("a".into(), BloodType::Water)]);
+        assert_eq!(
+            water.color.map(|c| c[3]),
+            Some(71),
+            "a faint blood stays faint"
+        );
     }
 
     #[test]

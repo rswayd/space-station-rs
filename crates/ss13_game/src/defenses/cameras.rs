@@ -22,11 +22,12 @@
 //!   sensor; the presets come with them. A crowbar asks which part to take out.
 //! - A camera switched on, or back from an EMP, raises its area's camera alarm
 //!   (`ALARM_CAMERA`) for 10 s; an EMPed camera shows its `emp` light.
-// shortcut: no notes held up to the camera, no
-// damage, breaking or repairing; a camera taken apart drops the assembly at full integrity; the
-// monitored areas are tg's `motion_monitored` areas by type (AI, armory, EVA, vault); tg's
-// motion group only tells its first camera (`track_mob` returns after one), here every camera
-// of the area watches.
+//! - Damage ([`crate::obj_damage`]): at half integrity an enabled camera breaks ([`atom_break`]:
+//!   off, the camera alarm up for good); at 0 it is destroyed ([`destroyed`]: cable and iron).
+// shortcut: no notes held up to the camera; a camera taken apart drops the assembly at full
+// integrity; the monitored areas are tg's `motion_monitored` areas by type (AI, armory, EVA,
+// vault); tg's motion group only tells its first camera (`track_mob` returns after one), here
+// every camera of the area watches.
 // Cost: every second, per motion camera (tens on a station), one `in_radius` of the spatial
 // index (1 tile, or its view range in a monitored area).
 
@@ -59,6 +60,7 @@ const CABLE: &str = "/obj/item/stack/cable_coil";
 const PROX_SENSOR: &str = "/obj/item/assembly/prox_sensor";
 const ANALYZER: &str = "/obj/item/analyzer";
 const PLASMA: &str = "/obj/item/stack/sheet/mineral/plasma";
+const IRON: &str = "/obj/item/stack/sheet/iron";
 /// `triggerCameraAlarm` then `addtimer(cancelCameraAlarm, 10 SECONDS)`.
 const CAMERA_ALARM_SECS: f64 = 10.0;
 /// The presets that call `upgradeMotion()` in `Initialize` (the thunderdome camera is the
@@ -277,8 +279,102 @@ pub fn toggle_cam(world: &mut World, e: Entity, user: Option<Entity>, message: b
             None => format!("{camera} {change}!"),
         };
         visible(world, e, &text, &text, Span::Danger);
+        if let Some(&pos) = world.get::<TilePos>(e) {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(pos, "sound/items/tools/wirecutter.ogg", 100.0, true),
+            );
+        }
     }
     refresh_look(world, e);
+}
+
+/// `camera/examine`: the upgrades it has or can take, and how to switch it back on.
+pub fn examine_lines(world: &World, camera: Entity, lines: &mut Vec<crate::examine::Line>) {
+    let Some(enabled) = world.get::<Camera>(camera).map(|c| c.enabled) else {
+        return;
+    };
+    if world.get::<CameraFrame>(camera).is_some() {
+        return;
+    }
+    let info = |text: &str| (Span::Info, text.to_owned());
+    lines.push(info(if world.get::<EmpProtection>(camera).is_some() {
+        "Она защищена от электромагнитных помех."
+    } else {
+        "Она может быть защищена от электромагнитных помех с помощью плазмы."
+    }));
+    lines.push(info(if world.get::<XRay>(camera).is_some() {
+        "Она оборудована рентгеновским фотодиодом."
+    } else {
+        "Она может быть оборудована рентгеновским фотодиодом с помощью газового анализатора."
+    }));
+    lines.push(info(if world.get::<MotionSensor>(camera).is_some() {
+        "Она оборудована датчиком движения."
+    } else {
+        "Она может быть улучшена с помощью датчика движения."
+    }));
+    let open = panel_open(world, camera);
+    let powered = world.get::<crate::power::Unpowered>(camera).is_none();
+    if !enabled {
+        lines.push(info("Она сейчас выключена."));
+        if !open && powered {
+            lines.push((
+                Span::Notice,
+                "Вам придётся открыть панель техобслуживания с помощью отвёртки, чтобы включить её."
+                    .to_owned(),
+            ));
+        }
+    }
+    if open {
+        lines.push(info("Панель техобслуживания открыта."));
+        if !enabled && powered {
+            lines.push(info("Она может быть перезапущена с помощью кусачек."));
+        }
+    }
+}
+
+/// `camera/atom_break`: an enabled camera goes off with a camera alarm that stays up (no
+/// `cancelCameraAlarm` timer) and is `BROKEN`, so armor no longer applies
+/// (`camera/run_atom_armor`). A disabled one returns before the parent: it never breaks.
+/// True when `e` is a camera.
+pub fn atom_break(world: &mut World, e: Entity) -> bool {
+    let Some(enabled) = world.get::<Camera>(e).map(|c| c.enabled) else {
+        return false;
+    };
+    if !enabled {
+        return true;
+    }
+    if let Some(mut integrity) = world.get_mut::<crate::obj_damage::Integrity>(e) {
+        integrity.broken = true;
+    }
+    world.entity_mut(e).remove::<CameraAlarmUntil>();
+    set_kind_alarm(world, e, AlarmKind::Camera, true);
+    toggle_cam(world, e, None, false);
+    true
+}
+
+/// `camera/Destroy`: `cancelCameraAlarm`, and the motion alarm it raised, so the alarm lists
+/// hold no despawned camera.
+pub fn on_destroy(world: &mut World, camera: Entity) {
+    set_kind_alarm(world, camera, AlarmKind::Camera, false);
+    set_alarm(world, camera, false);
+}
+
+/// `camera/on_deconstruction(disassembled = FALSE)` (destroyed by damage): the cable of a
+/// wired camera and an iron sheet; the upgrades are deleted with it. True when `e` is a camera.
+pub fn destroyed(world: &mut World, camera: Entity, pos: TilePos) -> bool {
+    if !is_camera(world, camera) {
+        return false;
+    }
+    let wired = world
+        .get::<CameraFrame>(camera)
+        .is_none_or(|f| f.0 >= STATE_WIRED);
+    if wired {
+        crate::construction::spawn_stack(world, CABLE, pos, 2);
+    }
+    crate::construction::spawn_stack(world, IRON, pos, 1);
+    on_destroy(world, camera);
+    true
 }
 
 /// tg `item_interaction` and the tool acts of cameras and frames, and the assembly on a wall.
@@ -678,6 +774,7 @@ fn deconstruct(world: &mut World, camera: Entity) {
     for part in parts_of(world, camera) {
         drop_part(world, camera, part, pos);
     }
+    on_destroy(world, camera);
     world
         .resource_mut::<crate::silicon::cameras::CameraNet>()
         .remove_camera(camera);

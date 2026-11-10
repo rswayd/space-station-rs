@@ -28,22 +28,27 @@
 //! - The console's camera list is built when its window opens (tg `ui_static_data`), so
 //!   cameras built or carried in later are listed; a camera the client looks through that goes
 //!   off tells it "Статика покрывает экран!" and puts the view back.
-//! - Entertainment monitors ([`set_network_broadcast`], tg
-//!   `COMSIG_GLOB_NETWORK_BROADCAST_UPDATED`) gain and lose the networks of live shows and say
-//!   the show's announcement.
+//! - Entertainment monitors ([`Entertainment`]; [`set_network_broadcast`], tg
+//!   `COMSIG_GLOB_NETWORK_BROADCAST_UPDATED`) gain and lose the networks of live shows, switch
+//!   their screen (`entertainment` / `entertainment_blank`) and say the show's announcement.
+//!   They are watched from across the room (tg `Click` + `can_watch_tv`: within 7 tiles, not
+//!   blind, conscious; from afar only while something is on), the window only interactive next
+//!   to them (`ui_status`). Their speakers (`/obj/item/radio/entertainment/speakers`) are a
+//!   receive-only [`crate::radio::Radio`] on the entertainment frequency; ctrl-click mutes them.
 // shortcut: all chunks with cameras are built at startup instead of tg's on-demand
 // `generate_chunk`; MetaStation's are ~1.5k chunks, see the startup log line.
-// shortcut: cameras do not lose power or break; `enabled` comes from the map, EMPs
-// (`crate::emp::machines`), Camera Failure (`crate::events::camera_failure`) and wirecutters
-// (`crate::defenses::cameras`, which also builds and takes cameras apart).
+// shortcut: cameras do not lose power; `enabled` comes from the map, EMPs
+// (`crate::emp::machines`), Camera Failure (`crate::events::camera_failure`), wirecutters and
+// breaking (`crate::defenses::cameras`, which also builds and takes cameras apart).
 // shortcut: `/turf/open/ai_visible` is not always visible.
-// shortcut: entertainment monitors are watched like other consoles (a click next to them),
-// not from across the room (`can_watch_tv`), and keep their screen sprite.
+// shortcut: watching TV from afar checks the distance, not `can_see`'s line of sight, and
+// there is no telekinesis reach; the speakers play no muffled-speech sound on receive.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use bevy::ecs::entity::EntityHashMap;
+use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use ss13_mapload::{Areas, DmCamera, DmCameraConsole, DmName, Opaque};
@@ -392,6 +397,13 @@ pub struct CameraConsole {
     pub active: Option<Entity>,
 }
 
+/// An entertainment monitor (`/obj/machinery/computer/security/telescreen/entertainment`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct Entertainment;
+
+/// tg `can_watch_tv`'s range.
+pub const TV_RANGE: u32 = 7;
+
 /// On a client looking through a console's active camera.
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ConsoleView {
@@ -424,7 +436,9 @@ impl Plugin for CamerasPlugin {
                 Update,
                 (
                     (track_opacity, update_net).chain().after(ResolveClicks),
-                    open_console.after(ResolveClicks).before(UiSystems::Open),
+                    (open_console, watch_tv, mute_tv)
+                        .after(ResolveClicks)
+                        .before(UiSystems::Open),
                     switch_camera.in_set(UiSystems::Handle),
                     (
                         follow_console_views,
@@ -434,7 +448,7 @@ impl Plugin for CamerasPlugin {
                         .chain()
                         .after(UiSystems::Handle)
                         .before(UiSystems::Send),
-                    close_stale_views.in_set(UiSystems::StatusHook),
+                    (close_stale_views, tv_status).in_set(UiSystems::StatusHook),
                 ),
             );
     }
@@ -643,7 +657,200 @@ fn init_consoles(world: &mut World) {
             statics,
             active: None,
         });
+        let tv = crate::construction::path_of(world, console)
+            .is_some_and(|p| crate::obj_damage::is_under(&p, ENTERTAINMENT));
+        if tv {
+            world
+                .entity_mut(console)
+                .insert((Entertainment, AlwaysState, speakers()));
+        }
     }
+}
+
+/// `/obj/item/radio/entertainment/speakers`: on the entertainment frequency, listening, never
+/// broadcasting (`WIRE_TX` cut).
+fn speakers() -> crate::radio::Radio {
+    crate::radio::Radio {
+        kind: crate::radio::RadioKind::Other,
+        on: true,
+        frequency: ss13_chat::radio::FREQ_ENTERTAINMENT,
+        broadcasting: false,
+        listening: true,
+        canhear_range: 3,
+        special_channels: 0,
+        channels: Vec::new(),
+        tx_cut: true,
+    }
+}
+
+/// `entertainment/notify`: `icon_screen` is `entertainment` while something is on, else
+/// `entertainment_blank` (the lit overlays of either swap in place).
+fn set_tv_screen(world: &mut World, monitor: Entity, on: bool) {
+    let Some(dmi) = world
+        .get::<ss13_mapload::DmAtom>(monitor)
+        .map(|a| a.icon.clone())
+    else {
+        return;
+    };
+    let Some(icons) = world.get_resource::<ss13_mapload::IconIndex>() else {
+        return;
+    };
+    let (off, lit) = (
+        icons.get(&dmi, "entertainment_blank"),
+        icons.get(&dmi, "entertainment"),
+    );
+    let (Some(off), Some(lit)) = (off, lit) else {
+        return;
+    };
+    let (from, to) = if on { (off, lit) } else { (lit, off) };
+    if let Some(mut look) = world.get_mut::<ss13_shared::Appearance>(monitor)
+        && look.overlays.iter().any(|o| o.icon_state == from)
+    {
+        for overlay in look.overlays.iter_mut().filter(|o| o.icon_state == from) {
+            overlay.icon_state = to;
+        }
+    }
+}
+
+/// tg `can_watch_tv` without `is_operational` (callers check power): within [`TV_RANGE`] on the
+/// same level, not blind, conscious.
+pub fn can_watch_tv(world: &World, watcher: Entity, monitor: Entity) -> bool {
+    let (Some(a), Some(b)) = (world.get::<TilePos>(watcher), world.get::<TilePos>(monitor)) else {
+        return false;
+    };
+    a.chebyshev(*b).is_some_and(|d| d <= TV_RANGE)
+        && !crate::vision::is_blind(world, watcher)
+        && world
+            .get::<crate::health::Stat>(watcher)
+            .is_none_or(|s| *s == crate::health::Stat::Conscious)
+}
+
+/// tg `entertainment/Click`: a click from across the room on a powered monitor with something
+/// on opens it (next to it `open_console` does, with or without something on).
+fn watch_tv(world: &mut World, mut clicks: Local<MessageCursor<crate::click::RangedClick>>) {
+    let pending: Vec<(Entity, Entity, Entity)> = clicks
+        .read(world.resource::<Messages<crate::click::RangedClick>>())
+        .map(|c| (c.client, c.mob, c.target))
+        .collect();
+    for (client, mob, monitor) in pending {
+        if world.get::<Entertainment>(monitor).is_none()
+            || world.get::<Unpowered>(monitor).is_some()
+            || !can_watch_tv(world, mob, monitor)
+        {
+            continue;
+        }
+        let network = match world.get::<CameraConsole>(monitor) {
+            Some(c) if !c.statics.network.is_empty() => c.statics.network.clone(),
+            _ => continue,
+        };
+        let fresh = {
+            let mut q = world.query::<(Entity, &Camera, &TilePos)>();
+            camera_entries(q.iter(world), &network)
+        };
+        if let Some(mut console) = world.get_mut::<CameraConsole>(monitor)
+            && fresh != console.statics.cameras
+        {
+            Arc::make_mut(&mut console.statics).cameras = fresh;
+        }
+        let title = world
+            .get::<DmName>(monitor)
+            .map(|n| crate::vending::plain_name(&n.name).to_owned())
+            .unwrap_or_default();
+        world.write_message(OpenUi::new::<CameraConsoleWindow>(
+            client, mob, monitor, title,
+        ));
+        // The show on screen: the watcher sees what the monitor's camera sees.
+        if world
+            .get::<CameraConsole>(monitor)
+            .is_some_and(|c| c.active.is_some())
+        {
+            world.entity_mut(client).insert((
+                ConsoleView {
+                    console: monitor,
+                    camera: None,
+                },
+                ViewOverride,
+            ));
+        }
+    }
+}
+
+/// `entertainment/click_ctrl`: "muted" / "unmuted", the speakers' listening flips.
+fn mute_tv(world: &mut World, mut clicks: Local<MessageCursor<crate::click::CtrlClick>>) {
+    let pending: Vec<(Entity, Entity)> = clicks
+        .read(world.resource::<Messages<crate::click::CtrlClick>>())
+        .map(|c| (c.mob, c.target))
+        .collect();
+    for (mob, monitor) in pending {
+        if world.get::<Entertainment>(monitor).is_none() {
+            continue;
+        }
+        let Some(mut radio) = world.get_mut::<crate::radio::Radio>(monitor) else {
+            continue;
+        };
+        let text = if radio.listening { "muted" } else { "unmuted" };
+        radio.listening = !radio.listening;
+        crate::balloon::balloon_alert(world, mob, monitor, text);
+    }
+}
+
+/// `entertainment/ui_status`: closed once the watcher cannot watch (or the monitor lost power),
+/// view-only unless next to it and able to act.
+fn tv_status(world: &mut World) {
+    let mut q = world.query::<(Entity, &UiWindow)>();
+    let windows: Vec<(Entity, Entity, Entity)> = q
+        .iter(world)
+        .filter(|(_, w)| w.interface == CameraConsoleUi::NAME)
+        .map(|(e, w)| (e, w.actor, w.source))
+        .filter(|&(_, _, source)| world.get::<Entertainment>(source).is_some())
+        .collect();
+    for (window, actor, monitor) in windows {
+        let cap =
+            if world.get::<Unpowered>(monitor).is_some() || !can_watch_tv(world, actor, monitor) {
+                UiStatus::Close
+            } else {
+                let near = matches!(
+                    (world.get::<TilePos>(actor), world.get::<TilePos>(monitor)),
+                    (Some(a), Some(b)) if a.chebyshev(*b).is_some_and(|d| d <= 1)
+                );
+                let incapacitated = world
+                    .get::<crate::status_effects::Incapacitation>(actor)
+                    .is_some_and(|i| i.incapacitated);
+                if near && !incapacitated {
+                    UiStatus::Interactive
+                } else {
+                    UiStatus::Update
+                }
+            };
+        if let Some(mut w) = world.get_mut::<UiWindow>(window) {
+            w.cap_status(cap);
+        }
+    }
+}
+
+/// `entertainment/examine`.
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
+    if world.get::<Entertainment>(target).is_none() {
+        return;
+    }
+    let on = world
+        .get::<CameraConsole>(target)
+        .is_some_and(|c| !c.statics.network.is_empty());
+    lines.push(if on {
+        (Span::Notice, "The TV is broadcasting something!".to_owned())
+    } else {
+        (Span::Notice, "There's nothing on TV.".to_owned())
+    });
+    let volume = world
+        .get::<crate::radio::Radio>(target)
+        .is_some_and(|r| r.listening);
+    lines.push((
+        Span::Notice,
+        format!(
+            "The volume is currently {}.",
+            if volume { "on" } else { "off" }
+        ),
+    ));
 }
 
 /// tg `on_network_broadcast_updated` of every entertainment monitor (`start_broadcasting_network`,
@@ -655,14 +862,8 @@ pub fn set_network_broadcast(
     active: bool,
     announcement: Option<&str>,
 ) {
-    let mut q = world.query_filtered::<Entity, With<CameraConsole>>();
-    let monitors: Vec<Entity> = q
-        .iter(world)
-        .filter(|&e| {
-            crate::construction::path_of(world, e)
-                .is_some_and(|p| crate::obj_damage::is_under(&p, ENTERTAINMENT))
-        })
-        .collect();
+    let mut q = world.query_filtered::<Entity, (With<CameraConsole>, With<Entertainment>)>();
+    let monitors: Vec<Entity> = q.iter(world).collect();
     for monitor in monitors {
         let Some(mut console) = world.get_mut::<CameraConsole>(monitor) else {
             continue;
@@ -677,6 +878,8 @@ pub fn set_network_broadcast(
                 statics.network.retain(|n| *n != net);
             }
         }
+        let on = !statics.network.is_empty();
+        set_tv_screen(world, monitor, on);
         if let Some(text) = announcement {
             crate::atmos_machinery::machine_say(world, monitor, text);
         }
@@ -753,15 +956,18 @@ fn open_console(
     mut consoles: Query<(&DmName, &mut CameraConsole), Without<Unpowered>>,
     cameras: Query<(Entity, &Camera, &TilePos)>,
     inventories: Query<&Inventory>,
+    entertainment: Query<(), With<Entertainment>>,
     mut open: MessageWriter<OpenUi>,
 ) {
     for click in clicks.read() {
         let Ok((name, mut console)) = consoles.get_mut(click.target) else {
             continue;
         };
-        if inventories
-            .get(click.mob)
-            .is_ok_and(|i| i.active_item().is_none())
+        // tg `entertainment/Click` opens it whatever the click did.
+        if (entertainment.contains(click.target) && !click.modifiers.shift)
+            || inventories
+                .get(click.mob)
+                .is_ok_and(|i| i.active_item().is_none())
         {
             // `ui_static_data` on open: the cameras as they are now.
             let fresh = camera_entries(cameras.iter(), &console.statics.network);

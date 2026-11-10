@@ -1,7 +1,8 @@
 //! Client half of the records: the `SecurityRecords` and `MedicalRecords` windows (tgui
 //! `SecurityRecords/*`, `MedicalRecords/*`) and the data HUD images over mobs.
 //! Also the `WarrantConsole` window.
-// shortcut: no character preview, no search by fingerprint; crimes and citations are listed
+// shortcut: the character preview is the record's photo, not a turnable 3-direction view; no
+// search by fingerprint; crimes and citations are listed
 // open (tg: collapsibles); the editable fields save on Enter (tg `EditableText` on blur); the
 // print screen has one print button per kind instead of tabs and keeps no defaults in its
 // fields (empty fields print the server's defaults).
@@ -171,16 +172,25 @@ fn record_tabs(
     let empty = shown
         .is_empty()
         .then(|| EntityScene(bsn! { @NoticeBox Children [ Text("Записи не найдены.") ] }));
-    let tabs: Vec<_> = shown
+    // The security console's tabs also `act('view_record', {crew_ref})` (the preview).
+    let view = purge.is_some();
+    let tabs: Vec<Box<dyn SceneList>> = shown
         .into_iter()
         .map(|(crew_ref, name, _, color)| {
             let sel = crew_ref == selected;
             let value = if sel { String::new() } else { crew_ref.clone() };
-            bsn! {
+            let tab = bsn! {
                 @TabsTab { @content: name, @icon: "user" }
                 TabsTab { selected: sel, color: color }
                 SetLocal { key: {RECORD.to_owned()}, value: value, rerender: true }
                 Name("records: record")
+            };
+            if view && !sel {
+                let params = p(&[("crew_ref", &crew_ref)]);
+                let act = Act(VIEW_RECORD.to_owned());
+                Box::new(EntityScene((tab, bsn! { act params }))) as Box<dyn SceneList>
+            } else {
+                Box::new(EntityScene(tab))
             }
         })
         .collect();
@@ -401,6 +411,12 @@ fn security_record(
             editable(&crew, "security_note", r.note.clone()),
         ),
     ];
+    // `CharacterPreview` of the record (`assigned_view`), once the server has it.
+    let preview: Option<Box<dyn SceneList>> = data
+        .preview
+        .as_ref()
+        .filter(|p| p.crew_ref == crew)
+        .map(|p| crate::service::client::picture_box(&p.picture, 96.0));
     let watcher: Box<dyn SceneList> = if local.get(PRINT_OPEN) == "1" {
         Box::new(EntityScene(record_print(r)))
     } else {
@@ -414,10 +430,18 @@ fn security_record(
             --
             @Section { @title: title, @buttons: header_buttons }
             Children [
-                @LabeledList
+                Node { flex_direction: FlexDirection::Row, column_gap: px(6) }
                 Children [
-                    @LabeledListItem { @label: "Статус", @buttons: status_row }
-                    Children [ {status} ]
+                    {preview}
+                    --
+                    Node { flex_grow: 1.0 }
+                    Children [
+                        @LabeledList
+                        Children [
+                            @LabeledListItem { @label: "Статус", @buttons: status_row }
+                            Children [ {status} ]
+                        ]
+                    ]
                 ]
             ]
             --

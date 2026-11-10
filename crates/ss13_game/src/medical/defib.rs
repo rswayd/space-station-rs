@@ -377,7 +377,7 @@ pub enum Stage {
     HarmCharge,
 }
 
-fn revivable(world: &World, mob: Entity) -> Result<(), DefibFail> {
+pub fn revivable(world: &World, mob: Entity) -> Result<(), DefibFail> {
     // `can_defib`: `TRAIT_HUSK` before the tissue damage.
     if world.get::<crate::human::Husk>(mob).is_some() {
         return Err(DefibFail::Husk);

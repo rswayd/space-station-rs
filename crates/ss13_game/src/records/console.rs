@@ -10,7 +10,10 @@
 //! ([`super::posters`]) with the record's photo; a new citation alerts the fined person's PDA
 //! (`alert_owner`); fines are paid at the warrant console ([`super::warrant`]).
 //! An EMP scrambles the security records (`security/emp_act`).
-// shortcut: no character preview or new records from photos; `purge_records` is
+//! `view_record` keeps the record's front photo as the user's character preview
+//! ([`RecordPreviews`]); a photo of one tile used on a security console makes a new record with
+//! that picture, named by the user (`insert_new_record`).
+// shortcut: the preview has no static and scanline overlays; `purge_records` is
 // immediate (tg: a 5 s `do_after`); a print appears at once with a 2 s busy time (tg: after
 // 2 s); the UI's `station_z` is always true (the acts check the level).
 
@@ -51,6 +54,25 @@ const SOUND_PRINT: &str = "sound/machines/printer.ogg";
 /// A security console's `printing`: game seconds until the printer is free.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct RecordsPrinter(pub f64);
+
+/// `character_preview_view` per user: the record each one last viewed and its picture.
+// shortcut: an entry stays until the user views another record (tg drops the view when the
+// last window closes); one per user who ever viewed a record here.
+#[derive(Component, Clone, Debug, Default)]
+pub struct RecordPreviews(
+    pub bevy::ecs::entity::EntityHashMap<(u32, std::sync::Arc<crate::service::Picture>)>,
+);
+
+/// The name prompt of `insert_new_record`.
+#[derive(Component, Clone, Copy, Debug)]
+struct NewRecordPrompt {
+    console: Entity,
+    mob: Entity,
+    photo: Entity,
+}
+
+const PHOTO: &str = "/obj/item/photo";
+const SOUND_INSERT: &str = "sound/machines/terminal/terminal_insert_disc.ogg";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RecordsKind {
@@ -95,6 +117,12 @@ pub struct RecordsConsolePlugin;
 
 impl Plugin for RecordsConsolePlugin {
     fn build(&self, app: &mut App) {
+        use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A photo on a security console makes a new record.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2719, |w, c| {
+            c.held
+                .is_some_and(|h| photo_interaction(w, c.client, c.mob, h, c.target))
+        });
         app.register_ui::<SecurityRecordsUi>()
             .register_ui::<MedicalRecordsUi>()
             .add_observer(attach)
@@ -103,6 +131,9 @@ impl Plugin for RecordsConsolePlugin {
                 (
                     open_console.after(ResolveClicks).before(UiSystems::Open),
                     (security_acts, medical_acts).in_set(UiSystems::Handle),
+                    new_record_named
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
                     records_emps.in_set(crate::emp::EmpSystems::Effects),
                 ),
             );
@@ -148,6 +179,139 @@ fn open_console(
     }
 }
 
+fn terminal_sound(world: &mut World, console: Entity, sound: &str) {
+    if let Some(&pos) = world.get::<ss13_shared::TilePos>(console) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 70.0, true));
+    }
+}
+
+/// `user.can_perform_action(src, ALLOW_SILICON_REACH)` and `is_operational`, now.
+fn can_use(world: &World, user: Entity, console: Entity) -> bool {
+    let near = match (
+        world.get::<ss13_shared::TilePos>(user),
+        world.get::<ss13_shared::TilePos>(console),
+    ) {
+        (Some(a), Some(b)) => a.chebyshev(*b).is_some_and(|d| d <= 1),
+        _ => false,
+    };
+    near && world.get::<Unpowered>(console).is_none()
+        && world
+            .get::<crate::health::Stat>(user)
+            .is_some_and(|s| *s == crate::health::Stat::Conscious)
+}
+
+/// `security/item_interaction` -> `insert_new_record`: a photo on a security console asks for
+/// the new record's name. True when the click was the console's.
+pub fn photo_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    let Some(state) = world.get::<RecordsConsole>(target).cloned() else {
+        return false;
+    };
+    let is_photo = world
+        .get::<ss13_mapload::DmItem>(held)
+        .is_some_and(|i| is_under(&i.path, PHOTO));
+    if state.kind != RecordsKind::Security || !is_photo {
+        return false;
+    }
+    let Some(picture) = world
+        .get::<crate::service::Photo>(held)
+        .and_then(|p| p.picture.clone())
+    else {
+        return true;
+    };
+    if !can_use(world, mob, target) {
+        return true;
+    }
+    if !state.authenticated && !check_access(&[], &state.req_one_access, &user_access(world, mob)) {
+        crate::balloon::balloon_alert(world, mob, target, "доступ запрещен");
+        terminal_sound(world, target, SOUND_ERROR);
+        return true;
+    }
+    // `psize_x > ICON_SIZE_X`: a mugshot is one tile.
+    if picture.width > 1 || picture.height > 1 {
+        crate::balloon::balloon_alert(world, mob, target, "фотография слишком большая!");
+        terminal_sound(world, target, SOUND_ERROR);
+        return true;
+    }
+    // `copytext(mugshot.name, 9, MAX_NAME_LEN)`: without "photo - ".
+    let trimmed: String = name_of_item(world, held)
+        .chars()
+        .skip(8)
+        .take(MAX_NAME_LEN - 9)
+        .collect();
+    let prompt = ss13_tgui::prompt::ask_world(
+        world,
+        ss13_tgui::prompt::Ask::new(
+            client,
+            mob,
+            "New Record",
+            "Enter the name of the new record.",
+            ss13_tgui::prompt::PromptKind::Text {
+                default: trimmed,
+                max_length: MAX_NAME_LEN as u32,
+                multiline: false,
+            },
+        ),
+    );
+    world.entity_mut(prompt).insert(NewRecordPrompt {
+        console: target,
+        mob,
+        photo: held,
+    });
+    true
+}
+
+fn name_of_item(world: &World, item: Entity) -> String {
+    world
+        .get::<DmName>(item)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .unwrap_or_default()
+}
+
+/// The name answered: checked again (console working, user able and next to it, the photo still
+/// theirs), then the record with the photo's picture, and the photo is used up.
+fn new_record_named(
+    world: &mut World,
+    mut answers: Local<MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    let pending: Vec<(Entity, Option<ss13_tgui::prompt::PromptAnswer>)> = answers
+        .read(world.resource::<Messages<ss13_tgui::prompt::PromptAnswered>>())
+        .map(|a| (a.prompt, a.answer.clone()))
+        .collect();
+    for (prompt, answer) in pending {
+        let Some(ask) = world.get::<NewRecordPrompt>(prompt).copied() else {
+            continue;
+        };
+        let Some(ss13_tgui::prompt::PromptAnswer::Text(name)) = answer else {
+            continue;
+        };
+        let name = sanitize(&name, MAX_NAME_LEN);
+        let held = world
+            .get::<Inventory>(ask.mob)
+            .is_some_and(|i| i.hands.contains(&Some(ask.photo)));
+        let picture = world
+            .get::<crate::service::Photo>(ask.photo)
+            .and_then(|p| p.picture.clone());
+        let (Some(picture), true) = (picture, held) else {
+            continue;
+        };
+        if name.is_empty() || !can_use(world, ask.mob, ask.console) {
+            continue;
+        }
+        world
+            .resource_mut::<Manifest>()
+            .add_from_photo(&name, picture);
+        crate::balloon::balloon_alert(world, ask.mob, ask.console, "запись создана");
+        terminal_sound(world, ask.console, SOUND_INSERT);
+        world.despawn(ask.photo);
+    }
+}
+
 /// What `ui_data` reads about the user and the records.
 #[derive(bevy::ecs::system::SystemParam)]
 pub struct RecordsParams<'w, 's> {
@@ -183,11 +347,11 @@ fn crime_entry(c: &Crime) -> CrimeEntry {
 }
 
 impl ServerUi for SecurityRecordsUi {
-    type Source = &'static RecordsConsole;
+    type Source = (&'static RecordsConsole, Option<&'static RecordPreviews>);
     type UserParam = RecordsParams<'static, 'static>;
     type Act = RecordsAct;
 
-    fn static_data(_: &RecordsConsole) -> AgeLimits {
+    fn static_data(_: (&RecordsConsole, Option<&RecordPreviews>)) -> AgeLimits {
         AgeLimits {
             min_age: AGE_MIN,
             max_age: AGE_MAX,
@@ -195,15 +359,29 @@ impl ServerUi for SecurityRecordsUi {
     }
 
     fn data(
-        console: &RecordsConsole,
+        (console, previews): (&RecordsConsole, Option<&RecordPreviews>),
         user: Entity,
         params: &SystemParamItem<'_, '_, Self::UserParam>,
     ) -> SecurityRecordsData {
         if !console.authenticated {
             return SecurityRecordsData::default();
         }
+        let preview = previews
+            .and_then(|p| p.0.get(&user))
+            .filter(|(id, _)| params.manifest.get(*id).is_some())
+            .map(|(id, picture)| RecordPreview {
+                crew_ref: id.to_string(),
+                picture: crate::service::PhotoData {
+                    name: String::new(),
+                    width: picture.width,
+                    height: picture.height,
+                    sprites: picture.sprites.clone(),
+                    scribble: String::new(),
+                },
+            });
         SecurityRecordsData {
             authenticated: true,
+            preview,
             station_z: true,
             available_statuses: WANTED_STATUSES.map(str::to_owned).to_vec(),
             current_user: params
@@ -312,8 +490,8 @@ pub enum RecordsAct {
     Login,
     Logout,
     Purge,
-    /// `view_record`: the character preview (not drawn); accepted and ignored.
-    View,
+    /// `view_record`: the character preview of a record.
+    View(u32),
     EditField {
         record: u32,
         field: String,
@@ -372,7 +550,7 @@ fn parse(action: &str, params: &UiParams) -> Result<RecordsAct, UiReject> {
         LOGIN => RecordsAct::Login,
         LOGOUT => RecordsAct::Logout,
         PURGE_RECORDS => RecordsAct::Purge,
-        VIEW_RECORD => RecordsAct::View,
+        VIEW_RECORD => RecordsAct::View(id_param(params, "crew_ref")?),
         EDIT_FIELD => RecordsAct::EditField {
             record: id_param(params, "ref")?,
             field: text(params, "field"),
@@ -538,7 +716,19 @@ fn apply(
             return Ok(());
         }
         _ if !state.authenticated => return Err("not logged in"),
-        RecordsAct::View => return Ok(()),
+        RecordsAct::View(record) => {
+            if kind != RecordsKind::Security {
+                return Ok(());
+            }
+            let picture = record_photo(world, record, true).ok_or("no such record")?;
+            let mut previews = world
+                .get::<RecordPreviews>(console)
+                .cloned()
+                .unwrap_or_default();
+            previews.0.insert(user, (record, picture));
+            world.entity_mut(console).insert(previews);
+            return Ok(());
+        }
         // "Don't let people off station futz with the station network."
         RecordsAct::Purge | RecordsAct::Expunge(_) if !on_station(world, console) => {
             crate::tools::tell(world, client, Span::Warning, "Слишком далеко!");
@@ -1083,6 +1273,31 @@ mod tests {
 
     fn record(world: &World, id: u32) -> super::super::manifest::CrewRecord {
         world.resource::<Manifest>().get(id).unwrap().clone()
+    }
+
+    /// `insert_new_record`'s record keeps tg's constructor defaults and the photo's picture,
+    /// and `view_record` makes that picture the viewer's preview (only once logged in).
+    #[test]
+    fn photo_records_and_previews() {
+        let (mut world, console, _) = setup();
+        let picture = std::sync::Arc::new(crate::service::Picture {
+            width: 1,
+            height: 1,
+            ..default()
+        });
+        let id = world
+            .resource_mut::<Manifest>()
+            .add_from_photo("Незнакомец", picture.clone());
+        let r = record(&world, id);
+        assert_eq!((r.age, r.rank.as_str()), (18, "Unassigned"));
+        assert_eq!(r.wanted_status, WANTED_NONE);
+        let user = officer(&mut world, "Офицер", &["security"]);
+        assert!(act(&mut world, user, console, RecordsAct::View(id)).is_err());
+        act(&mut world, user, console, RecordsAct::Login).unwrap();
+        act(&mut world, user, console, RecordsAct::View(id)).unwrap();
+        let previews = world.get::<RecordPreviews>(console).unwrap();
+        assert_eq!(previews.0.get(&user).map(|(r, _)| *r), Some(id));
+        assert!(act(&mut world, user, console, RecordsAct::View(9999)).is_err());
     }
 
     #[test]

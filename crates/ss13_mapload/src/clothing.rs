@@ -79,6 +79,9 @@ pub struct DmClothing {
     pub color_cutoffs: Option<[f32; 3]>,
     /// `/obj/item/clothing/glasses` `lighting_cutoff`.
     pub lighting_cutoff: Option<f32>,
+    /// Suits: `blood_overlay_type` (`suit`, `armor`, `coat`): the worn blood overlay
+    /// `<type>blood`. Empty on other clothing.
+    pub blood_overlay_type: String,
 }
 
 impl Default for DmClothing {
@@ -121,6 +124,7 @@ impl Default for DmClothing {
             clothing_traits: Vec::new(),
             color_cutoffs: None,
             lighting_cutoff: None,
+            blood_overlay_type: String::new(),
         }
     }
 }
@@ -174,7 +178,13 @@ enum Kind {
 
 /// Vars declared on a subfamily root: (root, var, field, kind). The root carries the resolved
 /// value, its subtypes what they declare.
-const FAMILY_VARS: [(&str, &str, &str, Kind); 14] = [
+const FAMILY_VARS: [(&str, &str, &str, Kind); 15] = [
+    (
+        "/obj/item/clothing/suit",
+        "blood_overlay_type",
+        "blood_overlay_type",
+        Kind::Text,
+    ),
     (
         CLOTHING_ROOT,
         "toggle_message",

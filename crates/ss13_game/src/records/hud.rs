@@ -11,7 +11,7 @@
 // shortcut: glasses give their HUD by type (`/obj/item/clothing/glasses/hud/security`,
 // `.../health`, `.../medsechud` and subtypes), not by `clothing_traits` (no toggling HUD
 // glasses; HUD implants come from `crate::medical::cyberimps`); the AI's and cyborgs' sensor
-// HUDs belong to the silicon group; no second implant slot offset, virus or defib states;
+// HUDs belong to the silicon group; no second implant slot offset;
 // refreshed every 0.5 s rather than on each change. The record is the one of [`perp_name`]
 // (tg `get_face_name(get_id_name(""))`).
 
@@ -152,6 +152,61 @@ pub fn glasses_huds(path: &str) -> (bool, bool) {
     )
 }
 
+/// tg `med_hud_set_status` of a human: dead (`huddefib` while a defibrillator could bring
+/// back a player), the worst disease a scanner sees (`check_virus`), broken suit sensors,
+/// else healthy.
+// shortcut: no xenomorph hosts, ghost-role revival or disease-like traits (none ported).
+pub fn med_status(
+    world: &World,
+    mob: Entity,
+    inventory: Option<&Inventory>,
+    dead: bool,
+    ghost_bodies: &[Entity],
+) -> &'static str {
+    if dead {
+        // `can_defib_client`: a player in the body or its ghost.
+        let player = world.get::<PlayerMob>(mob).is_some() || ghost_bodies.contains(&mob);
+        return if player && crate::medical::defib::revivable(world, mob).is_ok() {
+            "huddefib"
+        } else {
+            "huddead"
+        };
+    }
+    if let Some(state) = virus_state(crate::medical::diseases::of_mob(world, mob)) {
+        return state;
+    }
+    let broken = inventory
+        .and_then(|i| i.uniform)
+        .and_then(|u| world.get::<crate::clothing::sensors::SuitSensor>(u))
+        .is_some_and(|s| s.has == crate::clothing::sensors::BROKEN_SENSORS);
+    if broken { "hudnosensor" } else { "hudhealthy" }
+}
+
+/// `check_virus`: the icon of the most severe disease not `HIDDEN_SCANNER` (an uncurable one
+/// is the lowest value and gives way to any other, as in tg).
+pub fn virus_state(diseases: &[crate::medical::diseases::Disease]) -> Option<&'static str> {
+    use crate::medical::diseases::{HIDDEN_SCANNER, Severity};
+    let mut worst: Option<Severity> = None;
+    for d in diseases
+        .iter()
+        .filter(|d| d.visibility & HIDDEN_SCANNER == 0)
+    {
+        if worst.is_none_or(|w| w == Severity::Uncurable || d.severity > w) {
+            worst = Some(d.severity);
+        }
+    }
+    Some(match worst? {
+        Severity::Uncurable => "hudill6",
+        Severity::Biohazard => "hudill5",
+        Severity::Dangerous => "hudill4",
+        Severity::Harmful => "hudill3",
+        Severity::Medium => "hudill2",
+        Severity::Minor => "hudill1",
+        Severity::Nonthreat => "hudill0",
+        Severity::Positive => "hudbuff",
+    })
+}
+
 fn refresh(world: &mut World, mut next: Local<f64>) {
     let now = world.resource::<Time>().elapsed_secs_f64();
     if now < *next {
@@ -165,6 +220,11 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
         Option<&Stat>,
     ), With<HumanLook>>();
     let mut wearers = world.query::<(Entity, &PlayerMob, Option<&DataHudData>)>();
+    let ghost_bodies: Vec<Entity> = world
+        .query::<&crate::ghost::Ghost>()
+        .iter(world)
+        .filter_map(|g| g.body)
+        .collect();
     let Some(icons) = world.get_resource::<IconIndex>() else {
         return;
     };
@@ -215,7 +275,7 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
             let med = health
                 .map(|h| {
                     let bar = format!("hud{}", round_health(h.health(), h.max, dead));
-                    let status = if dead { "huddead" } else { "hudhealthy" };
+                    let status = med_status(world, e, inventory, dead, &ghost_bodies);
                     icon(&bar).into_iter().chain(icon(status)).collect()
                 })
                 .unwrap_or_default();
@@ -272,6 +332,42 @@ mod tests {
         assert_eq!(round_health(-60.0, 200.0, false), "health-50");
         assert_eq!(round_health(-100.0, 100.0, false), "health-100");
         assert_eq!(round_health(100.0, 100.0, true), "health-100");
+    }
+
+    /// `check_virus`: the worst visible disease; an uncurable one gives way to any other.
+    #[test]
+    fn virus_icon_is_the_worst_seen_disease() {
+        use crate::medical::diseases::{Disease, HIDDEN_SCANNER, Kind, Severity};
+        let with = |severity: Severity, hidden: bool| {
+            let mut d = Disease::new(Kind::Cold);
+            d.severity = severity;
+            d.visibility = if hidden { HIDDEN_SCANNER } else { 0 };
+            d
+        };
+        assert_eq!(virus_state(&[]), None);
+        assert_eq!(
+            virus_state(&[with(Severity::Minor, false), with(Severity::Harmful, false)]),
+            Some("hudill3")
+        );
+        assert_eq!(
+            virus_state(&[
+                with(Severity::Biohazard, true),
+                with(Severity::Minor, false)
+            ]),
+            Some("hudill1"),
+            "hidden from scanners"
+        );
+        assert_eq!(
+            virus_state(&[with(Severity::Uncurable, false)]),
+            Some("hudill6")
+        );
+        assert_eq!(
+            virus_state(&[
+                with(Severity::Uncurable, false),
+                with(Severity::Positive, false)
+            ]),
+            Some("hudbuff")
+        );
     }
 
     #[test]

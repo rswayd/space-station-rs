@@ -436,10 +436,11 @@ mod tests {
 /// The side the picture is scaled up to (tg shows it 480 px wide).
 const PHOTO_SIDE: f32 = 448.0;
 
-/// Window pixels per picture pixel: whole steps, so the sprites stay crisp.
-fn photo_scale(width: u8, height: u8) -> f32 {
-    let side = f32::from(width.max(height).max(1)) * ss13_shared::TILE_SIZE as f32;
-    (PHOTO_SIDE / side).floor().clamp(1.0, 4.0)
+/// Window pixels per picture pixel of a `width` x `height` tile picture shown at most `side`
+/// pixels wide: whole steps, so the sprites stay crisp.
+fn scale_to(width: u8, height: u8, side: f32) -> f32 {
+    let px = f32::from(width.max(height).max(1)) * ss13_shared::TILE_SIZE as f32;
+    (side / px).floor().clamp(1.0, 4.0)
 }
 
 impl ClientUi for PhotoUi {
@@ -473,12 +474,22 @@ pub struct PhotoSpriteNode {
     pub scale: f32,
 }
 
-fn photo_view(data: &PhotoData) -> impl Scene + use<> {
-    let scale = photo_scale(data.width, data.height);
+/// A picture's sprites in a black box scaled by whole steps to at most `side` pixels (other
+/// windows' previews, tgui `CharacterPreview` of a record).
+pub fn picture_box(data: &PhotoData, side: f32) -> Box<dyn bevy::scene::SceneList> {
+    let scale = scale_to(data.width, data.height, side);
     let tile = ss13_shared::TILE_SIZE as f32 * scale;
     let (width, height) = (f32::from(data.width) * tile, f32::from(data.height) * tile);
-    let sprites: Vec<_> = data
-        .sprites
+    let sprites = picture_sprites(data, scale);
+    Box::new(EntityScene(bsn! {
+        Node { width: px(width), height: px(height), overflow: Overflow::clip() }
+        BackgroundColor(Color::BLACK)
+        Children [ {sprites} ]
+    }))
+}
+
+fn picture_sprites(data: &PhotoData, scale: f32) -> Vec<impl Scene + use<>> {
+    data.sprites
         .iter()
         .map(|s| {
             let sprite = PhotoSpriteNode {
@@ -493,7 +504,11 @@ fn photo_view(data: &PhotoData) -> impl Scene + use<> {
                 sprite
             }
         })
-        .collect();
+        .collect()
+}
+
+fn photo_view(data: &PhotoData) -> impl Scene + use<> {
+    let picture = picture_box(data, PHOTO_SIDE);
     let back = (!data.scribble.is_empty()).then(|| {
         let text = format!("На обороте написано:\n{}", data.scribble);
         EntityScene(bsn! {
@@ -506,9 +521,7 @@ fn photo_view(data: &PhotoData) -> impl Scene + use<> {
         Children [
             Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center }
             Children [
-                Node { width: px(width), height: px(height), overflow: Overflow::clip() }
-                BackgroundColor(Color::BLACK)
-                Children [ {sprites} ]
+                {picture}
                 --
                 {back}
             ]
@@ -546,7 +559,11 @@ fn resolve_photo_sprites(
 
 #[cfg(test)]
 mod photo_tests {
-    use super::photo_scale;
+    use super::{PHOTO_SIDE, scale_to};
+
+    fn photo_scale(width: u8, height: u8) -> f32 {
+        scale_to(width, height, PHOTO_SIDE)
+    }
 
     #[test]
     fn pictures_scale_by_whole_steps() {

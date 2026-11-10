@@ -263,7 +263,7 @@ mod server {
             shown: &Inventory,
             icons: &IconIndex,
         ) -> Vec<(f32, ss13_shared::Overlay)> {
-            crate::forensics::server::blood_overlays(shown, &self.forensics, icons)
+            crate::forensics::server::blood_overlays(shown, &self.forensics, &self.clothing, icons)
         }
 
         /// Overlays on top of the worn items of `shown` (the inventory as drawn): the
