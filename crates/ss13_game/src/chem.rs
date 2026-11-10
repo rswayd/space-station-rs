@@ -30,8 +30,9 @@
 //! - An explosive instant reaction (`reagent_explosion`) blows up and empties its container; a
 //!   lit welder heats a cup.
 // shortcut: the machines are `crate::chem_dispenser`, `crate::chem_master` and
-// `crate::chem_heater`; no sprays or IV drips here; no lids; splashing and pouring expose
-// nothing (reagents' `expose_*` procs are not ported: water does not put out fires, acid does
+// `crate::chem_heater`; no sprays or IV drips here; no lids; pouring exposes
+// nothing (most reagents' `expose_*` procs are not ported, `crate::janitor::expose_by` has the
+// ones that are; splashing goes through it: water does not put out fires, acid does
 // not melt); no mixing sounds.
 
 use std::sync::Arc;
@@ -1535,7 +1536,9 @@ fn try_splash(world: &mut World, actor: Actor, target: Entity) -> bool {
             &format!("{user} выплёскивает на вас содержимое {src}!"),
         );
     }
-    // `reagents.expose(target, TOUCH)`: see the module's shortcut.
+    if let Some(h) = holder(world, held).cloned() {
+        crate::janitor::expose(world, target, &h, 1.0);
+    }
     if let Some(mut r) = world.get_mut::<Reagents>(held) {
         r.0.clear();
     }

@@ -87,6 +87,8 @@ const TYPES: &str = r##"{
         "parent": "/obj/item/reagent_containers/cup/bottle", "declared_vars": {
         "name": "water bottle",
         "list_reagents": { "list": [{ "assoc": [{ "path": "/datum/reagent/water" }, 30] }] } } },
+    "/obj/effect/decal/chempuff": { "parent": "/obj/effect/decal", "declared_vars": {
+        "name": "chemicals", "icon": { "resource": "c.dmi" }, "icon_state": "sprayer" } },
     "/obj/item/reagent_containers/spray": { "parent": "/obj/item/reagent_containers",
         "declared_vars": { "name": "spray bottle", "volume": 250,
         "possible_transfer_amounts": { "list": [5, 10] }, "initial_reagent_flags": 7,
@@ -191,6 +193,7 @@ fn fixture_assets(test: &str) -> PathBuf {
         "/obj/effect/decal/cleanable/blood/drip",
         "/obj/item/reagent_containers/cup/bottle/water",
         "/obj/item/reagent_containers/spray/cleaner",
+        "/obj/effect/decal/chempuff",
         "/obj/structure/mop_bucket",
         "/obj/item/mop",
         "/obj/item/soap",

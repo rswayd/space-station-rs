@@ -267,6 +267,18 @@ impl LevelAir {
         false
     }
 
+    /// `new /obj/effect/hotspot(turf, volume, temperature)`: a fire whatever the air. True when
+    /// created.
+    pub fn spawn_hotspot(&mut self, tile: u32, volume: f64, temperature: f64) -> bool {
+        let c = self.cell_of[tile as usize];
+        if c == NONE || self.cells[c as usize].hotspot != NONE {
+            return false;
+        }
+        self.new_hotspot(c, volume, temperature);
+        self.add_to_active(c, false);
+        true
+    }
+
     /// `/obj/effect/hotspot/Initialize(mapload, starting_volume, starting_temperature)`.
     fn new_hotspot(&mut self, c: u32, volume: f64, temperature: f64) {
         let serial = self.hotspots.next_serial;

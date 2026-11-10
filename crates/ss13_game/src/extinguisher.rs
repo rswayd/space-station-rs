@@ -10,6 +10,7 @@
 // shortcut: no sounds, no wall-mounted `tank_holder` sprites, no firebot assembly here, no wind-up
 // head bash (`attack_secondary`), no office chair ride (`move_chair`), no cooling of containers
 // a particle bumps, no suicide; particles do not leave foam (`firefighting` foam is not ported).
+// Backpack nozzles (`crate::watertank`) are extinguishers using their tank's holder.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
@@ -116,10 +117,14 @@ fn add_state(world: &mut World, e: Entity, dm: &DmExtinguisher) {
             false,
         );
     }
+    let nozzle = is_under(
+        &path_of(world, e).unwrap_or_default(),
+        crate::watertank::NOZZLE,
+    );
     world.entity_mut(e).insert((
         Reagents(holder),
         Extinguisher {
-            safety: true,
+            safety: !nozzle,
             last_use: f64::NEG_INFINITY,
             power: dm.power,
             precision: dm.precision,
@@ -170,9 +175,10 @@ fn refill_click(world: &mut World, c: &ClickCtx) -> bool {
     if !ext.tanktypes.iter().any(|t| is_under(&path, t)) {
         return false;
     }
+    let source = crate::watertank::reagent_source(world, held);
     let (Some(chem), Some(mut own), Some(mut tank)) = (
         world.get_resource::<Chem>().map(|r| r.0.clone()),
-        world.get::<Reagents>(held).map(|r| r.0.clone()),
+        world.get::<Reagents>(source).map(|r| r.0.clone()),
         world.get::<Reagents>(c.target).map(|r| r.0.clone()),
     ) else {
         return true;
@@ -181,7 +187,8 @@ fn refill_click(world: &mut World, c: &ClickCtx) -> bool {
         tell(world, c.client, Span::Warning, "Уже полон!");
         return true;
     }
-    if !chem.id(&ext.chem).is_some_and(|id| tank.has(id).is_some()) {
+    // A nozzle's `chem` is null: it takes what is in its tank.
+    if !ext.chem.is_empty() && !chem.id(&ext.chem).is_some_and(|id| tank.has(id).is_some()) {
         tell(
             world,
             c.client,
@@ -191,7 +198,7 @@ fn refill_click(world: &mut World, c: &ClickCtx) -> bool {
         return true;
     }
     let moved = tank.trans_to(&chem, &mut own, ext.max_water, 1.0, None, false, false);
-    world.entity_mut(held).insert(Reagents(own));
+    world.entity_mut(source).insert(Reagents(own));
     world.entity_mut(c.target).insert(Reagents(tank));
     if moved > 0.0 {
         tell(
@@ -215,6 +222,9 @@ fn spray_click(world: &mut World, c: &ClickCtx) -> bool {
     if !world.get::<Extinguisher>(held).is_some_and(|e| !e.safety) {
         return false;
     }
+    if let Some(handled) = crate::watertank::nozzle_fire(world, c.mob, held, c.target, c.pos) {
+        return handled;
+    }
     spray(world, c.mob, held, c.pos);
     !world.get::<CombatMode>(c.mob).is_some_and(|m| m.0)
 }
@@ -230,7 +240,10 @@ fn ranged_clicks(world: &mut World, mut cursor: Local<MessageCursor<RangedClick>
             .get::<Inventory>(click.mob)
             .and_then(Inventory::active_item)
             .filter(|&h| world.get::<Extinguisher>(h).is_some_and(|e| !e.safety));
-        if let Some(held) = held {
+        if let Some(held) = held
+            && crate::watertank::nozzle_fire(world, click.mob, held, click.target, click.target_pos)
+                .is_none()
+        {
             spray(world, click.mob, held, click.target_pos);
         }
     }
@@ -258,9 +271,10 @@ pub fn spread_targets(target: TilePos, direction: Option<Dir>, precision: bool) 
 /// The body of `ranged_interact_with_atom` with the safety off.
 fn spray(world: &mut World, mob: Entity, item: Entity, target: TilePos) {
     let now = world.resource::<Time>().elapsed_secs_f64();
+    let source = crate::watertank::reagent_source(world, item);
     let (Some(ext), Some(mut holder), Some(&from), Some(chem)) = (
         world.get::<Extinguisher>(item).cloned(),
-        world.get::<Reagents>(item).map(|r| r.0.clone()),
+        world.get::<Reagents>(source).map(|r| r.0.clone()),
         world.get::<TilePos>(mob),
         world.get_resource::<Chem>().map(|c| c.0.clone()),
     ) else {
@@ -306,7 +320,7 @@ fn spray(world: &mut World, mob: Entity, item: Entity, target: TilePos) {
             cooling_power: ext.cooling_power,
         });
     }
-    world.entity_mut(item).insert(Reagents(holder));
+    world.entity_mut(source).insert(Reagents(holder));
 }
 
 /// `PASSTABLE | PASSMACHINE | PASSSTRUCTURE | PASSGRILLE | PASSBLOB | PASSVEHICLE`: not windows
@@ -391,7 +405,8 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, item: Entity) -
         tell(world, client, Span::Notice, "Нужно держать его в руках!");
         return true;
     }
-    let Some(mut holder) = world.get::<Reagents>(item).map(|r| r.0.clone()) else {
+    let source = crate::watertank::reagent_source(world, item);
+    let Some(mut holder) = world.get::<Reagents>(source).map(|r| r.0.clone()) else {
         return true;
     };
     if holder.total_volume <= 0.0 {
@@ -405,7 +420,7 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, item: Entity) -
         crate::janitor::expose(world, turf, &holder, 1.0);
     }
     holder.clear();
-    world.entity_mut(item).insert(Reagents(holder));
+    world.entity_mut(source).insert(Reagents(holder));
     tell(
         world,
         client,

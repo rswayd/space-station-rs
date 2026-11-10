@@ -180,6 +180,7 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
             boozepwr: n("boozepwr"),
             brute_heal: n("brute_heal"),
             nutriment_factor: n("nutriment_factor"),
+            penetrates_skin: num(get("penetrates_skin")).unwrap_or(4.0) as u32,
             default_container: path_value(get("default_container")).unwrap_or_default(),
         });
     }

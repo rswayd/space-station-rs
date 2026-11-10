@@ -43,6 +43,8 @@ pub const TOGGLE_MAGBOOTS: &str = "Toggle Magboots";
 pub const TOGGLE_HELMET_LIGHT: &str = "Toggle Helmet Light";
 pub const TOGGLE_WELDING_SCREEN: &str = "Toggle Welding Screen";
 pub const TOGGLE_JETPACK: &str = "Toggle Jetpack";
+pub const TOGGLE_MISTER: &str = "Toggle Mister";
+pub const ACTIVATE_INJECTOR: &str = "Activate Injector";
 pub const JETPACK_STABILIZATION: &str = "Jetpack Stabilization";
 pub const SET_INTERNALS: &str = "Set Internals";
 
@@ -84,6 +86,10 @@ pub fn buttons(world: &World, slot: InventorySlot, item: Entity) -> Vec<&'static
             }
             buttons
         }
+        InventorySlot::Back if is_under(path, crate::watertank::WATERTANK) => vec![TOGGLE_MISTER],
+        InventorySlot::Back if is_under(path, crate::watertank::CHEMTANK) => {
+            vec![ACTIVATE_INJECTOR]
+        }
         _ if is_under(path, JETPACK) && worn_in_its_slot(world, slot, item) => {
             vec![TOGGLE_JETPACK, JETPACK_STABILIZATION, SET_INTERNALS]
         }
@@ -110,6 +116,8 @@ pub fn trigger(world: &mut World, client: Entity, mob: Entity, item: Entity, nam
         TOGGLE_WELDING_SCREEN => {
             crate::vision::toggle_hardhat_visor(world, client, mob, item);
         }
+        TOGGLE_MISTER => crate::watertank::toggle_mister(world, client, mob, item),
+        ACTIVATE_INJECTOR => crate::watertank::toggle_injector(world, client, mob, item),
         TOGGLE_JETPACK => jetpack::cycle(world, client, mob, item),
         JETPACK_STABILIZATION => jetpack::toggle_stabilization(world, client, mob, item),
         SET_INTERNALS => crate::internals::toggle(world, client, mob, item),

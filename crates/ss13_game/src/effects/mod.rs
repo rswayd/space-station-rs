@@ -34,6 +34,7 @@ pub mod mines;
 pub mod particles;
 pub(crate) mod reactions;
 pub mod smoke;
+pub mod splash;
 pub mod teleporters;
 pub mod temp_visual;
 pub mod trail;

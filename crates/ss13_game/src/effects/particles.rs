@@ -169,6 +169,7 @@ fn affect_location(world: &mut World, pos: TilePos, touch: bool) {
     if !touch {
         return;
     }
+    crate::hazard_decals::touched_sparks(world, pos);
     let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
         return;
     };

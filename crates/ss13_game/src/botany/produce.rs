@@ -595,7 +595,7 @@ fn zap_target(world: &mut World, plant: Entity, target: Entity, seed: &Seed) {
 }
 
 /// `living.can_inject()` without a user: the chest is not under thick clothing.
-fn can_inject(world: &World, mob: Entity) -> bool {
+pub(crate) fn can_inject(world: &World, mob: Entity) -> bool {
     let bit = crate::chem::body_part_bit(crate::zone::BodyZone::Chest);
     !world.get::<Inventory>(mob).is_some_and(|inv| {
         inv.equipped().any(|item| {

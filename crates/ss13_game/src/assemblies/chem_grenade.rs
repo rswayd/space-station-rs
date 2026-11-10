@@ -15,10 +15,8 @@
 //!   (`crate::effects::reactions`), happen on the grenade's tile
 //!   (`crate::chem::refresh_container`). The casing stays, used up until a screwdriver resets
 //!   its trigger.
-// shortcut: what is left after the reactions vanishes (`spread_reagents` exposes nothing: the
-// reagents' `expose_*` procs are not ported, see `crate::chem`); no premade grenades (metal
-// foam, incendiary...), no slime extracts in the
-// large casing, no 2 s `do_after` when resetting the trigger; logging is the server log.
+// shortcut: no premade grenades (metal foam, incendiary...), no slime extracts in the large
+// casing, no 2 s `do_after` when resetting the trigger; logging is the server log.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmName};
@@ -73,6 +71,11 @@ impl Casing {
     /// `ignition_temp`, `threatscale`.
     fn ignition(&self) -> (f32, f32) {
         if self.large { (25.0, 1.1) } else { (10.0, 1.0) }
+    }
+
+    /// `affected_area`.
+    fn affected_area(&self) -> u32 {
+        if self.large { 5 } else { 3 }
     }
 }
 
@@ -618,7 +621,14 @@ pub fn splash(world: &mut World, item: Entity) {
             );
             world.entity_mut(item).insert(Reagents(holder));
             crate::chem::refresh_container(world, &chem, item);
-            // shortcut: the rest is not spread onto the area (see the module docs).
+            // `chem_splash`: what the reactions left, spread over the area.
+            if let Some(rest) = world
+                .get::<Reagents>(item)
+                .map(|r| r.0.clone())
+                .filter(|h| h.total_volume > 0.0)
+            {
+                crate::effects::splash::spread_reagents(world, &rest, pos, c.affected_area());
+            }
             if world.get_entity(item).is_ok() {
                 world
                     .entity_mut(item)

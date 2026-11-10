@@ -376,6 +376,12 @@ impl Atmos {
             .is_some_and(|(level, tile)| level.hotspot_expose(tile, temperature, volume, soh))
     }
 
+    /// `new /obj/effect/hotspot(turf)` on `pos`, whatever its air. True when created.
+    pub fn new_hotspot(&mut self, pos: TilePos, volume: f64, temperature: f64) -> bool {
+        self.locate_mut(pos)
+            .is_some_and(|(level, tile)| level.spawn_hotspot(tile, volume, temperature))
+    }
+
     /// `qdel(hotspot)` of the fire on `pos`, if any.
     pub fn extinguish_hotspot(&mut self, pos: TilePos) {
         if let Some((level, tile)) = self.locate_mut(pos) {

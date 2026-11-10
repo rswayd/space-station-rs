@@ -23,8 +23,9 @@
 //!   washes it if it holds 1 u of a cleaning reagent (water, space cleaner), then exposes it to
 //!   ten times its reagents (water ≥ 5 u wets the floor: `MakeSlippery(water, 10 s, 60 s)`)
 //!   and loses 1 u. Soap cleans after its `cleanspeed` and loses a use.
-//! - A spray bottle clicked on an adjacent thing sprays `amount_per_transfer_from_this` onto
-//!   its tile (`VAPOR`): space cleaner ≥ 1 u washes the turf and everything on it.
+//! - Spray bottles are `crate::sprays`; `expose_by` is `reagents.expose(target, methods, ...)`:
+//!   what the reagents do to a turf, an object or a mob, and what soaks into the blood
+//!   (`penetrates_skin`, less bio armour).
 //! - `ClientIntent::ToggleMoveIntent` switches the mob between running and walking
 //!   (`WALK_DELAY` 4 deciseconds per tile).
 // The cleaning skill (`crate::skills`) shortens the do_after (`min(speed + offset, 1)`), soaks
@@ -34,8 +35,7 @@
 // (soap and mops skip them; items lose their traces, `crate::forensics`); no footprints, blood
 // trails, flying hit splatters or bloody shoes; blood bloodiness does not decay while drying and dried blood keeps its name;
 // no ice (wet floors below 0 °C just do not dry), lube, galoshes or noslip shoes, no sliding
-// and no gravity check; the advanced mop does not self-wet; the cart holds no tools; sprays
-// reach adjacent tiles only (`crate::click` resolves no ranged clicks) and have no puff; no
+// and no gravity check; the advanced mop does not self-wet; the cart holds no tools; no
 // sinks, so buckets are filled by pouring.
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -50,7 +50,7 @@ use ss13_shared::{Appearance, Overlay, TilePos};
 use ss13_world::{Density, Moved, SpatialIndex, WorldSystems};
 
 use crate::chem::{Chem, Reagents, TransferAmount};
-use crate::combat::{CombatRng, NextMove};
+use crate::combat::CombatRng;
 use crate::construction::{Job, turf_at};
 use crate::health::{BodyPosition, Health, HealthSystems, Stat};
 use crate::obj_damage::is_under;
@@ -111,17 +111,23 @@ const MOP_BUCKET: &str = "/obj/structure/mop_bucket";
 const JANICART: &str = "/obj/structure/mop_bucket/janitorialcart";
 const SOAP: &str = "/obj/item/soap";
 const SPRAY: &str = "/obj/item/reagent_containers/spray";
+const FUEL: &str = "/datum/reagent/fuel";
+const URANIUM: &str = "/datum/reagent/uranium";
+const CAPSAICIN: &str = "/datum/reagent/consumable/condensedcapsaicin";
+/// The exposure `methods`.
+pub const TOUCH: u32 = 1 << 0;
+pub const VAPOR: u32 = 1 << 2;
+pub const INHALE: u32 = 1 << 6;
+pub const SMOKE_MACHINE: u32 = TOUCH | INHALE;
 const WATER: &str = "/datum/reagent/water";
 const SPACE_CLEANER: &str = "/datum/reagent/space_cleaner";
 const FIREFIGHTING_FOAM: &str = "/datum/reagent/firefighting_foam";
 /// `/datum/reagent/water::cooling_temperature`.
-const WATER_COOLING_TEMPERATURE: f32 = 2.0;
+pub const WATER_COOLING_TEMPERATURE: f32 = 2.0;
 /// `REAGENT_CLEANS`.
 const REAGENT_CLEANS: u32 = 1 << 7;
 /// `/obj/item/mop` `mopspeed`, deciseconds.
 const MOPSPEED: f32 = 15.0;
-/// `CLICK_CD_RANGE`, seconds.
-const CLICK_CD_RANGE: f64 = 0.4;
 
 /// tg `move_intent == MOVE_INTENT_WALK`.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
@@ -295,6 +301,8 @@ fn add_cleanable(add: On<Add<DmCleanable>>, decals: Query<&DmCleanable>, mut com
         CLEAN_TYPE_BLOOD
     } else if is_under(&dm.path, "/obj/effect/decal/cleanable/crayon") {
         CLEAN_TYPE_HARD_DECAL
+    } else if is_under(&dm.path, crate::hazard_decals::FUEL_POOL) {
+        CLEAN_TYPE_BLOOD
     } else {
         CLEAN_TYPE_LIGHT_DECAL
     };
@@ -481,21 +489,60 @@ pub fn wash_turf(world: &mut World, pos: TilePos, clean_types: u32, all_contents
     cleaned
 }
 
-/// `reagents.expose(target, methods, volume_modifier)` for the reagents whose `expose_*` is
-/// ported here (water and space cleaner on turfs and objects).
+/// `reagents.expose(target, TOUCH, volume_modifier)`.
 pub fn expose(world: &mut World, target: Entity, holder: &Holder, modifier: f32) {
-    expose_cooled(world, target, holder, modifier, WATER_COOLING_TEMPERATURE);
+    expose_by(
+        world,
+        target,
+        holder,
+        modifier,
+        TOUCH,
+        WATER_COOLING_TEMPERATURE,
+    );
+}
+
+/// `reagents.expose(target, VAPOR, volume_modifier)`.
+pub fn expose_vapor(world: &mut World, target: Entity, holder: &Holder, modifier: f32) {
+    expose_by(
+        world,
+        target,
+        holder,
+        modifier,
+        VAPOR,
+        WATER_COOLING_TEMPERATURE,
+    );
 }
 
 /// [`expose`] with water's `cooling_temperature` (extinguishers set their own).
 pub fn expose_cooled(world: &mut World, target: Entity, holder: &Holder, modifier: f32, cool: f32) {
+    expose_by(world, target, holder, modifier, TOUCH, cool);
+}
+
+/// `reagents.expose(target, methods, volume_modifier)` for the reagents whose `expose_*` is
+/// ported here (water, firefighting foam, space cleaner, welding fuel, uranium, capsaicin,
+/// romerol), and `penetrates_skin` into the blood of a mob.
+pub fn expose_by(
+    world: &mut World,
+    target: Entity,
+    holder: &Holder,
+    modifier: f32,
+    methods: u32,
+    cool: f32,
+) {
     let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
         return;
     };
     let turf = world
         .get::<Turf>(target)
         .and_then(|_| world.get::<TilePos>(target).copied());
-    let living = world.get::<Health>(target).is_some();
+    let living =
+        world.get::<Health>(target).is_some() && world.get::<crate::ghost::Ghost>(target).is_none();
+    // `getarmor(null, BIO)`: the torso's (no zone-less armour here).
+    let touch_protection = if living && methods & (VAPOR | TOUCH) != 0 {
+        crate::armor::getarmor(world, target, crate::zone::BodyZone::Chest, "bio") * 0.01
+    } else {
+        0.0
+    };
     for r in &holder.reagents {
         let volume = r.volume * modifier;
         if chem.is_type(r.id, WATER) {
@@ -509,7 +556,7 @@ pub fn expose_cooled(world: &mut World, target: Entity, holder: &Holder, modifie
                     make_slippery(world, pos, TURF_WET_WATER, 10.0, (volume * 1.5).min(60.0));
                 }
             } else if living {
-                water_expose_mob(world, target, volume);
+                water_expose_mob(world, target, volume, methods);
             } else {
                 // `/datum/reagent/water/expose_obj` -> `extinguish()` (fireplaces, bonfires);
                 // hairless hide soaks into wet hide.
@@ -554,8 +601,78 @@ pub fn expose_cooled(world: &mut World, target: Entity, holder: &Holder, modifie
                 }
                 None => {}
             }
+        } else if chem.is_type(r.id, FUEL) {
+            // `/datum/reagent/fuel/expose_turf`, `expose_mob`.
+            if let Some(pos) = turf {
+                if volume >= 5.0 && !crate::construction::is_space(world, pos) {
+                    crate::hazard_decals::spawn_pool(world, pos, volume);
+                }
+            } else if living && methods & (VAPOR | TOUCH) != 0 {
+                crate::fire::adjust_fire_stacks(world, target, volume / 10.0);
+            }
+        } else if chem.is_type(r.id, URANIUM) {
+            // `/datum/reagent/uranium/expose_turf`.
+            if let Some(pos) = turf
+                && volume >= 3.0
+                && !crate::construction::is_space(world, pos)
+            {
+                crate::hazard_decals::spawn_glow(world, pos);
+            }
+        } else if chem.is_type(r.id, CAPSAICIN) {
+            if living && methods & (VAPOR | TOUCH | INHALE) != 0 {
+                pepper_expose(world, target);
+            }
+        }
+        // `/datum/reagent/expose_mob`: `penetrates_skin & methods`.
+        if living && chem.def(r.id).penetrates_skin & methods != 0 {
+            let amount = (volume * (1.0 - touch_protection).clamp(0.0, 1.0) * 10.0).round() / 10.0;
+            if amount >= 0.5
+                && let Some(mut m) = world.get_mut::<crate::chem::MobReagents>(target)
+            {
+                m.blood.add_reagent(
+                    &chem,
+                    r.id,
+                    amount,
+                    holder.chem_temp,
+                    None,
+                    None,
+                    false,
+                    false,
+                );
+            }
         }
     }
+}
+
+/// `/datum/reagent/consumable/condensedcapsaicin/expose_mob` on an unprotected human.
+// shortcut: no 10 s movement slowdown or `TRAIT_ANOSMIA`, no `pepperspray_protect` eyes (only
+// `is_pepper_proof` clothing); add with the movespeed modifier registry. The blindness replaces
+// a longer one (`set_temp_blindness_if_lower` has no getter here).
+fn pepper_expose(world: &mut World, mob: Entity) {
+    if world.get::<crate::human::HumanLook>(mob).is_none()
+        || crate::clothing::cover::pepper_proof(world, mob).is_some()
+    {
+        return;
+    }
+    if world.resource_mut::<CombatRng>().chance(5.0)
+        && let Some(emote) = ss13_chat::emote::find("scream")
+    {
+        crate::mobs::defense::emote(world, mob, emote.message);
+    }
+    if let Some(emote) = ss13_chat::emote::find("cry") {
+        crate::mobs::defense::emote(world, mob, emote.message);
+    }
+    crate::vision::set_eye_blur_if_lower(world, mob, 10.0);
+    crate::vision::cure_temp_blindness(world, mob);
+    crate::vision::adjust_temp_blindness(world, mob, 6.0);
+    crate::status_effects::set_timed(
+        world,
+        mob,
+        crate::status_effects::Timed::Confusion,
+        5.0,
+        true,
+    );
+    crate::status_effects::knockdown(world, mob, 3.0, 0.0);
 }
 
 /// The fire on `pos` goes out and its air cools (not over space: `isspaceturf`).
@@ -573,16 +690,25 @@ fn douse_hotspot(world: &mut World, pos: TilePos, cooled: impl FnOnce(f64) -> f6
     atmos.extinguish_hotspot(pos);
 }
 
-/// `WATER_TO_WET_STACKS_FACTOR_TOUCH`.
+/// `WATER_TO_WET_STACKS_FACTOR_TOUCH`, `WATER_TO_WET_STACKS_FACTOR_VAPOR`.
 const WATER_TO_WET_STACKS_FACTOR_TOUCH: f32 = 0.5;
+const WATER_TO_WET_STACKS_FACTOR_VAPOR: f32 = 0.1;
 
-/// `/datum/reagent/water/expose_mob` by touch (every caller of [`expose`] on a mob splashes):
-/// the fire goes out, the mob gets wet and wakes up a little.
-// shortcut: no vapor exposure (no caller sprays mobs), no felinid water hate.
-fn water_expose_mob(world: &mut World, mob: Entity, volume: f32) {
+/// `/datum/reagent/water/expose_mob`: by touch the fire goes out and the mob gets wet, by vapor it
+/// gets a little wet; either way it wakes up a little.
+// shortcut: no felinid water hate.
+fn water_expose_mob(world: &mut World, mob: Entity, volume: f32, methods: u32) {
     use crate::status_effects::{self, Incap, Timed};
-    crate::fire::extinguish_mob(world, mob);
-    crate::fire::adjust_wet_stacks(world, mob, volume * WATER_TO_WET_STACKS_FACTOR_TOUCH);
+    if methods & TOUCH != 0 {
+        crate::fire::extinguish_mob(world, mob);
+        crate::fire::adjust_wet_stacks(world, mob, volume * WATER_TO_WET_STACKS_FACTOR_TOUCH);
+    }
+    if methods & VAPOR != 0 {
+        crate::fire::adjust_wet_stacks(world, mob, volume * WATER_TO_WET_STACKS_FACTOR_VAPOR);
+    }
+    if methods & (TOUCH | VAPOR) == 0 {
+        return;
+    }
     status_effects::adjust_timed(world, mob, Timed::Dizziness, -2.0, None);
     status_effects::adjust_timed(world, mob, Timed::Confusion, -2.0, None);
     status_effects::adjust_timed(world, mob, Timed::Drowsiness, -4.0, None);
@@ -1017,7 +1143,7 @@ pub fn item_interaction(
         return true;
     }
     if is_under(&path, SPRAY) && !modifiers.right {
-        return spray(world, actor, target);
+        return crate::sprays::interact(world, actor, target);
     }
     false
 }
@@ -1168,86 +1294,6 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: CleanJob)
             }
         }
     }
-}
-
-/// `/obj/item/reagent_containers/spray/try_spray` + `spray` on an adjacent target: the puff
-/// (`amount_per_transfer_from_this / range`, range 1) lands on the target's tile.
-fn spray(world: &mut World, actor: Actor, target: Entity) -> bool {
-    let spray = actor.item.expect("a held spray");
-    let Some(mut holder) = world.get::<Reagents>(spray).map(|r| r.0.clone()) else {
-        return false;
-    };
-    // A drainable, non-refillable target (a tank) refills the bottle with 50 u.
-    if let Some(mut source) = world
-        .get::<Reagents>(target)
-        .map(|r| r.0.clone())
-        .filter(|h| h.is_drainable() && !h.is_refillable())
-    {
-        let (src, dst) = (
-            crate::chem::name_of(world, target),
-            crate::chem::name_of(world, spray),
-        );
-        if source.total_volume == 0.0 {
-            tell(world, actor.client, Span::Warning, format!("{src} пуст."));
-        } else if holder.holder_full() {
-            tell(world, actor.client, Span::Warning, format!("{dst} полон."));
-        } else if let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) {
-            let moved = source.trans_to(&chem, &mut holder, 50.0, 1.0, None, false, false);
-            world.entity_mut(target).insert(Reagents(source));
-            world.entity_mut(spray).insert(Reagents(holder));
-            tell(
-                world,
-                actor.client,
-                Span::Notice,
-                format!(
-                    "Вы наполняете {dst} {} ед. содержимого {src}.",
-                    crate::chem::dm_num(moved)
-                ),
-            );
-        }
-        return true;
-    }
-    let amount = world.get::<TransferAmount>(spray).map_or(5.0, |t| t.0);
-    if holder.total_volume < amount {
-        tell(world, actor.client, Span::Warning, "Больше не осталось!");
-        return true;
-    }
-    let now = world.resource::<Time>().elapsed_secs_f64();
-    if world.get::<NextMove>(actor.mob).is_some_and(|n| now < n.0) {
-        return true;
-    }
-    let (Some(chem), Some(&pos)) = (
-        world.get_resource::<Chem>().map(|c| c.0.clone()),
-        world.get::<TilePos>(target),
-    ) else {
-        return false;
-    };
-    let mut puff = Holder::new(amount, 0, Owner::default());
-    holder.trans_to(&chem, &mut puff, amount, 1.0, None, true, false);
-    world.entity_mut(spray).insert(Reagents(holder));
-    if let Some(mut next) = world.get_mut::<NextMove>(actor.mob) {
-        next.0 = now + CLICK_CD_RANGE * 2.0;
-    }
-    // `spray_down_turf`: what is on the tile (not hidden below the floor), then the turf.
-    let things: Vec<Entity> = world
-        .resource::<SpatialIndex>()
-        .on_tile(pos)
-        .iter()
-        .copied()
-        .filter(|&e| {
-            world.get::<Turf>(e).is_none()
-                && world.get::<ss13_mapload::HiddenUnderTile>(e).is_none()
-        })
-        .collect();
-    for e in things {
-        if world.get_entity(e).is_ok() {
-            expose(world, e, &puff, 1.0);
-        }
-    }
-    if let Some(turf) = turf_at(world, pos) {
-        expose(world, turf, &puff, 1.0);
-    }
-    true
 }
 
 // ---------------------------------------------------------------------------------------------

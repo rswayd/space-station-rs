@@ -74,6 +74,13 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `sprays`, `watertank`: the puff, the tanks' nozzles and the resin capsule.
+    "/obj/effect/decal/chempuff",
+    "/obj/item/reagent_containers/spray/mister",
+    "/obj/item/reagent_containers/spray/mister/janitor",
+    "/obj/item/reagent_containers/spray/mister/pepperspray",
+    "/obj/item/extinguisher/mini/nozzle",
+    "/obj/effect/resin_container",
     // `power::singularity`, `power::tesla`: what a delamination or a collapsing tear leaves.
     "/obj/singularity",
     "/obj/tesla_ball",

@@ -30,13 +30,13 @@
 Лужа сварочного топлива (`fuel_pool`) горит и растекается при поджоге; плазменная и радиоактивная зелёная слизь (`greenglow`) светятся и облучают.
 
 - **Код:** [`/obj/effect/decal/cleanable/fuel_pool`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/decals/cleanable/fuel.dm#L1), [`/obj/effect/decal/cleanable/greenglow`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/decals/cleanable/mess.dm#L113), [`/obj/effect/decal/cleanable/greenglow/radioactive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/decals/cleanable/mess.dm#L138), [`/obj/effect/decal/cleanable/plasma`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/decals/cleanable/mess.dm#L317)
-- **Статус в ss13-rs:** ❌ нет — нет луж топлива и радиации
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/hazard_decals.rs` (`FuelPool`: `burn_amount`, поджог огнём, горячим предметом, горящим мобом и искрами, распространение на соседние лужи через 0.5 с, следующий такт после гибели очага, `RadioactiveEmitter` у радиоактивной слизи), `crates/ss13_game/src/janitor.rs` (`expose_by`: лужа от 5 ед. топлива, слизь от 3 ед. урана/радия, тип смывания крови); свет — из DM-переменных при конвертации; плазменная декаль остаётся от пены пожаротушения (`effects/foam.rs`); нет поджога выстрелом и приземлившимся брошенным предметом, слизь не хранит реагенты
 
 ### Рисунки мелками и баллончиком
 Мелок или баллончик рисует руны, буквы, граффити и знаки на полу и стенах (`crayon`), выбор в меню мелка; смываются уборкой.
 
 - **Код:** [`/obj/effect/decal/cleanable/crayon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/decals/crayon.dm#L1), [`/obj/item/toy/crayon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/crayons.dm#L24)
-- **Статус в ss13-rs:** ❌ нет — нет мелков
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/crayons.rs` (мелки и баллончики: рисунки, надписи, руны, граффити, крупные на 3 тайла, стирание скрабом, покраска объектов, лицо), тест `crates/ss13_game/tests/it/crayons.rs`; выбор — `tgui_input_list` (окно мелка с превью не портировано), остальное см. `// shortcut` модуля
 
 ### Останки
 Скелетированные останки людей, плазмаменов, ксеноморфов, роботов (после растворения кислотой, сожжения и т.п.); «дымные» останки в техтоннелях при приближении (не чаще раза в 20 с) выпускают облако случайного реагента.
@@ -49,4 +49,4 @@
 Летящее облачко реагентов от распылителя/спрея: наносит реагенты на всё на своём пути.
 
 - **Код:** [`/obj/effect/decal/chempuff`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/decals/chemspray.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — нет распылителей
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/sprays.rs` (`Puff`: дальность по весу реагентов 3–5 тайлов, скорость `max(floor(2 + 3 / range), 2)` дс, режим струи, `PASSTABLE | PASSGRILLE`, `VAPOR` по всему на пути и тайлу, тройной выстрел химраспылителя, дозаправка из бака 50 ед.); нет глагола «опустошить» и обратного переключения порции, самовосполнения киборгских и уборочного распылителей

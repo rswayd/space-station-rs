@@ -865,6 +865,9 @@ fn click_equip_slot(
             let storage = crate::storage::storage_of(world, worn).expect("checked by the guard");
             crate::storage::click_storage(world, client, mob, storage);
         }
+        // tg `watertank/attack_hand` from the back, `item_interaction` with its nozzle.
+        (None, Some(worn)) if crate::watertank::attack_hand_worn(world, client, mob, worn) => {}
+        (Some(held), Some(worn)) if crate::watertank::nozzle_on_tank(world, held, worn) => {}
         // tg `defibrillator/attack_hand` from its slot: the paddles come out or go back.
         (None, Some(worn)) if crate::medical::defib::attack_hand_worn(world, client, mob, worn) => {
         }

@@ -34,6 +34,7 @@
 //! | 989 | `service::burden` pray refill (the chaplain's revolver) |
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 1000 | `guns::attack_self` |
+//! | 1097 | `sprays::attack_self` (stream or spray mode; lets `chem::attack_self` run) |
 //! | 1100 | `chem::attack_self` |
 //! | 1200 | `medical::attack_self` |
 //! | 1300 | `disposals::attack_self` |
@@ -101,6 +102,7 @@
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
 //! | 3269 | `deployable_turrets::attack_self` (a folded machine gun deploys) |
+//! | 3267 | `watertank::nozzle_attack_self` (the firefighter nozzle's modes) |
 //! | 3275 | `extinguisher::attack_self` (the safety) |
 //! | 3277 | `antag::revenant::scatter_residue` (the glimmering residue scattered by hand) |
 //! | 3285 | `recycling::conveyor::attack_self` (a switch assembly links nearby belt stacks) |
@@ -412,6 +414,7 @@
 //! | 3465 | `effects::teleporters::portal_click` (permanent portals) |
 //! | 3475 | `mining::crusher::item_interaction` (crusher trophies on and off) |
 //! | 3485 | `curses::cut_strand` (wirecutters on a strangled mob) |
+//! | 3487 | `hazard_decals::ignite_click` (a hot item on a fuel pool) |
 //! | 3500 | `janitor::item_interaction` |
 //! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |

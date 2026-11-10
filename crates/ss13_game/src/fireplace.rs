@@ -162,7 +162,7 @@ fn held_is(world: &World, held: Entity, root: &str) -> bool {
 }
 
 /// `get_temperature() >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST` (`ignition_effect`).
-fn is_hot(world: &World, item: Entity) -> bool {
+pub(crate) fn is_hot(world: &World, item: Entity) -> bool {
     crate::medical::surgery::ToolInfo::read(world, Some(item)).temperature
         >= crate::medical::surgery::FIRE_MINIMUM_TEMPERATURE_TO_EXIST
 }
