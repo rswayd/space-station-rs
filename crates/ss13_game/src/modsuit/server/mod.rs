@@ -86,7 +86,8 @@ pub(crate) use interact::{SHIELD_PROTECTION, set_emp_protection};
 pub use interact::{charge_plasma, hand_interaction, item_interaction, plasma_uses};
 use parts::*;
 pub use parts::{
-    allowed, charge, check_charge, install, max_charge, subtract_charge, uninstall, worn_suit,
+    add_charge, allowed, charge, check_charge, install, max_charge, subtract_charge, uninstall,
+    worn_suit,
 };
 pub(crate) use parts::{buzz, name, sound_at};
 use ui::*;
@@ -387,6 +388,7 @@ impl Plugin for ModSuitPlugin {
             crate::modsuit::paint::ModPaintPlugin,
             crate::modsuit::ai::ModAiPlugin,
             crate::modsuit::link::ModLinkPlugin,
+            crate::modsuit::ninja::NinjaModulesPlugin,
         ));
         app.register_ui::<ModSuitUi>()
             .add_systems(Startup, load_db)

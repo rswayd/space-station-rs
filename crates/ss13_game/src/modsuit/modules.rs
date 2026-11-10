@@ -35,6 +35,9 @@
 //!
 //! Every other module still installs, counts its complexity, toggles or selects, pays its power
 //! and cooldown.
+//! - the Spider Clan's modules ([`super::ninja`]): cloaks, hacker, weapon recall, energy net,
+//!   adrenaline boost, EMP pulse, star dispenser, DNA locks.
+//!
 // shortcut: t-ray, tethers, the diagnostic, meson, thermal and night visors and the remaining
 // department modules toggle and pay power but have no effect yet (no t-ray reveal, diagnostic HUD,
 // vision modes); the radiation counter panel is not drawn; overlays with `mask_worn_overlay` (an
@@ -109,6 +112,20 @@ pub enum Kind {
     QuickCuff,
     NoSlipWater,
     Bikehorn,
+    /// The Spider Clan's modules ([`super::ninja`]).
+    Stealth {
+        ninja: bool,
+    },
+    Hacker,
+    WeaponRecall,
+    EnergyNet,
+    AdrenalineBoost,
+    /// `emp_shield/pulse`: an EMP shield that also pulses.
+    EmpPulse,
+    StarDispenser,
+    DnaLock {
+        reinforced: bool,
+    },
     Other,
 }
 
@@ -119,6 +136,8 @@ impl Kind {
             |root: &str| is_under(p, &format!("{}/{root}", ss13_mapload::modsuit::MODULE_ROOT));
         if def.storage.is_some() {
             Self::Storage
+        } else if let Some(kind) = super::ninja::kind_of(def) {
+            kind
         } else if under("welding") {
             Self::Welding
         } else if under("flashlight") && def.light.is_some() {
@@ -311,7 +330,12 @@ pub fn on_install(world: &mut World, control: Entity, module: Entity) {
                 });
             }
         }
-        Kind::EmpShield { .. } => set_emp_protection(world, control, SHIELD_PROTECTION, true),
+        Kind::EmpShield { .. } | Kind::EmpPulse => {
+            set_emp_protection(world, control, SHIELD_PROTECTION, true)
+        }
+        k @ (Kind::AdrenalineBoost | Kind::DnaLock { .. }) => {
+            super::ninja::on_install(world, control, module, k)
+        }
         _ => {}
     }
 }
@@ -331,7 +355,9 @@ pub fn on_uninstall(world: &mut World, control: Entity, module: Entity) {
                 }
             }
         }
-        Kind::EmpShield { .. } => set_emp_protection(world, control, SHIELD_PROTECTION, false),
+        Kind::EmpShield { .. } | Kind::EmpPulse => {
+            set_emp_protection(world, control, SHIELD_PROTECTION, false)
+        }
         _ => {}
     }
 }
@@ -376,6 +402,9 @@ pub fn on_part_activation(world: &mut World, control: Entity, module: Entity) {
                 world.entity_mut(wearer).insert(NoSlipWater);
             }
         }
+        Kind::WeaponRecall => {
+            super::ninja::on_part_activation(world, control, module, Kind::WeaponRecall)
+        }
         _ => {}
     }
 }
@@ -407,6 +436,9 @@ pub fn on_part_deactivation(world: &mut World, control: Entity, module: Entity) 
             if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
                 world.entity_mut(wearer).remove::<NoSlipWater>();
             }
+        }
+        k @ (Kind::WeaponRecall | Kind::EnergyNet) => {
+            super::ninja::on_part_deactivation(world, control, module, k)
         }
         _ => {}
     }
@@ -551,6 +583,10 @@ pub fn used(world: &mut World, control: Entity, module: Entity, activator: Optio
     if !super::anomalock::may_trigger(world, module, wearer) {
         return false;
     }
+    // The adrenaline boost's own `used()`: its radium.
+    if !super::ninja::may_use(world, control, module, state.kind) {
+        return false;
+    }
     if let Some(mut m) = world.get_mut::<ModModule>(module) {
         m.cooldown_until = now + f64::from(def.cooldown_time) / 10.0;
     }
@@ -559,7 +595,9 @@ pub fn used(world: &mut World, control: Entity, module: Entity, activator: Optio
 
 /// tg `on_use(activator)` of the usable modules ported here (the others do nothing).
 fn on_use(world: &mut World, control: Entity, module: Entity) {
-    if kind(world, module) != Kind::Bikehorn {
+    let kind = kind(world, module);
+    if kind != Kind::Bikehorn {
+        super::ninja::on_use(world, control, module, kind);
         return;
     }
     // `playsound(src, 'bikehorn.ogg', 100, FALSE)`.
@@ -604,6 +642,9 @@ pub fn on_select_use(
         return;
     }
     if !used(world, control, module, Some(wearer)) {
+        return;
+    }
+    if super::ninja::on_select_use(world, control, module, kind(world, module), target) {
         return;
     }
     if kind(world, module) != Kind::HealthAnalyzer || world.get::<Health>(target).is_none() {
@@ -673,6 +714,7 @@ fn on_activation(world: &mut World, control: Entity, module: Entity) {
                 .entity_mut(wearer)
                 .insert((ModMegaphone { control, module }, VoiceSpan(MEGAPHONE_VOICE)));
         }
+        k @ Kind::Stealth { .. } => super::ninja::on_activation(world, control, module, k),
         _ => {}
     }
 }
@@ -696,6 +738,7 @@ fn strip_wearer(world: &mut World, module: Entity, kind: Kind, wearer: Entity) {
         Kind::Visor { .. } => {
             world.entity_mut(wearer).remove::<VisorHud>();
         }
+        Kind::Stealth { .. } => super::ninja::strip(world, module, kind, wearer),
         Kind::Megaphone
             if world
                 .get::<ModMegaphone>(wearer)

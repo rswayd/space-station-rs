@@ -955,6 +955,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::abductor::server::roundend_report(world, end));
     antags.extend(crate::antag::paradox_clone::roundend_report(world, end));
     antags.extend(crate::antag::nightmare::roundend_report(world, end));
+    antags.extend(crate::antag::raiders::roundend_report(world, end));
     antags.extend(crate::antag::morph::roundend_report(world, end));
     antags.extend(crate::antag::xeno::roundend_report(world, end));
     antags.extend(crate::antag::space_dragon::roundend_report(world, end));
@@ -1806,6 +1807,8 @@ fn preference_acts(
                     crate::antag::ROLE_BLOB,
                     crate::antag::ROLE_BLOB_INFECTION,
                     crate::antag::ROLE_ALIEN,
+                    crate::antag::ROLE_NINJA,
+                    crate::antag::ROLE_FUGITIVE,
                 ]
                 .contains(&role.as_str()) =>
             {

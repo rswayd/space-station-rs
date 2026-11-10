@@ -176,7 +176,9 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 3 | `modsuit::ninja` cloak (a cloaked wearer touching something living drops the cloak; never takes the click) |
 //! | 9 | `deployable_turrets::gunner_click` (a turret's gunner aims and fires) |
+//! | 13 | `antag::raiders::ninja::hack` (the hacker module's right click: drains, hacks, the electric touch) |
 //! | 95 | `shuttle_docker::interact` (a navigation computer: take, leave, rotate; its operator's clicks designate the landing spot) |
 //! | 97 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 99 | `machine_wires::empty_hand` (an open panel shows the wires) |
@@ -297,6 +299,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 3 | `modsuit::ninja` cloak (a cloaked wearer hitting something living drops the cloak; never takes the click) |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
 //! | 79 | `gym::item_interaction` (punching bag wrench/crowbar right clicks, the loom) |

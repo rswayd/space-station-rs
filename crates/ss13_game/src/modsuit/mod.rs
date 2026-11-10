@@ -21,6 +21,8 @@ pub mod link;
 #[cfg(feature = "server")]
 pub mod modules;
 #[cfg(feature = "server")]
+pub mod ninja;
+#[cfg(feature = "server")]
 pub mod paint;
 #[cfg(feature = "server")]
 pub mod server;

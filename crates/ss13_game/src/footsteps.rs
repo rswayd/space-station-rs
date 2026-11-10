@@ -70,7 +70,14 @@ type Stepper<'a> = (
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn play_footsteps(
     mut moved: MessageReader<Moved>,
-    mut mobs: Query<Stepper, With<HumanLook>>,
+    // `TRAIT_SILENT_FOOTSTEPS` (the ninja's cloak) makes no sound.
+    mut mobs: Query<
+        Stepper,
+        (
+            With<HumanLook>,
+            Without<crate::modsuit::ninja::SilentFootsteps>,
+        ),
+    >,
     clothing: Query<&DmClothing>,
     turfs: Query<&DmTurf, With<Turf>>,
     index: Res<SpatialIndex>,

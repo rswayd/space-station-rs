@@ -450,9 +450,17 @@ fn charge(world: &mut World, item: Entity) -> Option<Charge> {
         return None;
     }
     let x4 = is_under(&path, X4);
+    // The spider charge's `boom_sizes = list(4, 8, 12)`.
+    let spider = is_under(&path, crate::antag::raiders::ninja::SPIDER_CHARGE);
     let c = Charge {
         det_time: C4_MIN_TIMER,
-        boom_sizes: if x4 { [0, 5, 7] } else { [0, 0, 3] },
+        boom_sizes: if x4 {
+            [0, 5, 7]
+        } else if spider {
+            [4, 8, 12]
+        } else {
+            [0, 0, 3]
+        },
         directional: x4,
         aim_dir: Dir::North,
         planted: None,
@@ -545,6 +553,12 @@ pub fn c4_interact(world: &mut World, actor: Actor, target: Entity) -> bool {
     if world.get::<crate::ghost::Ghost>(target).is_some() || target == item {
         return false;
     }
+    // `c4/ninja/plant_c4`: only a ninja, only in the objective's area.
+    if crate::antag::raiders::ninja::is_spider_charge(world, item)
+        && !crate::antag::raiders::ninja::spider_plant_check(world, actor, item, target)
+    {
+        return true;
+    }
     let (Some(&from), Some(&to)) = (
         world.get::<TilePos>(actor.mob),
         world.get::<TilePos>(target),
@@ -601,6 +615,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Explosive
         c.planted = Some((action.target, at));
     }
     set_overlay(world, item, action.target, true);
+    crate::antag::raiders::ninja::spider_planted(world, item, mob);
     let target_name = crate::chem::name_of(world, action.target);
     info!(
         "{mob:?} planted a charge on {target_name} at {:?} with a {} second fuse",
@@ -683,6 +698,18 @@ fn detonate(world: &mut World, item: Entity, c: Charge) {
         }
         return;
     };
+    // `c4/ninja/detonate`: out of its area it fizzles into a fresh charge.
+    let spider = world
+        .get::<crate::antag::raiders::ninja::SpiderCharge>(item)
+        .copied();
+    if spider.is_some()
+        && world.get_entity(target).is_ok()
+        && !crate::antag::raiders::ninja::spider_detonation(world, item, target)
+    {
+        set_overlay(world, item, target, false);
+        world.despawn(item);
+        return;
+    }
     let mut location = None;
     let mut dense = false;
     if world.get_entity(target).is_ok() {
@@ -711,6 +738,9 @@ fn detonate(world: &mut World, item: Entity, c: Charge) {
             ex = ex.directional(dir_angle(c.aim_dir), X4_ARC);
         }
         super::explosion(world, pos, ex);
+        if let Some(spider) = spider {
+            crate::antag::raiders::ninja::spider_exploded(world, spider);
+        }
     }
     if world.get_entity(item).is_ok() {
         world.despawn(item);

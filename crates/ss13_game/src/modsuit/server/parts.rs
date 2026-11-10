@@ -123,6 +123,35 @@ pub fn subtract_charge(world: &mut World, control: Entity, amount: f64) -> bool 
     }
 }
 
+/// tg `add_charge(amount)`: the cell's `give`, the plasma core's own charge. What went in.
+pub fn add_charge(world: &mut World, control: Entity, amount: f64) -> f64 {
+    match core_state(world, control) {
+        Some(c) if c.infinite => 0.0,
+        Some(ModCore {
+            plasma: Some((charge, max)),
+            ..
+        }) => {
+            let given = amount.min(max - charge).max(0.0);
+            if let Some(core) = world.get::<ModSuit>(control).and_then(|s| s.core)
+                && let Some(mut c) = world.get_mut::<ModCore>(core)
+                && let Some((now, _)) = c.plasma.as_mut()
+            {
+                *now += given;
+            }
+            given
+        }
+        Some(_) => {
+            let Some(cell) = cell_of(world, control) else {
+                return 0.0;
+            };
+            world
+                .get_mut::<ItemCell>(cell)
+                .map_or(0.0, |mut c| c.0.give(amount))
+        }
+        None => 0.0,
+    }
+}
+
 pub(super) fn chargebar(world: &World, control: Entity) -> (String, String) {
     let Some(core) = core_state(world, control) else {
         return ("transparent".into(), "No Core Detected".into());
