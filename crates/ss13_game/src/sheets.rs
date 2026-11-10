@@ -35,7 +35,7 @@ use crate::construction::Job;
 use crate::inventory::Inventory;
 use crate::obj_damage::is_under;
 use crate::sound::{PlaySound, playsound};
-use crate::tools::{Actor, Stack, Welder, do_after, stack_amount, tell, use_stack};
+use crate::tools::{Actor, Stack, do_after, stack_amount, tell, use_stack};
 
 const PLASMA_SHEET: &str = "/obj/item/stack/sheet/mineral/plasma";
 const HOT_ICE: &str = "/obj/item/stack/sheet/hot_ice";
@@ -166,14 +166,9 @@ pub fn flood_of(world: &World, e: Entity) -> Option<Flood> {
         .map(|&(_, f)| f)
 }
 
-/// `get_temperature` of a held item: a lit welder's heat.
+/// `get_temperature` of a held item: a lit welder's, lighter's, match's or cigarette's heat.
 fn item_temperature(world: &World, item: Entity) -> f64 {
-    if !world.get::<Welder>(item).is_some_and(|w| w.on) {
-        return 0.0;
-    }
-    world
-        .get::<ss13_mapload::DmTool>(item)
-        .map_or(0.0, |t| f64::from(t.heat))
+    f64::from(crate::medical::surgery::ToolInfo::read(world, Some(item)).temperature)
 }
 
 /// `combustible_flooder/flood`, coal's `fire_act`: the gas on the stack's turf, the stack gone.

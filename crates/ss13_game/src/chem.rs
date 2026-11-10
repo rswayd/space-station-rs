@@ -996,17 +996,13 @@ fn apply_pill(world: &mut World, actor: Actor, target: Entity) {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UsedUp;
 
-/// A lit welder's `heat` (`get_temperature`).
-const WELDER_HEAT: f32 = 3800.0;
-
-/// tg `/datum/element/reagents_item_heatable` of cups: a hot tool heats a non-empty cup
-/// (`expose_temperature`, 2% of the difference, at least 1 K), which may start reactions.
-// shortcut: only a lit welder is hot (lighters, matches and burners have no lit state yet); no
-// extinguisher cooling.
+/// tg `/datum/element/reagents_item_heatable` of cups: a hot tool (`get_temperature`: a lit
+/// welder, lighter, match or cigarette) heats a non-empty cup (`expose_temperature`, 2% of the
+/// difference, at least 1 K), which may start reactions.
+// shortcut: no burners; no extinguisher cooling.
 fn heat_with_tool(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
-    if !world
-        .get::<crate::tools::Welder>(held)
-        .is_some_and(|w| w.on)
+    let heat = crate::medical::surgery::ToolInfo::read(world, Some(held)).temperature;
+    if heat <= 0.0
         || !is_under(&path(world, target), CUP_ROOT)
         || holder(world, target).is_none_or(|h| h.total_volume <= 0.0)
     {
@@ -1014,7 +1010,7 @@ fn heat_with_tool(world: &mut World, client: Entity, held: Entity, target: Entit
     }
     let chem = chem(world);
     if let Some(mut r) = world.get_mut::<Reagents>(target) {
-        r.0.expose_temperature(&chem, WELDER_HEAT, 0.02);
+        r.0.expose_temperature(&chem, heat, 0.02);
     }
     let dst = name_of(world, target);
     tell(world, client, Span::Notice, format!("{dst} нагрет"));

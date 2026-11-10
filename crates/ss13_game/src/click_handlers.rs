@@ -20,6 +20,7 @@
 //! | 150 | `silicon::mmi::attack_self` |
 //! | 160 | `silicon::aicard::attack_self` |
 //! | 165 | `silicon::pai::attack_self` (the pAI card's menu) |
+//! | 199 | `smoking::attack_self` (lighters before `tools`, the battery lighter, putting out smokables, emptying pipes and vapes) |
 //! | 200 | `tools::attack_self` |
 //! | 210 | `t_scanner::toggle` |
 //! | 220 | `inducer::attack_self` (the cell out of an open hatch) |
@@ -109,6 +110,8 @@
 //! | 3301 | `antag::wizard::server::runic::attack_self` (the scepter's recharge) |
 //! | 3295 | `power::cable_coil::attack_self` (the layer menu) |
 //! | 3305 | `legcuffs::attack_self` (a bear trap arms and disarms) |
+//! | 3309 | `kitchen_ware::attack_self` (pizza boxes open and close, tongs drop or clack) |
+//! | 3319 | `toys::toggle_sword` (a toy sword flicks out and in) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -130,9 +133,12 @@
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 477 | `instruments::boombox::other_hand` (a music tape into the boombox in the other hand, its menu) |
+//! | 479 | `toys::item_on_item` (caps into a cap gun, toy sword tools, filling and bursting balloons, emagging a Mini-Meteor) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
 //! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
+//! | 489 | `smoking::item_on_item` (lighting smokables, packing pipes, rolling paper, striking matches, vape tools, dipping) |
+//! | 499 | `kitchen_ware::other_hand` (food onto plates, pizza boxes, tongs; empty hand: food off a plate, pizza or the top box) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
 //! | 700 | `assemblies::server::item_interaction` |
@@ -295,6 +301,7 @@
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
+//! | 229 | `smoking::held_on_target` (lighters and matches on mobs, lighting someone's cigarette, smokables, matchboxes, vapes, dipping) |
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
@@ -366,6 +373,7 @@
 //! | 1783 | `science::cell_lines::dish_interaction` (a petri dish into the microscope or a growing vat) |
 //! | 1800 | `kitchen::item_interaction` |
 //! | 1803 | `antag::abductor::server::ship` (a science tool or vest onto the abductor console, a gland into storage) |
+//! | 1809 | `kitchen_ware::held_on_target` (tank taps, tongs, plates, pizza boxes) |
 //! | 1813 | `antag::abductor::server::gear` (science tool, silencer, mental interface device on a mob; far clicks: `RangedClick`) |
 //! | 1850 | `restaurant::item_interaction` |
 //! | 1900 | `cooking::item_interaction` |
@@ -427,6 +435,7 @@
 //! | 3500 | `janitor::item_interaction` |
 //! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |
+//! | 3649 | `toys::held_on_target` (caps, toy swords, balloons, the Mini-Meteor; water balloons never hit mobs) |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |
 //! | 3800 | `medical::item_interaction` |

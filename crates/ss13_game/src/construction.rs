@@ -217,6 +217,8 @@ pub enum Job {
     Chem(crate::chem::ChemJob),
     /// Eating, feeding or processing food ([`crate::food`]).
     Food(crate::food::FoodJob),
+    /// Striking the battery lighter ([`crate::smoking`]).
+    Smoking(crate::smoking::SmokingJob),
     /// Digging a plant out of a tray ([`crate::botany`]).
     Botany(crate::botany::BotanyJob),
     /// Welding a vent or scrubber ([`crate::atmos_machinery`]).
@@ -1399,6 +1401,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::Chem(job) => crate::chem::complete(world, mob, action, *job),
         Job::Implant => crate::implants::complete_implant(world, mob, action),
         Job::Food(job) => crate::food::complete(world, mob, action, *job),
+        Job::Smoking(job) => crate::smoking::complete(world, mob, action, *job),
         &Job::Clean(job) => crate::janitor::complete(world, mob, action, job),
         Job::Botany(job) => crate::botany::complete(world, mob, action, *job),
         Job::Atmos(job) => crate::atmos_machinery::windows::complete(world, mob, action, *job),

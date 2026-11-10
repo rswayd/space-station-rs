@@ -86,6 +86,8 @@ pub struct Welder {
     pub max_fuel: f32,
     /// `burned_fuel_for`, seconds.
     burned: f32,
+    /// Fuel one [`TOOL_FUEL_BURN_INTERVAL`] burns: 1, a lighter's `use(0.25)`.
+    pub burn_use: f32,
 }
 
 impl Welder {
@@ -95,6 +97,7 @@ impl Welder {
             fuel: max_fuel,
             max_fuel,
             burned: 0.0,
+            burn_use: 1.0,
         }
     }
 
@@ -113,7 +116,7 @@ impl Welder {
         if self.burned < TOOL_FUEL_BURN_INTERVAL {
             return false;
         }
-        self.use_fuel(1.0);
+        self.use_fuel(self.burn_use);
         true
     }
 
@@ -409,6 +412,11 @@ pub fn refresh_welder(world: &mut World, item: Entity) {
     let Some(welder) = world.get::<Welder>(item).cloned() else {
         return;
     };
+    // Lighters are `TOOL_WELDER` with their own sprites and force (`crate::smoking`).
+    if world.get::<crate::smoking::Lighter>(item).is_some() {
+        crate::smoking::refresh_lighter(world, item);
+        return;
+    }
     let base = world
         .get::<DmAtom>(item)
         .map(|a| (a.icon.clone(), a.icon_state.clone()));

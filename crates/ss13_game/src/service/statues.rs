@@ -31,7 +31,7 @@ use crate::radiation::{
     RAD_LIGHT_INSULATION, URANIUM_IRRADIATION_CHANCE, URANIUM_RADIATION_MINIMUM_EXPOSURE_TIME,
     radiation_pulse,
 };
-use crate::tools::{Actor, DoAfter, Welder, do_after, tell};
+use crate::tools::{Actor, DoAfter, do_after, tell};
 
 const URANIUM_STATUE: &str = "/obj/structure/statue/uranium";
 const PLASMA_STATUE: &str = "/obj/structure/statue/plasma";
@@ -206,14 +206,9 @@ pub fn fire_act(world: &mut World, thing: Entity, temperature: f64) -> bool {
     true
 }
 
-/// `get_temperature` of a held item: a lit welder's heat.
+/// `get_temperature` of a held item: a lit welder's, lighter's, match's or cigarette's heat.
 fn item_temperature(world: &World, item: Entity) -> f64 {
-    if !world.get::<Welder>(item).is_some_and(|w| w.on) {
-        return 0.0;
-    }
-    world
-        .get::<ss13_mapload::DmTool>(item)
-        .map_or(0.0, |t| f64::from(t.heat))
+    f64::from(crate::medical::surgery::ToolInfo::read(world, Some(item)).temperature)
 }
 
 /// `welder_react`/`attackby_react` of flooders, the chisel. True when the click was theirs.

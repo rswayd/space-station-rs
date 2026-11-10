@@ -53,6 +53,16 @@ pub fn spread_reagents(world: &mut World, source: &Holder, epicenter: TilePos, r
     }
 }
 
+/// `reagents.expose(T)` and `reagents.expose(A)` for every `A in T`: the whole of `source` on
+/// the turf of `pos` and on each thing there (water balloons bursting, `crate::toys`).
+pub fn splash_tile(world: &mut World, source: &Holder, pos: TilePos) {
+    for thing in on_tile(world, pos) {
+        if world.get_entity(thing).is_ok() {
+            crate::janitor::expose(world, thing, source, 1.0);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

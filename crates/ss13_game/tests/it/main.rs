@@ -119,6 +119,7 @@ mod service;
 mod shuttle;
 mod silicon;
 mod singularity;
+mod smoking;
 mod sound;
 mod space_events;
 mod spacemove;

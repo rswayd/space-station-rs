@@ -17,7 +17,7 @@
 Тарелка держит одно (большая — несколько) блюдо, отображая его на себе; бьётся при падении/броске в осколки. Малая, большая, железная.
 
 - **Код:** [`/obj/item/plate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/equipment/plate.dm#L1), [`/obj/item/plate/large`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/equipment/plate.dm#L103), [`/obj/item/plate_shard`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/equipment/plate.dm#L128)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/kitchen_ware.rs` (`Plate`, `OnPlate`): еда до `biggest_w_class` и `max_items` кладётся туда, куда кликнули (`max_x_offset`, `max_height_offset`), рисуется на тарелке, свободная другая рука снимает последнюю; тарелкой кормят первой едой (`pre_attack`, через `crate::food::try_to_eat`); брошенная хрупкая тарелка бьётся: еда высыпается, 5 осколков `plate_shard`, звук; малая, большая, железная (не бьётся), противень печи; нет роста веса тарелки от еды, калтропа у осколков (`/datum/component/caltrop`)
 
 ### Миски
 Миска — посуда для салатов и супов, принимает реагенты и ингредиенты кастомного салата.
@@ -41,13 +41,13 @@
 Берут еду и кормят ею с расстояния, щёлкают.
 
 - **Код:** [`/obj/item/kitchen/tongs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/equipment/kitchen_utensils.dm#L365)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/kitchen_ware.rs` (`Tongs`): берут еду до `WEIGHT_CLASS_NORMAL` с 2 клеток (`reach = 2`, `RangedClick`), рисуют её на себе, кормят ею моба (`crate::food::try_to_eat` с щипцами в руке), кладут на тарелку; в руке роняют еду или щёлкают (2 с, закрытый спрайт на 0,5 с); выпавшие из рук роняют еду; нет проверки пути `CanReach` на 2 клетки, уменьшения спрайта еды
 
 ### Коробка пиццы
 Открывается, хранит пиццу, коробки ставятся стопкой, на крышке можно написать ручкой; бесконечная коробка из админки, пицца-бомба (антагонисты, мина в коробке).
 
 - **Код:** [`/obj/item/pizzabox`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/pizzabox.dm#L9), [`/obj/item/pizzabox/infinite`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/pizzabox.dm#L363), [`/obj/item/bombcore/miniature/pizza`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/pizzabox.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/kitchen_ware.rs` (`PizzaBox`): открывается в руке (`pizzabox`/`_open`/`_messy`), пицца кладётся в открытую и вынимается свободной другой рукой; закрытые коробки ставятся стопкой (от 5 — `10%` за коробку рассыпаться), верхняя снимается другой рукой; ручкой/мелком пишется бирка верхней коробки (30 символов, `tgui_input_text`); стопка рассыпается при броске (2+, `20%` за коробку) и ударе (3+, `25%`): коробки разлетаются, половина теряет пиццу; коробки с картой приходят со своей пиццей, бесконечная делает любимую пиццу открывающего; нет складывания в картон (ПКМ в руке), нарезанной пиццы и кусков из коробки, любимой пиццы по ckey и квирков ананаса; пицца-бомба (`bombcore`, `/datum/wires/explosive/pizza`) — → ../engineering/wires.md («Провода взрывчатки»)
 
 ### Приправы
 Бутылки соусов (кетчуп, соевый, острый, майонез, масло), пакетики приправ, солонка и перечница (посыпать еду, просыпать соль на пол), универсальный фермент, мука, сахар, молоко в пакетах.
@@ -59,4 +59,4 @@
 Стационарный бак масла для фритюрницы и сковород.
 
 - **Код:** [`/obj/structure/reagent_dispensers/cooking_oil`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_dispenser.dm#L671)
-- **Статус в ss13-rs:** ❌ нет — стационарных баков реагентов (`reagent_dispensers`) в `crates/ss13_game/src/chem.rs` нет
+- **Статус в ss13-rs:** ✅ реализовано — бак — `reagent_dispensers` (`crates/ss13_mapload/src/reagents.rs` `dispenser_fields`: 1000 ед. масла, `DRAINABLE`), из него набирают стаканами (`crates/ss13_game/src/chem.rs`); кран у `openable` баков (вода, пена, топливо, кега, квас, масло) — `crates/ss13_game/src/kitchen_ware.rs` (`TapOpen`): ключ открывает/закрывает, открытый проливает 10 ед. на пол при открытии и перемещении (`tank_leak`); нет превращения в стационарный бак листом железа (сантехника)
