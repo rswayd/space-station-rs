@@ -31,8 +31,8 @@
 //! Gunpoint holds are `crate::gunpoint`; a gun in the mouth is `handle_suicide`; seclites,
 //! suppressors, bayonets and scopes are `crate::gun_attachments`.
 // shortcut: no
-// misfires, sawing off, fire mode toggles (burst guns always burst), clumsy botches or charge
-// overlays; pins cannot be removed or swapped. Add them
+// misfires, sawing off, fire mode toggles (burst guns always burst) or charge overlays (a clumsy
+// user's botch is `check_botched`; of a burst only the first round is aimed at the leg); pins cannot be removed or swapped. Add them
 // as their mechanics land.
 
 use bevy::prelude::*;
@@ -702,6 +702,9 @@ fn try_fire(
         empty_click(world, client, &dm, gun_entity);
         return !combat;
     }
+    if check_botched(world, client, mob, gun_entity, &dm) {
+        return true;
+    }
     // `process_fire`: `TRAIT_PACIFISM` and a harmful round chambered.
     if world
         .get::<crate::medical::traumas::Pacifist>(mob)
@@ -773,6 +776,74 @@ fn try_fire(
         }
     }
     process_fire(world, mob, gun_entity, aim, bonus_spread) || !combat
+}
+
+/// The guns with `clumsy_check = FALSE`: magic staffs and wands, the toy guns.
+const NO_CLUMSY_CHECK: &[&str] = &[
+    "/obj/item/gun/magic",
+    "/obj/item/gun/ballistic/automatic/toy",
+    "/obj/item/gun/ballistic/shotgun/toy",
+    "/obj/item/gun/ballistic/automatic/c20r/toy",
+    "/obj/item/gun/ballistic/automatic/l6_saw/toy",
+];
+
+/// The zone a botched shot hits (`process_fire(user, user, FALSE, null, target_zone)`).
+#[derive(Component, Clone, Copy, Debug)]
+pub struct BotchZone(pub crate::zone::BodyZone);
+
+/// tg `check_botched`: a clumsy user (`TRAIT_CLUMSY`) shoots a leg 40% of the time and drops
+/// the gun. True when botched.
+fn check_botched(world: &mut World, client: Entity, mob: Entity, gun: Entity, dm: &DmGun) -> bool {
+    use crate::zone::BodyZone;
+    if NO_CLUMSY_CHECK.iter().any(|p| is_under(&dm.path, p))
+        || !crate::genetics::is_clumsy(world, mob)
+        || !world.resource_mut::<CombatRng>().chance(40.0)
+    {
+        return false;
+    }
+    // `get_random_valid_zone(blacklisted_parts = chest, head, arms, even_weights = TRUE)`.
+    let legs: Vec<BodyZone> = [BodyZone::LLeg, BodyZone::RLeg]
+        .into_iter()
+        .filter(|&z| {
+            world
+                .get::<crate::medical::wounds::Limbs>(mob)
+                .is_none_or(|l| !l.limb(z).missing)
+        })
+        .collect();
+    if legs.is_empty() {
+        return false;
+    }
+    let zone = legs[world
+        .resource_mut::<CombatRng>()
+        .range(0, legs.len() as u32 - 1) as usize];
+    let Some(&at) = world.get::<TilePos>(mob) else {
+        return false;
+    };
+    let name = name_of(world, gun);
+    tell(
+        world,
+        client,
+        Span::BoldWarning,
+        format!("Вы стреляете себе в ногу из {name}!"),
+    );
+    world.entity_mut(gun).insert(BotchZone(zone));
+    let aim = Aim {
+        target: mob,
+        target_pos: at,
+        pixel: [0, 0],
+    };
+    process_fire(world, mob, gun, aim, 0.0);
+    if let Ok(mut e) = world.get_entity_mut(gun) {
+        e.remove::<BotchZone>();
+    }
+    if !crate::inventory::no_drop(world, gun)
+        && world
+            .get::<Inventory>(mob)
+            .is_some_and(|i| i.hands.contains(&Some(gun)))
+    {
+        crate::inventory::put_down(world, gun, at);
+    }
+    true
 }
 
 /// tg `process_fire`: the spread of this trigger pull, then one shot or a burst. False when the
@@ -1033,7 +1104,10 @@ fn shoot(
     let now = world.resource::<Time>().elapsed_secs_f64();
     // The boost belongs to this round only.
     let boost = world.entity_mut(gun_entity).take::<ChamberBoost>();
-    let zone = if boost.is_some_and(|b| b.head) {
+    let botch = world.get::<BotchZone>(gun_entity).map(|b| b.0);
+    let zone = if let Some(zone) = botch {
+        zone
+    } else if boost.is_some_and(|b| b.head) {
         crate::zone::BodyZone::Head
     } else {
         world

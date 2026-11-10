@@ -313,3 +313,34 @@ fn splints_and_disabled_legs_limit_walking() {
     apply_wound(limbs.limb_mut(BodyZone::RLeg), WoundKind::Compound);
     assert!(limbs.limits(&health).floored);
 }
+
+#[test]
+fn ligament_traits_change_the_wound_rolls() {
+    // Hooked ligaments: the exposed bone takes sharp hits in full.
+    let mut mangled = Limb::default();
+    apply_wound(&mut mangled, WoundKind::SlashCritical);
+    let (kind, damage) =
+        wounding_of_with(hit(DamageType::Brute, 10.0, SHARP_EDGED), &mangled, true).unwrap();
+    assert_eq!(kind, WoundType::Blunt);
+    assert!((damage - 10.0).abs() < 1e-5);
+    // The considered damage: capped at 25, ×1.5 cap when easily wounded, ×1.1 easy dismember.
+    let plain = WoundTraits::default();
+    assert_eq!(plain.considered_damage(40.0), WOUND_MAX_CONSIDERED_DAMAGE);
+    let reinforced = WoundTraits {
+        easily_wounded: true,
+        no_dismember: true,
+        ..plain
+    };
+    assert_eq!(reinforced.considered_damage(40.0), 37.5);
+    let hooked = WoundTraits {
+        easy_dismember: true,
+        ..plain
+    };
+    assert!((hooked.considered_damage(10.0) - 11.0).abs() < 1e-5);
+    let both = WoundTraits {
+        easily_wounded: true,
+        hardly_wounded: true,
+        ..plain
+    };
+    assert_eq!(both.considered_damage(40.0), WOUND_MAX_CONSIDERED_DAMAGE);
+}

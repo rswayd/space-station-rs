@@ -15,9 +15,53 @@ pub struct Hit {
     pub part_damage_before: f32,
 }
 
+/// The owner's traits the wound rolls read: `TRAIT_EASYDISMEMBER`, `TRAIT_NODISMEMBER`,
+/// `TRAIT_EASILY_WOUNDED`, `TRAIT_HARDLY_WOUNDED`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WoundTraits {
+    pub easy_dismember: bool,
+    pub no_dismember: bool,
+    pub easily_wounded: bool,
+    pub hardly_wounded: bool,
+}
+
+impl WoundTraits {
+    pub fn of(world: &World, mob: Entity) -> Self {
+        use crate::species::{Trait, has_trait};
+        Self {
+            easy_dismember: has_trait(world, mob, Trait::EasyDismember),
+            no_dismember: has_trait(world, mob, Trait::NoDismember),
+            easily_wounded: super::super::bioware::easily_wounded(world, mob),
+            hardly_wounded: has_trait(world, mob, Trait::HardlyWounded),
+        }
+    }
+
+    /// `check_wounding`'s damage: capped at `WOUND_MAX_CONSIDERED_DAMAGE` (×1.5 easily
+    /// wounded, ÷2 hardly), ×1.1 for an easy dismember that is not `TRAIT_NODISMEMBER`.
+    pub fn considered_damage(self, damage: f32) -> f32 {
+        let mut cap = WOUND_MAX_CONSIDERED_DAMAGE;
+        if self.easily_wounded && !self.hardly_wounded {
+            cap *= 1.5;
+        } else if self.hardly_wounded && !self.easily_wounded {
+            cap /= 2.0;
+        }
+        let mut damage = damage.min(cap);
+        if self.easy_dismember && !self.no_dismember {
+            damage *= 1.1;
+        }
+        damage
+    }
+}
+
 /// The wounding type and damage of a hit on a flesh-and-bone limb (tg `receive_damage`'s
 /// wound handling up to `check_wounding`): `None` for damage that does not wound.
 pub fn wounding_of(hit: Hit, limb: &Limb) -> Option<(WoundType, f32)> {
+    wounding_of_with(hit, limb, false)
+}
+
+/// [`wounding_of`] of an owner with `TRAIT_EASYDISMEMBER` or not: an easy dismember passes
+/// sharp hits on to the bone in full.
+pub fn wounding_of_with(hit: Hit, limb: &Limb, easy_dismember: bool) -> Option<(WoundType, f32)> {
     let (brute, burn) = match hit.kind {
         DamageType::Brute => (hit.damage, 0.0),
         DamageType::Burn => (0.0, hit.damage),
@@ -39,10 +83,10 @@ pub fn wounding_of(hit: Hit, limb: &Limb) -> Option<(WoundType, f32)> {
     // A mangled skin passes sharp hits on to the bone, at 60% (edged) or 75% (pointy).
     let (exterior, interior) = limb.mangled();
     if exterior && !interior && hit.sharpness != 0 {
-        if wounding == WoundType::Slash {
+        if wounding == WoundType::Slash && !easy_dismember {
             damage *= 0.6;
         }
-        if wounding == WoundType::Pierce {
+        if wounding == WoundType::Pierce && !easy_dismember {
             damage *= 0.75;
         }
         wounding = WoundType::Blunt;
@@ -93,7 +137,31 @@ pub fn roll_wounding(
     hit: Hit,
     can_dismember: bool,
 ) -> Option<Rolled> {
-    let damage = damage.min(WOUND_MAX_CONSIDERED_DAMAGE);
+    roll_wounding_with(
+        rng,
+        limb,
+        zone,
+        wounding,
+        damage,
+        hit,
+        can_dismember,
+        WoundTraits::default(),
+    )
+}
+
+/// [`roll_wounding`] of an owner with `traits`.
+#[allow(clippy::too_many_arguments)]
+pub fn roll_wounding_with(
+    rng: &mut CombatRng,
+    limb: &Limb,
+    zone: BodyZone,
+    wounding: WoundType,
+    damage: f32,
+    hit: Hit,
+    can_dismember: bool,
+    traits: WoundTraits,
+) -> Option<Rolled> {
+    let damage = traits.considered_damage(damage);
     let top = (damage.powf(WOUND_DAMAGE_EXPONENT)).round().max(1.0) as u32;
     let base_roll = rng.range(1, top) as f32;
     let injury_roll = woundings_mods(limb, zone, base_roll, hit);
@@ -292,11 +360,35 @@ pub fn receive_damage(
     has_blood: bool,
     can_dismember: bool,
 ) -> HitOutcome {
+    receive_damage_with(
+        rng,
+        limb,
+        zone,
+        hit,
+        dead,
+        has_blood,
+        can_dismember,
+        WoundTraits::default(),
+    )
+}
+
+/// [`receive_damage`] of an owner with `traits`.
+#[allow(clippy::too_many_arguments)]
+pub fn receive_damage_with(
+    rng: &mut CombatRng,
+    limb: &mut Limb,
+    zone: BodyZone,
+    hit: Hit,
+    dead: bool,
+    has_blood: bool,
+    can_dismember: bool,
+    traits: WoundTraits,
+) -> HitOutcome {
     let mut out = HitOutcome::default();
     if limb.robotic {
         return out;
     }
-    let Some((wounding, damage)) = wounding_of(hit, limb) else {
+    let Some((wounding, damage)) = wounding_of_with(hit, limb, traits.easy_dismember) else {
         return out;
     };
     let (exterior, interior) = limb.mangled();
@@ -305,7 +397,16 @@ pub fn receive_damage(
         return out;
     }
     let rolled = if damage >= WOUND_MINIMUM_DAMAGE && hit.wound_bonus != CANT_WOUND {
-        roll_wounding(rng, limb, zone, wounding, damage, hit, can_dismember)
+        roll_wounding_with(
+            rng,
+            limb,
+            zone,
+            wounding,
+            damage,
+            hit,
+            can_dismember,
+            traits,
+        )
     } else {
         None
     };

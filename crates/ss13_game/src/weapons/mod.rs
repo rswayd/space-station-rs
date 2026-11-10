@@ -1,12 +1,13 @@
 //! Melee weapon mechanics shared by many items (server): two-handed wielding
 //! ([`two_handed`]), the double-bladed energy sword ([`energy`]), blocking and shields
 //! ([`block`]), whetstones ([`sharpener`]), the fork's sledgehammer components
-//! ([`stamina_cost`], [`rip_and_tear`]).
+//! ([`stamina_cost`], [`rip_and_tear`]), the baseball bat's kneecapping ([`kneecap`]).
 
 use bevy::prelude::*;
 
 pub mod block;
 pub mod energy;
+pub mod kneecap;
 pub mod rip_and_tear;
 pub mod sharpener;
 pub mod stamina_cost;

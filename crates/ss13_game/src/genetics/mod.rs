@@ -49,6 +49,8 @@ pub const SOURCE_ACTIVATED: u8 = 1;
 pub const SOURCE_MUTATOR: u8 = 2;
 /// `MUTATION_SOURCE_BURDENED_TRAUMA` (`crate::service` punished god).
 pub const SOURCE_BURDENED: u8 = 4;
+/// `MUTATION_SOURCE_CLOWN_CLUMSINESS`: the clown's own, which mutadone leaves.
+pub const SOURCE_CLOWN: u8 = 8;
 /// `GLOB.standard_mutation_sources`.
 pub const STANDARD_SOURCES: u8 = SOURCE_ACTIVATED | SOURCE_MUTATOR;
 
@@ -78,6 +80,8 @@ pub enum Effect {
     Hulk,
     /// `/datum/mutation/nervousness`: stutters now and then.
     Nervousness,
+    /// `/datum/mutation/clumsy`: `TRAIT_CLUMSY` ([`is_clumsy`]).
+    Clumsy,
     /// `/datum/mutation/unintelligible`: `TRAIT_UNINTELLIGIBLE_SPEECH` (read by
     /// `crate::medical::traumas::refresh`).
     Unintelligible,
@@ -265,6 +269,19 @@ pub const MUTATIONS: &[MutationDef] = &[
         gain: "Твоя рука кажется тёплой.",
         lose: "",
         effect: Effect::Power(effects::Power::Cindikinesis),
+    },
+    MutationDef {
+        path: "/datum/mutation/clumsy",
+        name: "Clumsiness",
+        desc: "Данный геном подавляет определённые функции мозга, из-за чего его обладатель \
+               выглядит неуклюжим.",
+        quality: MINOR_NEGATIVE,
+        instability: NEGATIVE_STABILITY_MAJOR,
+        difficulty: 8,
+        locked: false,
+        gain: "Тебя охватывает легкомыслие",
+        lose: "",
+        effect: Effect::Clumsy,
     },
     MutationDef {
         path: "/datum/mutation/nervousness",
@@ -1009,6 +1026,21 @@ pub fn has_effect(world: &World, mob: Entity, effect: Effect) -> bool {
     world
         .get::<Dna>(mob)
         .is_some_and(|d| d.mutations.iter().any(|m| MUTATIONS[m.id].effect == effect))
+}
+
+/// `HAS_TRAIT(mob, TRAIT_CLUMSY)`: the clumsiness mutation.
+// shortcut: no Clumsy quirk, hunger curse or drug source of the trait yet.
+pub fn is_clumsy(world: &World, mob: Entity) -> bool {
+    has_effect(world, mob, Effect::Clumsy)
+}
+
+/// `/datum/outfit/job/clown/post_equip`: `add_mutation(/datum/mutation/clumsy,
+/// MUTATION_SOURCE_CLOWN_CLUMSINESS)`.
+pub fn make_clown_clumsy(world: &mut World, mob: Entity) {
+    ensure_dna(world, mob);
+    if let Some(id) = mutation_id("/datum/mutation/clumsy") {
+        add_mutation(world, mob, id, SOURCE_CLOWN);
+    }
 }
 
 /// `SPT_PROB(percent, seconds)`.

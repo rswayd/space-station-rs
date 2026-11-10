@@ -1351,6 +1351,10 @@ fn sleep_pulse(world: &mut World, mob: Entity) {
     let tile = tile_paths(world, mob);
     let sanity = world.get::<crate::mood::Mood>(mob).map(|m| m.sanity_level);
     let quality = sleep_quality(sanity, &tile, !crate::sound::can_hear(world, mob));
+    // `exercised`: a carbon's good sleep turns the workout into athletics.
+    if world.get::<crate::inventory::Inventory>(mob).is_some() {
+        crate::buffs::sleep_workout(world, mob, secs, quality);
+    }
     let ratio = world
         .get::<Health>(mob)
         .filter(|h| h.max > 0.0)

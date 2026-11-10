@@ -11,7 +11,7 @@
 После упражнений на тренажёрах — бафф к восстановлению и опыт навыка атлетики (см. [skills.md](skills.md)).
 
 - **Код:** [`/datum/status_effect/exercised`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs.dm#L180)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/buffs.rs` (`Exercised`, `exercise`, `workout_duration`, `exercise_mood`, `sleep_workout`), `status_effects.rs` (`sleep_pulse`), `gym.rs` (груша): 15 с (+бонус × модификатор: Халк, ожирение, pumpup, оксандролон, белковая еда, уровень атлетики) до предела `SKILL_VALUE_MODIFIER` атлетики (истощение — крик и сообщение), алерт `exercised`, мудлет `exercise` по уровню атлетики и личности (Lazy, Athletic), сон с качеством > 0 переводит его в опыт атлетики (×10); только с разумом. Источники кроме груши — с их механиками: тренажёр (`weight_machine`), бокс, плавание, перчатки, гулаг-жерло, неподвижный стержень; нет `TRAIT_STIMMED`
 
 ### Баффы еды
 Блюда с высоким качеством дают эффекты: ускорение (`haste`), охлаждение (`chilling`), черты (иммунитет к шоку, немота, иммунитет к пепельной буре, «вразвалку»), акцент речи (итальянский, французский).
@@ -23,7 +23,7 @@
 Постоянные эффекты от операций: укреплённые вены, связки, нервы, кора мозга. Сами операции — см. ../medical/.
 
 - **Код:** [`/datum/status_effect/bioware`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/bioware/_bioware.dm#L6), [`/datum/status_effect/bioware/heart`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/bioware/circulation.dm#L2), [`/datum/status_effect/bioware/nerves`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/buffs/bioware/nerves.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/bioware.rs` (`Biowares`, `gain`, `grants`, `easily_wounded`), операции — `medical/surgery/defs.rs`: венозная нить (кровотечение ×¼), мышечная мембрана (без сердца), сращивание нервов (оглушение ×½, стамина ×0,8), заземление нервов (иммунитет к шоку), отпечаток коры (лечит и блокирует базовые травмы), крюк для связок (`TRAIT_EASYDISMEMBER` в `medical/wounds/roll.rs` `WoundTraits`, `TRAIT_LIMBATTACHMENT`), укрепление связок (`TRAIT_NODISMEMBER`, `TRAIT_EASILY_WOUNDED`); нет складывания коры (`TRAIT_SPECIAL_TRAUMA_BOOST`) и механических вариантов; ручное прикрепление конечности по `TRAIT_LIMBATTACHMENT` (`/obj/item/bodypart/attack`) — у агента medical
 
 ### Лечебные баффы
 Регенеративное ядро (лаваленд), клятва Гиппократа (жезл Асклепия), заращивание плоти (генокрад), бафф здоровья, хорошая музыка (лечит слушателей), гнездо (корм), ускорение.
@@ -54,10 +54,10 @@
 Влюблённость, успокоенное горло/голова, награда за голову, калтропы, эйгенстазиум, свечение (тинлюкс, черенков), выпотрошенность, регенерация от мытья и горячего источника, прожектор, муд-зоны, ESP админа, «heads up».
 
 - **Код:** [`/datum/status_effect/in_love`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L73), [`/datum/status_effect/caltropped`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L417), [`/datum/status_effect/eigenstasium`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L431), [`/datum/status_effect/washing_regen`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L661), [`/datum/status_effect/moodlet_in_area`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L847)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — свечение тинлюкса (`crates/ss13_game/src/buffs.rs` `tinlux_light`: свет 2/1,5 `#ccff33`, пока реагент в крови); муд-зоны (`moodlet_in_area`) — `personality.rs`; регенерация стамины под душем (`washing_regen`) — `plumbing.rs`. Остальное — с источниками у их групп: влюблённость (валентинки, зелье любви ксенобиологии), успокоенное горло/голова (напитки; кашель и головная боль болезней), награда за голову (магический снаряд), калтропы (элемент `caltrop`), эйгенстазиум (реагент), черенков (радиация), выпотрошенность (генокрад, ИИ мобов), горячий источник, прожектор (смайт), ESP админа, «heads up» (спавнеры)
 
 ### Предмет, прикованный к руке
 Предмет пристёгнут к руке наручниками и не выпадает.
 
 - **Код:** [`/datum/status_effect/cuffed_item`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/cuffed_item.dm#L9)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ не требуется — в BandaStation `cuffable_item` отключён (`CUFFABLE_ITEMS_DISABLED`, `code/__DEFINES/bandastation/defines.dm`): статус-эффект недостижим

@@ -143,6 +143,7 @@ impl Plugin for BuffsPlugin {
                     offer_upkeep,
                     surrender_upkeep,
                     food_buff_upkeep,
+                    exercise_upkeep,
                     drug_upkeep,
                     bath_salts_upkeep,
                 )
@@ -630,13 +631,205 @@ fn food_buff_upkeep(world: &mut World) {
     }
 }
 
+// --- Exercise --------------------------------------------------------------------------------
+
+/// `/datum/status_effect/exercised::duration`, seconds.
+pub const EXERCISED_SECS: f64 = 15.0;
+/// `SLEEP_QUALITY_WORKOUT_MULTIPLER`.
+pub const SLEEP_QUALITY_WORKOUT_MULTIPLIER: f32 = 10.0;
+const PUMPUP: &str = "/datum/reagent/drug/pumpup";
+const OXANDROLONE_INVERSE: &str = "/datum/reagent/inverse/oxandrolone";
+/// `supplementary_reagents_bonus`, seconds.
+const WORKOUT_FOODS: [(&str, f32); 13] = [
+    ("/datum/reagent/consumable/ethanol/protein_blend", 10.0),
+    (OXANDROLONE_INVERSE, 8.0),
+    ("/datum/reagent/consumable/nutriment/protein", 5.0),
+    ("/datum/reagent/consumable/nutriment/vitamin", 4.0),
+    ("/datum/reagent/consumable/milk", 4.0),
+    ("/datum/reagent/consumable/rice", 3.0),
+    ("/datum/reagent/consumable/eggwhite", 3.0),
+    ("/datum/reagent/consumable/eggyolk", 2.0),
+    ("/datum/reagent/consumable/nutraslop", 2.0),
+    ("/datum/reagent/consumable/soymilk", 1.0),
+    ("/datum/reagent/consumable/sugar", -1.0),
+    ("/datum/reagent/consumable/monkey_energy", -1.0),
+    ("/datum/reagent/consumable/nutriment/fat", -1.0),
+];
+
+/// `/datum/status_effect/exercised` (`STATUS_EFFECT_REFRESH`) until `until`: its alert and the
+/// `exercise` moodlet; sleeping turns it into athletics experience
+/// ([`sleep_workout`]).
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Exercised {
+    pub until: f64,
+}
+
+/// `workout_duration` on `current` seconds left: `(bonus + food + (athletics - 1) * 2 s) ×
+/// modifier` more, up to the athletics `SKILL_VALUE_MODIFIER` (`Some(limit)`: exhausted).
+pub fn workout_duration(
+    current: f32,
+    bonus: f32,
+    food: f32,
+    level: u8,
+    modifier: f32,
+    limit: f32,
+) -> (f32, bool) {
+    if bonus == 0.0 {
+        return (current, false);
+    }
+    let bonus = (bonus + food + (f32::from(level) - 1.0) * 2.0) * modifier;
+    if current + bonus >= limit {
+        (limit, true)
+    } else {
+        (current + bonus, false)
+    }
+}
+
+/// `/datum/mood_event/exercise` with `fitness_level`: the athletics level, halved for most,
+/// a chore (−½) for the lazy, in full for the athletic.
+pub fn exercise_mood(level: u8, lazy: bool, athletic: bool) -> MoodEvent {
+    let base = f32::from(level);
+    let (mood_change, description) = if lazy {
+        (base * -0.5, "Тренировка - это такая рутинная работа!")
+    } else if !athletic {
+        (
+            base * 0.5,
+            "Тренировка - это немного рутинная работа, но она приносит большое удовлетворение.",
+        )
+    } else {
+        (base, "Спорт высвобождает эндорфины!")
+    };
+    MoodEvent {
+        id: "exercise",
+        description,
+        mood_change,
+        timeout: 0.0,
+        hidden: false,
+    }
+}
+
+/// `apply_status_effect(/datum/status_effect/exercised, bonus_time)`: a new one lasts 15 s plus
+/// the workout; a running one gets the workout added (`refresh`). Only mobs with a mind.
+// tg's `refresh` compares the absolute end time with the limit and so always exhausts; the
+// limit is meant for the time left, as on creation.
+pub fn exercise(world: &mut World, mob: Entity, bonus_secs: f32) {
+    use crate::personality::Personality;
+    use crate::skills::{Modifier, Skill};
+    if world.get::<crate::mind::MindData>(mob).is_none() {
+        return;
+    }
+    let now = now(world);
+    let current = world
+        .get::<Exercised>(mob)
+        .filter(|e| e.until > now)
+        .map_or(EXERCISED_SECS as f32, |e| (e.until - now) as f32);
+    // `workout_duration`: carbons only.
+    let carbon = world.get::<Inventory>(mob).is_some();
+    let mut modifier = 1.0;
+    if crate::genetics::effects::is_hulk(world, mob) {
+        modifier += 0.5;
+    }
+    if world.get::<crate::hunger::Fat>(mob).is_some_and(|f| f.0) {
+        modifier -= 0.5;
+    }
+    let read: &World = world;
+    let in_blood = |path: &str| crate::chem::blood_amount(read, mob, path) > 0.0;
+    if in_blood(PUMPUP) {
+        modifier += 3.0;
+    }
+    if in_blood(OXANDROLONE_INVERSE) {
+        modifier += 2.0;
+    }
+    let food: f32 = WORKOUT_FOODS
+        .iter()
+        .filter(|&&(path, _)| in_blood(path))
+        .map(|&(_, secs)| secs)
+        .sum();
+    let level = crate::skills::level(world, mob, Skill::Athletics);
+    let limit = crate::skills::modifier(world, mob, Skill::Athletics, Modifier::Value);
+    let bonus = if carbon { bonus_secs } else { 0.0 };
+    let (secs, exhausted) = workout_duration(current, bonus, food, level, modifier, limit);
+    if exhausted {
+        tell_mob(
+            world,
+            mob,
+            Span::BoldWarning,
+            "Ваши мышцы истощены! Пожалуй, стоит поспать...",
+        );
+        crate::medical::diseases::emote(world, mob, "scream");
+    }
+    world.entity_mut(mob).insert(Exercised {
+        until: now + f64::from(secs),
+    });
+    // `on_apply` / `refresh`: the moodlet anew, for the current fitness.
+    let mood = exercise_mood(
+        level,
+        crate::personality::has(world, mob, Personality::Lazy),
+        crate::personality::has(world, mob, Personality::Athletic),
+    );
+    crate::mood::clear_event(world, mob, "exercise");
+    crate::mood::add_event(world, mob, "exercise", &mood);
+    throw_alert(world, mob, AlertCategory::Exercised, "exercised", 0);
+}
+
+/// `sleeping/tick` of an exercised carbon with a mind and a sleep quality above 0: athletics
+/// experience `secs × quality × 10`, the same off the exercise, a 2% "fitness" line.
+pub fn sleep_workout(world: &mut World, mob: Entity, secs: f32, quality: f32) {
+    let now = now(world);
+    let Some(ex) = world
+        .get::<Exercised>(mob)
+        .copied()
+        .filter(|e| e.until > now)
+    else {
+        return;
+    };
+    if quality <= 0.0 || world.get::<crate::mind::MindData>(mob).is_none() {
+        return;
+    }
+    let gain = secs * quality * SLEEP_QUALITY_WORKOUT_MULTIPLIER;
+    crate::skills::adjust_experience(world, mob, crate::skills::Skill::Athletics, gain, false);
+    world.entity_mut(mob).insert(Exercised {
+        until: ex.until - f64::from(gain),
+    });
+    if world
+        .get_resource_or_init::<crate::combat::CombatRng>()
+        .chance(2.0)
+    {
+        tell_mob(
+            world,
+            mob,
+            Span::Notice,
+            "Вы чувствуете, как улучшается ваша физическая форма!",
+        );
+    }
+}
+
+/// `exercised/on_remove`: the moodlet and the alert go with it.
+fn exercise_upkeep(world: &mut World) {
+    let now = now(world);
+    let mut query = world.query::<(Entity, &Exercised)>();
+    let ended: Vec<Entity> = query
+        .iter(world)
+        .filter(|(_, e)| now >= e.until)
+        .map(|(e, _)| e)
+        .collect();
+    for mob in ended {
+        world.entity_mut(mob).remove::<Exercised>();
+        crate::mood::clear_event(world, mob, "exercise");
+        clear_alert(world, mob, AlertCategory::Exercised);
+    }
+}
+
 // --- Drugs -----------------------------------------------------------------------------------
 
 /// The reagents of this module in `mob`'s blood, each `SSmobs` fire of `secs`
 /// (`crate::chem`): space drugs set the drugginess (`30 SECONDS * metabolization_ratio *
-/// seconds_per_tick`, the ratio taken as 1), bath salts make it stun immune.
+/// seconds_per_tick`, the ratio taken as 1), bath salts make it stun immune, tinlux makes it
+/// glow ([`tinlux_light`]).
 pub fn reagents(world: &mut World, mob: Entity, secs: f32) {
     use crate::chem::blood_amount;
+    // `REAGENT_DEAD_PROCESS`: also in a corpse.
+    tinlux_light(world, mob, blood_amount(world, mob, TINLUX) > 0.0);
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         return;
     }
@@ -645,6 +838,51 @@ pub fn reagents(world: &mut World, mob: Entity, secs: f32) {
     }
     if blood_amount(world, mob, BATH_SALTS) > 0.0 {
         status_effects::add_stun_immunity(world, mob, BATH_SALTS_SOURCE);
+    }
+}
+
+const TINLUX: &str = "/datum/reagent/consumable/tinlux";
+
+/// `/datum/status_effect/tinlux_light` is on (its light is the mob's).
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TinluxLit;
+
+/// `tinlux_light/on_apply`: `mob_light(2, 1.5, "#ccff33")`.
+pub const TINLUX_LIGHT: ss13_shared::LightSource = ss13_shared::LightSource {
+    range: 2.0,
+    power: 1.5,
+    color: [0xCC, 0xFF, 0x33],
+    height: 1.0,
+    angle: 360,
+    dir: ss13_shared::Dir::South,
+    offset: [0, 0],
+};
+
+/// Tinlux's `on_mob_add` / `on_mob_delete`: the glow follows the reagent.
+// shortcut: the glow is the mob's own light, not a `moblight` dummy: it does not replace another
+// light the mob already has (a glowy mutation, a fire) and leaves one that replaced it.
+fn tinlux_light(world: &mut World, mob: Entity, in_blood: bool) {
+    use ss13_shared::Optics;
+    let lit = world.get::<TinluxLit>(mob).is_some();
+    if in_blood && !lit {
+        world.entity_mut(mob).insert(TinluxLit);
+        match world.get_mut::<Optics>(mob) {
+            Some(mut optics) if optics.light.is_none() => optics.light = Some(TINLUX_LIGHT),
+            Some(_) => {}
+            None => {
+                world.entity_mut(mob).insert(Optics {
+                    light: Some(TINLUX_LIGHT),
+                    ..default()
+                });
+            }
+        }
+    } else if !in_blood && lit {
+        world.entity_mut(mob).remove::<TinluxLit>();
+        if let Some(mut optics) = world.get_mut::<Optics>(mob)
+            && optics.light == Some(TINLUX_LIGHT)
+        {
+            optics.light = None;
+        }
     }
 }
 
@@ -734,6 +972,83 @@ mod tests {
                 .get(AlertCategory::FoodBuff)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn exercise_lasts_and_ends_with_its_alert() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let mob = world
+            .spawn((
+                Stat::Conscious,
+                Alerts::default(),
+                crate::mind::MindData::new("key", "name"),
+            ))
+            .id();
+        exercise(&mut world, mob, 0.0);
+        assert_eq!(world.get::<Exercised>(mob).unwrap().until, EXERCISED_SECS);
+        let alerts = world.get::<Alerts>(mob).unwrap();
+        assert_eq!(
+            alerts.get(AlertCategory::Exercised).unwrap().state,
+            "exercised"
+        );
+        // Without a mind nothing happens (`on_apply`).
+        let mindless = world.spawn(Alerts::default()).id();
+        exercise(&mut world, mindless, 0.0);
+        assert!(world.get::<Exercised>(mindless).is_none());
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_secs(16));
+        exercise_upkeep(&mut world);
+        assert!(world.get::<Exercised>(mob).is_none());
+        let alerts = world.get::<Alerts>(mob).unwrap();
+        assert!(alerts.get(AlertCategory::Exercised).is_none());
+    }
+
+    #[test]
+    fn workouts_add_time_up_to_the_athletics_limit() {
+        // No bonus time: nothing added (the punching bag).
+        assert_eq!(
+            workout_duration(15.0, 0.0, 5.0, 3, 2.0, 60.0),
+            (15.0, false)
+        );
+        // (10 + 4 food + (3 - 1) × 2) × 1.5 = 27.
+        assert_eq!(
+            workout_duration(15.0, 10.0, 4.0, 3, 1.5, 60.0),
+            (42.0, false)
+        );
+        assert_eq!(
+            workout_duration(50.0, 10.0, 4.0, 3, 1.5, 60.0),
+            (60.0, true)
+        );
+        assert_eq!(exercise_mood(4, false, true).mood_change, 4.0);
+        assert_eq!(exercise_mood(4, false, false).mood_change, 2.0);
+        assert_eq!(exercise_mood(4, true, false).mood_change, -2.0);
+    }
+
+    #[test]
+    fn tinlux_glows_while_in_the_blood() {
+        let mut world = World::new();
+        let mob = world.spawn_empty().id();
+        tinlux_light(&mut world, mob, true);
+        let optics = world.get::<ss13_shared::Optics>(mob).unwrap();
+        assert_eq!(optics.light, Some(TINLUX_LIGHT));
+        tinlux_light(&mut world, mob, false);
+        assert_eq!(world.get::<ss13_shared::Optics>(mob).unwrap().light, None);
+        // Another light stays the mob's.
+        let glowing = world
+            .spawn(ss13_shared::Optics {
+                light: Some(ss13_shared::LightSource {
+                    power: 9.0,
+                    ..TINLUX_LIGHT
+                }),
+                ..default()
+            })
+            .id();
+        tinlux_light(&mut world, glowing, true);
+        tinlux_light(&mut world, glowing, false);
+        let light = world.get::<ss13_shared::Optics>(glowing).unwrap().light;
+        assert_eq!(light.map(|l| l.power), Some(9.0));
     }
 
     #[test]

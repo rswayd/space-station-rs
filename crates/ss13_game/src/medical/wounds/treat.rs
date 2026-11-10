@@ -342,8 +342,9 @@ pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
         .get::<super::super::blood::Blood>(victim)
         .is_some_and(|b| b.volume > 0.0);
     let can_dismember = super::super::bodyparts::can_dismember(world, victim, zone);
+    let traits = WoundTraits::of(world, victim);
     let mut rng = super::super::fork_rng(world);
-    let out = receive_damage(
+    let out = receive_damage_with(
         &mut rng,
         limbs.limb_mut(zone),
         zone,
@@ -351,6 +352,7 @@ pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
         dead,
         has_blood,
         can_dismember,
+        traits,
     );
     world.entity_mut(victim).insert(limbs);
     if let Some((wounding, outright)) = out.dismember {

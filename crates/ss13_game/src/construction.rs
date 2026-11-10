@@ -303,6 +303,8 @@ pub enum Job {
     Cannon(crate::cannons::CannonJob),
     /// The punching bag and the loom ([`crate::gym`]).
     Gym(crate::gym::GymJob),
+    /// Aiming a bat at a leg ([`crate::weapons::kneecap`]).
+    Kneecap(crate::zone::BodyZone),
     /// Safes ([`crate::safes`], [`crate::secure_safes`]).
     Safe(crate::safes::SafeJob),
     SecureSafe(crate::secure_safes::SecureSafeJob),
@@ -1459,6 +1461,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::DeployableTurret(job) => crate::deployable_turrets::complete(world, mob, action, job),
         &Job::Cannon(job) => crate::cannons::complete(world, mob, action, job),
         &Job::Gym(job) => crate::gym::complete(world, mob, action, job),
+        &Job::Kneecap(zone) => crate::weapons::kneecap::complete(world, mob, action, zone),
         &Job::Safe(job) => crate::safes::complete(world, action, job),
         &Job::SecureSafe(job) => crate::secure_safes::complete(world, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),

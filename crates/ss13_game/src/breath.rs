@@ -135,6 +135,8 @@ pub enum AlertCategory {
     Drugged,
     /// `/datum/status_effect/food`'s alert (`crate::buffs`).
     FoodBuff,
+    /// `/datum/status_effect/exercised`'s alert (`crate::buffs`).
+    Exercised,
     /// The alerts of `crate::debuffs`: `convulsing`, `seizure`, `woozy`,
     /// `high_blood_pressure`.
     Convulsing,
@@ -356,6 +358,11 @@ impl Alert {
                 "Ого, чувак, да тебя накрыло! Осторожнее, не подсядь... если ещё не подсел.",
             ),
             "food_buff_" => ("Блюдо ручной работы", "Съев это, я ощущаю себя лучше."),
+            // tg has these only in English.
+            "exercised" => (
+                "Тренировка",
+                "Вы хорошо потренировались! Сон улучшит вашу физическую форму.",
+            ),
             "convulsing" => (
                 "Трясущиеся руки",
                 "Вас чем-то ударило током, и руки не перестают трястись! Кажется, вы ничего не \

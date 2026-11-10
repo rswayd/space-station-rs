@@ -8,11 +8,15 @@
 //! [`super::organs::cardiac_arrest`]); spliced nerves halve stuns and take 80% stamina damage
 //! (`PHYS_COEFF_STUN`, `STAMINA`, read by `crate::status_effects`); grounded nerves are immune
 //! to shocks (`TRAIT_SHOCKIMMUNE`, `crate::wires`); an imprinted cortex cures and blocks basic
-//! brain traumas ([`super::traumas`]).
-// shortcut: no ligament hook or reinforcement (dismemberment reads only the species'
-// `TRAIT_NODISMEMBER`), no cortex folding (no
-// special trauma boost), no mechanical variants (robotic bodyparts); the stun multiplier
-// covers `crate::status_effects::apply`/`knockdown`, not effects set on the component directly.
+//! brain traumas ([`super::traumas`]). Hooked ligaments come off easier
+//! (`TRAIT_EASYDISMEMBER`: sharp hits reach the bone in full, the wound roll ×1.1) and can be
+//! put back by hand (`TRAIT_LIMBATTACHMENT`); reinforced ones never come off
+//! (`TRAIT_NODISMEMBER`) but wound easier (`TRAIT_EASILY_WOUNDED`: the considered damage cap
+//! ×1.5) ([`grants`], [`easily_wounded`], `super::wounds::WoundTraits`).
+// shortcut: no cortex folding (no special trauma boost), no mechanical variants (robotic
+// bodyparts), no hand reattachment of a limb (`/obj/item/bodypart/attack`: the medical group's,
+// the trait is there for it); the stun multiplier covers
+// `crate::status_effects::apply`/`knockdown`, not effects set on the component directly.
 
 use bevy::prelude::*;
 
@@ -32,15 +36,21 @@ pub enum Bioware {
     NerveGrounding,
     /// `/datum/status_effect/bioware/cortex/imprinted`.
     CortexImprint,
+    /// `/datum/status_effect/bioware/ligaments/hooked`.
+    LigamentHook,
+    /// `/datum/status_effect/bioware/ligaments/reinforced`.
+    LigamentReinforcement,
 }
 
 impl Bioware {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 7] = [
         Self::VeinThreading,
         Self::MuscledVeins,
         Self::NerveSplicing,
         Self::NerveGrounding,
         Self::CortexImprint,
+        Self::LigamentHook,
+        Self::LigamentReinforcement,
     ];
 
     /// The status effect `id`: a mob takes one bioware of each.
@@ -49,6 +59,7 @@ impl Bioware {
             Self::VeinThreading | Self::MuscledVeins => "circulation",
             Self::NerveSplicing | Self::NerveGrounding => "nerves",
             Self::CortexImprint => "cortex",
+            Self::LigamentHook | Self::LigamentReinforcement => "ligaments",
         }
     }
 
@@ -133,6 +144,21 @@ pub fn shock_immune(world: &World, mob: Entity) -> bool {
         || crate::antag::abductor::server::gland_shock_immune(world, mob)
 }
 
+/// The species traits the ligament bioware adds (`crate::species::has_trait`).
+pub fn grants(world: &World, mob: Entity, t: crate::species::Trait) -> bool {
+    use crate::species::Trait;
+    match t {
+        Trait::EasyDismember | Trait::LimbAttachment => has(world, mob, Bioware::LigamentHook),
+        Trait::NoDismember => has(world, mob, Bioware::LigamentReinforcement),
+        _ => false,
+    }
+}
+
+/// `TRAIT_EASILY_WOUNDED`: reinforced ligaments (and the species that have it, not ported).
+pub fn easily_wounded(world: &World, mob: Entity) -> bool {
+    has(world, mob, Bioware::LigamentReinforcement)
+}
+
 /// The imprinted cortex's `COMSIG_CARBON_BLOCK_TRAUMA`: basic traumas do not take.
 pub fn blocks_trauma(world: &World, mob: Entity, resilience: Resilience) -> bool {
     resilience <= Resilience::Basic && has(world, mob, Bioware::CortexImprint)
@@ -156,5 +182,22 @@ mod tests {
         assert!(shock_immune(&world, mob) && stun_mod(&world, mob) == 1.0);
         assert!(!can_gain(&world, mob, Bioware::NerveSplicing));
         assert!(!blocks_trauma(&world, mob, Resilience::Basic));
+    }
+
+    #[test]
+    fn ligaments_trade_dismemberment_for_wounds() {
+        use crate::species::Trait;
+        let mut world = World::new();
+        let hooked = world.spawn_empty().id();
+        gain(&mut world, hooked, Bioware::LigamentHook);
+        assert!(grants(&world, hooked, Trait::EasyDismember));
+        assert!(grants(&world, hooked, Trait::LimbAttachment));
+        assert!(!grants(&world, hooked, Trait::NoDismember));
+        // One ligament bioware per patient.
+        assert!(!can_gain(&world, hooked, Bioware::LigamentReinforcement));
+        let reinforced = world.spawn_empty().id();
+        gain(&mut world, reinforced, Bioware::LigamentReinforcement);
+        assert!(grants(&world, reinforced, Trait::NoDismember));
+        assert!(easily_wounded(&world, reinforced) && !easily_wounded(&world, hooked));
     }
 }
