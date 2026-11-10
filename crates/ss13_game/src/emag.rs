@@ -22,6 +22,7 @@
 //!     (`crate::silicon::chassis`), a modular computer (`crate::modpc::pda`): their own
 //!     `emag_act`;
 //!   - a meteor shield satellite: `crate::station_goals::emag_act`.
+//!   - a security gas mask: its vocal circuit fries (`crate::clothing::secgear`).
 //! - Bots take emags through their own clicks (`crate::bots`), after [`can_emag`].
 // shortcut: no bluespace emag reach (`prox_check`), no emags stuck together, no Donk Co. fake
 // emag, no `emag_act` of the unported families; no hacked-APC flicker; no blackbox or
@@ -164,6 +165,7 @@ fn takes_emag(world: &World, target: Entity) -> bool {
         || e.contains::<crate::holodeck::Holodeck>()
         || crate::devices::door_remote::is_remote(world, target)
         || e.contains::<crate::airlock_controllers::AccessControl>()
+        || crate::clothing::secgear::is_hailer(world, target)
 }
 
 fn name(world: &World, e: Entity) -> String {
@@ -269,6 +271,9 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     }
     if world.get::<Closet>(target).is_some() {
         return closet(world, mob, target);
+    }
+    if crate::clothing::secgear::is_hailer(world, target) {
+        return crate::clothing::secgear::emag(world, mob, target);
     }
     if world.get::<crate::lockbox::Lockbox>(target).is_some() {
         return crate::lockbox::emag_act(world, client, target);

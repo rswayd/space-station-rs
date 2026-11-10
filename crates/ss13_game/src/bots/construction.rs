@@ -187,6 +187,20 @@ pub fn item_interaction(
         return start(world, ctx, CLEANBOT_ASSEMBLY, None);
     }
     if is_under(&target_path, SEC_HELMET) && is_under(&tool_path, SIGNALER) {
+        // "There's a flashlight in us. Remove it first, or it'll be lost forever!"
+        if let Some(light) = world
+            .get::<crate::gun_attachments::LightMount>(target)
+            .and_then(|m| m.light)
+        {
+            let name = crate::security::name_of(world, light);
+            tell(
+                world,
+                client,
+                Span::Warning,
+                format!("{name} мешает, сначала снимите его!"),
+            );
+            return true;
+        }
         return start(world, ctx, SECBOT_ASSEMBLY, None);
     }
     if is_under(&target_path, EXTINGUISHER) && is_arm(&tool_path) {

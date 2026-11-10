@@ -117,6 +117,7 @@
 //! | 3325 | `cargo::black_market::attack_self` (the market uplink's window) |
 //! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
+//! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -171,8 +172,9 @@
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1477 | `security::item_interaction` (a screwdriver, cell, conversion kit, crystal or diamond onto a baton in the other hand) |
-//! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
+//! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun or a security helmet) |
 //! | 1493 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
+//! | 1495 | `clothing::secgear::tool_act` (a screwdriver or wirecutters on a security mask's restrictor) |
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
 //! | 1489 | `service::burden` refuses manual reloads of the chaplain's revolver |
 //! | 1500 | `guns::item_interaction` |
@@ -478,9 +480,11 @@
 //! | 4257 | `misc_items::target::welder_act` (a lit welder clears a target's marks) |
 //! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
 //! | 4273 | `stickers::attempt_attach` |
+//! | 4275 | `clothing::secgear::tool_act` (the same on a security mask lying around) |
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
+//! | 4285 | `clothing::muzzle::attack` (a tape piece onto someone's mouth, combat mode off) |
 //! | 4287 | `security::item_interaction` (the same onto a baton lying around) |
-//! | 4291 | `gun_attachments::attach` (a seclite, bayonet or screwdriver on a gun lying around) |
+//! | 4291 | `gun_attachments::attach` (a seclite, bayonet or screwdriver on a gun or helmet lying around) |
 //! | 4300 | `tables::item_interaction` |
 //! | 4313 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 4400 | `science::experi_scanner::pre_attack` (not on living mobs) |

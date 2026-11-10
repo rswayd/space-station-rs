@@ -456,14 +456,17 @@ fn watch_hoods(world: &mut World) {
 
 // --- Item action buttons ---------------------------------------------------------------------
 
-/// The buttons a worn item gives (tg `actions_types`): the gear's, else [`button_name`]'s.
+/// The buttons a worn item gives (tg `actions_types`): the gear's, else [`button_name`]'s,
+/// then the security gear's ("HALT!").
 fn button_names(world: &World, slot: InventorySlot, item: Entity) -> Vec<&'static str> {
     let gear = super::gear::buttons(world, slot, item);
-    if gear.is_empty() {
+    let mut names: Vec<&'static str> = if gear.is_empty() {
         button_name(world, slot, item).into_iter().collect()
     } else {
         gear
-    }
+    };
+    names.extend(super::secgear::buttons(world, slot, item));
+    names
 }
 
 /// The button a worn item gives (tg `actions_types` and `toggle_attached_clothing`'s action):
@@ -577,7 +580,9 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
         let Some(&name) = button_names(world, slot, item).iter().find(|n| **n == name) else {
             continue;
         };
-        if super::gear::trigger(world, client, actor, item, name) {
+        if super::gear::trigger(world, client, actor, item, name)
+            || super::secgear::trigger(world, client, actor, item, name)
+        {
             continue;
         }
         match name {

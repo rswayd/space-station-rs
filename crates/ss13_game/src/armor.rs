@@ -6,7 +6,9 @@
 //! `laser`, `energy`, ...); pockets and hands do not count. Armour penetration lowers the result
 //! (`PENETRATE_ARMOUR`); `weak_against_armour` doubles it. Damage is then reduced by at most
 //! `ARMOR_MAX_BLOCK` (90%); effects (stuns, stamina) by the full rating.
-// shortcut: no inner armor (`inner_armor`: species and implants), no wound armor; add with them.
+//! Wound armor is not a multiplier: `check_woundings_mods` adds up the `wound` ratings of the
+//! clothing on the bodypart ([`worn_wound_armor`], `crate::medical::wounds`).
+// shortcut: no inner armor (`inner_armor`: species and implants); add with them.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmArmor, DmClothing};
@@ -84,6 +86,22 @@ pub fn getarmor(world: &World, mob: Entity, zone: BodyZone, flag: &str) -> f32 {
     )
 }
 
+/// The `wound` ratings of the clothing `mob` wears on `zone`, added up (tg
+/// `check_woundings_mods`: `armor_ablation += clothes.get_armor_rating(WOUND)` over
+/// `get_clothing_on_part`).
+pub fn worn_wound_armor(world: &World, mob: Entity, zone: BodyZone) -> f32 {
+    let Some(inventory) = world.get::<Inventory>(mob) else {
+        return 0.0;
+    };
+    let bit = crate::chem::body_part_bit(zone);
+    let clothing =
+        |item: Entity| Some((world.get::<DmClothing>(item)?, world.get::<DmArmor>(item)?));
+    worn_pieces(inventory, clothing, "wound")
+        .filter(|&(covered, _)| covered & bit != 0)
+        .map(|(_, rating)| rating)
+        .sum()
+}
+
 /// tg `run_armor_check` from the armor value: the effective armor and the line the victim reads
 /// (none without armor). `absorb`/`soften` replace the default lines.
 pub fn run_armor_check(
@@ -142,6 +160,39 @@ mod tests {
         );
         // Two 50% pieces stop 75%.
         assert!((worn_value([(1, 50.0), (1, 50.0)], 1) - 75.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn worn_wound_armor_adds_up_on_the_bodypart() {
+        let mut world = World::new();
+        let chest = crate::chem::body_part_bit(BodyZone::Chest);
+        let head = crate::chem::body_part_bit(BodyZone::Head);
+        let mut piece = |covered: u32, wound: f32| {
+            world
+                .spawn((
+                    DmClothing {
+                        body_parts_covered: covered,
+                        ..default()
+                    },
+                    DmArmor { wound, ..default() },
+                ))
+                .id()
+        };
+        // A vest (wound 10) over a jumpsuit (wound 5); a helmet (wound 10) on the head.
+        let vest = piece(chest, 10.0);
+        let uniform = piece(chest, 5.0);
+        let helmet = piece(head, 10.0);
+        let mob = world
+            .spawn(Inventory {
+                suit: Some(vest),
+                uniform: Some(uniform),
+                head: Some(helmet),
+                ..default()
+            })
+            .id();
+        assert_eq!(worn_wound_armor(&world, mob, BodyZone::Chest), 15.0);
+        assert_eq!(worn_wound_armor(&world, mob, BodyZone::Head), 10.0);
+        assert_eq!(worn_wound_armor(&world, mob, BodyZone::LLeg), 0.0);
     }
 
     #[test]

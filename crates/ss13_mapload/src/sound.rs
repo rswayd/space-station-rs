@@ -327,7 +327,7 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 343] = [
+    pub const GAME_CODE: [&str; 368] = [
         "modular_bandastation/weapon/sound/melee/electrostaff_on.ogg",
         "sound/effects/clock_tick.ogg",
         "sound/effects/woodhit.ogg",
@@ -675,6 +675,32 @@ pub mod files {
         "sound/mobs/non-humanoids/alien/alien_eat.ogg",
         "sound/mobs/non-humanoids/alien/alien_york.ogg",
         "sound/mobs/non-humanoids/hiss/hiss5.ogg",
+        // Security gear (`ss13_game::clothing::secgear`, `muzzle`, `closets`, MOD holster).
+        "sound/runtime/complionator/emag.ogg",
+        "sound/runtime/complionator/halt.ogg",
+        "sound/runtime/complionator/bobby.ogg",
+        "sound/runtime/complionator/compliance.ogg",
+        "sound/runtime/complionator/justice.ogg",
+        "sound/runtime/complionator/running.ogg",
+        "sound/runtime/complionator/dontmove.ogg",
+        "sound/runtime/complionator/floor.ogg",
+        "sound/runtime/complionator/robocop.ogg",
+        "sound/runtime/complionator/god.ogg",
+        "sound/runtime/complionator/freeze.ogg",
+        "sound/runtime/complionator/imperial.ogg",
+        "sound/runtime/complionator/bash.ogg",
+        "sound/runtime/complionator/harry.ogg",
+        "sound/runtime/complionator/asshole.ogg",
+        "sound/runtime/complionator/stfu.ogg",
+        "sound/runtime/complionator/shutup.ogg",
+        "sound/runtime/complionator/super.ogg",
+        "sound/runtime/complionator/dredd.ogg",
+        "sound/items/whistle/whistle.ogg",
+        "sound/items/party_horn.ogg",
+        "sound/items/duct_tape/duct_tape_rip.ogg",
+        "sound/machines/closet/closet_lock.ogg",
+        "sound/machines/closet/closet_unlock.ogg",
+        "sound/items/weapons/gun/revolver/empty.ogg",
     ];
     /// Admin verbs (`ss13_admin::verbs`): BandaStation's Man Up.
     pub const ADMIN: [&str; 1] = ["modular_bandastation/admin/sound/manup1.ogg"];

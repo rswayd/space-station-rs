@@ -32,9 +32,13 @@ pub mod holsters;
 #[cfg(feature = "server")]
 pub mod lasertag;
 #[cfg(feature = "server")]
+pub mod muzzle;
+#[cfg(feature = "server")]
 pub mod reactive;
 #[cfg(feature = "server")]
 pub mod reskin;
+#[cfg(feature = "server")]
+pub mod secgear;
 #[cfg(feature = "server")]
 pub mod sensors;
 #[cfg(feature = "server")]
@@ -100,7 +104,8 @@ mod server {
 
     use super::accessories::{self, Accessories};
     use super::{
-        chameleon, cover, damage, envirosuit, reactive, reskin, sensors, slowdown, toggles,
+        chameleon, cover, damage, envirosuit, muzzle, reactive, reskin, secgear, sensors, slowdown,
+        toggles,
     };
     use crate::click_handlers::{AddClickHandler, ClickPhase};
     use crate::human::layers::{FACEMASK_LAYER, UNIFORM_LAYER};
@@ -149,7 +154,21 @@ mod server {
                 c.held.is_some_and(|held| {
                     reactive::shell_interaction(w, c.client, c.mob, held, c.target)
                 })
+            })
+            // The security helmet's straps.
+            .add_click_handler(ClickPhase::AttackSelf, 3345, |w, c| {
+                secgear::attack_self(w, c.client, c.mob, c.target)
+            })
+            // A screwdriver or wirecutters on a security mask's restrictor.
+            .add_click_handler(ClickPhase::OtherHand, 1495, |w, c| {
+                c.held
+                    .is_some_and(|held| secgear::tool_act(w, c.client, held, c.target))
+            })
+            .add_click_handler(ClickPhase::HeldOnTarget, 4275, |w, c| {
+                c.held
+                    .is_some_and(|held| secgear::tool_act(w, c.client, held, c.target))
             });
+            muzzle::build(app);
             reactive::build(app);
             envirosuit::build(app);
             sensors::build(app);
@@ -179,6 +198,7 @@ mod server {
     /// tg `click_alt` of clothing: a jumpsuit's style, a toggle suit, a breath mask.
     pub fn click_alt(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
         reskin::click_alt(world, client, mob, item)
+            || secgear::click_alt(world, client, mob, item)
             || toggles::rolldown(world, client, mob, item)
             || toggles::toggle_suit(world, client, mob, item)
             || toggles::breath_alt(world, client, mob, item)

@@ -37,9 +37,9 @@ use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUse
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
     ANXIOUS_FILLERS, AlienHivemind, Anxiety, AnxiousSay, BinaryCapable, ChangelingHivemind,
-    EarsWorn, Impediments, RadioExtension, RadioTarget, SpeakerStat, SpeechEffects, Tongueless,
-    VoiceSpan, WhisperHeard, capitalize, derpspeech, parse_mods_speaking, slur, stars, stutter,
-    stutter_with, unintelligize, whisper_heard,
+    EarsWorn, Impediments, Muffled, RadioExtension, RadioTarget, SpeakerStat, SpeechEffects,
+    Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech, muffle, parse_mods_speaking, slur,
+    stars, stutter, stutter_with, unintelligize, whisper_heard,
 };
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
@@ -598,7 +598,7 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents): (
+    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents, muffled): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
@@ -607,6 +607,7 @@ fn handle_say(
         Query<Entity, With<SixthSense>>,
         Option<Res<Emojis>>,
         Query<&crate::accents::Accents>,
+        Query<(), With<Muffled>>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -767,6 +768,26 @@ fn handle_say(
                     .is_some_and(|&at| now < at + cooldown)
             });
             match outcome {
+                // `muffles_speech/emote_override`: an audible emote without hands is a noise.
+                EmoteOutcome::Run { key, .. }
+                    if muffled.contains(speaker)
+                        && crate::emote::find(key).is_some_and(|e| {
+                            e.flags & crate::emote::AUDIBLE != 0
+                                && e.flags & crate::emote::REQUIRE_HANDS == 0
+                        }) =>
+                {
+                    let strength = ["сильный ", "слабый ", ""];
+                    let pick = (rng.percent() as usize * strength.len()) / 100;
+                    let text = format!("издаёт {}звук.", strength[pick.min(strength.len() - 1)]);
+                    let clients: Vec<Entity> = hearers_within(HEARING_RANGE)
+                        .into_iter()
+                        .map(|(c, ..)| c)
+                        .collect();
+                    chat.write(SendChat {
+                        clients,
+                        message: emote_message(&name, &text),
+                    });
+                }
                 EmoteOutcome::Run { key, text, sound } => {
                     // `should_play_sound`: a mute or tongueless mob makes no audible sound.
                     let silenced = impediments.is_some_and(|i| i.mute) || tongueless;
@@ -913,6 +934,11 @@ fn handle_say(
                 let i = (rng.percent() as usize * ANXIOUS_FILLERS.len()) / 100;
                 message = ANXIOUS_FILLERS[i.min(ANXIOUS_FILLERS.len() - 1)].to_owned();
             }
+        }
+        // `COMSIG_MOB_SAY`: a muzzle (`muffles_speech/muzzle_talk`).
+        // shortcut: no `TRAIT_SIGN_LANG` exemption (no sign language).
+        if muffled.contains(speaker) {
+            message = muffle(&message, || rng.percent());
         }
         // `COMSIG_MOB_SAY`: the speech mutations (`crate::accents`).
         if let Ok(accents) = accents.get(speaker) {

@@ -5,7 +5,7 @@
 Шлемы СБ (с креплением фонарика), противоударные, морпеховские, старые; дают броню головы. Переключаемые шлемы опускают визор.
 
 - **Код:** [`/obj/item/clothing/head/helmet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/helmet.dm#L1), [`/obj/item/clothing/head/helmet/sec`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/helmet.dm#L35), [`/obj/item/clothing/head/helmet/toggleable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/head/helmet.dm#L221)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: надевается; визор `helmet/toggleable` поднимается (`crates/ss13_game/src/clothing/toggles.rs`); нет брони, крепления фонарика
+- **Статус в ss13-rs:** ✅ реализовано — броня головы считается как у любой одежды (`crates/ss13_game/src/armor.rs`, `getarmor` по `body_parts_covered`; `wound` — в бросках ран); визор `helmet/toggleable` поднимается (`crates/ss13_game/src/clothing/toggles.rs`); крепление фонарика (`seclite_attachable`) на шлемах СБ, прессы, пуленепробиваемом, морпеха (с фонарём с завода), противоударном, NT SWAT и спецназа BandaStation: секлайт кликом, отвёртка снимает, свет от носителя, кнопка в руке и на голове (`crates/ss13_game/src/gun_attachments.rs`); шлем СБ: ремни в руке за 3 с (`HIDEHAIR`), alt-клик откидывает визор (`-novisor`, глаза не закрыты, звук `visor_up/down`), сигнальщик — сборка секбота, если фонарь снят (`crates/ss13_game/src/clothing/secgear.rs`, `crates/ss13_game/src/bots/construction.rs`); нет спрайта `-flight` и examine-строк крепления, ЭМИ по фонарю шлема, сирены/ночного зрения шлемов юстиции и NVG
 
 ### Каски с фонарём
 Строительные каски и сварочные каски: включаемый фонарь на голове, у сварочных — щиток от вспышек; торт-шляпа как каска-светильник.
@@ -48,13 +48,13 @@
 
 - **Код:** [`/obj/item/clothing/mask/gas/sechailer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/hailer.dm#L45), [`play_phrase()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/hailer.dm#L182), [`/obj/item/clothing/mask/whistle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/hailer.dm#L193)
 - **BandaStation:** [`hailer.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/hailer.dm#L66) — хейлер не защищает от перцового спрея (`pepper_tint`)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/internals.rs`: работает как противогаз для баллона; нет фраз (и звуков вообще)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/secgear.rs`: кнопка «HALT!» надетой маски СБ — фраза Compli-o-Nator большим красным и звук `sound/runtime/complionator/*.ogg` раз в 3 с; ограничитель (хороший/плохой коп, SWAT — все фразы; отвёртка переключает, кусачки ломают — фразы 13-19), емаг — только ругательство; 3-я и 4-я фраза за 18 с предупреждают о нагреве, 5-я ломает хейлер навсегда; свисток «HALT!» (любой слот, раз в 10 с) и дудка «TOOT!»; маска работает как противогаз для баллона (`crates/ss13_game/src/internals.rs`) и сдвигается (`toggles.rs`); нет TTS-фильтра голоса (TTS нет), звука смерти `emote_sounds`, анимации дудки
 
 ### Кляпы и скотч
 Намордник и полоски скотча на рот не дают говорить и есть; снимаются с задержкой.
 
 - **Код:** [`/obj/item/clothing/mask/muzzle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/muzzle.dm#L1), [`/obj/item/clothing/mask/muzzle/tape`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/masks/muzzle.dm#L22)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/muzzle.rs`: намордник, дыхательный намордник и скотч в слоте маски глушат речь (`ss13_chat::speech::Muffled`: слова → «mmmf», крик заглавными) и превращают слышимые эмоуты без рук в «издаёт звук» (`crates/ss13_chat/src/server.rs`); рот закрыт (`MASKCOVERSMOUTH`: не есть и не пить); скотч на человека вне боевого режима — заклеивание за `equip_delay_other` (хирургический 3 с, прочие 4 с), если рот не закрыт шлемом и слот свободен; снятый любым путём скотч рвётся со звуком, колючий бьёт по голове (10/20) с криком; снимают через меню раздевания (задержка общая — `strip_delay` по типам не сконвертирован); нет отказа обезьяне и блокировки заклинаний
 
 ### Маски-костюмы
 Банданы (носятся на лице или шее), балаклавы, маски луча́доров, хирургические маски, усы, маски животных (проклятые прирастают и меняют речь), гондола (меняет речь).
