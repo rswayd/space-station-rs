@@ -17,19 +17,19 @@
 CO2 выше 10 кПа душит и в итоге вырубает, плазма выше 0.05 кПа даёт toxin-урон (плазмамены, наоборот, дышат ею), N2O усыпляет и вызывает эйфорию.
 
 - **Код:** [`proc/too_much_co2()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L316), [`proc/too_much_plasma()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L370), [`proc/breathe_nitro()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L294), [`proc/add_gas_reaction()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L197)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`: пороги и урон CO2/плазмы, оповещение N2O; нет сна, эйфории и смеха от N2O, дыхания плазмой у плазменов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/breath.rs`: пороги и урон CO2/плазмы (и урон лёгким от плазмы), дыхание плазмой у плазменов; N2O — оповещение, отключка и сон, смех с дурманом (`drugginess`) и настроение «химическая эйфория»; нет иммунитета ко сну (`TRAIT_SLEEPIMMUNE`) и аносмии
 
 ### Экзотические газы
 Реакции лёгких на BZ (галлюцинации, урон мозгу), фреон, галон, хилиум (сон и лечение), гелий (голос), гиперноблий, миазмы (болезни), нитриум, тритий (радиация), антиноблий, заукер (урон), плюоксиум.
 
 - **Код:** [`proc/too_much_bz()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L391), [`proc/too_much_freon()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L398), [`proc/consume_healium()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L425), [`proc/too_much_miasma()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L473), [`proc/too_much_nitrium()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L559), [`proc/too_much_tritium()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L579), [`proc/too_much_zauker()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L616)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/breath.rs` явно пропускает эти газы (shortcut)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/breath.rs` (`exotic_gases`, `radioactive_breath`, `too_much_miasma`): BZ — метаболиты BZ (галлюцинации в `crates/ss13_game/src/hallucination/mod.rs`) и урон мозгу; фреон — ожоги, немота, реагент; галон — oxy-урон и реагент; хилиум — эйфория, сон, реагент; гиперноблий, нитриум (отрыжка, урон лёгким, реагенты), заукер — реагенты и урон лёгким; тритий и антиноблий — токсины, облучение (`crates/ss13_game/src/radiation.rs`), урон лёгким; миазмы — предупреждения, настроения вони, рвота. Сами реагенты действуют по группе химии. В tg антиноблий выдыхается дважды и токсин-урона нет, а `lose_healium`/`safe_miasma` срабатывают сразу после вдоха (настроение вони тут же снимается) — баги не перенесены. Нет: писклявого голоса от гелия (в чате нет малого шрифта), болезней «с пола» от миазм и отвращения (`disgust`) — не портированы
 
 ### Температура вдоха
 Слишком горячий или холодный вдох обжигает лёгкие и горло (burn-урон, урон органа), пар изо рта на холоде.
 
 - **Код:** [`proc/handle_breath_temperature()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L794), [`proc/emit_breath_particle()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/lungs/_lungs.dm#L847)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/breath.rs` (`breath_temperature`): вдох холоднее 260/200/120 K или горячее 360/400/1000 K даёт 0,5/1,5/3 или 2/4/8 burn (× `coldmod`/`heatmod`, без урона при `TRAIT_RESISTCOLD`/`TRAIT_RESISTHEAT`), на третьем уровне — урон лёгким; сообщения и дрожь. В tg условие раннего выхода `>` cold_1 ИЛИ `<` heat_1 истинно всегда и урона нет — перенесено задуманное «И». Нет облачка пара изо рта (частиц нет); подтипы лёгких берут человеческие пороги
 
 ### Баллоны и internals
 Маска с `MASKINTERNALS` или шлем с `HEADINTERNALS` позволяют дышать из баллона (alt-клик по баллону, кнопка HUD); баллон закрывается, если его сняли или сняли маску. Есть и внешние internals (подключение к чужому баллону).
@@ -41,7 +41,7 @@ CO2 выше 10 кПа душит и в итоге вырубает, плазм�
 Противогаз и подобное (`BLOCK_GAS_SMOKE_EFFECT`) защищают от вдыхания реагентов из дыма.
 
 - **Код:** [`proc/has_smoke_protection()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/life.dm#L130)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/effects/smoke.rs` (`has_smoke_protection`): одежда с `BLOCK_GAS_SMOKE_EFFECT` или `TRAIT_NOBREATH`, а также открытые internals защищают от плохого, усыпляющего и химического дыма
 
 ### Давление окружения
 Ниже 20 кПа и выше 550 кПа моб получает brute-урон и видит оповещение; одежда со `STOPSPRESSUREDAMAGE` на голове и теле (скафандры) защищает.
@@ -65,6 +65,6 @@ CO2 выше 10 кПа душит и в итоге вырубает, плазм�
 Объятия и тесный контакт передают тепло (`share_bodytemperature`) — греет замёрзших.
 
 - **Код:** [`proc/share_bodytemperature()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/life.dm#L649)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/breath.rs` (`share_bodytemperature`, `hug_temperature_warnings`), вызов из объятий в `crates/ss13_game/src/combat.rs`: каждый сдвигается на половину разницы температуры кожи через утепление одежды, шагами `/15` (не больше 30 K), до сравнения тепла для настроения; сообщения о перегреве/переохлаждении обнимающего и обнимаемого. Нет медвежьих объятий и `TRAIT_HYPOTHERMIC` (не портированы)
 
 Горение моба (огненные стаки, `/datum/status_effect/fire_handler/fire_stacks`, в Rust `crates/ss13_game/src/fire.rs`) описано среди статус-эффектов этой папки.

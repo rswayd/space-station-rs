@@ -91,12 +91,40 @@ pub enum FaunaLeaf {
     },
     /// A lavaland mob leaf (`crate::mobs::lavaland::ai`).
     Lavaland(crate::mobs::lavaland::ai::LavaLeaf),
+    /// `run_emote` / `perform_emote` of this emote key.
+    Emote(&'static str),
+    /// `face_target_or_face_initial` (mannequins).
+    FaceTarget {
+        key: Key,
+    },
+    /// The statue's `update_interaction_target` over lit fixtures (`unbroken_light`, 7 tiles).
+    AcquireLight {
+        key: Key,
+    },
+    /// The statue's `hunt_target/interact_with_target` on a light: it smashes it.
+    SmashLight {
+        key: Key,
+    },
+    /// The regal rat's `targeted_mob_ability` of its `riot`.
+    RatRiot,
+    /// The regal rat's `use_mob_ability/domain`: on when it is off.
+    RatDomain,
+    /// The bee's `update_interaction_target` over pollinatable trays (10 tiles, 10 s).
+    AcquireTray {
+        key: Key,
+    },
+    /// `pollinate_hydro` (5 s).
+    Pollinate {
+        key: Key,
+    },
 }
 
 impl FaunaLeaf {
     pub fn cooldown(&self) -> f64 {
         match self {
             Self::FindPartner => 5.0,
+            Self::AcquireTray { .. } => 10.0,
+            Self::Pollinate { .. } => 5.0,
             Self::ParrotRepeat => crate::mobs::parrot::REPEAT_COOLDOWN,
             Self::RangedAttack { cooldown, .. } => *cooldown,
             Self::Lavaland(leaf) => leaf.cooldown(),
@@ -230,6 +258,25 @@ impl FaunaLeaf {
                 crate::mobs::defense::emote(ctx.world, ctx.pawn, &text);
                 SUCCEED
             }
+            Self::Emote(key) => {
+                crate::mobs::space_fauna::run_emote(ctx.world, ctx.pawn, key);
+                SUCCEED
+            }
+            Self::FaceTarget { key } => {
+                if let (Some(from), Some(to)) = (ctx.pawn_pos(), ctx.target_pos(key))
+                    && let Some(dir) = dir_towards(from, to)
+                    && let Some(mut facing) = ctx.world.get_mut::<ss13_shared::Facing>(ctx.pawn)
+                {
+                    facing.set_if_neq(ss13_shared::Facing(dir));
+                }
+                DELAY_SUCCEED
+            }
+            Self::AcquireLight { key } => crate::mobs::space_fauna::acquire_light(ctx, key),
+            Self::SmashLight { key } => crate::mobs::space_fauna::smash_light(ctx, key),
+            Self::RatRiot => crate::mobs::space_fauna::rat_riot_leaf(ctx),
+            Self::RatDomain => crate::mobs::space_fauna::rat_domain_leaf(ctx),
+            Self::AcquireTray { key } => crate::mobs::bees::acquire_tray(ctx, key),
+            Self::Pollinate { key } => crate::mobs::bees::pollinate_leaf(ctx, key),
             // Performed above.
             Self::Lavaland(_) => FAIL,
         }
@@ -256,6 +303,8 @@ impl FaunaLeaf {
             Self::MakeBabies { key } | Self::Headbutt { key } | Self::SniffFlora { key } => {
                 ctx.bb.clear(key)
             }
+            // `always_reset_target`, `pollinate_hydro/finish_action`.
+            Self::SmashLight { key } | Self::Pollinate { key } => ctx.bb.clear(key),
             Self::MaintainDistance { .. } => {
                 ctx.movement.failed = false;
                 ctx.movement.stop();

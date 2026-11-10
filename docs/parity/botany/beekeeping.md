@@ -23,4 +23,4 @@
 Шляпа и костюм пчеловода защищают от укусов пчёл (толстая ткань, `THICKMATERIAL`).
 
 - **Код:** [`/obj/item/clothing/head/utility/beekeeper_head`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/beekeeping/beekeeper_suit.dm#L2), [`/obj/item/clothing/suit/utility/beekeeper_suit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/hydroponics/beekeeping/beekeeper_suit.dm#L16)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload` (`dm_clothing`), `crates/ss13_game/src/inventory.rs`: надевается как одежда; защиты от пчёл нет (пчёл нет)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_mapload` (`dm_clothing`), `crates/ss13_game/src/inventory.rs`: надевается как одежда; пчёлы не нападают на того, у кого костюм и шляпа с `THICKMATERIAL` (`bee_friendly` в `crates/ss13_game/src/mobs/bees.rs`)

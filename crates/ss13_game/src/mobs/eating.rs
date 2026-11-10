@@ -91,6 +91,22 @@ static SNAIL: Eating = Eating {
     cooldown: EAT_FOOD_COOLDOWN,
 };
 
+/// `/mob/living/basic/gorilla` `gorilla_food`.
+static GORILLA: Eating = Eating {
+    foods: &[
+        "/obj/item/food/bread/banana",
+        "/obj/item/food/breadslice/banana",
+        "/obj/item/food/cnds/banana_honk",
+        "/obj/item/food/grown/banana",
+        "/obj/item/food/popsicle/topsicle/banana",
+        "/obj/item/food/salad/fruit",
+        "/obj/item/food/salad/jungle",
+        "/obj/item/food/sundae",
+    ],
+    heal: 10.0,
+    cooldown: EAT_FOOD_COOLDOWN,
+};
+
 /// The `basic_eating` of mob type `path` (cows and snakes through `tameable`).
 pub fn eating_of(path: &str) -> Option<&'static Eating> {
     let under = |root: &str| ss13_mapload::fidelity::is_under(path, root);
@@ -98,7 +114,8 @@ pub fn eating_of(path: &str) -> Option<&'static Eating> {
     if under(super::farm::WISDOM_COW) {
         return None;
     }
-    let table: [(&str, &'static Eating); 9] = [
+    let table: [(&str, &'static Eating); 10] = [
+        ("/mob/living/basic/gorilla", &GORILLA),
         ("/mob/living/basic/lizard/big", &BIG_LIZARD),
         ("/mob/living/basic/lizard", &LIZARD),
         ("/mob/living/basic/cow", &COW),

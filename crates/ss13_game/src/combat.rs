@@ -663,7 +663,10 @@ fn melee(
                 let helper = attacker;
                 commands.queue(move |world: &mut World| {
                     crate::medical::fear::on_hug(world, helper, target);
+                    // "Warm them up with hugs", before the moodlets compare the warmth.
+                    crate::breath::share_bodytemperature(world, target, helper);
                     crate::mood::on_hug(world, helper, target);
+                    crate::breath::hug_temperature_warnings(world, helper, target);
                     crate::status_effects::shake_up(world, target);
                 });
                 Some(Seen {
