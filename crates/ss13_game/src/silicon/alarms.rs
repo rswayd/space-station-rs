@@ -15,9 +15,8 @@
 //!   picking an area jumps its eye to one of the area's cameras (a list when several).
 //! - The AI and cyborgs are told in chat (tg `queueAlarm`): changes are gathered for 3 seconds,
 //!   then shown one by one, or as counts per type past 4 raised / 2 cleared lines.
-// shortcut: no camera alarms: cameras never break here; the type is listed (nominal) as in tg.
-// Burglar alarms come from display cases (`crate::displaycase`). Motion alarms come from motion cameras
-// (`crate::defenses::cameras`).
+// Burglar alarms come from display cases (`crate::displaycase`). Motion and camera alarms
+// (a camera switched on or back from an EMP) come from cameras (`crate::defenses::cameras`).
 // shortcut: listeners see every current alarm, not only those raised after they were created
 // (tg's own comment doubts that this is a feature); a broken console or a dead cyborg keeps
 // updating (`prevent_alarm_changes`); no `[Show Alerts]` / camera links in the chat lines.

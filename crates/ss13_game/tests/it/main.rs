@@ -18,6 +18,7 @@ mod brothers;
 mod bs_objects;
 mod buffs;
 mod bump;
+mod cameras;
 mod cards;
 mod cargo;
 mod changeling;

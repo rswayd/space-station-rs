@@ -180,6 +180,8 @@ pub enum AlertCategory {
     Strandling,
     /// `ALERT_SUCCUMB` (`crate::death`): in crit, a click succumbs.
     Succumb,
+    /// BandaStation `ALERT_BODYCAM_VIEWED` (`crate::silicon::mob_cameras`).
+    BodycamViewed,
 }
 
 /// One thrown alert: its type's base `icon_state` and `severity` (0: none).
@@ -437,6 +439,11 @@ impl Alert {
                 "Высокое давление",
                 "У вас сейчас очень высокое давление... Кровь, наверное, хлынет как из резаной \
                  свиньи.",
+            ),
+            // BandaStation `/atom/movable/screen/alert/bodycam_viewed`.
+            "recording" => (
+                "Нательная камера активна",
+                "Через вашу камеру кто-то смотрит...",
             ),
             // An offer's name and text come from the offer (`crate::buffs::Offering`).
             "template" => ("Предложение", ""),
