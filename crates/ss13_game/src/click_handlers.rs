@@ -212,6 +212,7 @@
 //! | 2500 | `disposals::interact` |
 //! | 2600 | `genetics::console::interact` |
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
+//! | 2653 | `cryosleep::interact` (the cryo console's window) |
 //! | 2660 | `medical::kiosk::interact` |
 //! | 2663 | `science::xenobio_console::take_controls` (the slime console's controls) |
 //! | 2673 | `science::cell_lines::attack_hand` (microscope readout and dish removal, vat resampler and flush) |

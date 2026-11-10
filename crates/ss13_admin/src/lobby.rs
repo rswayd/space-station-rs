@@ -9,6 +9,8 @@
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use ss13_game::round::{LobbyAdmin, LobbyAdminAct, LobbyAdminRequest, NewPlayer};
+use ss13_game::votes::{AdminNotice, VoteRights};
+use ss13_net::server::ClientToken;
 use ss13_shared::admin::rights::{R_ADMIN, R_DEBUG, R_SERVER};
 use ss13_shared::chat::{ChatChannel, Span};
 
@@ -18,7 +20,8 @@ use crate::server::{
 };
 
 pub(crate) fn build(app: &mut App) {
-    app.add_systems(Update, (sync_lobby_admin, lobby_admin_acts).chain());
+    app.add_systems(Update, (sync_lobby_admin, lobby_admin_acts).chain())
+        .add_systems(Update, (sync_vote_rights, forward_admin_notices));
 }
 
 /// [`LobbyAdmin`] on the lobby clients whose active rights have `R_ADMIN` or `R_DEBUG`. Runs over
@@ -34,6 +37,35 @@ fn sync_lobby_admin(
         } else if !admin && marked {
             commands.entity(client).remove::<LobbyAdmin>();
         }
+    }
+}
+
+/// [`VoteRights`] on every client from its active rights. Runs over the connected clients.
+fn sync_vote_rights(
+    clients: Query<(Entity, Option<&AdminSession>, Option<&VoteRights>), With<ClientToken>>,
+    mut commands: Commands,
+) {
+    for (client, session, current) in &clients {
+        let rights = session.map_or(0, AdminSession::active_rights);
+        let wanted = VoteRights {
+            holder: rights != 0,
+            admin: rights & R_ADMIN != 0,
+            server: rights & R_SERVER != 0,
+        };
+        if current != Some(&wanted) {
+            commands.entity(client).insert(wanted);
+        }
+    }
+}
+
+/// `message_admins` for what the game crate reports ([`AdminNotice`]).
+fn forward_admin_notices(world: &mut World, mut cursor: Local<MessageCursor<AdminNotice>>) {
+    let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<AdminNotice>>() else {
+        return;
+    };
+    let notices: Vec<String> = cursor.read(messages).map(|n| n.0.clone()).collect();
+    for text in notices {
+        message_admins(world, &text);
     }
 }
 

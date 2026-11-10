@@ -259,6 +259,9 @@ pub mod construction;
 pub mod cooking;
 #[cfg(feature = "server")]
 pub mod crayons;
+pub mod cryosleep;
+#[cfg(feature = "client")]
+pub mod cryosleep_client;
 #[cfg(feature = "server")]
 pub mod curses;
 #[cfg(feature = "server")]
@@ -676,6 +679,9 @@ pub mod vending;
 pub mod ventcrawl;
 #[cfg(feature = "server")]
 pub mod vision;
+pub mod votes;
+#[cfg(feature = "client")]
+pub mod votes_client;
 #[cfg(feature = "server")]
 pub mod wallmount;
 #[cfg(feature = "server")]

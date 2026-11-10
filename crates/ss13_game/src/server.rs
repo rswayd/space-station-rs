@@ -305,6 +305,7 @@ impl Plugin for GameServerPlugin {
         ))
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
         .add_plugins(crate::statpanel::StatPanelServerPlugin)
+        .add_plugins((crate::votes::VotesPlugin, crate::cryosleep::CryosleepPlugin))
         .add_plugins((
             crate::runechat::RunechatServerPlugin,
             crate::radial::RadialServerPlugin,

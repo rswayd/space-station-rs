@@ -75,4 +75,4 @@ Nuclear — взорвать станцию; absorb/absorb_most/absorb_changelin
 
 - **Код:** [`replace_unavailable_objectives()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/antagonists/code/objective_replacement.dm#L26), [`/datum/objective/proc/replace_unavailable_target()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/antagonists/code/objective_replacement.dm#L60)
 - **BandaStation:** [`_antagonists.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/antagonists/_antagonists.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — криосна нет
+- **Статус в ss13-rs:** ❌ нет — криосон есть (`crates/ss13_game/src/cryosleep.rs`, `despawn_occupant`), но переназначения целей при уходе в крио нет

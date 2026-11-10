@@ -58,6 +58,10 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::ghost_menu_client::GhostMenuClientPlugin);
         app.add_plugins(crate::statpanel_client::StatPanelClientPlugin);
         app.add_plugins((
+            crate::votes_client::VotesClientPlugin,
+            crate::cryosleep_client::CryosleepClientPlugin,
+        ));
+        app.add_plugins((
             crate::screentips_client::ScreentipsClientPlugin,
             crate::escape_menu_client::EscapeMenuClientPlugin,
         ));
