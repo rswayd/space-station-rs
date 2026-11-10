@@ -264,11 +264,14 @@ fn decode(path: &Path) -> anyhow::Result<(Image, AlphaMask)> {
     page_image(&bytes).with_context(|| format!("decoding {}", path.display()))
 }
 
-/// An atlas page file as an sRGB RGBA8 texture with nearest sampling, plus its alpha mask.
-fn page_image(bytes: &[u8]) -> anyhow::Result<(Image, AlphaMask)> {
+/// A QOI file (`ss13_assets::page`) as an sRGB RGBA8 texture with `sampler`, kept on the GPU
+/// only: an atlas page, or a station map image (`ss13_game::nanomap`).
+pub fn qoi_image(bytes: &[u8], sampler: ImageSampler) -> anyhow::Result<Image> {
     let page = ss13_assets::page::decode(bytes)?;
-    let mask = AlphaMask::from_rgba8(page.width, page.height, &page.rgba)
-        .context("pixel count does not match the size")?;
+    Ok(rgba_image(page, sampler))
+}
+
+fn rgba_image(page: ss13_assets::page::PagePixels, sampler: ImageSampler) -> Image {
     let mut image = Image::new(
         Extent3d {
             width: page.width,
@@ -281,8 +284,16 @@ fn page_image(bytes: &[u8]) -> anyhow::Result<(Image, AlphaMask)> {
         // The pixels live on the GPU only: Bevy drops the CPU copy after the upload.
         RenderAssetUsages::RENDER_WORLD,
     );
-    image.sampler = ImageSampler::nearest();
-    Ok((image, mask))
+    image.sampler = sampler;
+    image
+}
+
+/// An atlas page file as an sRGB RGBA8 texture with nearest sampling, plus its alpha mask.
+fn page_image(bytes: &[u8]) -> anyhow::Result<(Image, AlphaMask)> {
+    let page = ss13_assets::page::decode(bytes)?;
+    let mask = AlphaMask::from_rgba8(page.width, page.height, &page.rgba)
+        .context("pixel count does not match the size")?;
+    Ok((rgba_image(page, ImageSampler::nearest()), mask))
 }
 
 /// `SS13_ATLAS_BUDGET_MB` in bytes, [`DEFAULT_BUDGET_MB`] when unset or invalid.

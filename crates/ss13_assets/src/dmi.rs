@@ -174,6 +174,26 @@ fn relatin1_to_utf8(s: String) -> String {
     String::from_utf8(bytes).unwrap_or(s)
 }
 
+/// A plain PNG file as RGBA8 (an image that is not a `.dmi`, e.g. a nanomap).
+pub fn read_png_rgba8(bytes: &[u8]) -> Result<crate::page::PagePixels, DmiError> {
+    let mut decoder = png::Decoder::new(Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
+    let mut reader = decoder.read_info()?;
+    let mut buf = vec![
+        0;
+        reader
+            .output_buffer_size()
+            .expect("png size fits in memory")
+    ];
+    let out = reader.next_frame(&mut buf)?;
+    buf.truncate(out.buffer_size());
+    Ok(crate::page::PagePixels {
+        width: out.width,
+        height: out.height,
+        rgba: to_rgba8(buf, out.color_type),
+    })
+}
+
 fn to_rgba8(buf: Vec<u8>, color: png::ColorType) -> Vec<u8> {
     use png::ColorType::*;
     match color {

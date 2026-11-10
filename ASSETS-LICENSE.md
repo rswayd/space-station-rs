@@ -24,7 +24,7 @@ copy every such file that applies to a converted asset, at its source path, next
 - sounds: `sound/<source path>/` (listed in `sound/SOURCES.txt`);
 - icons: `licenses/icons/<source path>/` (atlas pages and their source `.dmi` files are listed in
   `ICON-SOURCES.txt`);
-- station map images: `nanomap/licenses/<source path>/` (the images, copied from
+- station map images: `nanomap/licenses/<source path>/` (the images, converted to QOI from
   `icons/_nanomaps/` under BandaStation's asset keys, are listed in `nanomap/SOURCES.txt`). They are
   rendered from the station maps by BandaStation's NanoMap bot and are licensed like the icons.
 

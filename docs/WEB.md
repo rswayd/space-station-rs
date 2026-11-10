@@ -53,7 +53,7 @@ entry `ss13_web_client`, shared bridge `ss13_web_common`), page and build script
 | client | `manifest.postcard` (shared with the server: fetch once, hand the bytes to the worker) | 4.9 MB | 0.73 MB | start |
 | client | `atlas/*.qoi`, 237 pages of up to 1024x1024 (QOI: decodes 1.4 ms per page natively in release vs 3.1 ms for the PNG pages before; 1.6 vs 5.1 ms in wasm) | 74 MB (PNG was 106 MB) | 28 MB (`web-build.sh` ships `atlas/N.qoi.gz`) | lazily, per page on first use (the native client already loads pages on demand and evicts by `SS13_ATLAS_BUDGET_MB`) |
 | client | `sound/` (ogg) | 12 MB | (ogg) | lazily, on first play |
-| client | `nanomap/` (station map PNGs of the camera console and crew monitor maps) | 6 MB | (png) | on first view of a level |
+| client | `nanomap/*.qoi` (station map images of the camera console and crew monitor maps, QOI like the atlas pages; the source PNGs are 5.5 MB) | 18.4 MB | 3.4 MB | on first view of a level |
 | — | `dm_types.json` (46 MB), `licenses/`, `ICON-SOURCES.txt` | | | not shipped (converter input, attribution files linked from the page) |
 
 So a first frame needs ~21 MB raw / ~2.6 MB gzip of data plus the two wasm binaries (size not yet

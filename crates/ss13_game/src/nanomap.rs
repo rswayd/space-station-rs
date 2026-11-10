@@ -41,10 +41,10 @@ impl MapUiData {
     /// port's station starts on z1.
     pub fn image(&self, level: u16) -> Option<String> {
         if self.lavaland_level == Some(level) && level != self.min_floor {
-            return Some("Lavaland_nanomap_z1.png".to_owned());
+            return Some("Lavaland_nanomap_z1.qoi".to_owned());
         }
         (!self.name.is_empty() && (self.min_floor..=self.max_floor).contains(&level))
-            .then(|| format!("{}_nanomap_z{}.png", self.name, level - self.min_floor + 1))
+            .then(|| format!("{}_nanomap_z{}.qoi", self.name, level - self.min_floor + 1))
     }
 
     /// The selector's label of `level`.
@@ -129,8 +129,7 @@ pub use client::*;
 mod client {
     use std::collections::HashMap;
 
-    use bevy::asset::RenderAssetUsages;
-    use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
+    use bevy::image::ImageSampler;
     use bevy::prelude::*;
     use ss13_render::IconAtlas;
     use ss13_tgui::client::SetLocal;
@@ -149,8 +148,8 @@ mod client {
     pub struct NanomapImages(HashMap<String, Option<Handle<Image>>>);
 
     /// Gives each new [`NanomapImage`] its image, read and decoded on first use.
-    // shortcut: the first decode (a 2040 px PNG) blocks the frame once per level and session;
-    // move it to the IO task pool if it shows in frame times.
+    // shortcut: the first decode (a 2040 px QOI, a few ms) blocks the frame once per level and
+    // session; move it to the IO task pool if it shows in frame times.
     pub fn resolve_images(
         maps: Query<(Entity, &NanomapImage), Changed<NanomapImage>>,
         atlas: Option<Res<IconAtlas>>,
@@ -171,16 +170,9 @@ mod client {
                 .or_insert_with(|| {
                     let path = atlas.root().join(NANOMAP_DIR).join(&map.0);
                     let bytes = ss13_data::read(&path).ok()?;
-                    let image = Image::from_buffer(
-                        &bytes,
-                        ImageType::Extension("png"),
-                        CompressedImageFormats::NONE,
-                        true,
-                        ImageSampler::linear(),
-                        RenderAssetUsages::RENDER_WORLD,
-                    )
-                    .inspect_err(|e| warn!("nanomap {}: {e}", path.display()))
-                    .ok()?;
+                    let image = ss13_render::atlas::qoi_image(&bytes, ImageSampler::linear())
+                        .inspect_err(|e| warn!("nanomap {}: {e}", path.display()))
+                        .ok()?;
                     Some(images.add(image))
                 })
                 .clone();
@@ -253,8 +245,8 @@ mod tests {
     fn images_follow_the_original_keys() {
         let map = meta();
         assert_eq!(map.levels(), [1, 2]);
-        assert_eq!(map.image(1).as_deref(), Some("MetaStation_nanomap_z1.png"));
-        assert_eq!(map.image(2).as_deref(), Some("Lavaland_nanomap_z1.png"));
+        assert_eq!(map.image(1).as_deref(), Some("MetaStation_nanomap_z1.qoi"));
+        assert_eq!(map.image(2).as_deref(), Some("Lavaland_nanomap_z1.qoi"));
         assert_eq!(map.image(3), None);
         assert_eq!(map.level_label(2), "Лаваленд");
         let icebox = MapUiData {
@@ -267,7 +259,7 @@ mod tests {
         assert_eq!(icebox.levels(), [1, 2, 3]);
         assert_eq!(
             icebox.image(3).as_deref(),
-            Some("Ice Box Station_nanomap_z3.png")
+            Some("Ice Box Station_nanomap_z3.qoi")
         );
         assert_eq!(icebox.level_label(2), "Этаж 2");
         // No map data (a fixture without a station): no image.
