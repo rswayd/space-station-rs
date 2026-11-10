@@ -40,9 +40,11 @@ pub struct FrameKind {
 }
 
 /// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm`,
-/// `fireaxe.dm` and the photo frame (`photos/frame.dm`, its photo moves along:
-/// [`crate::service::picture_frame_moved`]). Subtypes come before their parents.
-pub static FRAMES: [FrameKind; 8] = [
+/// `fireaxe.dm`, the photo frame (`photos/frame.dm`, its photo moves along:
+/// [`crate::service::picture_frame_moved`]) and the heretic's eldritch paintings
+/// (`eldritch_painting.dm`, `crate::antag::heretic::server::EldritchPainting`). Subtypes come
+/// before their parents.
+pub static FRAMES: [FrameKind; 13] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",
@@ -82,6 +84,36 @@ pub static FRAMES: [FrameKind; 8] = [
     FrameKind {
         frame: "/obj/item/wallframe/picture",
         result: "/obj/structure/sign/picture_frame",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/painting/eldritch/weeping",
+        result: "/obj/structure/sign/painting/eldritch/weeping",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/painting/eldritch/desire",
+        result: "/obj/structure/sign/painting/eldritch/desire",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/painting/eldritch/vines",
+        result: "/obj/structure/sign/painting/eldritch/vines",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/painting/eldritch/beauty",
+        result: "/obj/structure/sign/painting/eldritch/beauty",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/painting/eldritch/rust",
+        result: "/obj/structure/sign/painting/eldritch/rust",
         pixel_shift: 30,
         materials: &[(WOOD, 1)],
     },

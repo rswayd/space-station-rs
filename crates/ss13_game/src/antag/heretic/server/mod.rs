@@ -26,9 +26,9 @@
 // Pull, Realignment and the Blade and Void ascensions are in [`super::paths`]. Their other
 // spells get a button that says it is not ported, recipes spawn their results when the
 // prototype exists, and passives do nothing. Side knowledge has no effects beyond its ritual's
-// results; summons (no basic mobs for heretic monsters yet), curses, the knowledge ritual, the
-// focus, the heretic aura, dreams, x-ray near influences, rust healing and spell recharge by
-// focus/holy water/passive are not ported. Ash Passage (jaunt) is not ported. No shadow realm:
+// results and what [`items`], [`paintings`] and [`summon`] give them; curses, the knowledge
+// ritual, the heretic aura, dreams, x-ray near influences, rust healing and spell recharge by
+// holy water/passive are not ported. Ash Passage (jaunt) is not ported. No shadow realm:
 // see [`begin_sacrifice`].
 // The radials are list windows; balloon alerts are chat warnings.
 
@@ -73,15 +73,29 @@ use crate::tools::{Actor, DoAfter, do_after, tell};
 mod buttons;
 mod clicks;
 mod gain;
+mod items;
+mod paintings;
 mod rune;
 mod sacrifice;
+mod summon;
 mod tick;
 mod windows;
 pub use buttons::*;
 pub use clicks::*;
 pub use gain::*;
+pub use items::{
+    CRUCIBLE, CRUCIBLE_MAX_MASS, Crucible, DuskAndDawn, FocusWorn, POTIONS, examine_lines,
+    focus_recharge_amount, has_heretic_vision, hastened, heretic_vision,
+};
+use items::{PAINTING, brew_potion, squeeze_medallion};
+use paintings::painting_recipe;
+pub use paintings::{EldritchPainting, PaintingCurse, PaintingExamined, PaintingKind};
 pub use rune::*;
 pub use sacrifice::*;
+use summon::begin_summon;
+pub use summon::{
+    HereticMonster, PendingSummon, SUMMON_POLL_SECS, is_heretic_or_monster, summon_of,
+};
 pub use tick::*;
 pub use windows::*;
 
@@ -459,6 +473,8 @@ pub enum PromptKind {
     },
     /// The Feast of Owls' alert.
     ConfirmFeast { rune: Entity },
+    /// The mawed crucible's brews (`create_potion`'s radial): types in `paths`.
+    Potion { crucible: Entity },
 }
 
 /// A list prompt on the heretic (`tgui_input_list`, tg radials and alerts).
@@ -485,8 +501,12 @@ impl UiInterface for HereticListWindow {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HereticJob {
     DrawRune,
-    Drain { points: u32 },
+    Drain {
+        points: u32,
+    },
     FireBlast,
+    /// The crimson medallion squeezed.
+    Squeeze,
 }
 
 pub struct HereticPlugin;
@@ -509,6 +529,8 @@ impl Plugin for HereticPlugin {
                 crate::antag::heretic::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        items::build(app);
+        paintings::build(app);
         app.register_ui::<AntagInfoHereticUi>()
             .register_ui::<HereticListWindow>()
             .init_resource::<RealityTracker>()

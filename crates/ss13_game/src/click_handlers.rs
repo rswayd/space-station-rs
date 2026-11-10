@@ -28,6 +28,7 @@
 //! | 400 | `forensics::server::attack_self` |
 //! | 500 | `antag::cult::server::attack_self` |
 //! | 600 | `antag::heretic::server::attack_self` |
+//! | 601 | `antag::heretic::server::items::attack_self` (the crimson medallion squeezed, a crucible brew or the ether drunk) |
 //! | 700 | `antag::wizard::server::attack_self` |
 //! | 800 | `vision::visor_attack_self` |
 //! | 893 | `antag::abductor::server::gear` (science tool, advanced baton, mental interface device modes) |
@@ -184,6 +185,7 @@
 //! | 200 | `silicon::cyborg::inventory_action` (`EmptyHandClick`) |
 //! | 300 | `antag::cult::server::interact` |
 //! | 400 | `antag::heretic::server::interact` |
+//! | 401 | `antag::heretic::server::items::crucible_hand` (the mawed crucible's brews, a non-heretic's hand bitten) |
 //! | 500 | `kitchen::interact` |
 //! | 550 | `restaurant::attack_hand` |
 //! | 600 | `cooking::interact` |
@@ -333,6 +335,7 @@
 //! | 1100 | `explosions::sources::c4_interact` |
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |
+//! | 1391 | `antag::heretic::server::items::held_on_target` (organs, flasks, codex and grasp on the mawed crucible; the phylactery's right click; wirecutters on an eldritch painting) |
 //! | 1400 | `antag::heretic::server::item_interaction` |
 //! | 1410 | `antag::nightmare::item_interaction` (the light eater) |
 //! | 1420 | `silicon::aicard::interact_with_atom` |

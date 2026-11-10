@@ -46,7 +46,7 @@ pub const CULT_RUNTIME_TYPES: [&str; 17] = [
 
 /// What the heretic makes at runtime (`ss13_game::antag::heretic`): influences, the rune, the
 /// Mansus grasp's hand and every ritual's results (`result_atoms`).
-pub const HERETIC_RUNTIME_TYPES: [&str; 46] = [
+pub const HERETIC_RUNTIME_TYPES: [&str; 82] = [
     "/obj/effect/heretic_influence",
     "/obj/effect/visible_heretic_influence",
     "/obj/effect/heretic_rune/big",
@@ -93,6 +93,43 @@ pub const HERETIC_RUNTIME_TYPES: [&str; 46] = [
     "/obj/item/void_prison",
     "/obj/item/wallframe/mirror/heretic",
     "/obj/structure/destructible/eldritch_crucible",
+    // Summons, foci, brews, paintings and what paintings give (`ss13_game::antag::heretic`).
+    "/mob/living/basic/heretic_summon/raw_prophet",
+    "/mob/living/basic/heretic_summon/stalker",
+    "/mob/living/basic/heretic_summon/rust_walker",
+    "/mob/living/basic/heretic_summon/maid_in_the_mirror",
+    "/mob/living/basic/heretic_summon/ash_spirit",
+    "/mob/living/basic/heretic_summon/fire_shark",
+    "/obj/item/clothing/neck/heretic_focus/crimson_medallion",
+    "/obj/item/clothing/neck/eldritch_amulet/piercing",
+    "/obj/item/eldritch_potion/crucible_soul",
+    "/obj/item/eldritch_potion/duskndawn",
+    "/obj/item/eldritch_potion/wounded",
+    "/obj/effect/gibspawner/generic",
+    "/obj/item/wallframe/painting/eldritch/weeping",
+    "/obj/structure/sign/painting/eldritch/weeping",
+    "/obj/item/wallframe/painting/eldritch/desire",
+    "/obj/structure/sign/painting/eldritch/desire",
+    "/obj/item/wallframe/painting/eldritch/vines",
+    "/obj/structure/sign/painting/eldritch/vines",
+    "/obj/item/wallframe/painting/eldritch/beauty",
+    "/obj/structure/sign/painting/eldritch/beauty",
+    "/obj/item/wallframe/painting/eldritch/rust",
+    "/obj/structure/sign/painting/eldritch/rust",
+    "/obj/item/organ/brain",
+    "/obj/item/organ/lungs",
+    "/obj/item/organ/eyes",
+    "/obj/item/organ/ears",
+    "/obj/item/organ/heart",
+    "/obj/item/organ/liver",
+    "/obj/item/organ/stomach",
+    "/obj/item/organ/appendix",
+    "/obj/item/bodypart/arm/left",
+    "/obj/item/bodypart/arm/right",
+    "/obj/item/bodypart/leg/left",
+    "/obj/item/bodypart/leg/right",
+    "/obj/item/food/grown/flower/poppy",
+    "/obj/item/food/grown/flower/harebell",
 ];
 
 /// tg `UPLINK_TRAITORS`.

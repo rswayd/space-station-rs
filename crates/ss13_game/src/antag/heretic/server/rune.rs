@@ -87,6 +87,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: HereticJo
         }
         HereticJob::Drain { points } => finish_drain(world, mob, action, points),
         HereticJob::FireBlast => cast_fire_blast(world, mob),
+        HereticJob::Squeeze => squeeze_medallion(world, mob, action),
     }
 }
 
@@ -103,7 +104,7 @@ pub fn interrupted(world: &mut World, mob: Entity, action: &DoAfter, job: Hereti
                 i.being_drained = false;
             }
         }
-        HereticJob::FireBlast => return,
+        HereticJob::FireBlast | HereticJob::Squeeze => return,
     }
     tell(world, action.client, Span::Warning, "прервано!");
 }
@@ -290,7 +291,24 @@ pub(super) fn do_ritual(
     if !snowflake_check(world, client, mob, def, &mut atoms) {
         return;
     }
-    let matched = match knowledge::match_recipe(def.required, &atoms) {
+    // `painting/recipe_snowflake_check` swaps the recipe for the extra item's painting.
+    let (required, results) = if def.path == PAINTING {
+        match painting_recipe(&atoms) {
+            Some(recipe) => recipe,
+            None => {
+                tell(
+                    world,
+                    client,
+                    Span::Warning,
+                    "нет дополнительного предмета!",
+                );
+                return;
+            }
+        }
+    } else {
+        (def.required, def.results)
+    };
+    let matched = match knowledge::match_recipe(required, &atoms) {
         Ok(m) => m,
         Err(missing) => {
             tell(
@@ -302,7 +320,7 @@ pub(super) fn do_ritual(
             let parts: Vec<String> = missing
                 .iter()
                 .map(|&(i, n)| {
-                    def.required[i]
+                    required[i]
                         .0
                         .iter()
                         .map(|t| knowledge::describe_required(t, n, |p| type_name(world, p)))
@@ -323,7 +341,21 @@ pub(super) fn do_ritual(
             return;
         }
     };
-    let done = finish_recipe(world, client, mob, rune, def, &matched.atoms, loc);
+    if def.kind == Kind::Summon {
+        // The atoms go when a ghost takes the summon (`summon_ritual_mob` sleeps on the poll).
+        begin_summon(
+            world,
+            client,
+            mob,
+            rune,
+            def,
+            matched.atoms,
+            matched.stacks,
+            loc,
+        );
+        return;
+    }
+    let done = finish_recipe(world, client, mob, rune, def, results, &matched.atoms, loc);
     if !done {
         return;
     }
@@ -528,12 +560,14 @@ pub(super) fn limit_check(
 }
 
 /// `on_finished_recipe`: true when the atoms are consumed.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn finish_recipe(
     world: &mut World,
     client: Entity,
     mob: Entity,
     rune: Entity,
     def: &'static KnowledgeDef,
+    results: &'static [&'static str],
     atoms: &[Entity],
     loc: TilePos,
 ) -> bool {
@@ -606,22 +640,14 @@ pub(super) fn finish_recipe(
             ascend(world, mob, def);
             true
         }
-        Kind::Summon => {
-            // shortcut: heretic monsters need basic mobs and ghost polls (not ported).
-            tell(
-                world,
-                client,
-                Span::Warning,
-                "ритуал провален, нет призраков!",
-            );
-            false
-        }
+        // Started by `do_ritual` ([`begin_summon`]).
+        Kind::Summon => false,
         _ => {
-            if def.results.is_empty() {
+            if results.is_empty() {
                 return false;
             }
             let mut made = Vec::new();
-            for result in def.results {
+            for result in results {
                 match crate::construction::spawn_obj(world, result, loc) {
                     Some(e) => made.push(e),
                     None => warn!("heretic: no prototype for {result}"),

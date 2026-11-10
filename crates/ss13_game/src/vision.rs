@@ -195,6 +195,11 @@ pub fn worn_vision(world: &World, mob: Entity) -> WornVision {
     let mut cutoff = glasses.and_then(|g| g.lighting_cutoff).unwrap_or(0.0);
     let average = (color[0] + color[1] + color[2]) / 3.0;
     let mut sight = 0;
+    // Heretic amulets and the brew of dusk and dawn (`ADD_TRAIT` without clothing traits).
+    let has_trait = |world: &World, mob: Entity, name: &str| {
+        has_trait(world, mob, name)
+            || crate::antag::heretic::server::has_heretic_vision(world, mob, name)
+    };
     if has_trait(world, mob, MESON_VISION) {
         sight |= NetSight::SEE_TURFS;
         cutoff = cutoff.max(CUTOFF_REAL_LOW - average);
