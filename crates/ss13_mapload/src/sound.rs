@@ -327,7 +327,23 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 307] = [
+    pub const GAME_CODE: [&str; 323] = [
+        "sound/effects/glug.ogg",
+        "sound/items/balloon_pop.ogg",
+        "sound/items/ceramic_break.ogg",
+        "sound/items/lighter/cig_light.ogg",
+        "sound/items/lighter/cig_snuff.ogg",
+        "sound/items/lighter/lighter_off.ogg",
+        "sound/items/lighter/lighter_on.ogg",
+        "sound/items/lighter/zippo_off.ogg",
+        "sound/items/lighter/zippo_on.ogg",
+        "sound/items/modsuit/inflate_bloon.ogg",
+        "sound/machines/clockcult/brass_skewer.ogg",
+        "sound/machines/tram/door_chime.ogg",
+        "sound/machines/tram/info_chime.ogg",
+        "sound/machines/tram/other_line_processed.ogg",
+        "sound/vehicles/car_crash.ogg",
+        "sound/vehicles/mecha/hydraulic.ogg",
         "sound/effects/bamf.ogg",
         "sound/effects/magic/staff_animation.ogg",
         "sound/effects/magic/summon_karp.ogg",

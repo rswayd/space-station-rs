@@ -740,7 +740,7 @@ fn an_ai_rides_the_unit_and_leaves_a_minicard() {
     let before = ss13_game::modsuit::server::charge(world, control);
     assert!(!relaymove(world, control, Dir::East));
     assert_eq!(ss13_game::modsuit::server::charge(world, control), before);
-    assert!(CHARGE_PER_STEP > 0.0);
+    const { assert!(CHARGE_PER_STEP > 0.0) };
 
     ai_exit_mod(world, control, ai, card);
     assert_eq!(world.get::<AiInside>(ai), Some(&AiInside::Card(card)));

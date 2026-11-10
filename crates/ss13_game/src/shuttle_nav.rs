@@ -600,7 +600,6 @@ pub fn request(world: &mut World, port: Entity, dest: Entity) -> bool {
     if nav.instant {
         // `/obj/docking_port/mobile/elevator/request`: `initiate_docking(S, force = TRUE)`.
         nav.previous = docked;
-        drop(nav);
         let moved = initiate_docking(world, port, dest);
         info!("lift shuttle {port} docked: {moved:?}");
         return moved.is_ok();

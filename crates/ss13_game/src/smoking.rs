@@ -1755,7 +1755,7 @@ mod tests {
         );
         // Under `HIGH_TEMPERATURE_REQUIRED`: a zippo cannot slice walls, the slime one can.
         assert!(zippo.heat < crate::tools::HIGH_TEMPERATURE_REQUIRED);
-        assert!(SLIME_HEAT >= crate::tools::HIGH_TEMPERATURE_REQUIRED);
+        const { assert!(SLIME_HEAT >= crate::tools::HIGH_TEMPERATURE_REQUIRED) };
         assert!(lighter_spec("/obj/item/lighterfluid").is_none());
     }
 

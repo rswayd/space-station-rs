@@ -74,6 +74,12 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `modsuit::ai`, `modsuit::construction`: the AI card and a finished control unit.
+    "/obj/item/mod/ai_minicard",
+    "/obj/item/mod/control",
+    // `modsuit::paint`, `bots::construction` (Vim) and the rest of the latest wave.
+    "/obj/item/mod/module/waddle",
+    "/obj/vehicle/sealed/mecha/vim",
     // `smoking`: butts (`type_butt`), rollies from rolling paper.
     "/obj/item/cigbutt",
     "/obj/item/cigbutt/roach",

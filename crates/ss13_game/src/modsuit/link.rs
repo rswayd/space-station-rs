@@ -291,10 +291,6 @@ pub fn can_call(world: &World, holder: Entity) -> bool {
     world.get::<CarriedBy>(holder).is_some_and(|c| alive(c.0)) && cell_charge(world, holder) > 0.0
 }
 
-fn holder_is_scryer(world: &World, holder: Entity) -> bool {
-    world.get::<Scryer>(holder).is_some()
-}
-
 /// tg `/proc/call_link`: the links on the frequency that can call, as a list.
 pub fn call_link(world: &mut World, client: Entity, user: Entity, from: Entity) {
     let Some(frequency) = world.get::<ModLink>(from).and_then(|l| l.frequency.clone()) else {

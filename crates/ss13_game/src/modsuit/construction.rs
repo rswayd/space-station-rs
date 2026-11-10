@@ -312,7 +312,7 @@ fn shell_interaction(world: &mut World, actor: Actor, held: Entity, shell: Entit
 fn set_state(world: &mut World, shell: Entity, step: ShellStep, edit: impl FnOnce(&mut ModShell)) {
     if let Some(mut s) = world.get_mut::<ModShell>(shell) {
         s.step = step;
-        edit(&mut *s);
+        edit(&mut s);
     }
     let state = format!("mod-construction_{}", step.id());
     crate::obj_damage::set_icon_state(world, shell, &state);

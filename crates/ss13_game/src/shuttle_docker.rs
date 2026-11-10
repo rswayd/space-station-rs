@@ -126,17 +126,6 @@ pub enum Landing {
 
 pub struct ShuttleDockerPlugin;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn rotation_turns_clockwise() {
-        assert_eq!(turn_cw(Dir::North), Dir::East);
-        assert_eq!(turn_cw(Dir::West), Dir::North);
-    }
-}
-
 impl Plugin for ShuttleDockerPlugin {
     fn build(&self, app: &mut App) {
         use crate::click_handlers::{AddClickHandler, ClickPhase};
@@ -234,9 +223,10 @@ fn interact(
         world.entity_mut(mob).remove::<DockerOperator>();
         return false;
     }
-    match place_landing_spot(world, console, pos) {
-        Ok(()) => tell(world, client, Span::Notice, "Transit location designated."),
-        Err(()) => tell(world, client, Span::Warning, "Invalid transit location."),
+    if place_landing_spot(world, console, pos) {
+        tell(world, client, Span::Notice, "Transit location designated.");
+    } else {
+        tell(world, client, Span::Warning, "Invalid transit location.");
     }
     true
 }
@@ -348,15 +338,21 @@ pub fn check_landing(
     Landing::Clear
 }
 
-/// tg `placeLandingSpot` with the eye on `eye`. Err when the spot is not clear.
-pub fn place_landing_spot(world: &mut World, console: Entity, eye: TilePos) -> Result<(), ()> {
-    let docker = world.get::<ShuttleDocker>(console).cloned().ok_or(())?;
-    let port = shuttle_port(world, &docker.shuttle_id).ok_or(())?;
-    let mobile = world.get::<MobileDock>(port).cloned().ok_or(())?;
+/// tg `placeLandingSpot` with the eye on `eye`: false when the spot is not clear.
+pub fn place_landing_spot(world: &mut World, console: Entity, eye: TilePos) -> bool {
+    let Some(docker) = world.get::<ShuttleDocker>(console).cloned() else {
+        return false;
+    };
+    let Some(port) = shuttle_port(world, &docker.shuttle_id) else {
+        return false;
+    };
+    let Some(mobile) = world.get::<MobileDock>(port).cloned() else {
+        return false;
+    };
     let dir = docker.dir.unwrap_or(mobile.dir);
     let port_pos = TilePos::new(eye.x - docker.offset.0, eye.y - docker.offset.1, eye.z);
     if check_landing(world, &docker, port_pos, dir) != Landing::Clear {
-        return Err(());
+        return false;
     }
     let mut my_port = docker.my_port.filter(|&p| world.get_entity(p).is_ok());
     // A port the shuttle sits on stays behind, nameless, for its takeoff.
@@ -397,5 +393,16 @@ pub fn place_landing_spot(world: &mut World, console: Entity, eye: TilePos) -> R
     if let Some(mut d) = world.get_mut::<ShuttleDocker>(console) {
         d.my_port = Some(port_e);
     }
-    Ok(())
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rotation_turns_clockwise() {
+        assert_eq!(turn_cw(Dir::North), Dir::East);
+        assert_eq!(turn_cw(Dir::West), Dir::North);
+    }
 }
