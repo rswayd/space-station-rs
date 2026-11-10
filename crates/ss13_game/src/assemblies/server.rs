@@ -1118,6 +1118,8 @@ pub fn post_signal(
     if range == 0 || area.is_some() {
         crate::events::anomalies::signal_received(world, frequency, code, area);
     }
+    // Chem implants synced to a signaler listen too (`crate::implants`).
+    crate::implants::chem_signal(world, frequency, code, from, range);
     for r in receivers {
         if range > 0 {
             let (Some(from), Some(to)) = (from, crate::explosions::turf_of(world, r)) else {

@@ -1177,6 +1177,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/vending_refill/sovietsoda",
     "/obj/structure/closet/body_bag",
     "/obj/structure/closet/body_bag/bluespace",
+    // The stealth implant's box (`ss13_game::implants::stealth`).
+    "/obj/structure/closet/cardboard/agent",
     // Mirrors hung from their frames (`ss13_game::service::barber::hang_frame`).
     "/obj/structure/mirror",
     "/obj/structure/mirror/broken",

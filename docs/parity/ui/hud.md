@@ -54,4 +54,4 @@
 Миникарта уровня станции (действие и стол-голограмма) с отметками.
 
 - **Код:** [`/datum/minimap`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/minimap/minimap.dm#L5), [`code/modules/minimap`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/minimap)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет. Сюда же перенесён имплант тактической карты ([`/obj/item/implant/tacmap`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_tacmap.dm#L1), из ../security/implants.md): кнопка `/datum/action/minimap`, отметка носителя, у ядерных оперативников — запрет на базе и рисование лидера; делается вместе с миникартой как ещё один `ImplantKind` в `crates/ss13_game/src/implants/mod.rs`

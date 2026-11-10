@@ -329,8 +329,12 @@ fn same_level(world: &World, a: Entity, b: Entity) -> bool {
     a.z == b.z || (levels.contains(&a.z) && levels.contains(&b.z))
 }
 
-/// `is_shown_on_console(console)` of an implant of `kind` in `mob`.
-fn shown(world: &World, console: Entity, mob: Entity, kind: ImplantKind) -> bool {
+/// `is_shown_on_console(console)` of the implant `id` of `kind` in `mob`.
+fn shown(world: &World, console: Entity, mob: Entity, kind: ImplantKind, id: u32) -> bool {
+    // `chem/is_shown_on_console`: not once synced to a signaler.
+    if kind == ImplantKind::Chem && crate::implants::chem_synced(world, mob, id) {
+        return false;
+    }
     // `beacon/is_shown_on_console`: any level.
     if kind == ImplantKind::Beacon {
         return crate::implants::beacon_live(world, mob);
@@ -438,7 +442,7 @@ fn apply(
         } => {
             // `locate(params["implant_ref"]) in GLOB.tracked_implants`, shown on this console.
             let (mob, kind) = implant_host(world, implant).ok_or("no such implant")?;
-            if !shown(world, console, mob, kind) {
+            if !shown(world, console, mob, kind, implant) {
                 return Err("not shown");
             }
             let question = match (action.as_str(), kind) {
@@ -660,7 +664,7 @@ fn refresh_views(world: &mut World) {
         });
         let implants: Vec<ImplantInfo> = hosts
             .iter()
-            .filter(|&&(mob, _, kind)| shown(world, console, mob, kind))
+            .filter(|&&(mob, id, kind)| shown(world, console, mob, kind, id))
             .filter_map(|&(mob, id, kind)| implant_info(world, mob, id, kind))
             .collect();
         if let Some(mut c) = world.get_mut::<PrisonerConsole>(console) {

@@ -67,6 +67,12 @@ pub struct BuiltInRadio {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct SiliconRadio(pub Entity);
 
+/// On a living mob with an internal radio implant (`crate::implants::parts`): its
+/// [`BuiltInRadio`], which `;`, `:h` and the radio's own channel keys talk into before the
+/// headset (`/mob/living/radio`).
+#[derive(Component, Clone, Copy, Debug)]
+pub struct ImplantRadio(pub Entity);
+
 /// A machine talking into its internal radio (tg `radio.talk_into(src, text, channel)`), e.g.
 /// the supermatter's warnings: always on, transmits from `z`.
 #[derive(Message, Clone, Debug)]
@@ -434,11 +440,13 @@ fn open_intercoms(
     }
 }
 
-/// `inventory_state` of a carried radio: only while its user carries it.
+/// `inventory_state` of a carried radio: only while its user carries it; an implant's radio
+/// (`deep_inventory_state`) while it is in its user.
 fn radio_window_status(
     mut windows: Query<&mut UiWindow>,
     radios: Query<&Radio>,
     carried: Query<&CarriedBy>,
+    builtin: Query<&BuiltInRadio>,
 ) {
     for mut window in &mut windows {
         if window.interface != RadioUi::NAME {
@@ -449,7 +457,10 @@ fn radio_window_status(
             .is_ok_and(|r| r.kind == RadioKind::Intercom)
             || carried
                 .get(window.source)
-                .is_ok_and(|c| c.0 == window.actor);
+                .is_ok_and(|c| c.0 == window.actor)
+            || builtin
+                .get(window.source)
+                .is_ok_and(|b| b.listener == window.actor);
         if !held {
             window.cap_status(UiStatus::Close);
         }
@@ -503,11 +514,14 @@ pub fn apply_act(radio: &mut Radio, tuning: RadioTuning, act: &RadioAct) {
 /// [`EarsWorn`] follows the ears slot (department keys need it).
 fn mark_ears(
     // A silicon's built-in radio counts as worn (`crate::silicon`).
-    mobs: Query<(Entity, &Inventory, Has<EarsWorn>), (Changed<Inventory>, Without<SiliconRadio>)>,
+    mobs: Query<
+        (Entity, &Inventory, Has<EarsWorn>, Has<ImplantRadio>),
+        (Changed<Inventory>, Without<SiliconRadio>),
+    >,
     mut commands: Commands,
 ) {
-    for (mob, inventory, marked) in &mobs {
-        match (inventory.ears.is_some(), marked) {
+    for (mob, inventory, marked, implant) in &mobs {
+        match (inventory.ears.is_some() || implant, marked) {
             (true, false) => {
                 commands.entity(mob).try_insert(EarsWorn);
             }
@@ -653,7 +667,16 @@ fn transmit_speech(
     senses: ss13_chat::server::Senses,
     mut chat: MessageWriter<SendChat>,
     mut machine: MessageReader<MachineRadio>,
-    (outage, time, machines, telecomms_levels, mut rng, understanding, mut server_logs): (
+    (
+        outage,
+        time,
+        machines,
+        telecomms_levels,
+        mut rng,
+        understanding,
+        mut server_logs,
+        implant_radios,
+    ): (
         Res<TelecommsOutage>,
         Res<Time>,
         Query<(Entity, &Telecomms, &TilePos)>,
@@ -661,6 +684,7 @@ fn transmit_speech(
         ResMut<CombatRng>,
         ss13_chat::server::Understanding,
         Query<&mut crate::telecomms_config::ServerLog>,
+        Query<&ImplantRadio>,
     ),
 ) {
     let now = time.elapsed_secs_f64();
@@ -710,14 +734,32 @@ fn transmit_speech(
                 .map(|e| (e, None))
                 .into_iter()
                 .collect(),
-            Some(channel) => mobs
-                .get(spoke.speaker)
-                .ok()
-                .and_then(|(_, inv)| inv.ears)
-                .or_else(|| silicons.get(spoke.speaker).ok().map(|r| r.0))
-                .map(|e| (e, Some(channel).filter(|c| *c != RadioTarget::Headset)))
-                .into_iter()
-                .collect(),
+            Some(channel) => {
+                // `/mob/living/radio`: a switched-on implant radio takes `;`, `:h` and its own
+                // channels.
+                let implant = implant_radios
+                    .get(spoke.speaker)
+                    .ok()
+                    .map(|r| r.0)
+                    .filter(|&r| {
+                        radios.get(r).is_ok_and(|(_, radio, ..)| {
+                            radio.on
+                                && match channel {
+                                    RadioTarget::Headset | RadioTarget::Department => true,
+                                    RadioTarget::Channel(name) => {
+                                        radio.channels.iter().any(|c| c.0 == name)
+                                    }
+                                    _ => false,
+                                }
+                        })
+                    });
+                implant
+                    .or_else(|| mobs.get(spoke.speaker).ok().and_then(|(_, inv)| inv.ears))
+                    .or_else(|| silicons.get(spoke.speaker).ok().map(|r| r.0))
+                    .map(|e| (e, Some(channel).filter(|c| *c != RadioTarget::Headset)))
+                    .into_iter()
+                    .collect()
+            }
         };
         for (device, channel) in devices {
             let Ok((e, radio, pos, carried, builtin)) = radios.get(device) else {

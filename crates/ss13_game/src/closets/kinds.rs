@@ -130,7 +130,13 @@ pub fn attach(world: &mut World, closet: Entity) {
         world.entity_mut(closet).insert(lock);
     }
     if kind == ClosetKind::Cardboard && !has_box {
-        let speed = if is_under(&path, METAL_BOX) { 2.0 } else { 1.0 };
+        let speed = if is_under(&path, METAL_BOX) {
+            2.0
+        } else if is_under(&path, crate::implants::stealth::AGENT_BOX) {
+            0.5
+        } else {
+            1.0
+        };
         world.entity_mut(closet).insert(CardboardBox {
             move_speed_multiplier: speed,
             next_move: 0.0,
@@ -780,7 +786,9 @@ pub(super) fn cardboard_step(world: &mut World, mob: Entity, closet: Entity, dir
     {
         return true;
     }
-    if crate::pull::step_once(world, closet, dir, None).is_err() {
+    if let Err(blockers) = crate::pull::step_once(world, closet, dir, None) {
+        // `agent/Bump`: a living mob in the way shows the agent box.
+        crate::implants::stealth::bumped_into(world, closet, &blockers);
         return true;
     }
     let Some(&to) = world.get::<TilePos>(closet) else {
