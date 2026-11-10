@@ -40,6 +40,8 @@ pub mod construction;
 #[cfg(feature = "server")]
 mod core;
 #[cfg(feature = "server")]
+pub(crate) use core::area_name;
+#[cfg(feature = "server")]
 pub mod mule;
 #[cfg(feature = "server")]
 pub mod sec;

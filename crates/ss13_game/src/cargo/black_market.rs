@@ -953,7 +953,7 @@ fn ship(world: &mut World) {
                 let Some(pos) = crate::events::electrical_storm::random_station_turf(world) else {
                     continue;
                 };
-                let area = crate::bots::core::area_name(world, pos);
+                let area = crate::bots::area_name(world, pos);
                 tell_buyer(
                     world,
                     purchase.uplink,
