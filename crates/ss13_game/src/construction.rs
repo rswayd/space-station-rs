@@ -310,6 +310,8 @@ pub enum Job {
     /// Safes ([`crate::safes`], [`crate::secure_safes`]).
     Safe(crate::safes::SafeJob),
     SecureSafe(crate::secure_safes::SecureSafeJob),
+    /// Picking a closet's lock (BandaStation, [`crate::closets::picklock`]).
+    Picklock(crate::closets::picklock::PicklockJob),
     /// Taking an unlit bonfire apart ([`crate::fireplace`]).
     Bonfire,
     /// Screwing, welding or repairing a law rack's module ([`crate::silicon::law_rack`]).
@@ -1474,6 +1476,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Kneecap(zone) => crate::weapons::kneecap::complete(world, mob, action, zone),
         &Job::Safe(job) => crate::safes::complete(world, action, job),
         &Job::SecureSafe(job) => crate::secure_safes::complete(world, action, job),
+        &Job::Picklock(job) => crate::closets::picklock::complete(world, mob, action, job),
         Job::Bonfire => crate::fireplace::complete_dismantle(world, action),
         &Job::LawRack(job) => crate::silicon::law_rack::complete(world, mob, action, job),
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),

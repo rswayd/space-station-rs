@@ -244,6 +244,10 @@ fn can_act(world: &World, mob: Entity) -> bool {
 /// `/datum/component/reskinable_item/sabre/on_click_alt_reskin`: the skin list. True when it
 /// handled the click; an empty sheath warns and lets the click go on.
 pub fn click_alt(world: &mut World, client: Entity, mob: Entity, sheath: Entity) -> bool {
+    // The stunsword's and the electrostaff's skins (`crate::security`).
+    if can_act(world, mob) && crate::security::click_alt(world, client, mob, sheath) {
+        return true;
+    }
     if world.get::<Reskinnable>(sheath).is_none()
         || !world
             .get::<DmItem>(sheath)

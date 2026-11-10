@@ -2,7 +2,8 @@
 //! lies and cannot move), cuffs B (B cannot pick things up), drags the cuffed B, takes the cuffs
 //! off; B steps away from a second cuffing, is cuffed with tg's fake handcuffs and resists out
 //! after their `breakouttime`. A flash knocks down a mob facing it (only its client sees the flash
-//! overlay), not one in sunglasses; a shove pushes a mob away.
+//! overlay), not one in sunglasses; a shove pushes a mob away. A screwdriver swaps a stun
+//! baton's cell; wirecutters cut cable restraints.
 
 use std::path::{Path, PathBuf};
 
@@ -13,6 +14,7 @@ use ss13_game::hud::{
     FullscreenHudData, FullscreenHudUi, HealthHudData, HealthHudUi, ScreenCategory,
 };
 use ss13_game::inventory::Inventory;
+use ss13_game::mecha::core::ItemCell;
 use ss13_game::pull::Pulling;
 use ss13_game::restraints::Handcuffed;
 use ss13_game::security::Baton;
@@ -57,7 +59,8 @@ const TYPES: &str = r##"{
     "/obj/item/melee/baton/security": { "parent": "/obj/item/melee/baton", "declared_vars": {
         "name": "stun baton", "icon_state": "stunbaton", "inhand_icon_state": "stunbaton",
         "force": 10, "active": 0, "cooldown": 25, "knockdown_time": 50, "stamina_damage": 60,
-        "stun_on_harmbaton": 1, "cell_hit_cost": 10000, "preload_cell_type": null } },
+        "stun_on_harmbaton": 1, "cell_hit_cost": 10000, "preload_cell_type": null,
+        "can_remove_cell": 1, "convertible": 1 } },
     "/obj/item/melee/baton/security/loaded": { "parent": "/obj/item/melee/baton/security",
         "declared_vars": { "preload_cell_type": {
             "path": "/obj/item/stock_parts/power_store/cell/high" } } },
@@ -73,6 +76,12 @@ const TYPES: &str = r##"{
         "used": 0 } },
     "/obj/item/restraints/handcuffs/fake": { "parent": "/obj/item/restraints/handcuffs",
         "declared_vars": { "name": "fake handcuffs", "breakouttime": 10 } },
+    "/obj/item/restraints/handcuffs/cable": { "parent": "/obj/item/restraints/handcuffs",
+        "declared_vars": { "name": "cable restraints", "breakouttime": 300 } },
+    "/obj/item/screwdriver": { "parent": "/obj/item", "declared_vars": {
+        "name": "screwdriver", "tool_behaviour": "screwdriver", "toolspeed": 1 } },
+    "/obj/item/wirecutters": { "parent": "/obj/item", "declared_vars": {
+        "name": "wirecutters", "tool_behaviour": "cutters", "toolspeed": 1 } },
     "/obj/item/restraints/legcuffs": { "parent": "/obj/item/restraints", "declared_vars": {
         "name": "leg cuffs", "icon_state": "handcuff", "slowdown": 7, "breakouttime": 10,
         "armed": 0, "trap_damage": 0, "knockdown": 0 } },
@@ -126,6 +135,22 @@ const PREFABS: &str = r##""w" = (/turf/closed/wall,/area/space)
 "l" = (/obj/item/assembly/flash/handheld,/turf/open/floor,/area/space)
 "g" = (/obj/item/clothing/glasses/sunglasses,/turf/open/floor,/area/space)
 "j" = (/obj/item/restraints/legcuffs/beartrap/prearmed,/turf/open/floor,/area/space)
+"d" = (/obj/item/screwdriver,/turf/open/floor,/area/space)
+"e" = (/obj/item/restraints/handcuffs/cable,/turf/open/floor,/area/space)
+"z" = (/obj/item/wirecutters,/turf/open/floor,/area/space)
+"##;
+
+/// A at (3,3), B at (3,4); a screwdriver (2,3), a loaded stun baton (4,3), cable restraints
+/// (2,4), wirecutters (4,4).
+const TOOLS_MAP: &str = r##"
+(1,1,1) = {"
+wwwwwwww
+wffffffw
+weszfffw
+wdsbfffw
+wffffffw
+wwwwwwww
+"}
 "##;
 
 /// Rows top-down, the last line is y = 1: A at (3,3), B at (3,4); a loaded stun baton (4,3),
@@ -191,6 +216,10 @@ fn fixture_assets(test: &str, map: &str) -> PathBuf {
         "/obj/item/melee/baton/security/loaded",
         "/obj/item/restraints/handcuffs",
         "/obj/item/restraints/handcuffs/fake",
+        "/obj/item/restraints/handcuffs/cable",
+        "/obj/item/screwdriver",
+        "/obj/item/wirecutters",
+        "/obj/item/stock_parts/power_store/cell/high",
         "/obj/item/restraints/legcuffs/beartrap/prearmed",
         "/obj/item/assembly/flash/handheld",
         "/obj/item/clothing/glasses/sunglasses",
@@ -647,4 +676,81 @@ fn bear_trap_bites_legcuffs_and_resists_out() {
         s.try_get::<ss13_game::legcuffs::Legcuffed>(a).is_none()
     });
     assert_eq!(s.pos_of(trap), s.pos_of(a), "the trap falls at A's feet");
+}
+
+/// tg `tryremovecell`, `security/item_interaction` and `/datum/element/cuffsnapping`: a
+/// screwdriver takes the stun baton's cell out with its charge, the cell goes back in; cable
+/// restraints on B come off at once under wirecutters (a right click), gone.
+#[test]
+fn baton_cell_swap_and_wirecutters_cut_cable_cuffs() {
+    let mut s = Station::start(
+        "baton_cell_swap_and_wirecutters_cut_cable_cuffs",
+        TOOLS_MAP,
+        2,
+    );
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    assert_eq!(
+        (s.pos_of(a), s.pos_of(b)),
+        (TilePos::new(3, 3, 1), TilePos::new(3, 4, 1))
+    );
+    let baton = s.item_at(TilePos::new(4, 3, 1));
+    assert_eq!(s.get::<Baton>(baton).charge, Some(100_000.0));
+
+    // The screwdriver on the baton lying there: the cell drops beside it, full.
+    let screwdriver = s.item_at(TilePos::new(2, 3, 1));
+    s.pick_up(0, screwdriver);
+    s.click(0, baton);
+    s.run_until("the cell is out", |s| {
+        s.get::<Baton>(baton).charge.is_none()
+    });
+    let cell_at = |s: &Station| {
+        let world = s.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(TilePos::new(4, 3, 1))
+            .iter()
+            .copied()
+            .find(|&e| world.get::<ItemCell>(e).is_some())
+    };
+    s.run_until("the cell lies by the baton", |s| cell_at(s).is_some());
+    let cell = cell_at(&s).unwrap();
+    assert_eq!(s.get::<ItemCell>(cell).0.charge, 100_000.0);
+    s.run_until("A reads it", |s| s.said(0, "Вы вынимаете батарею"));
+
+    // The cell back in: the baton has its charge again, the cell item is gone.
+    s.send(0, ClientIntent::DropActive);
+    s.run_until("screwdriver dropped", |s| s.held(a).is_none());
+    s.pick_up(0, cell);
+    s.click(0, baton);
+    s.run_until("the cell is in", |s| {
+        s.get::<Baton>(baton).charge == Some(100_000.0)
+    });
+    assert!(s.server.world().get_entity(cell).is_err());
+    assert!(s.held(a).is_none());
+
+    // Cable restraints on B, then wirecutters cut them at once.
+    let cable = s.item_at(TilePos::new(2, 4, 1));
+    s.pick_up(0, cable);
+    s.click(0, b);
+    s.run_until_for(10.0, "B is cuffed", |s| {
+        s.try_get::<Handcuffed>(b).map(|c| c.0) == Some(cable)
+    });
+    let cutters = s.item_at(TilePos::new(4, 4, 1));
+    s.pick_up(0, cutters);
+    s.click_with(
+        0,
+        b,
+        ClickModifiers {
+            right: true,
+            ..default()
+        },
+    );
+    s.run_until("the restraints are cut", |s| {
+        s.try_get::<Handcuffed>(b).is_none()
+    });
+    assert!(
+        s.server.world().get_entity(cable).is_err(),
+        "cut cuffs are gone"
+    );
+    assert!(!s.traits(b).hands_blocked);
 }

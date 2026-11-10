@@ -472,16 +472,17 @@ fn guns(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
 // shortcut: the flips happen at once (tg spreads them over a few seconds with sparks).
 fn batons(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
-        let (Some(dm), Some(charge)) = (
+        let (Some(dm), Some((charge, maxcharge))) = (
             world.get::<DmBaton>(ev.target).cloned(),
-            world.get::<Baton>(ev.target).and_then(|b| b.charge),
+            world
+                .get::<Baton>(ev.target)
+                .and_then(|b| b.charge.map(|c| (c, b.cell_max))),
         ) else {
             continue;
         };
         let mut charge = charge;
         if ev.hits_self() {
-            charge = (charge - cell_drain(ev.severity, modifier_by_capacity(dm.cell_maxcharge)))
-                .max(0.0);
+            charge = (charge - cell_drain(ev.severity, modifier_by_capacity(maxcharge))).max(0.0);
         }
         let flips = if charge >= dm.cell_hit_cost {
             1 + world.resource_mut::<EmpRng>().range(6, 12)

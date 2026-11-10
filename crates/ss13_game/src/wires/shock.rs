@@ -140,6 +140,18 @@ pub(crate) fn electrocute_from_node(
     electrocute_mob(world, victim, Some((node, None, true)), source, 1.0)
 }
 
+/// tg `electrocute_mob(user, get_area(source), source, siemens)`: from the APC of `source`'s
+/// area.
+pub(crate) fn electrocute_from_area(
+    world: &mut World,
+    victim: Entity,
+    source: Entity,
+    siemens: f32,
+) -> bool {
+    let power = area_power_source(world, source);
+    electrocute_mob(world, victim, power, source, siemens)
+}
+
 /// tg `electrocute_mob(victim, power_source, source, siemens_coeff, dist_check = TRUE)`.
 pub(super) fn electrocute_mob(
     world: &mut World,

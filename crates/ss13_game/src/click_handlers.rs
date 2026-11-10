@@ -32,7 +32,7 @@
 //! | 700 | `antag::wizard::server::attack_self` |
 //! | 800 | `vision::visor_attack_self` |
 //! | 893 | `antag::abductor::server::gear` (science tool, advanced baton, mental interface device modes) |
-//! | 900 | `security::attack_self` |
+//! | 900 | `security::attack_self` (baton toggles, the electrostaff's wield, the gun cane's safety, flashes) |
 //! | 989 | `service::burden` pray refill (the chaplain's revolver) |
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 1000 | `guns::attack_self` |
@@ -168,6 +168,7 @@
 //! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
+//! | 1477 | `security::item_interaction` (a screwdriver, cell, conversion kit, crystal or diamond onto a baton in the other hand) |
 //! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun) |
 //! | 1493 | `devices::table_clock::attackby` (a heavy item smashes the clock) |
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
@@ -474,6 +475,7 @@
 //! | 4263 | `syndie_spraycan::interact` (the Syndicate rune) |
 //! | 4273 | `stickers::attempt_attach` |
 //! | 4283 | `gifts::wrap_parcel` (wrapping paper on a parcel) |
+//! | 4287 | `security::item_interaction` (the same onto a baton lying around) |
 //! | 4291 | `gun_attachments::attach` (a seclite, bayonet or screwdriver on a gun lying around) |
 //! | 4300 | `tables::item_interaction` |
 //! | 4313 | `devices::table_clock::attackby` (a heavy item smashes the clock) |

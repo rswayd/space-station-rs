@@ -3,8 +3,8 @@
 //! burns on a robotic limb; wirecutters and a multitool on a laid cable.
 //!
 //! Laying goes through the RWD's `lay_cable` (the power grid and the neighbours' sprites).
-// shortcut: restraints drop at the feet (tg `put_in_hands`), no multilayer and multi-z hubs from
-// the menu (a hub needs its own layer radial), no
+// shortcut: restraints are always red (tg: the coil's colour), no multilayer and multi-z hubs
+// from the menu (a hub needs its own layer radial), no
 // shock when laying on a live net or when cutting (`shock`), a repair does one burn step per
 // click (tg loops while it can), no suit sensor repair, no custom coil colours beyond the
 // three layers.
@@ -171,7 +171,12 @@ fn make_restraints(world: &mut World, client: Entity, mob: Entity, coil: Entity)
         return;
     };
     use_stack(world, coil, RESTRAINTS_COST);
-    crate::construction::spawn_obj(world, CUFFS, pos);
+    // `user.put_in_hands(restraints)`.
+    if let Some(cuffs) = crate::construction::spawn_obj(world, CUFFS, pos)
+        && let Some(inventory) = world.get::<crate::inventory::Inventory>(mob).cloned()
+    {
+        crate::storage::put_in_hands(world, mob, &inventory, cuffs);
+    }
 }
 
 fn held_on_target(world: &mut World, c: &ClickCtx) -> bool {

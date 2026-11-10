@@ -25,11 +25,36 @@
 //!   its active item; otherwise it is staggered.
 //!
 //! Using a baton or a flash in hand (`attack_self`) toggles the baton or flashes everyone
-//! around (`AOE_flash`: confusion only).
-// shortcut: no armor (the stun's `run_armor_check`), no clumsiness, no silicon blindness (a
-// flashed cyborg is only remembered as blinded, see `flash_silicon`), no
-// sounds (but the bonk on a cyborg), sparks or baton light, no `TRAIT_BATON_RESISTANCE`, no cell removal or replacement (the cell
-// is the baton's charge), no shoves into tables, lockers or disposal bins and no directional
+//! around in view (`AOE_flash`: confusion only).
+//!
+//! Batons in detail:
+//! - the stun goes through the chest armor of the baton's `armour_type_against_stun` (less its
+//!   `stun_armour_penetration`), plays its `on_stun_sound`; a Hulk's fingers are too big for it;
+//! - a security baton's cell ([`Baton::charge`] and its type) comes out with a screwdriver and a
+//!   cell clicked onto the baton goes in (if it holds a hit); turning on and off sparks; thrown
+//!   while on it stuns at `throw_stun_chance` ([`thrown`]); a conversion kit turns it into a
+//!   police baton;
+//! - the stunprod sparks its igniter on each stun (once per 3 s) and takes a bluespace crystal
+//!   or a telecrystal (without a cell) to become a teleprod (the victim blinks up to 15 tiles,
+//!   50 for a clumsy user's own head) or a snatcherprod (the victim's held item jumps into the
+//!   user's other hand); the boomerang flies back at its thrower; nunchaku change their look
+//!   after each swing;
+//! - the electrostaff (BandaStation) is two-handed: wielding turns it on, letting go turns it
+//!   off; wielded without charge it still strikes (20 stamina, knockdown, a wooden thud); a
+//!   powered right click adds 5 burn; stunswords and electrostaves reskin once by alt-click;
+//! - the NT gun cane (BandaStation) takes a diamond and, with the safety off (`attack_self`),
+//!   fires it at what it is clicked on.
+//!
+//! Flashes in detail: the flash sound and the `cooldown` between uses; a clumsy user flashes
+//! itself half the time; the hypnotic flash never burns out and hypnotises (a trance for the
+//! vulnerable, else confusion, dizziness, drowsiness and pacifism); the arm implant overheats
+//! for 2 s instead of burning out; a cyborg's flash is restored in a recharging station.
+// shortcut: no `TRAIT_BATON_RESISTANCE`, force_say, baton or flash light, nunchaku block in
+// throw mode, the electrostaff's block charge cost and powerless halving, the stunprod and
+// boomerang crafting recipes (crafting group), flashes as assembly parts (assemblies group);
+// the cell taken out is a new cell of the same type with the charge (its other state is lost);
+// the cane's safety is toggled by using it in hand (tg: an action button); no walking-aid
+// slowdown relief of the cane. No shoves into lockers or disposal bins and no directional
 // (border) shove checks.
 
 use bevy::ecs::entity::EntityHashSet;
@@ -78,6 +103,57 @@ const CONFUSION_STACK_MAX_MULTIPLIER: f32 = 2.0;
 const FLASH_AOE_RANGE: u32 = 3;
 /// `FLASH_PROTECTION_SENSITIVE`.
 const FLASH_PROTECTION_SENSITIVE: i32 = -1;
+/// `try_use_flash`'s sound.
+const FLASH_SOUND: &str = "sound/items/weapons/flash.ogg";
+/// `clown_check`: a clumsy user's own `flash_mob(confusion_duration = 15 SECONDS)`.
+const CLUMSY_FLASH_CONFUSION: f32 = 15.0;
+/// `/obj/item/assembly/flash/hypnotic`, `/armimplant` (`flashcd` 2 s, twice that after a
+/// burnout).
+const HYPNOTIC_FLASH: &str = "/obj/item/assembly/flash/hypnotic";
+const ARM_FLASH: &str = "/obj/item/assembly/flash/armimplant";
+const ARM_FLASH_CD: f64 = 2.0;
+/// The hypnotic flash's `cooldown = 20` (deciseconds).
+const HYPNOTIC_COOLDOWN: f64 = 2.0;
+
+/// Baton types with their own behaviour.
+pub const CLASSIC_BATON: &str = "/obj/item/melee/baton";
+const CONTRACTOR_BATON: &str = "/obj/item/melee/baton/telescopic/contractor_baton";
+const STUNSWORD: &str = "/obj/item/melee/baton/security/stunsword";
+const CATTLEPROD: &str = "/obj/item/melee/baton/security/cattleprod";
+const TELEPROD: &str = "/obj/item/melee/baton/security/cattleprod/teleprod";
+const SNATCHERPROD: &str = "/obj/item/melee/baton/security/cattleprod/telecrystalprod";
+const BOOMERANG: &str = "/obj/item/melee/baton/security/boomerang";
+const NUNCHAKU: &str = "/obj/item/melee/baton/nunchaku";
+/// BandaStation `modular_bandastation/weapon/code/melee/electrostaff.dm`, `baton.dm`.
+pub const ELECTROSTAFF: &str = "/obj/item/melee/baton/security/electrostaff";
+const NT_CANE_GUN: &str = "/obj/item/melee/baton/nt_cane/gun";
+const CONVERSION_KIT: &str = "/obj/item/conversion_kit";
+const BLUESPACE_CRYSTAL: &str = "/obj/item/stack/ore/bluespace_crystal";
+const TELECRYSTAL: &str = "/obj/item/stack/telecrystal";
+const DIAMOND: &str = "/obj/item/stack/sheet/mineral/diamond";
+const POWER_CELL: &str = "/obj/item/stock_parts/power_store/cell";
+/// `SFX_SPARKS` of `turn_on`/`turn_off`, at 75.
+const SPARKS_SOUND: &str = "sparks";
+/// The cattleprod's igniter: `/obj/item/assembly/activate`'s `next_activate` 3 s.
+const SPARKLER_COOLDOWN: f64 = 3.0;
+/// `do_teleport` precision of the teleprod (`clumsy ? 50 : 15`).
+const TELEPROD_PRECISION: i32 = 15;
+const TELEPROD_CLUMSY_PRECISION: i32 = 50;
+/// `/datum/component/boomerang`: `throw_range + 2`, and `BOOMERANG_REBOUND_INTERVAL`.
+const BOOMERANG_RANGE: u32 = 7;
+/// The electrostaff: `block_chance_two_handed`, `burn_damage`, `depleted_stamina_damage`,
+/// `depleted_hit_sound`, `sound_on`.
+pub const ELECTROSTAFF_BLOCK: f32 = 50.0;
+const ELECTROSTAFF_BURN: f32 = 5.0;
+const ELECTROSTAFF_DEPLETED_STAMINA: f32 = 20.0;
+const WOOD_HIT_SOUND: &str = "sound/effects/woodhit.ogg";
+const ELECTROSTAFF_SOUND_ON: &str = "modular_bandastation/weapon/sound/melee/electrostaff_on.ogg";
+/// The gun cane: `fire_cooldown` 1.5 s, `safety_toggle_cooldown` 3 s, its sounds.
+const CANE_FIRE_COOLDOWN: f64 = 1.5;
+const CANE_SAFETY_COOLDOWN: f64 = 3.0;
+const CANE_LOAD_SOUND: &str = "sound/effects/clock_tick.ogg";
+const CANE_SHOT_SOUND: &str = "sound/items/weapons/effects/ric1.ogg";
+const CANE_SAFETY_SOUND: &str = "sound/items/modsuit/atrocinator_step.ogg";
 
 /// Attackers whose click on a mob this tick was handled here; `crate::combat` skips them.
 #[derive(Resource, Default, Debug)]
@@ -90,11 +166,37 @@ pub struct Baton {
     /// Joules left in the cell; `None`: no cell (a classic or telescopic baton, or an empty
     /// stun baton).
     pub charge: Option<f64>,
+    /// The cell's `maxcharge` and `chargerate` (watts) and its type, while it has one.
+    pub cell_max: f64,
+    pub cell_rate: f64,
+    pub cell_path: String,
     /// `Time::elapsed_secs_f64` before which it cannot stun again.
     pub ready_at: f64,
     base_inhand: String,
     base_force: f32,
+    /// The stunprod's igniter `next_activate`.
+    sparkler_ready_at: f64,
+    /// The boomerang's `last_boomerang_throw` cooldown end.
+    rebound_ready_at: f64,
 }
+
+/// The NT gun cane (`/obj/item/melee/baton/nt_cane/gun`): `safety_on`, `diamond_loaded` and
+/// its cooldowns.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct CaneGun {
+    pub safety_on: bool,
+    pub loaded: bool,
+    fire_ready_at: f64,
+    safety_ready_at: f64,
+}
+
+/// `/datum/component/reskinable_item` of stunswords and electrostaves, until used.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BatonSkins;
+
+/// On a radial prompt: the baton whose skin is asked for.
+#[derive(Component, Clone, Copy, Debug)]
+struct BatonSkinAsk(Entity);
 
 /// A flash's live state.
 #[derive(Component, Clone, Debug, Default, PartialEq)]
@@ -103,6 +205,10 @@ pub struct Flash {
     pub burnt_out: bool,
     /// `last_used`, `Time::elapsed_secs_f64`.
     last_used: f64,
+    /// `last_trigger` of the `cooldown`.
+    last_trigger: f64,
+    /// The arm implant's `overheat`, until.
+    overheat_until: f64,
 }
 
 /// `TRAIT_IWASBATONED`: who batoned this mob, until when.
@@ -131,10 +237,15 @@ impl Plugin for SecurityServerPlugin {
     fn build(&self, app: &mut App) {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
-        // A baton toggles, a flash flashes around.
+        // A baton toggles (an electrostaff wields, a gun cane's safety), a flash flashes
+        // around.
         app.add_click_handler(ClickPhase::AttackSelf, 900, |w, c| {
             crate::security::attack_self(w, c.client, c.mob, c.target)
         });
+        // Tools, cells, kits, crystals and diamonds onto a baton in the other hand or on the
+        // floor.
+        app.add_click_handler(ClickPhase::OtherHand, 1477, item_interaction);
+        app.add_click_handler(ClickPhase::HeldOnTarget, 4287, item_interaction);
         app.init_resource::<MeleeHandled>()
             .add_systems(
                 Update,
@@ -146,6 +257,10 @@ impl Plugin for SecurityServerPlugin {
                     run_pending
                         .run_if(any_with_component::<Pending>)
                         .before(StatusSystems),
+                    cane_ranged_clicks.after(ResolveClicks),
+                    skin_answers
+                        .in_set(ss13_tgui::server::UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
                 ),
             )
             .add_observer(add_baton_state)
@@ -166,10 +281,38 @@ fn add_baton_state(
     commands.entity(entity).insert_if_new(Baton {
         active: dm.active && !dm.uses_cell,
         charge,
+        cell_max: if charge.is_some() {
+            dm.cell_maxcharge
+        } else {
+            0.0
+        },
+        cell_rate: if charge.is_some() {
+            dm.cell_chargerate
+        } else {
+            0.0
+        },
+        cell_path: if charge.is_some() {
+            dm.cell_path.clone()
+        } else {
+            String::new()
+        },
         ready_at: 0.0,
         base_inhand: item.inhand_icon_state.clone(),
         base_force: item.force,
+        sparkler_ready_at: 0.0,
+        rebound_ready_at: 0.0,
     });
+    if is_under(&dm.path, NT_CANE_GUN) {
+        commands.entity(entity).insert_if_new(CaneGun {
+            safety_on: true,
+            loaded: false,
+            fire_ready_at: 0.0,
+            safety_ready_at: 0.0,
+        });
+    }
+    if is_under(&dm.path, STUNSWORD) || is_under(&dm.path, ELECTROSTAFF) {
+        commands.entity(entity).insert_if_new(BatonSkins);
+    }
     commands.queue(move |world: &mut World| refresh_baton(world, entity));
 }
 
@@ -270,7 +413,12 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
                 true
             }
             Some(item) if world.get::<Baton>(item).is_some() => {
-                baton_attack(world, actor, item, target, click.modifiers.right, now)
+                let handled = baton_attack(world, actor, item, target, click.modifiers.right, now);
+                // The gun cane's `afterattack` with the safety off.
+                if world.get::<CaneGun>(item).is_some() {
+                    try_fire_cane(world, actor, item, target);
+                }
+                handled
             }
             Some(item) if world.get::<Flash>(item).is_some() => {
                 flash_attack(world, mob, item, target, now);
@@ -282,6 +430,13 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             // Point blank (`crate::guns`).
             Some(item) if world.get::<crate::guns::Gun>(item).is_some() => {
                 crate::guns::interact_with_mob(world, &click, item)
+            }
+            // `/datum/element/cuffsnapping`: a right click cuts the target's cuffs.
+            Some(item)
+                if click.modifiers.right
+                    && crate::restraints::cuffsnap(world, actor, item, target) =>
+            {
+                true
             }
             // tg `check_block` of the defender against a melee hit (`crate::martial`).
             Some(item) if target != mob && blocks_melee(world, mob, item, target) => {
@@ -363,6 +518,16 @@ fn blocks_melee(world: &mut World, user: Entity, item: Entity, target: Entity) -
     )
 }
 
+/// The electrostaff (`/obj/item/melee/baton/security/electrostaff`).
+fn is_staff(dm: &DmBaton) -> bool {
+    is_under(&dm.path, ELECTROSTAFF)
+}
+
+/// The electrostaff's `has_power`: a cell holding a hit.
+fn has_power(state: &Baton, dm: &DmBaton) -> bool {
+    state.charge.is_some_and(|c| c >= dm.cell_hit_cost)
+}
+
 /// tg `/obj/item/melee/baton/pre_attack` + `afterattack`. True when melee must not hit.
 fn baton_attack(
     world: &mut World,
@@ -375,18 +540,54 @@ fn baton_attack(
     let Some(dm) = world.get::<DmBaton>(baton).cloned() else {
         return false;
     };
+    let state = world.get::<Baton>(baton).cloned().expect("checked");
+    // The electrostaff's `pre_attack`: a powered right click burns too (its `afterattack`).
+    let staff_burn = harm && is_staff(&dm) && has_power(&state, &dm);
+    // `nunchaku/afterattack`: `randomize_state`.
+    if is_under(&dm.path, NUNCHAKU) {
+        randomize_nunchaku(world, baton);
+    }
+    let handled = stun_attack(world, actor, baton, &dm, &state, target, harm, now);
+    if staff_burn && !handled {
+        damage(
+            world,
+            target,
+            None,
+            crate::health::DamageType::Burn,
+            ELECTROSTAFF_BURN,
+        );
+    }
+    handled
+}
+
+/// `pre_attack` (`try_stun`, the clumsy redirect) and `afterattack` (the stun and its lines).
+#[allow(clippy::too_many_arguments)]
+fn stun_attack(
+    world: &mut World,
+    actor: Actor,
+    baton: Entity,
+    dm: &DmBaton,
+    state: &Baton,
+    target: Entity,
+    harm: bool,
+    now: f64,
+) -> bool {
     if harm && !dm.stun_on_harmbaton {
         return false;
     }
-    let state = world.get::<Baton>(baton).cloned().expect("checked");
     let combat = world.get::<CombatMode>(actor.mob).is_some_and(|c| c.0);
+    // `electrostaff/try_stun`: wielded without power it strikes as if on.
+    let active = state.active
+        || (is_staff(dm)
+            && !has_power(state, dm)
+            && crate::weapons::two_handed::is_wielded(world, baton));
     let (user, victim, item) = (
         name_of(world, actor.mob),
         name_of(world, target),
         name_of(world, baton),
     );
     // `try_stun`.
-    let can_stun = if dm.uses_cell && !state.active && !harm && !combat {
+    let can_stun = if dm.uses_cell && !active && !harm && !combat {
         if let Some(&at) = world.get::<TilePos>(target) {
             show(
                 world,
@@ -407,7 +608,18 @@ fn baton_attack(
             );
         }
         false
-    } else if !state.active {
+    } else if !active {
+        false
+    } else if crate::genetics::effects::is_hulk(world, actor.mob) {
+        // `check_chunky_fingers` (no baton is `chunky_finger_usable`).
+        if !harm {
+            tell(
+                world,
+                actor.client,
+                Span::Warning,
+                "пальцы слишком большие!",
+            );
+        }
         false
     } else if now < state.ready_at {
         if dm.uses_cell && !harm {
@@ -422,19 +634,22 @@ fn baton_attack(
             tell(world, actor.client, Span::Warning, "нельзя пока оглушить!");
         }
         false
+    } else if is_under(&dm.path, CATTLEPROD) {
+        // `cattleprod/try_stun`: `sparkler.activate()`.
+        spark_igniter(world, baton, now)
     } else {
         true
     };
     if !can_stun {
         // Harmbatons always hit; an active baton that cannot stun, or a poke, does not.
-        return !harm && (state.active || !combat);
+        return !harm && (active || !combat);
     }
     let attack_speed = world.get::<DmItem>(baton).map_or(8.0, |i| i.attack_speed);
     // Clumsy people redirect the attack: the stun and twice the force on their own head.
     if crate::genetics::is_clumsy(world, actor.mob)
         && world.resource_mut::<CombatRng>().chance(50.0)
     {
-        clumsy_baton(world, actor, baton, &dm, now, attack_speed, &user, &item);
+        clumsy_baton(world, actor, baton, dm, now, attack_speed, &user, &item);
         return true;
     }
     if !harm {
@@ -443,14 +658,14 @@ fn baton_attack(
             .entity_mut(actor.mob)
             .insert(NextMove(now + f64::from(attack_speed) / 10.0));
     }
-    finalize_baton_attack(world, baton, &dm, actor.mob, target, now);
+    finalize_baton_attack(world, baton, dm, Some(actor.mob), target, now, false);
     if let Some(&at) = world.get::<TilePos>(target) {
         // `afterattack`: a cyborg gets `get_cyborg_stun_description` (and the bonk, unless the
         // baton stuns cyborgs).
         let cyborg = world
             .get::<crate::silicon::cyborg::Cyborg>(target)
             .is_some();
-        let (visible, local, local_span) = if cyborg && stuns_cyborgs(&dm) {
+        let (visible, local, local_span) = if cyborg && stuns_cyborgs(dm) {
             (
                 format!("{user} пульсирует сенсоры {victim} с помощью {item}!"),
                 format!("Вы пульсируете сенсоры {victim} с помощью {item}!"),
@@ -500,6 +715,62 @@ fn baton_attack(
     !harm
 }
 
+/// The stunprod's igniter (`/obj/item/assembly/igniter/activate`): once per 3 s, with sparks.
+fn spark_igniter(world: &mut World, baton: Entity, now: f64) -> bool {
+    let Some(mut state) = world.get_mut::<Baton>(baton) else {
+        return false;
+    };
+    if now < state.sparkler_ready_at {
+        return false;
+    }
+    state.sparkler_ready_at = now + SPARKLER_COOLDOWN;
+    if let Some(pos) = crate::explosions::turf_of(world, baton) {
+        crate::effects::particles::do_sparks(world, 2, false, pos);
+    }
+    true
+}
+
+/// `nunchaku/randomize_state`.
+fn randomize_nunchaku(world: &mut World, baton: Entity) {
+    const STATES: [&str; 3] = ["nunchaku", "nunchaku_x", "nunchaku_y"];
+    let i = world.resource_mut::<CombatRng>().range(0, 2) as usize;
+    crate::obj_damage::set_icon_state(world, baton, STATES[i]);
+}
+
+/// `amount` of `kind` to a living mob, on `zone` or over the body.
+pub(crate) fn damage(
+    world: &mut World,
+    mob: Entity,
+    zone: Option<crate::zone::BodyZone>,
+    kind: crate::health::DamageType,
+    amount: f32,
+) {
+    if let Ok(mut entity) = world.get_entity_mut(mob)
+        && let Ok((mut health, mut stat)) = entity.get_components_mut::<(&mut Health, &mut Stat)>()
+    {
+        let mut new = *stat;
+        match zone {
+            Some(zone) => {
+                crate::health::apply_damage_zone(&mut health, &mut new, zone, kind, amount);
+            }
+            None => {
+                crate::health::apply_damage(&mut health, &mut new, kind, amount);
+            }
+        }
+        stat.set_if_neq(new);
+    }
+}
+
+/// `playsound(src, sound, vol, TRUE)` where the item is.
+fn play_at(world: &mut World, item: Entity, sound: &str, vol: f32) {
+    if sound.is_empty() {
+        return;
+    }
+    if let Some(pos) = crate::explosions::turf_of(world, item) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, vol, true));
+    }
+}
+
 /// `/obj/item/melee/baton/pre_attack` of a clumsy user (`TRAIT_CLUMSY`, `prob(50)`).
 #[allow(clippy::too_many_arguments)]
 fn clumsy_baton(
@@ -520,21 +791,15 @@ fn clumsy_baton(
         &format!("{user} случайно бьёт себя по голове {item}! Что за придурок!"),
         Span::Danger,
     );
-    finalize_baton_attack(world, baton, dm, mob, mob, now);
+    finalize_baton_attack(world, baton, dm, Some(mob), mob, now, true);
     let force = world.get::<DmItem>(baton).map_or(0.0, |i| i.force);
-    if let Ok(mut entity) = world.get_entity_mut(mob)
-        && let Ok((mut health, mut stat)) = entity.get_components_mut::<(&mut Health, &mut Stat)>()
-    {
-        let mut new = *stat;
-        crate::health::apply_damage_zone(
-            &mut health,
-            &mut new,
-            crate::zone::BodyZone::Head,
-            crate::health::DamageType::Brute,
-            2.0 * force,
-        );
-        stat.set_if_neq(new);
-    }
+    damage(
+        world,
+        mob,
+        Some(crate::zone::BodyZone::Head),
+        crate::health::DamageType::Brute,
+        2.0 * force,
+    );
     crate::animation::do_attack_animation_with(
         world,
         mob,
@@ -548,41 +813,72 @@ fn clumsy_baton(
 
 /// tg `affect_cyborg`: only the contractor baton has it.
 fn stuns_cyborgs(dm: &DmBaton) -> bool {
-    dm.path
-        .starts_with("/obj/item/melee/baton/telescopic/contractor_baton")
+    dm.path.starts_with(CONTRACTOR_BATON)
 }
 
-/// tg `finalize_baton_attack` -> `baton_effect` (+ the security baton's charge and
-/// `additional_effects_non_cyborg`), `set_batoned`.
+/// tg `finalize_baton_attack`: the cooldown, `on_stun_sound`, `baton_effect` and
+/// `set_batoned`. `user` is `None` for a baton thrown by nobody.
 fn finalize_baton_attack(
     world: &mut World,
     baton: Entity,
     dm: &DmBaton,
-    user: Entity,
+    user: Option<Entity>,
     target: Entity,
     now: f64,
+    clumsy: bool,
 ) {
     let cooldown = f64::from(dm.cooldown) / 10.0;
-    let mut state = world.get_mut::<Baton>(baton).expect("checked");
-    state.ready_at = now + cooldown;
+    if let Some(mut state) = world.get_mut::<Baton>(baton) {
+        state.ready_at = now + cooldown;
+    }
+    play_at(world, baton, &dm.on_stun_sound, dm.on_stun_volume);
+    if baton_effect(world, baton, dm, user, target, now, clumsy)
+        && let Some(user) = user
+    {
+        set_batoned(world, user, target, cooldown, now);
+    }
+}
+
+/// tg `baton_effect` (+ the security baton's charge and `additional_effects_non_cyborg`, the
+/// electrostaff's powerless strike, the prods' tricks). True when it took.
+fn baton_effect(
+    world: &mut World,
+    baton: Entity,
+    dm: &DmBaton,
+    user: Option<Entity>,
+    target: Entity,
+    now: f64,
+    clumsy: bool,
+) -> bool {
     if dm.uses_cell {
-        if let Some(mut cyborg) = world.get_mut::<crate::silicon::cyborg::Cyborg>(user) {
+        let state = world.get::<Baton>(baton).cloned().expect("checked");
+        if is_staff(dm) && !has_power(&state, dm) {
+            // `electrostaff/baton_effect` without power.
+            adjust_stamina(world, target, ELECTROSTAFF_DEPLETED_STAMINA);
+            knockdown(world, target, dm.knockdown_time / 10.0, 0.0);
+            play_at(world, baton, WOOD_HIT_SOUND, 75.0);
+            return true;
+        }
+        let holder = world.get::<CarriedBy>(baton).map(|c| c.0);
+        if let Some(mut cyborg) =
+            holder.and_then(|h| world.get_mut::<crate::silicon::cyborg::Cyborg>(h))
+        {
             // `security/baton_effect`, `iscyborg(loc)`: the cyborg's own cell pays.
             if cyborg.charge < dm.cell_hit_cost {
-                return;
+                return false;
             }
             cyborg.charge -= dm.cell_hit_cost;
         } else {
-            let mut state = world.get_mut::<Baton>(baton).expect("checked");
             // `deductcharge`: `cell.use` refuses when short; below a hit the baton turns off.
             let Some(charge) = state.charge.filter(|&c| c >= dm.cell_hit_cost) else {
-                return;
+                return false;
             };
             let left = charge - dm.cell_hit_cost;
-            state.charge = Some(left);
+            if let Some(mut b) = world.get_mut::<Baton>(baton) {
+                b.charge = Some(left);
+            }
             if state.active && left < dm.cell_hit_cost {
-                state.active = false;
-                refresh_baton(world, baton);
+                set_active(world, baton, false);
             }
         }
     }
@@ -591,23 +887,38 @@ fn finalize_baton_attack(
         .is_some()
     {
         // `baton_effect`: `if(!affect_cyborg) return FALSE`; the rest of it is the paralysis.
-        if stuns_cyborgs(dm) {
-            crate::status_effects::apply(
-                world,
-                target,
-                crate::status_effects::Incap::Paralyze,
-                STUN_TIME_CYBORG,
-            );
-            set_batoned(world, user, target, cooldown, now);
+        if !stuns_cyborgs(dm) {
+            return false;
         }
-        return;
+        crate::status_effects::apply(
+            world,
+            target,
+            crate::status_effects::Incap::Paralyze,
+            STUN_TIME_CYBORG,
+        );
+        return true;
     }
-    adjust_stamina(world, target, dm.stamina_damage);
+    // `run_armor_check(BODY_ZONE_CHEST, armour_type_against_stun, armour_penetration =
+    // stun_armour_penetration)`, then `apply_damage(stamina_damage, STAMINA, blocked)`.
+    let armor = crate::armor::getarmor(
+        world,
+        target,
+        crate::zone::BodyZone::Chest,
+        &dm.armour_type_against_stun,
+    );
+    let (armor, line) =
+        crate::armor::run_armor_check(armor, dm.stun_armour_penetration, false, None, None);
+    if let Some((span, text)) = line {
+        tell_mob(world, target, span, text);
+    }
+    adjust_stamina(
+        world,
+        target,
+        crate::armor::blocked_damage(dm.stamina_damage, armor),
+    );
     // `additional_effects_non_cyborg`: the security baton jitters (40 s), confuses and stutters
     // (16 s); the contractor baton jitters and stutters 40 s.
-    let contractor = dm
-        .path
-        .starts_with("/obj/item/melee/baton/telescopic/contractor_baton");
+    let contractor = dm.path.starts_with(CONTRACTOR_BATON);
     if dm.uses_cell || contractor {
         use crate::status_effects::{Timed, set_timed};
         set_timed(world, target, Timed::Jitter, 40.0, true);
@@ -620,6 +931,7 @@ fn finalize_baton_attack(
         );
     }
     if dm.uses_cell {
+        // `stun_override = 0`: the knockdown comes 2 s later (`apply_stun_effect_end`).
         if let Some(mut e) = effects_mut(world, target) {
             e.set_confusion_if_lower(BATON_CONFUSION);
         }
@@ -640,7 +952,130 @@ fn finalize_baton_attack(
             }
         }
     }
-    set_batoned(world, user, target, cooldown, now);
+    if is_under(&dm.path, TELEPROD) {
+        teleprod_effect(world, target, clumsy);
+    } else if is_under(&dm.path, SNATCHERPROD) {
+        snatcherprod_effect(world, baton, user, target, clumsy);
+    }
+    true
+}
+
+/// `teleprod/baton_effect`: the victim blinks away (`move_resist` of mobs is below
+/// `MOVE_FORCE_OVERPOWERING`).
+fn teleprod_effect(world: &mut World, target: Entity, clumsy: bool) {
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return;
+    };
+    let precision = if clumsy {
+        TELEPROD_CLUMSY_PRECISION
+    } else {
+        TELEPROD_PRECISION
+    };
+    crate::teleport::do_teleport(
+        world,
+        target,
+        pos,
+        crate::teleport::Tele {
+            precision,
+            channel: crate::teleport::Channel::Bluespace,
+            ..default()
+        },
+    );
+}
+
+/// `telecrystalprod/baton_effect`: the victim's held item jumps into the user's other hand (or
+/// at its feet); a clumsy user loses the prod to a blink.
+fn snatcherprod_effect(
+    world: &mut World,
+    baton: Entity,
+    user: Option<Entity>,
+    target: Entity,
+    clumsy: bool,
+) {
+    let Some(user) = user else {
+        return;
+    };
+    let Some(stuff) = world
+        .get::<Inventory>(target)
+        .and_then(Inventory::active_item)
+    else {
+        return;
+    };
+    if crate::inventory::no_drop(world, stuff) {
+        return;
+    }
+    if let Some(mut inventory) = world.get_mut::<Inventory>(target) {
+        for hand in inventory.hands.iter_mut() {
+            if *hand == Some(stuff) {
+                *hand = None;
+            }
+        }
+    }
+    world.entity_mut(stuff).remove::<CarriedBy>();
+    let name = ss13_shared::capitalize(&name_of(world, stuff));
+    let inactive = world.get::<Inventory>(user).and_then(|i| {
+        let other = 1 - i.active;
+        (i.hands[other].is_none() && crate::medical::bodyparts::has_hand(world, user, other))
+            .then_some(other)
+    });
+    let Some(&user_pos) = world.get::<TilePos>(user) else {
+        return;
+    };
+    let text = if let Some(hand) = inactive {
+        world
+            .entity_mut(stuff)
+            .remove::<TilePos>()
+            .insert(CarriedBy(user));
+        if let Some(mut inventory) = world.get_mut::<Inventory>(user) {
+            inventory.hands[hand] = Some(stuff);
+        }
+        format!(
+            "{name} внезапно появляется в руке {}!",
+            name_of(world, user)
+        )
+    } else {
+        crate::inventory::put_down(world, stuff, user_pos);
+        format!("{name} внезапно появляется!")
+    };
+    show(
+        world,
+        user_pos,
+        DEFAULT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (Span::Warning, text),
+        &[],
+    );
+    if clumsy && world.get::<CarriedBy>(baton).is_some_and(|c| c.0 == user) {
+        crate::inventory::put_down(world, baton, user_pos);
+        crate::teleport::do_teleport(
+            world,
+            baton,
+            user_pos,
+            crate::teleport::Tele {
+                precision: TELEPROD_CLUMSY_PRECISION,
+                channel: crate::teleport::Channel::Bluespace,
+                ..default()
+            },
+        );
+    }
+}
+
+/// `turn_on`/`turn_off` of a security baton: the state, the sparks sound (and sparks on), the
+/// look.
+fn set_active(world: &mut World, baton: Entity, on: bool) {
+    if let Some(mut b) = world.get_mut::<Baton>(baton) {
+        b.active = on;
+    }
+    if let Some(pos) = crate::explosions::turf_of(world, baton) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, SPARKS_SOUND, 75.0, true),
+        );
+        if on {
+            crate::effects::particles::do_sparks(world, 1, true, pos);
+        }
+    }
+    refresh_baton(world, baton);
 }
 
 /// tg `set_batoned`: `target` remembers who batoned it.
@@ -718,32 +1153,42 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         aoe_flash(world, mob, item);
         return true;
     }
+    if world.get::<CaneGun>(item).is_some() {
+        toggle_cane_safety(world, client, mob, item);
+        return true;
+    }
     let (Some(dm), Some(mut state)) = (
         world.get::<DmBaton>(item).cloned(),
         world.get::<Baton>(item).cloned(),
     ) else {
         return false;
     };
+    if is_staff(&dm) {
+        // `electrostaff/attack_self`: wield or let go; the wield turns it on ([`on_wield`]).
+        return crate::weapons::two_handed::attack_self(world, client, mob, item);
+    }
     let text = if dm.uses_cell {
         // `/obj/item/melee/baton/security/attack_self`.
         let charge = state.charge.unwrap_or(0.0);
-        if charge >= dm.cell_hit_cost && !state.active {
-            state.active = true;
+        let on = charge >= dm.cell_hit_cost && !state.active;
+        set_active(world, item, on);
+        if on {
             "включение"
+        } else if state.charge.is_none() {
+            "нет источника питания!"
+        } else if charge < dm.cell_hit_cost {
+            "не хватает заряда!"
         } else {
-            state.active = false;
-            if state.charge.is_none() {
-                "нет источника питания!"
-            } else if charge < dm.cell_hit_cost {
-                "не хватает заряда!"
-            } else {
-                "выключение"
-            }
+            "выключение"
         }
     } else if dm.telescopic {
         // `/datum/component/transforming` -> `on_transform`.
         state.active = !state.active;
-        if state.active {
+        let active = state.active;
+        world.entity_mut(item).insert(state);
+        play_at(world, item, &dm.on_sound, 50.0);
+        refresh_baton(world, item);
+        if active {
             "вытянуто"
         } else {
             "втянуто"
@@ -751,17 +1196,53 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     } else {
         return false;
     };
-    world.entity_mut(item).insert(state);
     tell(world, client, Span::Notice, text);
-    refresh_baton(world, item);
     if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
         inventory.set_changed();
     }
     true
 }
 
-/// A baton's look and live vars: `update_icon_state` of a stun baton (`_active`, `_nocell`),
-/// a telescopic baton's `_on` state, force and in-hand sprite.
+/// The electrostaff's `on_wield`/`on_unwield` (`crate::weapons::two_handed`).
+pub fn on_wield(world: &mut World, client: Option<Entity>, item: Entity, wielded: bool) {
+    let (Some(dm), Some(state)) = (
+        world.get::<DmBaton>(item).cloned(),
+        world.get::<Baton>(item).cloned(),
+    ) else {
+        return;
+    };
+    if !is_staff(&dm) {
+        return;
+    }
+    let powered = has_power(&state, &dm);
+    let text = if wielded {
+        if powered {
+            play_at(world, item, ELECTROSTAFF_SOUND_ON, 75.0);
+            set_active(world, item, true);
+            Some("включение")
+        } else if state.charge.is_none() {
+            Some("нет источника питания!")
+        } else {
+            Some("не хватает заряда!")
+        }
+    } else if state.active {
+        if powered {
+            play_at(world, item, ELECTROSTAFF_SOUND_ON, 75.0);
+        }
+        set_active(world, item, false);
+        powered.then_some("выключение")
+    } else {
+        None
+    };
+    refresh_baton(world, item);
+    if let (Some(client), Some(text)) = (client, text) {
+        tell(world, client, Span::Notice, text);
+    }
+}
+
+/// A baton's look and live vars: `update_icon_state` of a stun baton (`_active`, `_nocell`;
+/// the electrostaff's `_wield`, `_nocell_wield`), a telescopic baton's `_on` state, force and
+/// in-hand sprite.
 pub fn refresh_baton(world: &mut World, item: Entity) {
     let (Some(dm), Some(state)) = (
         world.get::<DmBaton>(item).cloned(),
@@ -775,24 +1256,43 @@ pub fn refresh_baton(world: &mut World, item: Entity) {
     else {
         return;
     };
+    // `active_changes_inhand = FALSE` of the stunprod and the boomerang.
+    let inhand_follows = !is_under(&dm.path, CATTLEPROD) && !is_under(&dm.path, BOOMERANG);
     let (icon_state, inhand, force) = if dm.telescopic {
         if state.active {
             let inhand = dm.on_inhand_icon_state.clone();
-            (format!("{base}_on"), inhand, dm.active_force)
+            (format!("{base}_on"), inhand, Some(dm.active_force))
         } else {
-            (base.clone(), String::new(), state.base_force)
+            (base.clone(), String::new(), Some(state.base_force))
         }
+    } else if is_staff(&dm) {
+        // `electrostaff/update_icon_state`; its force is the two-handed component's.
+        let suffix = if crate::weapons::two_handed::is_wielded(world, item) {
+            if state.active && has_power(&state, &dm) {
+                "_active"
+            } else if state.charge.is_some() {
+                "_wield"
+            } else {
+                "_nocell_wield"
+            }
+        } else if state.charge.is_none() {
+            "_nocell"
+        } else {
+            ""
+        };
+        let look = format!("{base}{suffix}");
+        (look.clone(), look, None)
     } else if dm.uses_cell && state.active {
-        let inhand = format!("{}_active", state.base_inhand);
-        (format!("{base}_active"), inhand, state.base_force)
+        let inhand = if inhand_follows {
+            format!("{}_active", state.base_inhand)
+        } else {
+            state.base_inhand.clone()
+        };
+        (format!("{base}_active"), inhand, None)
     } else if dm.uses_cell && state.charge.is_none() {
-        (
-            format!("{base}_nocell"),
-            state.base_inhand.clone(),
-            state.base_force,
-        )
+        (format!("{base}_nocell"), state.base_inhand.clone(), None)
     } else {
-        (base.clone(), state.base_inhand.clone(), state.base_force)
+        (base.clone(), state.base_inhand.clone(), None)
     };
     let id = world
         .get_resource::<IconIndex>()
@@ -802,16 +1302,563 @@ pub fn refresh_baton(world: &mut World, item: Entity) {
     {
         appearance.icon_state = id;
     }
-    if let Some(mut item) = world.get_mut::<DmItem>(item)
-        && (item.inhand_icon_state != inhand || item.force != force)
-    {
-        item.inhand_icon_state = inhand;
-        item.force = force;
+    if let Some(mut item) = world.get_mut::<DmItem>(item) {
+        if item.inhand_icon_state != inhand {
+            item.inhand_icon_state = inhand;
+        }
+        if let Some(force) = force
+            && item.force != force
+        {
+            item.force = force;
+        }
     }
     if let Some(carrier) = world.get::<CarriedBy>(item).map(|c| c.0)
         && let Some(mut inventory) = world.get_mut::<Inventory>(carrier)
     {
         inventory.set_changed();
+    }
+}
+
+/// Items used on a baton (in the other hand or on the floor): a screwdriver takes the cell out
+/// (`screwdriver_act`), a cell goes in, a conversion kit (`convert`), a crystal onto a stunprod,
+/// a diamond into the gun cane.
+fn item_interaction(world: &mut World, c: &crate::click_handlers::ClickCtx) -> bool {
+    let (Some(held), target) = (c.held, c.target) else {
+        return false;
+    };
+    let Some(dm) = world.get::<DmBaton>(target).cloned() else {
+        return false;
+    };
+    if world.get::<Baton>(target).is_none() {
+        return false;
+    }
+    let held_path = world
+        .get::<DmItem>(held)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    if world.get::<CaneGun>(target).is_some() && is_under(&held_path, DIAMOND) {
+        load_cane(world, c.client, held, target);
+        return true;
+    }
+    if !dm.uses_cell {
+        return false;
+    }
+    if is_under(&held_path, CONVERSION_KIT) {
+        if !dm.convertible {
+            return false;
+        }
+        convert(world, held, target);
+        return true;
+    }
+    if crate::tools::tool_of(world, held).map(|(t, _)| t)
+        == Some(crate::tools::ToolKind::Screwdriver)
+    {
+        if remove_cell(world, c.client, target) {
+            play_at(world, target, "sound/items/tools/screwdriver.ogg", 50.0);
+        }
+        return true;
+    }
+    if is_under(&held_path, POWER_CELL) {
+        insert_cell(world, c.client, c.mob, held, target);
+        return true;
+    }
+    let upgradable = is_under(&dm.path, CATTLEPROD)
+        && !is_under(&dm.path, TELEPROD)
+        && !is_under(&dm.path, SNATCHERPROD);
+    if world.get::<ss13_mapload::DmStack>(held).is_some() && is_under(&dm.path, CATTLEPROD) {
+        upgrade_prod(world, c.client, c.mob, held, target, &held_path, upgradable);
+        return true;
+    }
+    false
+}
+
+/// `tryremovecell`: the cell drops where the baton is (`drop_location`).
+fn remove_cell(world: &mut World, client: Entity, baton: Entity) -> bool {
+    let (Some(dm), Some(state)) = (
+        world.get::<DmBaton>(baton).cloned(),
+        world.get::<Baton>(baton).cloned(),
+    ) else {
+        return false;
+    };
+    let Some(charge) = state.charge else {
+        return false;
+    };
+    if dm.cell_fixed {
+        return false;
+    }
+    let Some(pos) = crate::explosions::turf_of(world, baton) else {
+        return false;
+    };
+    // An unconverted baton does not know its cell type: a standard cell.
+    let path = if state.cell_path.is_empty() {
+        POWER_CELL
+    } else {
+        state.cell_path.as_str()
+    };
+    if let Some(cell) = crate::construction::spawn_obj(world, path, pos) {
+        // The charge after the prototype's own (`mecha::core::cell_charge`).
+        world.flush();
+        world
+            .entity_mut(cell)
+            .insert(crate::mecha::core::ItemCell(crate::power::Cell {
+                charge,
+                maxcharge: state.cell_max,
+                chargerate: state.cell_rate,
+            }));
+    }
+    if let Some(mut b) = world.get_mut::<Baton>(baton) {
+        b.charge = None;
+        b.cell_max = 0.0;
+        b.cell_rate = 0.0;
+        b.cell_path.clear();
+    }
+    // `Exited`: no cell, the baton turns off.
+    if state.active {
+        set_active(world, baton, false);
+    }
+    refresh_baton(world, baton);
+    let name = name_of(world, baton);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы вынимаете батарею из {name}."),
+    );
+    true
+}
+
+/// `security/item_interaction` with a cell.
+fn insert_cell(world: &mut World, client: Entity, mob: Entity, cell: Entity, baton: Entity) {
+    let (Some(dm), Some(state)) = (
+        world.get::<DmBaton>(baton).cloned(),
+        world.get::<Baton>(baton).cloned(),
+    ) else {
+        return;
+    };
+    let Some(data) = world.get::<crate::mecha::core::ItemCell>(cell).map(|c| c.0) else {
+        return;
+    };
+    let name = ss13_shared::capitalize(&name_of(world, baton));
+    if state.charge.is_some() {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("{name} уже имеет батарею!"),
+        );
+        return;
+    }
+    if data.maxcharge < dm.cell_hit_cost {
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("{name} нуждается в более емкой батарее."),
+        );
+        return;
+    }
+    // `transferItemToLoc`: only from the user's hands.
+    if world.get::<CarriedBy>(cell).is_none_or(|c| c.0 != mob)
+        || crate::inventory::no_drop(world, cell)
+    {
+        return;
+    }
+    let path = world
+        .get::<DmItem>(cell)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    world.despawn(cell);
+    if let Some(mut b) = world.get_mut::<Baton>(baton) {
+        b.charge = Some(data.charge);
+        b.cell_max = data.maxcharge;
+        b.cell_rate = data.chargerate;
+        b.cell_path = path;
+    }
+    refresh_baton(world, baton);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы вставляете батарею в {name}."),
+    );
+}
+
+/// `security/convert`: a police baton where the stun baton was, the kit and the baton gone.
+fn convert(world: &mut World, kit: Entity, baton: Entity) {
+    let Some(pos) = crate::explosions::turf_of(world, baton) else {
+        return;
+    };
+    crate::construction::spawn_obj(world, CLASSIC_BATON, pos);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, "sound/items/tools/drill_use.ogg", 80.0, true),
+    );
+    world.despawn(kit);
+    world.despawn(baton);
+}
+
+/// `cattleprod/item_interaction` with a stack: a bluespace crystal makes a teleprod, a
+/// telecrystal a snatcherprod (the new prod into the user's hands).
+fn upgrade_prod(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    stack: Entity,
+    prod: Entity,
+    stack_path: &str,
+    upgradable: bool,
+) {
+    let name = name_of(world, prod);
+    if !upgradable {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("{} уже улучшен!", ss13_shared::capitalize(&name)),
+        );
+        return;
+    }
+    if world.get::<Baton>(prod).is_some_and(|b| b.charge.is_some()) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            format!("Вы не можете вставить кристалл в {name} пока установлен источник питания!"),
+        );
+        return;
+    }
+    let new = if is_under(stack_path, BLUESPACE_CRYSTAL) {
+        TELEPROD
+    } else if is_under(stack_path, TELECRYSTAL) {
+        SNATCHERPROD
+    } else {
+        let what = name_of(world, stack);
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("Вы не думаете, что {what} способен хоть как-то улучшить {name}."),
+        );
+        return;
+    };
+    let what = name_of(world, stack);
+    if !crate::tools::use_stack(world, stack, 1) {
+        return;
+    }
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы крепко вставляете {what} в воспламенитель."),
+    );
+    let Some(pos) = world.get::<TilePos>(mob).copied() else {
+        return;
+    };
+    world.despawn(prod);
+    if let Some(new) = crate::construction::spawn_obj(world, new, pos)
+        && let Some(inventory) = world.get::<Inventory>(mob).cloned()
+    {
+        crate::storage::put_in_hands(world, mob, &inventory, new);
+    }
+}
+
+/// `/obj/item/melee/baton/security/throw_impact`: an active security baton that was not
+/// caught stuns what it hit at `throw_stun_chance`; a boomerang flies back at its thrower.
+pub fn thrown(world: &mut World, item: Entity, hit: Option<Entity>, thrower: Option<Entity>) {
+    let (Some(dm), Some(state)) = (
+        world.get::<DmBaton>(item).cloned(),
+        world.get::<Baton>(item).cloned(),
+    ) else {
+        return;
+    };
+    if is_under(&dm.path, NUNCHAKU) {
+        // `nunchaku/after_throw`.
+        randomize_nunchaku(world, item);
+    }
+    if world.get::<CarriedBy>(item).is_some() {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(hit) = hit
+        && dm.uses_cell
+        && state.active
+        && world.get::<Health>(hit).is_some()
+        && world
+            .resource_mut::<CombatRng>()
+            .chance(dm.throw_stun_chance)
+    {
+        finalize_baton_attack(world, item, &dm, thrower, hit, now, false);
+    }
+    // `/datum/component/boomerang`: `return_hit_throw`, `return_missed_throw`.
+    if is_under(&dm.path, BOOMERANG)
+        && now >= state.rebound_ready_at
+        && let Some(thrower) = thrower
+        && let Some(&to) = world.get::<TilePos>(thrower)
+    {
+        if let Some(mut b) = world.get_mut::<Baton>(item) {
+            b.rebound_ready_at = now + 1.0;
+        }
+        let name = ss13_shared::capitalize(&name_of(world, item));
+        if let Some(&at) = world.get::<TilePos>(item) {
+            show(
+                world,
+                at,
+                DEFAULT_MESSAGE_RANGE,
+                ChatChannel::Combat,
+                (
+                    Span::Danger,
+                    format!("{name} летит обратно к {}!", name_of(world, thrower)),
+                ),
+                &[(
+                    thrower,
+                    Span::Danger,
+                    format!("{name} летит обратно к вам!"),
+                )],
+            );
+        }
+        let speed = world
+            .get::<DmItem>(item)
+            .map_or(1.0, |i| i.throw_speed.max(1.0));
+        if crate::throw::throw_at(world, item, to, BOOMERANG_RANGE, speed)
+            && let Some(mut flight) = world.get_mut::<crate::throw::Thrown>(item)
+        {
+            flight.thrower = Some(thrower);
+            flight.target = Some(thrower);
+        }
+    }
+}
+
+/// `try_load_diamond`.
+fn load_cane(world: &mut World, client: Entity, diamond: Entity, cane: Entity) {
+    if world.get::<CaneGun>(cane).is_some_and(|g| g.loaded) {
+        tell(world, client, Span::Warning, "уже заряжена!");
+        return;
+    }
+    if crate::tools::use_stack(world, diamond, 1)
+        && let Some(mut gun) = world.get_mut::<CaneGun>(cane)
+    {
+        gun.loaded = true;
+    }
+    play_at(world, cane, CANE_LOAD_SOUND, 50.0);
+    tell(world, client, Span::Notice, "заряжено");
+}
+
+/// `toggle_safety` (tg's action button; here the cane used in the active hand).
+fn toggle_cane_safety(world: &mut World, client: Entity, mob: Entity, cane: Entity) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if world.get::<Inventory>(mob).and_then(Inventory::active_item) != Some(cane) {
+        tell(world, client, Span::Warning, "возьмите в активную руку!");
+        return;
+    }
+    let Some(mut gun) = world.get_mut::<CaneGun>(cane) else {
+        return;
+    };
+    if now < gun.safety_ready_at {
+        tell(world, client, Span::Warning, "перезарядка!");
+        return;
+    }
+    gun.safety_ready_at = now + CANE_SAFETY_COOLDOWN;
+    gun.safety_on = !gun.safety_on;
+    let on = gun.safety_on;
+    let text = if on {
+        "предохранитель: включён."
+    } else {
+        "предохранитель: выключен."
+    };
+    tell(world, client, Span::Notice, text);
+    // `play_safety_sound`.
+    // shortcut: the three clicks play at once (tg spaces them 0.5 s apart).
+    play_at(world, cane, CANE_SAFETY_SOUND, 50.0);
+}
+
+/// `try_fire_diamond`: true when the click was the cane's shot (fired or refused).
+fn try_fire_cane(world: &mut World, actor: Actor, cane: Entity, target: Entity) -> bool {
+    let Some(gun) = world.get::<CaneGun>(cane).copied() else {
+        return false;
+    };
+    if gun.safety_on || !gun.loaded {
+        return false;
+    }
+    if target == actor.mob
+        || world
+            .get::<CarriedBy>(target)
+            .is_some_and(|c| c.0 == actor.mob)
+    {
+        return true;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if now < gun.fire_ready_at {
+        tell(world, actor.client, Span::Warning, "перезарядка!");
+        return true;
+    }
+    let (Some(&from), Some(to)) = (
+        world.get::<TilePos>(actor.mob),
+        crate::explosions::turf_of(world, target),
+    ) else {
+        return true;
+    };
+    let Some(data) = world.get::<DmBaton>(cane).map(|d| d.projectile.clone()) else {
+        return true;
+    };
+    if let Some(mut g) = world.get_mut::<CaneGun>(cane) {
+        g.fire_ready_at = now + CANE_FIRE_COOLDOWN;
+        g.loaded = false;
+    }
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(from, CANE_SHOT_SOUND, 50.0, true),
+    );
+    let zone = world
+        .get::<crate::health::ZoneSelected>(actor.mob)
+        .copied()
+        .unwrap_or_default()
+        .0
+        .check_zone();
+    crate::projectile::fire(
+        world,
+        crate::projectile::Shot {
+            data: &data,
+            firer: actor.mob,
+            from,
+            target: Some(target),
+            target_pos: to,
+            zone,
+            hit_prone: world.get::<CombatMode>(actor.mob).is_some_and(|c| c.0),
+            pixel: [0, 0],
+            deviation: 0.0,
+            fired_from: Some(cane),
+        },
+    );
+    true
+}
+
+/// `ranged_interact_with_atom` of the gun cane, and its `afterattack` refusal far away.
+fn cane_ranged_clicks(
+    world: &mut World,
+    mut cursor: Local<MessageCursor<crate::click::RangedClick>>,
+) {
+    let clicks: Vec<crate::click::RangedClick> = cursor
+        .read(world.resource::<Messages<crate::click::RangedClick>>())
+        .copied()
+        .collect();
+    for click in clicks {
+        let Some(cane) = world
+            .get::<Inventory>(click.mob)
+            .and_then(Inventory::active_item)
+            .filter(|&h| world.get::<CaneGun>(h).is_some())
+        else {
+            continue;
+        };
+        let actor = Actor {
+            client: click.client,
+            mob: click.mob,
+            item: Some(cane),
+        };
+        let safety = world.get::<CaneGun>(cane).is_some_and(|g| g.safety_on);
+        if !try_fire_cane(world, actor, cane, click.target) && !safety {
+            tell(world, click.client, Span::Warning, "нет заряда!");
+        }
+    }
+}
+
+/// `/datum/atom_skin/stunsword/*` and `/datum/atom_skin/electrostaff/*`: `preview_name` and
+/// the new icon state (sorted by name, as the radial lists them).
+const STUNSWORD_SKINS: [(&str, &str); 2] =
+    [("Default", "stunsword"), ("Energy", "stunsword_energy")];
+const ELECTROSTAFF_SKINS: [(&str, &str); 4] = [
+    ("Blue", "electrostaff_blue"),
+    ("Orange", "electrostaff_orange"),
+    ("Purple", "electrostaff_purple"),
+    ("Red", "electrostaff_red"),
+];
+
+fn skins_of(world: &World, baton: Entity) -> &'static [(&'static str, &'static str)] {
+    match world.get::<DmBaton>(baton) {
+        Some(dm) if is_under(&dm.path, STUNSWORD) => &STUNSWORD_SKINS,
+        Some(dm) if is_under(&dm.path, ELECTROSTAFF) => &ELECTROSTAFF_SKINS,
+        _ => &[],
+    }
+}
+
+/// `reskinable_item/on_click_alt_reskin` of a stunsword or electrostaff: the skin radial.
+/// True when it handled the click.
+pub fn click_alt(world: &mut World, client: Entity, mob: Entity, baton: Entity) -> bool {
+    if world.get::<BatonSkins>(baton).is_none() {
+        return false;
+    }
+    let skins = skins_of(world, baton);
+    let Some(dmi) = world.get::<DmAtom>(baton).map(|a| a.icon.clone()) else {
+        return false;
+    };
+    let choices = skins
+        .iter()
+        .map(|(name, state)| ss13_tgui::prompt::RadialChoice {
+            name: (*name).to_owned(),
+            icon: crate::radial::icon_of(world, &dmi, state),
+        })
+        .collect();
+    let title = name_of(world, baton);
+    if let Some(prompt) = crate::radial::show(
+        world,
+        crate::radial::RadialMenu {
+            client,
+            actor: mob,
+            anchor: baton,
+            title,
+            choices,
+            require_near: true,
+        },
+    ) {
+        world.entity_mut(prompt).insert(BatonSkinAsk(baton));
+    }
+    true
+}
+
+fn skin_answers(
+    world: &mut World,
+    mut cursor: Local<MessageCursor<ss13_tgui::prompt::PromptAnswered>>,
+) {
+    let answers: Vec<(
+        Entity,
+        Entity,
+        Entity,
+        Option<ss13_tgui::prompt::PromptAnswer>,
+    )> = cursor
+        .read(world.resource::<Messages<ss13_tgui::prompt::PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
+        .collect();
+    for (prompt, client, mob, answer) in answers {
+        let Some(BatonSkinAsk(baton)) = world.get::<BatonSkinAsk>(prompt).copied() else {
+            continue;
+        };
+        let Some(ss13_tgui::prompt::PromptAnswer::Item(i)) = answer else {
+            continue;
+        };
+        // Again at the moment of effect: still reskinnable and in reach.
+        let skins = skins_of(world, baton);
+        if i >= skins.len()
+            || world.get::<BatonSkins>(baton).is_none()
+            || !crate::storage::in_reach(world, mob, baton)
+        {
+            continue;
+        }
+        let (name, state) = skins[i];
+        world.entity_mut(baton).remove::<BatonSkins>();
+        // `change_base_icon_state`, `change_inhand_icon_state` (and the electrostaff's
+        // `change_worn_icon_state`).
+        if let Some(mut atom) = world.get_mut::<DmAtom>(baton) {
+            atom.icon_state = state.to_owned();
+        }
+        if let Some(mut b) = world.get_mut::<Baton>(baton) {
+            b.base_inhand = state.to_owned();
+        }
+        let staff = world.get::<DmBaton>(baton).is_some_and(is_staff);
+        if staff && let Some(mut item) = world.get_mut::<DmItem>(baton) {
+            item.worn_icon_state = state.to_owned();
+        }
+        refresh_baton(world, baton);
+        let text = format!("{} is now skinned as '{name}.'", name_of(world, baton));
+        tell(world, client, Span::Info, text);
     }
 }
 
@@ -846,14 +1893,49 @@ pub fn deviation(protection: i32, victim: TilePos, facing: Dir, attacker: TilePo
     }
 }
 
-/// tg `try_use_flash` + `flash_recharge` (`interval` 10 s, burnout chance `times_used * 3`).
-fn try_use_flash(world: &mut World, flash: Entity, now: f64) -> bool {
+fn flash_path(world: &World, flash: Entity) -> String {
+    world
+        .get::<DmItem>(flash)
+        .map(|i| i.path.clone())
+        .unwrap_or_default()
+}
+
+/// tg `try_use_flash(user)` + `flash_recharge` (`interval` 10 s, burnout chance
+/// `times_used * 3`) + `clown_check`; the arm implant's and the hypnotic flash's own rules.
+fn try_use_flash(world: &mut World, flash: Entity, user: Option<Entity>, now: f64) -> bool {
     let Some(mut state) = world.get::<Flash>(flash).cloned() else {
         return false;
     };
-    if state.burnt_out {
+    let path = flash_path(world, flash);
+    if is_under(&path, ARM_FLASH) {
+        // `armimplant/try_use_flash`: an overheat of `flashcd` instead of the burnout.
+        if now < state.overheat_until {
+            if let Some(owner) = arm_flash_owner(world, flash) {
+                tell_mob(
+                    world,
+                    owner,
+                    Span::Warning,
+                    "Ваш фотонный проектор слишком перегрет, чтобы снова использовать его так скоро!"
+                        .to_owned(),
+                );
+            }
+            return false;
+        }
+        state.overheat_until = now + ARM_FLASH_CD;
+        world.entity_mut(flash).insert(state);
+        play_at(world, flash, FLASH_SOUND, 100.0);
+        return true;
+    }
+    let cooldown = if is_under(&path, HYPNOTIC_FLASH) {
+        HYPNOTIC_COOLDOWN
+    } else {
+        0.0
+    };
+    if state.burnt_out || now < state.last_trigger + cooldown {
         return false;
     }
+    state.last_trigger = now;
+    play_at(world, flash, FLASH_SOUND, 100.0);
     state.times_used += 1;
     let recharged = ((now - state.last_used) / 10.0).floor().max(0.0) as u32;
     state.times_used = state.times_used.saturating_sub(recharged);
@@ -861,19 +1943,62 @@ fn try_use_flash(world: &mut World, flash: Entity, now: f64) -> bool {
     let burn = world
         .resource_mut::<CombatRng>()
         .chance(state.times_used as f32 * 3.0);
-    if burn {
-        state.burnt_out = true;
-    }
     world.entity_mut(flash).insert(state);
     if burn {
         burn_out(world, flash);
+        if world.get::<Flash>(flash).is_some_and(|f| f.burnt_out) {
+            return false;
+        }
+    }
+    // `clown_check`: a clumsy user flashes itself instead.
+    if let Some(user) = user
+        && crate::genetics::is_clumsy(world, user)
+        && world.resource_mut::<CombatRng>().chance(50.0)
+    {
+        flash_mob_with(world, flash, user, user, CLUMSY_FLASH_CONFUSION, false);
         return false;
     }
     true
 }
 
-/// tg `burn_out`: "burnt-out flash", the `flashburnt` overlay, the burnt in-hand sprite.
+/// The mob whose arm implant holds this flash.
+fn arm_flash_owner(world: &World, flash: Entity) -> Option<Entity> {
+    world.get::<CarriedBy>(flash).map(|c| c.0)
+}
+
+/// tg `burn_out`: "burnt-out flash", the `flashburnt` overlay, the burnt in-hand sprite. The
+/// hypnotic flash never burns out; the arm implant overheats 4 s and retracts.
 pub(crate) fn burn_out(world: &mut World, flash: Entity) {
+    let path = flash_path(world, flash);
+    if is_under(&path, HYPNOTIC_FLASH) {
+        return;
+    }
+    if is_under(&path, ARM_FLASH) {
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        if let Some(mut state) = world.get_mut::<Flash>(flash) {
+            state.overheat_until = now + 2.0 * ARM_FLASH_CD;
+        }
+        let implant = world
+            .query::<(Entity, &crate::medical::cyberimps::Implant)>()
+            .iter(world)
+            .find(|(_, i)| i.extended == Some(flash))
+            .map(|(e, _)| e);
+        if let Some(implant) = implant {
+            if let Some(owner) = arm_flash_owner(world, flash) {
+                tell_mob(
+                    world,
+                    owner,
+                    Span::Warning,
+                    "Ваш имплант фотонного проектора перегревается и отключается!".to_owned(),
+                );
+            }
+            crate::medical::cyberimps::retract(world, implant);
+        }
+        return;
+    }
+    if world.get::<Flash>(flash).is_some_and(|f| f.burnt_out) {
+        return;
+    }
     if let Some(mut state) = world.get_mut::<Flash>(flash) {
         state.burnt_out = true;
     }
@@ -969,7 +2094,11 @@ fn flash_silicon(world: &mut World, source: &FlashSource, victim: Entity, at: Ti
 
 /// tg `/obj/item/assembly/flash/attack`.
 fn flash_attack(world: &mut World, user: Entity, flash: Entity, target: Entity, now: f64) {
-    if try_use_flash(world, flash, now) && flash_mob(world, user, target, FLASH_CONFUSION, true) {
+    if !try_use_flash(world, flash, Some(user), now) {
+        return;
+    }
+    let hypnotic = is_under(&flash_path(world, flash), HYPNOTIC_FLASH);
+    if flash_mob_with(world, flash, user, target, FLASH_CONFUSION, true) && !hypnotic {
         // `COMSIG_MOB_SUCCESSFUL_FLASHED_MOB`.
         crate::antag::brother::on_successful_flash(world, user, target, flash);
         if crate::antag::revolution::server::on_successful_flash(world, user, target)
@@ -980,37 +2109,237 @@ fn flash_attack(world: &mut World, user: Entity, flash: Entity, target: Entity, 
     }
 }
 
-/// tg `AOE_flash` (range 3, every mob that sees the flash but the user).
+/// tg `AOE_flash` (range 3, every mob that sees the flash but the user: `viewers`).
 fn aoe_flash(world: &mut World, user: Entity, flash: Entity) {
     let now = world.resource::<Time>().elapsed_secs_f64();
-    if !try_use_flash(world, flash, now) {
+    if !try_use_flash(world, flash, Some(user), now) {
         return;
     }
     let Some(&at) = world.get::<TilePos>(user) else {
         return;
     };
-    let name = name_of(world, flash);
+    let name = ss13_shared::capitalize(&name_of(world, flash));
     tell_mob(
         world,
         user,
         Span::Danger,
         format!("{name} испускает ослепляющий свет!"),
     );
+    let hypnotic = is_under(&flash_path(world, flash), HYPNOTIC_FLASH);
     let targets: Vec<Entity> = world
         .resource::<SpatialIndex>()
         .in_radius(at, FLASH_AOE_RANGE)
         .filter(|&e| e != user)
         .collect();
     for target in targets {
-        if world.get::<Health>(target).is_some() {
-            tell_mob(
-                world,
-                target,
-                Span::Danger,
-                format!("{name} испускает ослепляющий свет!"),
-            );
-            flash_mob(world, user, target, FLASH_CONFUSION, false);
+        let seen = world.get::<TilePos>(target).is_some_and(|&pos| {
+            crate::mobs::ai::behaviors::can_see(world, at, pos, FLASH_AOE_RANGE)
+        });
+        if world.get::<Health>(target).is_none() || !seen {
+            continue;
         }
+        // `generic_message`.
+        let (span, text) = if hypnotic {
+            (
+                Span::Notice,
+                format!("{name} испускает успокаивающий свет..."),
+            )
+        } else {
+            (Span::Danger, format!("{name} испускает ослепляющий свет!"))
+        };
+        tell_mob(world, target, span, text);
+        flash_mob_with(world, flash, user, target, FLASH_CONFUSION, false);
+    }
+}
+
+/// The flash's own `flash_mob`: the hypnotic one hypnotises.
+fn flash_mob_with(
+    world: &mut World,
+    flash: Entity,
+    user: Entity,
+    victim: Entity,
+    confusion: f32,
+    targeted: bool,
+) -> bool {
+    if is_under(&flash_path(world, flash), HYPNOTIC_FLASH) {
+        return hypno_flash_mob(world, user, victim, confusion, targeted);
+    }
+    flash_mob(world, user, victim, confusion, targeted)
+}
+
+/// tg `hypnosis_vulnerable`.
+fn hypnosis_vulnerable(world: &World, mob: Entity) -> bool {
+    if crate::antag::revolution::server::mindshielded(world, mob) {
+        return false;
+    }
+    let effects = world
+        .get::<crate::status_effects::StatusEffects>(mob)
+        .cloned()
+        .unwrap_or_default();
+    world
+        .get::<crate::hallucination::Hallucinating>(mob)
+        .is_some()
+        || effects.drugginess > 0.0
+        || effects.unconscious > 0.0
+        || effects.sleeping > 0.0
+        || matches!(world.get::<Stat>(mob), Some(Stat::HardCrit))
+        || crate::mood::sanity(world, mob) < crate::mood::SANITY_UNSTABLE
+}
+
+/// `/obj/item/assembly/flash/hypnotic/flash_mob`: no deviation; a trance for the vulnerable,
+/// else confusion, dizziness, drowsiness and pacifism (less of them from the AOE).
+fn hypno_flash_mob(
+    world: &mut World,
+    user: Entity,
+    victim: Entity,
+    confusion: f32,
+    targeted: bool,
+) -> bool {
+    use crate::status_effects::{Timed, adjust_timed};
+    let Some(&victim_at) = world.get::<TilePos>(victim) else {
+        return false;
+    };
+    let (name_user, name_victim) = (name_of(world, user), name_of(world, victim));
+    if !crate::vision::flash_act(
+        world,
+        victim,
+        1,
+        targeted,
+        false,
+        crate::vision::FLASH_LENGTH,
+    ) {
+        if targeted {
+            show(
+                world,
+                victim_at,
+                DEFAULT_MESSAGE_RANGE,
+                ChatChannel::Combat,
+                (
+                    Span::Warning,
+                    format!("{name_user} не удаётся ослепить {name_victim} вспышкой!"),
+                ),
+                &[(
+                    user,
+                    Span::Warning,
+                    format!("Вам не удаётся гипно-ослепить {name_victim}!"),
+                )],
+            );
+        }
+        return false;
+    }
+    if !targeted {
+        tell_mob(
+            world,
+            victim,
+            Span::Notice,
+            "Какой красивый свет...".to_owned(),
+        );
+        if let Some(mut e) = effects_mut(world, victim) {
+            e.adjust_confusion_up_to(confusion, confusion * 2.0 * CONFUSION_STACK_MAX_MULTIPLIER);
+        }
+        adjust_timed(world, victim, Timed::Dizziness, 8.0, Some(40.0));
+        adjust_timed(world, victim, Timed::Drowsiness, 8.0, Some(40.0));
+        adjust_timed(world, victim, Timed::Pacify, 4.0, None);
+        return true;
+    }
+    show(
+        world,
+        victim_at,
+        DEFAULT_MESSAGE_RANGE,
+        ChatChannel::Combat,
+        (
+            Span::Danger,
+            format!("{name_user} ослепляет {name_victim} вспышкой!"),
+        ),
+        &[(
+            user,
+            Span::Danger,
+            format!("Вы гипно-ослепляете {name_victim}!"),
+        )],
+    );
+    if hypnosis_vulnerable(world, victim) {
+        // `apply_status_effect(/datum/status_effect/trance, 200, TRUE)`.
+        crate::curses::apply_trance(world, victim, 20.0, true);
+    } else {
+        tell_mob(
+            world,
+            victim,
+            Span::Hypnophrase,
+            "Свет заставляет вас чувствовать себя странно расслабленно...".to_owned(),
+        );
+        if let Some(mut e) = effects_mut(world, victim) {
+            e.adjust_confusion_up_to(
+                confusion * 2.0,
+                confusion * 2.0 * CONFUSION_STACK_MAX_MULTIPLIER,
+            );
+        }
+        adjust_timed(world, victim, Timed::Dizziness, 20.0, Some(40.0));
+        adjust_timed(world, victim, Timed::Drowsiness, 20.0, Some(40.0));
+        adjust_timed(world, victim, Timed::Pacify, 10.0, None);
+    }
+    true
+}
+
+/// `robot_model/respawn_consumable` of a cyborg in a recharging station: its flashes are
+/// whole again (`times_used = 0`, not burnt out).
+pub fn restock_flashes(world: &mut World, borg: Entity) {
+    let model = world
+        .get::<crate::silicon::cyborg::Cyborg>(borg)
+        .and_then(|c| c.model_item);
+    let mut query =
+        world.query_filtered::<(Entity, &Flash), With<crate::silicon::cyborg::RobotModule>>();
+    let worn: Vec<Entity> = query
+        .iter(world)
+        .filter(|(_, f)| f.burnt_out || f.times_used > 0)
+        .map(|(e, _)| e)
+        .collect();
+    for flash in worn {
+        let owned = world.get::<CarriedBy>(flash).is_some_and(|c| c.0 == borg)
+            || model.is_some_and(|m| {
+                world
+                    .get::<crate::storage::StoredIn>(flash)
+                    .is_some_and(|s| s.0 == m)
+            });
+        if !owned {
+            continue;
+        }
+        let was_burnt = world.get::<Flash>(flash).is_some_and(|f| f.burnt_out);
+        if let Some(mut state) = world.get_mut::<Flash>(flash) {
+            state.times_used = 0;
+            state.burnt_out = false;
+        }
+        if was_burnt {
+            unburn(world, flash);
+        }
+    }
+}
+
+/// `update_appearance` of a flash that is no longer burnt out: its name, in-hand sprite and
+/// overlay back.
+fn unburn(world: &mut World, flash: Entity) {
+    if let Some(mut dm_name) = world.get_mut::<DmName>(flash)
+        && let Some(name) = dm_name.name.strip_prefix("burnt-out ")
+    {
+        dm_name.name = name.to_owned();
+    }
+    if let Some(mut item) = world.get_mut::<DmItem>(flash) {
+        item.inhand_icon_state = "flashtool".to_owned();
+    }
+    let overlay = world
+        .get::<DmAtom>(flash)
+        .map(|a| a.icon.clone())
+        .and_then(|dmi| {
+            world
+                .get_resource::<IconIndex>()
+                .and_then(|icons| icons.get(&dmi, "flashburnt"))
+        });
+    if let (Some(id), Some(mut appearance)) = (overlay, world.get_mut::<Appearance>(flash)) {
+        appearance.overlays.retain(|o| o.icon_state != id);
+    }
+    if let Some(holder) = world.get::<CarriedBy>(flash).map(|c| c.0)
+        && let Some(mut inventory) = world.get_mut::<Inventory>(holder)
+    {
+        inventory.set_changed();
     }
 }
 

@@ -73,6 +73,11 @@ pub fn chance(
     wielded: bool,
     blade_active: Option<bool>,
 ) -> Option<f32> {
+    // BandaStation `electrostaff/hit_reaction`: 50% while wielded.
+    // shortcut: not halved without charge, no +20 against thrown things, no charge cost.
+    if is_under(path, crate::security::ELECTROSTAFF) {
+        return wielded.then_some(crate::security::ELECTROSTAFF_BLOCK);
+    }
     if clothing || melee.block_chance <= 0.0 {
         return None;
     }

@@ -44,6 +44,25 @@ pub struct DmBaton {
     pub active_force: f32,
     /// `on_inhand_icon_state` of a telescopic baton.
     pub on_inhand_icon_state: String,
+    /// `on_stun_sound` and `on_stun_volume` of `finalize_baton_attack`.
+    pub on_stun_sound: String,
+    pub on_stun_volume: f32,
+    /// The stun's `run_armor_check`: `armour_type_against_stun` (`"melee"`, `"energy"`) and
+    /// `stun_armour_penetration`.
+    pub armour_type_against_stun: String,
+    pub stun_armour_penetration: f32,
+    /// Security batons: `throw_stun_chance` percent of a thrown active baton stunning.
+    pub throw_stun_chance: f32,
+    /// The preloaded cell's type (empty without one).
+    pub cell_path: String,
+    /// `!can_remove_cell` (the cell stays in).
+    pub cell_fixed: bool,
+    /// `convertible` with a conversion kit.
+    pub convertible: bool,
+    /// Telescopic batons: `on_sound` of the extension.
+    pub on_sound: String,
+    /// `/obj/item/melee/baton/nt_cane/gun`: its `projectile_type`.
+    pub projectile: crate::guns::ProjectileData,
 }
 
 /// `/obj/item/restraints/handcuffs` vars, deciseconds.
@@ -88,12 +107,57 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             "stun_on_harmbaton",
             truthy(get("stun_on_harmbaton")).to_string(),
         ));
+        out.push(ext(
+            c,
+            "on_stun_sound",
+            str_ron(&text(get("on_stun_sound"))),
+        ));
+        out.push(ext(
+            c,
+            "on_stun_volume",
+            format!("{:?}", n("on_stun_volume") as f32),
+        ));
+        out.push(ext(
+            c,
+            "armour_type_against_stun",
+            str_ron(&text(get("armour_type_against_stun"))),
+        ));
+        out.push(ext(
+            c,
+            "stun_armour_penetration",
+            format!("{:?}", n("stun_armour_penetration") as f32),
+        ));
+        let projectile = text(get("projectile_type"));
+        if !projectile.is_empty() {
+            let data = crate::guns::projectile(types, &projectile);
+            out.push(ext(
+                c,
+                "projectile",
+                ron::to_string(&data).expect("prototype data always serializes"),
+            ));
+        }
         if is_under(path, SECURITY_BATON_ROOT) {
             out.push(ext(c, "uses_cell", "true"));
             out.push(ext(c, "cell_hit_cost", format!("{:?}", n("cell_hit_cost"))));
+            out.push(ext(
+                c,
+                "throw_stun_chance",
+                format!("{:?}", n("throw_stun_chance") as f32),
+            ));
+            out.push(ext(
+                c,
+                "cell_fixed",
+                (!truthy(get("can_remove_cell"))).to_string(),
+            ));
+            out.push(ext(
+                c,
+                "convertible",
+                truthy(get("convertible")).to_string(),
+            ));
             let cell = get("preload_cell_type")
                 .and_then(|v| v.get("path"))
                 .and_then(Value::as_str);
+            out.push(ext(c, "cell_path", str_ron(cell.unwrap_or_default())));
             for (field, var) in [
                 ("cell_maxcharge", "maxcharge"),
                 ("cell_chargerate", "chargerate"),
@@ -113,6 +177,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 .and_then(Value::as_str)
                 .unwrap_or_default();
             out.push(ext(c, "on_inhand_icon_state", str_ron(inhand)));
+            out.push(ext(c, "on_sound", str_ron(&text(get("on_sound")))));
         }
     }
     if is_under(path, HANDCUFFS_ROOT) {
@@ -132,6 +197,20 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         out.push(ext(c, "armed", truthy(get("armed")).to_string()));
     }
     out
+}
+
+/// A text or file var (`'sound/x.ogg'` is `{"resource": ...}`), a type var's `path`.
+fn text(v: Option<&Value>) -> String {
+    match v {
+        Some(Value::String(s)) => s.clone(),
+        Some(Value::Object(o)) => o
+            .get("resource")
+            .or_else(|| o.get("path"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        _ => String::new(),
+    }
 }
 
 fn str_ron(s: &str) -> String {
@@ -191,6 +270,7 @@ mod tests {
             "uses_cell: true",
             "cell_hit_cost: 10000.0",
             "cell_maxcharge: 100000.0",
+            "cell_path: \"/obj/item/stock_parts/power_store/cell/high\"",
         ] {
             assert!(loaded.contains(part), "{part} in {loaded}");
         }

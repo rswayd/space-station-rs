@@ -342,9 +342,7 @@ pub fn process_cell_charger(world: &mut World, charger: Entity, cell: Entity, dt
 /// tg `recharger/process` for a device with a cell.
 pub fn process_recharger(world: &mut World, recharger: Entity, item: Entity, dt: f64) {
     let device = match (world.get::<Baton>(item), world.get::<DmBaton>(item)) {
-        (Some(baton), Some(dm)) => baton
-            .charge
-            .map(|c| (c, dm.cell_maxcharge, dm.cell_chargerate)),
+        (Some(baton), Some(_)) => baton.charge.map(|c| (c, baton.cell_max, baton.cell_rate)),
         _ => crate::guns::energy_cell(world, item),
     }
     .or_else(|| {
