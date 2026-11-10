@@ -138,6 +138,7 @@
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 477 | `instruments::boombox::other_hand` (a music tape into the boombox in the other hand, its menu) |
 //! | 479 | `toys::item_on_item` (caps into a cap gun, toy sword tools, filling and bursting balloons, emagging a Mini-Meteor) |
+//! | 481 | `silicon::mob_cameras::repair` (cable on a broken bodycam or its jumpsuit in the other hand) |
 //! | 480 | `clothing::accessories::attach` (before a jumpsuit's holster takes the item) |
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
 //! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
@@ -233,6 +234,7 @@
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
 //! | 2653 | `cryosleep::interact` (the cryo console's window) |
 //! | 2660 | `medical::kiosk::interact` |
+//! | 2661 | `silicon::camera_advanced::attack_hand` (the advanced camera console's eye) |
 //! | 2663 | `science::xenobio_console::take_controls` (the slime console's controls) |
 //! | 2673 | `science::cell_lines::attack_hand` (microscope readout and dish removal, vat resampler and flush) |
 //! | 2683 | `antag::abductor::server::ship` (abductor console, experimentation machine, gland storage windows) |
@@ -410,6 +412,7 @@
 //! | 2703 | `airlock_controllers` (any item presses an access button or console) |
 //! | 2707 | `wallmount::frames::item_interaction` (wall frames on walls, their screwdriver and wrench) |
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
+//! | 2711 | `silicon::mob_cameras::repair` (cable on a broken bodycam or its jumpsuit) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
 //! | 2785 | `recycling::held_on_target` (belts, switches, flaps, recyclers, disposal constructs and welding, belt stacks on floors) |
 //! | 2800 | `power::chargers::item_interaction` |

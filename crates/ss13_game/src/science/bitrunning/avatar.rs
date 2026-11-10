@@ -21,7 +21,7 @@
 //!   (1 s, more when hurt) then opens; a dead or unpowered one opens at once.
 // shortcut: no outfit selection window (`NetpodOutfits`) or body scanning (`copy_body`), no
 // hacker alias, voice, skills, skillchips or disks loaded onto the avatar (`stock_gear`), no
-// bodycam, no avatar ID card or help action (the help text goes to chat), no stasis status
+// avatar ID card or help action (the help text goes to chat), no stasis status
 // effect, no red pill, no screen alerts (chat lines instead), no netpod integrity alert; the
 // avatar keeps the pod's occupant's name.
 
@@ -466,7 +466,15 @@ fn generate_avatar(world: &mut World, pos: TilePos, name: String, forced: Option
         .resource_mut::<crate::combat::CombatRng>()
         .range(0, u32::MAX);
     let look = crate::human::AppearancePrefs::random(u64::from(seed)).body();
-    let mob = crate::server::spawn_body(world, pos, name, look);
+    let mob = crate::server::spawn_body(world, pos, name.clone(), look);
+    // `AddComponent(/datum/component/simple_bodycam, ..., BITRUNNER_CAMERA_NET, emp_proof)`.
+    crate::silicon::mob_cameras::add_simple_bodycam(
+        world,
+        mob,
+        format!("Avatar {name}"),
+        "bitrunner",
+        true,
+    );
     let mut inventory = match avatar_outfit(world, forced) {
         Some((mut outfit, forced)) => {
             outfit.items.retain(|(slot, _)| {

@@ -667,6 +667,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
     rcd::examine_lines(world, target, lines);
     binoculars::examine_lines(world, target, lines);
     broadcast_camera::examine_lines(world, target, lines);
+    crate::silicon::mob_cameras::examine_lines(world, target, lines);
     door_seal::examine_lines(world, target, lines);
     table_clock::examine_lines(world, target, lines);
     rhd::examine_lines(world, target, lines);

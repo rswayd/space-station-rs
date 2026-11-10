@@ -952,7 +952,8 @@ fn nearest_free_tile(world: &World, start: TilePos) -> Option<TilePos> {
 ///
 /// A step of a mob that cannot move (tg `MOBILITY_MOVE`: hard crit, dead, `TRAIT_IMMOBILIZED`
 /// from `crate::status_effects`) is applied as blocked; a confused mob's step may turn;
-/// a dead mob's step ghostizes it (tg `client/Move`); a mob held in a grab resists first
+/// a dead mob's step ghostizes it (tg `client/Move`); a mob at an advanced camera console moves
+/// its eye; a mob held in a grab resists first
 /// (`crate::pull`); a driver's step drives its vehicle (`crate::vehicles`). A ghost (no `Mover`)
 /// takes one step per tick through `crate::ghost`.
 // Cost: per tick, one lookup per received intent and per mob with waiting steps.
@@ -963,9 +964,10 @@ pub(crate) fn forward_moves(
     mut mobs: Query<MoveItem>,
     mut requests: MessageWriter<MoveRequest>,
     mut ghost_steps: MessageWriter<GhostStep>,
-    (mut eye_steps, mut blob_steps): (
+    (mut eye_steps, mut blob_steps, mut remote_steps): (
         MessageWriter<crate::silicon::ai::EyeStep>,
         MessageWriter<crate::antag::blob::BlobStep>,
+        MessageWriter<crate::silicon::camera_advanced::RemoteEyeStep>,
     ),
     mut ghostize: MessageWriter<Ghostize>,
     mut resists: MessageWriter<MoveResist>,
@@ -1017,7 +1019,7 @@ pub(crate) fn forward_moves(
             traits,
             effects,
             closeted,
-            (eye, blob),
+            (eye, blob, remote),
             pilot,
             coma,
             (jaunting, incorporeal, observed),
@@ -1058,6 +1060,11 @@ pub(crate) fn forward_moves(
             // The blob overmind (`crate::antag::blob`), tg `/mob/eye/blob/Move`.
             _ if blob => {
                 blob_steps.write(crate::antag::blob::BlobStep { overmind: mob, dir });
+            }
+            // An advanced camera console's eye (`crate::silicon::camera_advanced`), tg
+            // `remote_control.relaymove`.
+            _ if remote => {
+                remote_steps.write(crate::silicon::camera_advanced::RemoteEyeStep { mob, dir });
             }
             // tg `phased_mob/relaymove` of an ethereal jaunt (`crate::spells`).
             _ if jaunting => {
@@ -1122,6 +1129,7 @@ type MoveItem<'a> = (
     (
         Has<crate::silicon::ai::AiEye>,
         Has<crate::antag::blob::BlobOvermind>,
+        Has<crate::silicon::camera_advanced::RemoteEyeUser>,
     ),
     Option<&'a crate::mecha::Pilot>,
     Has<crate::health::DeathComa>,

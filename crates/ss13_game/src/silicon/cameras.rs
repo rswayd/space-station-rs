@@ -19,13 +19,26 @@
 //!   the camera and the headless `CameraView` sends what the camera sees, static elsewhere.
 //!   Closing the window (or walking away, which closes it) puts the view back on the mob.
 //! - Under static nothing is replicated (tg hides mobs and objects there): a console's client
-//!   gets a `ViewMask` of its camera's view, an AI eye's client the network's chunks.
+//!   gets a `ViewMask` of its camera's view, an AI eye's client the network's chunks, an
+//!   advanced console's eye (`super::camera_advanced`) the network's chunks.
+//! - Cameras carried by mobs (bodycams, a live broadcast camera: `super::mob_cameras`) are
+//!   entities of their own on the carrier's turf; a camera that moves, changes or is
+//!   [`CameraPaused`] updates its chunks like any other ([`sync_camera`]). An [`XRay`] camera
+//!   sees every tile of its range (tg `RANGE_TURFS`).
+//! - The console's camera list is built when its window opens (tg `ui_static_data`), so
+//!   cameras built or carried in later are listed; a camera the client looks through that goes
+//!   off tells it "Статика покрывает экран!" and puts the view back.
+//! - Entertainment monitors ([`set_network_broadcast`], tg
+//!   `COMSIG_GLOB_NETWORK_BROADCAST_UPDATED`) gain and lose the networks of live shows and say
+//!   the show's announcement.
 // shortcut: all chunks with cameras are built at startup instead of tg's on-demand
 // `generate_chunk`; MetaStation's are ~1.5k chunks, see the startup log line.
 // shortcut: cameras do not lose power or break; `enabled` comes from the map, EMPs
 // (`crate::emp::machines`), Camera Failure (`crate::events::camera_failure`) and wirecutters
 // (`crate::defenses::cameras`, which also builds and takes cameras apart).
-// shortcut: `/turf/open/ai_visible` is not always visible, x-ray cameras see like the others.
+// shortcut: `/turf/open/ai_visible` is not always visible.
+// shortcut: entertainment monitors are watched like other consoles (a click next to them),
+// not from across the room (`can_watch_tv`), and keep their screen sprite.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -38,6 +51,7 @@ use ss13_net::server::{
     ControlledEntity, MASK_CHUNK, MaskId, ViewGrid, ViewMask, ViewMasks, Viewer,
 };
 use ss13_shared::TilePos;
+use ss13_shared::chat::Span;
 use ss13_shared::ui::UiStatus;
 use ss13_tgui::server::{
     AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
@@ -58,6 +72,14 @@ pub const MAX_CAMERA_RANGE: i32 = 7;
 /// The box a [`CameraViewData`] covers: the replication view radius.
 pub const VIEW_RADIUS: u8 = ss13_net::server::DEFAULT_VIEW_RADIUS as u8;
 const AUTONAME: &str = "/obj/machinery/camera/autoname";
+/// The presets that call `upgradeXRay()` / `upgradeEmpProof()` in `Initialize`.
+pub const XRAY_PRESETS: [&str; 2] = ["/obj/machinery/camera/xray", "/obj/machinery/camera/all"];
+pub const EMP_PROOF_PRESETS: [&str; 2] = [
+    "/obj/machinery/camera/emp_proof",
+    "/obj/machinery/camera/all",
+];
+/// `/obj/machinery/computer/security/telescreen/entertainment`.
+pub const ENTERTAINMENT: &str = "/obj/machinery/computer/security/telescreen/entertainment";
 /// The replication mask of the whole camera network (the AI eye); a camera's own mask (a
 /// console looking through it) is [`camera_mask`].
 pub const CAMERANET_MASK: MaskId = MaskId(u64::MAX);
@@ -79,6 +101,38 @@ pub struct Camera {
     pub view_range: u8,
     /// tg `camera_enabled`; `can_use()`.
     pub enabled: bool,
+}
+
+/// tg `CAMERA_UPGRADE_XRAY` (`upgradeXRay`): the camera sees through walls.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct XRay;
+
+/// A pausable bodycam nobody watches (BandaStation `pausable_bodycam`): listed on consoles,
+/// out of the network's chunks.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct CameraPaused;
+
+/// The camera as the network takes it.
+pub fn net_camera(cam: &Camera, pos: TilePos, xray: bool, paused: bool) -> NetCamera {
+    NetCamera {
+        pos,
+        range: cam.view_range,
+        enabled: cam.enabled && !paused,
+        xray,
+    }
+}
+
+/// Puts `camera`'s current state into the network now (tg `add_camera_to_chunk`,
+/// `remove_camera_from_chunk`, `update_visibility`).
+pub fn sync_camera(world: &mut World, camera: Entity) {
+    let Ok(e) = world.get_entity(camera) else {
+        return;
+    };
+    let (Some(cam), Some(&pos)) = (e.get::<Camera>(), e.get::<TilePos>()) else {
+        return;
+    };
+    let net = net_camera(cam, pos, e.contains::<XRay>(), e.contains::<CameraPaused>());
+    world.resource_mut::<CameraNet>().set_camera(camera, net);
 }
 
 /// Chunk coordinates: tg `GET_CHUNK_COORD` / `CHUNK_SIZE`.
@@ -110,6 +164,7 @@ pub struct NetCamera {
     pub pos: TilePos,
     pub range: u8,
     pub enabled: bool,
+    pub xray: bool,
 }
 
 /// `SScameras.chunks`: what the cameras see, per chunk.
@@ -224,7 +279,8 @@ impl CameraNet {
             if takes.is_empty() {
                 continue;
             }
-            camera_sees(cam.pos, cam.range, &opaque, &in_bounds, |p| {
+            let blocks = |p: TilePos| !cam.xray && opaque(p);
+            camera_sees(cam.pos, cam.range, &blocks, &in_bounds, |p| {
                 let key = chunk_of(p);
                 if takes.contains(&key)
                     && let Some(bits) = fresh.get_mut(&key)
@@ -413,6 +469,21 @@ fn init_cameras(world: &mut World) {
             view_range: dm.view_range.clamp(0.0, 32.0) as u8,
             enabled: dm.camera_enabled,
         });
+        // The presets' `upgradeXRay()` / `upgradeEmpProof()` in `Initialize`.
+        if XRAY_PRESETS
+            .iter()
+            .any(|p| crate::obj_damage::is_under(&dm.path, p))
+        {
+            world.entity_mut(entity).insert(XRay);
+        }
+        if EMP_PROOF_PRESETS
+            .iter()
+            .any(|p| crate::obj_damage::is_under(&dm.path, p))
+        {
+            world
+                .entity_mut(entity)
+                .insert(crate::emp::EmpProtection(crate::emp::PROTECT_ALL));
+        }
     }
 }
 
@@ -433,19 +504,13 @@ fn opacity_fns(world: &World) -> (impl Fn(TilePos) -> bool + '_, impl Fn(TilePos
 
 fn build_net(world: &mut World) {
     let start = Instant::now();
-    let mut query = world.query_filtered::<(Entity, &Camera, &TilePos), With<ss13_world::Mapped>>();
+    let mut query = world.query_filtered::<
+        (Entity, &Camera, &TilePos, Has<XRay>, Has<CameraPaused>),
+        With<ss13_world::Mapped>,
+    >();
     let cams: Vec<(Entity, NetCamera)> = query
         .iter(world)
-        .map(|(e, c, &pos)| {
-            (
-                e,
-                NetCamera {
-                    pos,
-                    range: c.view_range,
-                    enabled: c.enabled,
-                },
-            )
-        })
+        .map(|(e, c, &pos, xray, paused)| (e, net_camera(c, pos, xray, paused)))
         .collect();
     let mut net = std::mem::take(&mut *world.resource_mut::<CameraNet>());
     for (e, cam) in &cams {
@@ -482,7 +547,11 @@ fn track_opacity(
     changed: Query<(Entity, &TilePos), (With<Opaque>, Changed<TilePos>)>,
     added: Query<(Entity, &TilePos), Added<Opaque>>,
     mut removed: RemovedComponents<Opaque>,
-    cameras: Query<(Entity, &Camera, &TilePos), Changed<Camera>>,
+    cameras: Query<
+        (Entity, &Camera, &TilePos, Has<XRay>, Has<CameraPaused>),
+        Or<(Changed<Camera>, Changed<TilePos>)>,
+    >,
+    mut gone: RemovedComponents<Camera>,
     mut tiles: ResMut<OpaqueTiles>,
     mut net: ResMut<CameraNet>,
     mut started: Local<bool>,
@@ -490,7 +559,12 @@ fn track_opacity(
     // The first run sees every entity as changed; the network was built from them.
     if !std::mem::replace(&mut *started, true) {
         removed.clear();
+        gone.clear();
         return;
+    }
+    // A camera taken apart or a mob's camera gone (tg `Destroy`: `moveToNullspace`).
+    for camera in gone.read() {
+        net.remove_camera(camera);
     }
     for e in removed.read() {
         if let Some(pos) = tiles.0.remove(&e) {
@@ -505,15 +579,8 @@ fn track_opacity(
         }
         net.tile_changed(pos);
     }
-    for (e, cam, &pos) in &cameras {
-        net.set_camera(
-            e,
-            NetCamera {
-                pos,
-                range: cam.view_range,
-                enabled: cam.enabled,
-            },
-        );
+    for (e, cam, &pos, xray, paused) in &cameras {
+        net.set_camera(e, net_camera(cam, pos, xray, paused));
     }
 }
 
@@ -534,14 +601,28 @@ fn update_net(world: &mut World) {
     world.insert_resource(net);
 }
 
-fn init_consoles(world: &mut World) {
-    let mut cams = world.query::<(Entity, &Camera, &TilePos)>();
-    let mut all: Vec<(Entity, Camera, TilePos)> = cams
-        .iter(world)
-        .map(|(e, c, &p)| (e, c.clone(), p))
+/// tg `get_available_cameras_data(network)`: the cameras with a `c_tag` on one of `network`
+/// (`is_camera_available`), sorted by `c_tag` (`cmp_camera_ctag_asc`).
+pub fn camera_entries<'a>(
+    cameras: impl Iterator<Item = (Entity, &'a Camera, &'a TilePos)>,
+    network: &[String],
+) -> Vec<CameraEntry> {
+    let mut list: Vec<CameraEntry> = cameras
+        .filter(|(_, c, _)| !c.c_tag.is_empty() && c.network.iter().any(|n| network.contains(n)))
+        .map(|(e, c, p)| CameraEntry {
+            name: c.c_tag.clone(),
+            cam_ref: e.to_bits().to_string(),
+            x: p.x,
+            y: p.y,
+            z: p.z,
+            status: c.enabled,
+        })
         .collect();
-    // tg `cmp_camera_ctag_asc`.
-    all.sort_by(|a, b| a.1.c_tag.cmp(&b.1.c_tag));
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+    list
+}
+
+fn init_consoles(world: &mut World) {
     let mut consoles =
         world.query_filtered::<(Entity, &DmCameraConsole), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, Vec<String>)> = consoles
@@ -549,25 +630,12 @@ fn init_consoles(world: &mut World) {
         .map(|(e, d)| (e, d.network.iter().map(|n| n.to_lowercase()).collect()))
         .collect();
     let mut by_network: HashMap<Vec<String>, Arc<CameraConsoleStatic>> = HashMap::new();
+    let mut cams = world.query::<(Entity, &Camera, &TilePos)>();
     for (console, network) in found {
         let statics = by_network
             .entry(network.clone())
             .or_insert_with(|| {
-                // tg `is_camera_available`: a `c_tag` and a shared network.
-                let cameras = all
-                    .iter()
-                    .filter(|(_, c, _)| {
-                        !c.c_tag.is_empty() && c.network.iter().any(|n| network.contains(n))
-                    })
-                    .map(|(e, c, p)| CameraEntry {
-                        name: c.c_tag.clone(),
-                        cam_ref: e.to_bits().to_string(),
-                        x: p.x,
-                        y: p.y,
-                        z: p.z,
-                        status: c.enabled,
-                    })
-                    .collect();
+                let cameras = camera_entries(cams.iter(world), &network);
                 Arc::new(CameraConsoleStatic { network, cameras })
             })
             .clone();
@@ -575,6 +643,43 @@ fn init_consoles(world: &mut World) {
             statics,
             active: None,
         });
+    }
+}
+
+/// tg `on_network_broadcast_updated` of every entertainment monitor (`start_broadcasting_network`,
+/// `stop_broadcasting_network`): the show's networks join or leave its list, and the monitor
+/// says the announcement (`notify`).
+pub fn set_network_broadcast(
+    world: &mut World,
+    networks: &[String],
+    active: bool,
+    announcement: Option<&str>,
+) {
+    let mut q = world.query_filtered::<Entity, With<CameraConsole>>();
+    let monitors: Vec<Entity> = q
+        .iter(world)
+        .filter(|&e| {
+            crate::construction::path_of(world, e)
+                .is_some_and(|p| crate::obj_damage::is_under(&p, ENTERTAINMENT))
+        })
+        .collect();
+    for monitor in monitors {
+        let Some(mut console) = world.get_mut::<CameraConsole>(monitor) else {
+            continue;
+        };
+        let statics = Arc::make_mut(&mut console.statics);
+        for net in networks {
+            let net = net.to_lowercase();
+            let has = statics.network.contains(&net);
+            if active && !has {
+                statics.network.push(net);
+            } else if !active && has {
+                statics.network.retain(|n| *n != net);
+            }
+        }
+        if let Some(text) = announcement {
+            crate::atmos_machinery::machine_say(world, monitor, text);
+        }
     }
 }
 
@@ -645,18 +750,24 @@ impl ServerUi for CameraViewWindow {
 /// tg `/obj/machinery/computer/security` `interact` with an empty hand: the window.
 fn open_console(
     mut clicks: MessageReader<ClickResolved>,
-    consoles: Query<&DmName, (With<CameraConsole>, Without<Unpowered>)>,
+    mut consoles: Query<(&DmName, &mut CameraConsole), Without<Unpowered>>,
+    cameras: Query<(Entity, &Camera, &TilePos)>,
     inventories: Query<&Inventory>,
     mut open: MessageWriter<OpenUi>,
 ) {
     for click in clicks.read() {
-        let Ok(name) = consoles.get(click.target) else {
+        let Ok((name, mut console)) = consoles.get_mut(click.target) else {
             continue;
         };
         if inventories
             .get(click.mob)
             .is_ok_and(|i| i.active_item().is_none())
         {
+            // `ui_static_data` on open: the cameras as they are now.
+            let fresh = camera_entries(cameras.iter(), &console.statics.network);
+            if fresh != console.statics.cameras {
+                Arc::make_mut(&mut console.statics).cameras = fresh;
+            }
             open.write(OpenUi::new::<CameraConsoleWindow>(
                 click.client,
                 click.mob,
@@ -718,12 +829,15 @@ fn follow_console_views(
         let open_window = windows.iter().any(|w| {
             w.client == client && w.source == view.console && w.interface == CameraConsoleUi::NAME
         });
-        let active = consoles
-            .get(view.console)
-            .ok()
-            .and_then(|c| c.active)
-            .filter(|&cam| cameras.get(cam).is_ok_and(|(c, _)| c.enabled));
+        let chosen = consoles.get(view.console).ok().and_then(|c| c.active);
+        let active = chosen.filter(|&cam| cameras.get(cam).is_ok_and(|(c, _)| c.enabled));
         let Some(camera) = active.filter(|_| open_window) else {
+            // tg `toggle_cam` / `emp_act`: whoever looks through a camera that goes off.
+            if open_window && chosen.is_some() && view.camera.is_some() {
+                commands.queue(move |world: &mut World| {
+                    crate::tools::tell(world, client, Span::Warning, "Статика покрывает экран!");
+                });
+            }
             commands
                 .entity(client)
                 .remove::<(ConsoleView, ViewOverride)>();
@@ -740,17 +854,21 @@ fn follow_console_views(
             }
             continue;
         };
+        let Ok((_, &pos)) = cameras.get(camera) else {
+            continue;
+        };
         if view.camera == Some(camera) {
+            // A camera on the move (a bodycam): tg `update_active_camera_screen` from its turf.
+            if viewer.center != pos {
+                viewer.center = pos;
+                commands.entity(camera).try_insert(NeedsView);
+            }
             continue;
         }
         view.camera = Some(camera);
-        let Ok((cam, &pos)) = cameras.get(camera) else {
-            continue;
-        };
         viewer.center = pos;
         // tg `update_active_camera_screen`: only what this camera sees, static elsewhere
         // (`refresh_camera_views` fills the bits).
-        let _ = cam;
         commands.entity(camera).try_insert((
             CameraViewSource(CameraViewData {
                 center: pos,
@@ -784,11 +902,13 @@ fn refresh_camera_views(world: &mut World) {
         .iter(world)
         .filter_map(|v| v.camera)
         .collect();
-    let mut query = world
-        .query_filtered::<(Entity, &Camera, &TilePos, Has<NeedsView>), With<CameraViewSource>>();
-    let targets: Vec<(Entity, u8, TilePos)> = query
+    let mut query = world.query_filtered::<
+        (Entity, &Camera, &TilePos, Has<NeedsView>, Has<XRay>),
+        With<CameraViewSource>,
+    >();
+    let targets: Vec<(Entity, u8, TilePos, bool)> = query
         .iter(world)
-        .filter(|&(camera, cam, pos, needs)| {
+        .filter(|&(camera, cam, pos, needs, _)| {
             needs
                 || (watched.contains(&camera)
                     && changes.iter().any(|c| {
@@ -796,13 +916,14 @@ fn refresh_camera_views(world: &mut World) {
                             .is_some_and(|d| d <= u32::from(cam.view_range))
                     }))
         })
-        .map(|(e, c, &p, _)| (e, c.view_range, p))
+        .map(|(e, c, &p, _, xray)| (e, c.view_range, p, xray))
         .collect();
-    for (camera, range, pos) in targets {
+    for (camera, range, pos, xray) in targets {
         let seen = {
             let (opaque, in_bounds) = opacity_fns(world);
+            let blocks = |p: TilePos| !xray && opaque(p);
             let mut seen = HashSet::new();
-            camera_sees(pos, range, &opaque, &in_bounds, |p| {
+            camera_sees(pos, range, &blocks, &in_bounds, |p| {
                 seen.insert(p);
             });
             seen
@@ -814,9 +935,10 @@ fn refresh_camera_views(world: &mut World) {
         let mut e = world.entity_mut(camera);
         e.remove::<NeedsView>();
         if let Some(mut source) = e.get_mut::<CameraViewSource>()
-            && source.0.visible != bits
+            && (source.0.visible != bits || source.0.center != pos)
         {
             source.0.visible = bits;
+            source.0.center = pos;
         }
     }
 }
@@ -836,11 +958,14 @@ fn assign_view_masks(
     >,
     eyes: Query<&super::ai::AiEye>,
     inside: Query<&super::ai::AiInside>,
+    remote: Query<(), With<super::camera_advanced::RemoteEyeUser>>,
     mut commands: Commands,
 ) {
     for (client, console, controlled, mask) in &clients {
         let want = match console.and_then(|c| c.camera) {
             Some(camera) => Some(camera_mask(camera)),
+            // An advanced console's eye sees what the network sees.
+            None if controlled.is_some_and(|c| remote.contains(c.0)) => Some(CAMERANET_MASK),
             None => controlled.and_then(|c| eyes.get(c.0).ok()).and_then(|eye| {
                 match inside.get(eye.ai) {
                     // A carded AI sees around the card without cameras.
@@ -869,6 +994,8 @@ fn close_stale_views(
     mut windows: Query<&mut UiWindow>,
     views: Query<&ConsoleView>,
     eyes: Query<(), With<super::ai::AiEye>>,
+    controls: Query<&ControlledEntity>,
+    remote: Query<&super::camera_advanced::RemoteEyeUser>,
 ) {
     for mut window in &mut windows {
         if window.interface != CameraViewUi::NAME || eyes.contains(window.source) {
@@ -876,7 +1003,12 @@ fn close_stale_views(
         }
         let watching = views
             .get(window.client)
-            .is_ok_and(|v| v.camera == Some(window.source));
+            .is_ok_and(|v| v.camera == Some(window.source))
+            || controls
+                .get(window.client)
+                .ok()
+                .and_then(|c| remote.get(c.0).ok())
+                .is_some_and(|u| u.eye == window.source);
         if !watching {
             window.cap_status(UiStatus::Close);
         }
@@ -900,6 +1032,7 @@ mod tests {
             pos: TilePos::new(x, y, 1),
             range: 7,
             enabled: true,
+            xray: false,
         }
     }
 
@@ -920,6 +1053,23 @@ mod tests {
         assert!(!net.visible(TilePos::new(9, 10, 1)), "behind the wall");
         assert!(!net.visible(TilePos::new(4, 18, 1)), "beyond view_range");
         assert!(!net.visible(TilePos::new(4, 10, 2)), "another z");
+    }
+
+    #[test]
+    fn xray_cameras_see_through_walls() {
+        let walls: Vec<(i32, i32)> = (1..=24).map(|y| (8, y)).collect();
+        let (opaque, in_bounds) = grid(&walls);
+        let mut net = CameraNet::default();
+        net.set_camera(
+            Entity::from_bits(1),
+            NetCamera {
+                xray: true,
+                ..cam(4, 10)
+            },
+        );
+        net.update(&opaque, &in_bounds);
+        assert!(net.visible(TilePos::new(9, 10, 1)), "behind the wall");
+        assert!(!net.visible(TilePos::new(12, 10, 1)), "beyond view_range");
     }
 
     #[test]

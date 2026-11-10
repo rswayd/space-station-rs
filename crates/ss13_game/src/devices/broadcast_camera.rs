@@ -8,12 +8,13 @@
 //!   within 7 tiles of it goes out on the entertainment frequency (the camera carries the
 //!   [`Radio`] while live, so `crate::radio` relays like any broadcasting radio).
 //! - Alt-click in hand switches the microphone, a right click in hand renames the broadcast.
-// shortcut: no picture. tg's internal camera joins `CAMERANET_NETWORK_CURATOR` and the
-// entertainment monitors (`/obj/machinery/computer/security/telescreen/entertainment`) add the
-// network while it is live; the port's camera consoles list their cameras once at map load and
-// show only mapped, fixed cameras, so a moving camera and monitors that change networks need
-// the camera group first. No light while live, no announcement on the monitors, no cargo
-// camera's per-camera network (its slowdown comes from its `slowdown` var).
+//! - Live, its `internal_camera` `"LIVE: <name>"` (view range 7, the cargo camera's 5) follows
+//!   the carbon holding it on its networks (`curator`; each cargo camera its own
+//!   `cargo_camera_id_<n>`), and every entertainment monitor gains those networks and says
+//!   "<name> is now LIVE!" (`start_broadcasting_network`); offline, the camera goes and the
+//!   monitors lose the networks (`crate::silicon::cameras::set_network_broadcast`).
+// shortcut: no light while live; the cargo cameras' network numbers are their entity ids,
+// not a counter (only their uniqueness matters).
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
@@ -42,6 +43,23 @@ pub struct BroadcastCamera {
     pub active: bool,
     pub microphone: bool,
     pub name: String,
+}
+
+/// The live camera's `internal_camera` (`crate::silicon::mob_cameras`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LiveCamera(pub Entity);
+
+/// `camera_networks` and `camera_range`.
+fn networks(world: &World, camera: Entity) -> (Vec<String>, u8) {
+    let path = world
+        .get::<DmItem>(camera)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    if is_under(&path, CARGO_CAMERA) {
+        (vec![format!("cargo_camera_id_{}", camera.to_bits())], 5)
+    } else {
+        (vec!["curator".to_owned()], 7)
+    }
 }
 
 /// On a rename prompt: the camera it renames.
@@ -137,8 +155,28 @@ fn go_live(world: &mut World, mob: Entity, camera: Entity) {
         return;
     };
     state.active = true;
-    let mic = state.microphone;
+    let (mic, name) = (state.microphone, state.name.clone());
     world.entity_mut(camera).insert(microphone(mic));
+    let (nets, range) = networks(world, camera);
+    if let Some(internal) = crate::silicon::mob_cameras::spawn_mob_camera(
+        world,
+        mob,
+        format!("LIVE: {name}"),
+        nets.clone(),
+        range,
+        true,
+        crate::silicon::mob_cameras::MobCameraKind::Broadcast,
+        Some(camera),
+        false,
+    ) {
+        world.entity_mut(camera).insert(LiveCamera(internal));
+    }
+    crate::silicon::cameras::set_network_broadcast(
+        world,
+        &nets,
+        true,
+        Some(&format!("{name} is now LIVE!")),
+    );
     crate::obj_damage::set_icon_state(world, camera, "broadcast_cam1");
     sound(world, camera, ON_SOUND);
     crate::balloon::balloon_alert_to_viewers(world, camera, "в эфире!", None, &[]);
@@ -154,6 +192,11 @@ fn go_offline(world: &mut World, camera: Entity) {
     }
     state.active = false;
     world.entity_mut(camera).remove::<Radio>();
+    if let Some(LiveCamera(internal)) = world.entity_mut(camera).take::<LiveCamera>() {
+        crate::silicon::mob_cameras::remove_mob_camera(world, internal);
+    }
+    let (nets, _) = networks(world, camera);
+    crate::silicon::cameras::set_network_broadcast(world, &nets, false, None);
     crate::obj_damage::set_icon_state(world, camera, "broadcast_cam0");
     sound(world, camera, OFF_SOUND);
     crate::balloon::balloon_alert_to_viewers(world, camera, "не в эфире", None, &[]);

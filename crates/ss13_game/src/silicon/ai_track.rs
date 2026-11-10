@@ -9,13 +9,22 @@
 //!   to reacquire...", then tries again every second (`SSprocessing`); after 10 failures
 //!   "Unable to reacquire, cancelling track...". A deleted or dead target, a dead AI, or the eye
 //!   moved by anything else (steps, the core button, a camera jump) ends the tracking.
-// shortcut: no "track" verb by name (there is no verb bar), no glide-size following.
+//! - Not trackable (tg `can_track`): an invisible or faded (alpha 50 or less) mob, one not on a
+//!   turf (in a closet, a mech, someone's hands), on the syndicate base's level, a morph, or
+//!   one wearing an agent ID card or an abductor helmet.
+// shortcut: no "track" verb by name (there is no verb bar), no double click on a mob, no
+// glide-size following. No CentCom or away-level exclusion (the port has no level traits for
+// them). The changeling's and heretic's digital camouflage (no such powers yet) and the
+// ninja's camera vision module (`crate::modsuit::ninja`, the modsuit group) do not block yet.
+// Consoles track only through SecurEye (`docs/parity/comms/ntos-apps.md`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
+use ss13_mapload::fidelity::is_under;
 use ss13_net::server::Invisibility;
-use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
+use ss13_shared::protocol::InventorySlot;
+use ss13_shared::{Appearance, TilePos};
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems};
 use ss13_tgui::server::UiSystems;
 
@@ -25,6 +34,7 @@ use super::chassis::name_of;
 use super::notice;
 use crate::health::{Health, Stat};
 use crate::human::HumanLook;
+use crate::inventory::Inventory;
 
 /// tg `CAMERA_TICK_LIMIT`.
 pub const CAMERA_TICK_LIMIT: u32 = 10;
@@ -66,17 +76,61 @@ impl Plugin for AiTrackPlugin {
     }
 }
 
+/// What makes a mob untrackable while worn (`COMSIG_LIVING_CAN_TRACK` -> `COMPONENT_CANT_TRACK`):
+/// an agent ID card in the ID slot, an abductor helmet on the head.
+const UNTRACKABLE_GEAR: [(InventorySlot, &str); 2] = [
+    (InventorySlot::Id, "/obj/item/card/id/advanced/chameleon"),
+    (
+        InventorySlot::Head,
+        "/obj/item/clothing/head/helmet/abductor",
+    ),
+];
+
 /// tg `/mob/living/can_track(user)`, `user` being the AI core.
 pub fn can_track(world: &World, target: Entity, ai: Entity) -> bool {
     if target == ai || world.get::<Health>(target).is_none() {
         return false;
     }
-    if world.get::<Invisibility>(target).is_some_and(|i| i.0 > 0) {
+    if let Some(inventory) = world.get::<Inventory>(target) {
+        let blocked = UNTRACKABLE_GEAR.iter().any(|&(slot, path)| {
+            inventory
+                .slot(slot)
+                .and_then(|item| crate::emp::path_of(world, item))
+                .is_some_and(|p| is_under(&p, path))
+        });
+        if blocked {
+            return false;
+        }
+    }
+    // `/mob/living/basic/morph/can_track`: never.
+    if world.get::<crate::antag::morph::Morph>(target).is_some() {
+        return false;
+    }
+    // `invisibility || alpha <= 50`: cloaked.
+    let faded = world
+        .get::<Appearance>(target)
+        .and_then(|a| a.color)
+        .is_some_and(|c| c[3] <= 50);
+    if faded || world.get::<Invisibility>(target).is_some_and(|i| i.0 > 0) {
+        return false;
+    }
+    // `!isturf(loc)`: in a closet, a mech or someone's hands.
+    if world.get::<crate::closets::InCloset>(target).is_some()
+        || world.get::<crate::mecha::Pilot>(target).is_some()
+        || world.get::<crate::inventory::CarriedBy>(target).is_some()
+    {
         return false;
     }
     let Some(&pos) = world.get::<TilePos>(target) else {
         return false;
     };
+    // `onSyndieBase() && !(ROLE_SYNDICATE in user.faction)`: the AI is no syndicate.
+    if world
+        .get_resource::<crate::antag::nukeop::server::Infiltrator>()
+        .is_some_and(|i| i.level_z == pos.z)
+    {
+        return false;
+    }
     world
         .get_resource::<CameraNet>()
         .is_some_and(|net| net.visible(pos))

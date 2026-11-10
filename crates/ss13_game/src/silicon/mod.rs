@@ -1,6 +1,8 @@
 //! Silicons and cameras, after tg `/mob/living/silicon` (`code/modules/mob/living/silicon/`):
 //!
 //! - [`cameras`] (server): security cameras, `SScameras` chunks, the camera console;
+//!   [`camera_advanced`] (server): the advanced camera console and its eye; [`mob_cameras`]
+//!   (server): cameras carried by mobs (bodycams, a live broadcast camera);
 //! - [`ai`] (server): the AI in its core, its eye, AI clicks on doors and APCs; [`ai_power`]
 //!   (server): the core's power loss and restore routine; [`ai_hud`] (server): the AI's and
 //!   cyborgs' HUD buttons, VOX announcements, the core display; [`ai_track`] (server): camera
@@ -62,6 +64,8 @@ pub mod alarms;
 #[cfg(feature = "server")]
 pub mod borg_upgrades;
 #[cfg(feature = "server")]
+pub mod camera_advanced;
+#[cfg(feature = "server")]
 pub mod cameras;
 #[cfg(feature = "server")]
 pub mod chassis;
@@ -83,6 +87,8 @@ pub mod malf;
 pub mod malf_modules;
 #[cfg(feature = "server")]
 pub mod mmi;
+#[cfg(feature = "server")]
+pub mod mob_cameras;
 #[cfg(feature = "server")]
 pub mod pai;
 #[cfg(feature = "server")]
@@ -152,6 +158,8 @@ mod server {
                     super::ai_slipper::AiSlipperPlugin,
                     super::holopad::HolopadPlugin,
                     super::pai::PaiPlugin,
+                    super::camera_advanced::CameraAdvancedPlugin,
+                    super::mob_cameras::MobCamerasPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(

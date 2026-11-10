@@ -20,7 +20,7 @@ use crate::power::Unpowered;
 use crate::radio::TelecommsOutage;
 use crate::science::points::ResearchServer;
 use crate::security_level::displays::{DisplayState, EvacDisplay};
-use crate::silicon::cameras::{Camera, CameraNet, NetCamera};
+use crate::silicon::cameras::Camera;
 use crate::silicon::cyborg::RechargeStation;
 use crate::wallmount::controls::Flasher;
 use crate::wallmount::fire_alarm::FireAlarm;
@@ -107,8 +107,9 @@ fn doors(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
 }
 
 /// `/obj/machinery/camera/emp_act`: an enabled camera goes dark at `150 / severity` percent
-/// (off the network, its viewers back to their bodies) for 90 s after the last pulse.
-// shortcut: no "static" message to its viewers, `emp` icon state or camera alarm.
+/// (off the network, its viewers back to their bodies with "Статика покрывает экран!", its
+/// `emp` light on) for 90 s after the last pulse; back on, it raises its camera alarm for 10 s
+/// (`post_emp_reset`).
 fn cameras(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
         if !ev.hits_self() {
@@ -126,34 +127,25 @@ fn cameras(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
         }
         set_camera(world, ev.target, false);
         set_emped(world, ev.target, CAMERA_EMP_SECS);
+        crate::defenses::cameras::refresh_look(world, ev.target);
     }
 }
 
 /// The camera's `can_use()` and its place on the network.
 pub(crate) fn set_camera(world: &mut World, camera: Entity, enabled: bool) {
-    let (Some(range), Some(&pos)) = (
-        world.get::<Camera>(camera).map(|c| c.view_range),
-        world.get::<TilePos>(camera),
-    ) else {
+    let Some(mut c) = world.get_mut::<Camera>(camera) else {
         return;
     };
-    if let Some(mut c) = world.get_mut::<Camera>(camera) {
-        c.enabled = enabled;
-    }
-    world.resource_mut::<CameraNet>().set_camera(
-        camera,
-        NetCamera {
-            pos,
-            range,
-            enabled,
-        },
-    );
+    c.enabled = enabled;
+    crate::silicon::cameras::sync_camera(world, camera);
 }
 
 fn restore_cameras(world: &mut World) {
     for camera in emped_expired::<With<Camera>>(world) {
         world.entity_mut(camera).remove::<Emped>();
         set_camera(world, camera, true);
+        crate::defenses::cameras::camera_alarm(world, camera);
+        crate::defenses::cameras::refresh_look(world, camera);
     }
 }
 

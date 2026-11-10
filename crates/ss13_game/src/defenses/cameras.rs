@@ -17,7 +17,12 @@
 //!   living mobs next to it (in a `motion_monitored` area, anywhere in its area it sees) and 3 s
 //!   later raises the area's motion alarm (`ALARM_MOTION`, `crate::silicon::alarms`) with "A red
 //!   light flashes"; the alarm clears once nobody is left.
-// shortcut: no x-ray or EMP-proof upgrades (analyzer, plasma), no notes held up to the camera, no
+//! - Upgrades go into an open camera: a gas analyzer gives x-ray ([`XRay`]: it sees through
+//!   walls), a plasma sheet EMP protection (`EMP_PROTECT_ALL`), a proximity sensor the motion
+//!   sensor; the presets come with them. A crowbar asks which part to take out.
+//! - A camera switched on, or back from an EMP, raises its area's camera alarm
+//!   (`ALARM_CAMERA`) for 10 s; an EMPed camera shows its `emp` light.
+// shortcut: no notes held up to the camera, no
 // damage, breaking or repairing; a camera taken apart drops the assembly at full integrity; the
 // monitored areas are tg's `motion_monitored` areas by type (AI, armory, EVA, vault); tg's
 // motion group only tells its first camera (`track_mob` returns after one), here every camera
@@ -38,10 +43,12 @@ use ss13_tgui::server::UiSystems;
 use ss13_world::SpatialIndex;
 
 use crate::construction::{Job, PanelOpen};
+use crate::emp::{EmpProtection, PROTECT_ALL};
 use crate::health::{Health, Stat};
 use crate::medical::{name_of, visible};
 use crate::silicon::alarms::{AlarmKind, AreaInfo, StationAlarms};
-use crate::silicon::cameras::Camera;
+use crate::silicon::cameras::{Camera, XRay};
+use crate::silicon::mob_cameras::MobCamera;
 use crate::tools::{Actor, DoAfter, ToolKind, tell, tool_of};
 
 pub const CAMERA_ROOT: &str = "/obj/machinery/camera";
@@ -50,6 +57,10 @@ pub const CAMERA_FRAME: &str = "/obj/machinery/camera/autoname/deconstructed";
 pub const CAMERA_ASSEMBLY: &str = "/obj/item/wallframe/camera";
 const CABLE: &str = "/obj/item/stack/cable_coil";
 const PROX_SENSOR: &str = "/obj/item/assembly/prox_sensor";
+const ANALYZER: &str = "/obj/item/analyzer";
+const PLASMA: &str = "/obj/item/stack/sheet/mineral/plasma";
+/// `triggerCameraAlarm` then `addtimer(cancelCameraAlarm, 10 SECONDS)`.
+const CAMERA_ALARM_SECS: f64 = 10.0;
 /// The presets that call `upgradeMotion()` in `Initialize` (the thunderdome camera is the
 /// entertainment network's own).
 const MOTION_PRESETS: [&str; 4] = [
@@ -92,6 +103,36 @@ pub struct MotionSensor {
     pub alarmed: bool,
 }
 
+/// A camera alarm up until this time (`cancelCameraAlarm` timer).
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct CameraAlarmUntil(pub f64);
+
+/// The crowbar's part prompt (`tgui_input_list` of `crowbar_act`): the parts offered.
+#[derive(Component, Clone, Debug)]
+struct PartPrompt {
+    camera: Entity,
+    mob: Entity,
+    parts: Vec<Part>,
+}
+
+/// An upgrade part inside a camera.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Part {
+    XRay,
+    EmpProof,
+    Motion,
+}
+
+impl Part {
+    fn name(self) -> &'static str {
+        match self {
+            Self::XRay => "газовый анализатор",
+            Self::EmpProof => "лист плазмы",
+            Self::Motion => "датчик движения",
+        }
+    }
+}
+
 /// The camera's `initial(view_range)`, for the multitool's focus.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 struct FocusRange(u8);
@@ -120,10 +161,11 @@ impl Plugin for CameraBuildPlugin {
             .add_systems(
                 Update,
                 (
-                    networks_chosen
+                    (networks_chosen, part_chosen)
                         .in_set(UiSystems::Handle)
                         .after(PromptSystems::Answer),
                     motion_sensors,
+                    clear_camera_alarms,
                 ),
             );
     }
@@ -170,7 +212,13 @@ pub fn refresh_look(world: &mut World, e: Entity) {
     let Some(enabled) = world.get::<Camera>(e).map(|c| c.enabled) else {
         return;
     };
-    let base = "camera";
+    // `isXRay(TRUE)`: the `xray` sprites; `machine_stat & EMPED`: the `emp` light.
+    let xray = if world.get::<XRay>(e).is_some() {
+        "xray"
+    } else {
+        ""
+    };
+    let emped = world.get::<crate::emp::Emped>(e).is_some();
     let open = panel_open(world, e);
     let Some(dmi) = world.get::<DmAtom>(e).map(|a| a.icon.clone()) else {
         return;
@@ -178,13 +226,27 @@ pub fn refresh_look(world: &mut World, e: Entity) {
     let Some(icons) = world.get_resource::<IconIndex>() else {
         return;
     };
-    let state = icons.get(&dmi, if enabled { base } else { "camera_off" });
+    let state = if enabled && !emped {
+        icons.get(&dmi, &format!("{xray}camera"))
+    } else {
+        icons.get(&dmi, &format!("{xray}camera_off"))
+    };
     let mut overlays = Vec::new();
     if open {
         overlays.extend(icons.get(&dmi, "camera_panel").map(Overlay::new));
     }
-    if enabled {
-        overlays.extend(icons.get(&dmi, "camera_on").map(Overlay::new));
+    if emped {
+        overlays.extend(
+            icons
+                .get(&dmi, &format!("{xray}camera_emp"))
+                .map(Overlay::new),
+        );
+    } else if enabled {
+        overlays.extend(
+            icons
+                .get(&dmi, &format!("{xray}camera_on"))
+                .map(Overlay::new),
+        );
     }
     if let Some(mut look) = world.get_mut::<Appearance>(e) {
         if let Some(state) = state {
@@ -200,6 +262,9 @@ pub fn toggle_cam(world: &mut World, e: Entity, user: Option<Entity>, message: b
         return;
     };
     crate::emp::machines::set_camera(world, e, enabled);
+    if enabled {
+        camera_alarm(world, e);
+    }
     if message {
         let change = if enabled {
             "включается"
@@ -326,6 +391,44 @@ pub fn item_interaction(
             refresh_look(world, target);
         }
         (None, _) if !panel_open(world, target) => return false,
+        // `gas_analyzer_act`, `plasma_act`.
+        (None, _) if is_under(&path, ANALYZER) || is_under(&path, PLASMA) => {
+            let xray = is_under(&path, ANALYZER);
+            let has = if xray {
+                world.get::<XRay>(target).is_some()
+            } else {
+                world.get::<EmpProtection>(target).is_some()
+            };
+            if has {
+                tell(
+                    world,
+                    client,
+                    Span::Warning,
+                    "На этой камере уже есть такое улучшение!",
+                );
+                return true;
+            }
+            if xray {
+                if crate::inventory::no_drop(world, held) {
+                    return true;
+                }
+                world.despawn(held);
+                world.entity_mut(target).insert(XRay);
+                crate::silicon::cameras::sync_camera(world, target);
+                refresh_look(world, target);
+            } else {
+                if !crate::tools::use_stack(world, held, 1) {
+                    return true;
+                }
+                world.entity_mut(target).insert(EmpProtection(PROTECT_ALL));
+            }
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "Вы подключаете улучшение к внутренним схемам камеры.",
+            );
+        }
         (None, Some(ToolKind::Wirecutters)) => toggle_cam(world, target, Some(mob), true),
         (None, Some(ToolKind::Multitool)) => {
             let initial = world.get::<FocusRange>(target).map_or(7, |f| f.0);
@@ -342,22 +445,28 @@ pub fn item_interaction(
             tell(world, client, Span::Notice, text);
         }
         (None, Some(ToolKind::Crowbar)) => {
-            if world.get::<MotionSensor>(target).is_none() {
+            let parts = parts_of(world, target);
+            if parts.is_empty() {
                 return true;
             }
-            remove_motion(world, target);
-            if let Some(&pos) = world.get::<TilePos>(target) {
-                crate::construction::spawn_obj(world, PROX_SENSOR, pos);
-            }
-            tell(
+            let prompt = ss13_tgui::prompt::ask_world(
                 world,
-                client,
-                Span::Notice,
-                format!(
-                    "Вы извлекаете датчик движения из {}.",
-                    name_of(world, target)
+                Ask::new(
+                    client,
+                    mob,
+                    "Извлечение детали",
+                    "Выберите деталь для извлечения",
+                    PromptKind::List {
+                        items: parts.iter().map(|p| p.name().to_owned()).collect(),
+                        default: None,
+                    },
                 ),
             );
+            world.entity_mut(prompt).insert(PartPrompt {
+                camera: target,
+                mob,
+                parts,
+            });
         }
         (None, Some(ToolKind::Welder)) => {
             crate::tools::use_tool(
@@ -391,6 +500,100 @@ pub fn item_interaction(
         (None, _) => return false,
     }
     true
+}
+
+/// The upgrade parts inside a camera (`droppable_parts`).
+fn parts_of(world: &World, camera: Entity) -> Vec<Part> {
+    let mut parts = Vec::new();
+    if world.get::<XRay>(camera).is_some() {
+        parts.push(Part::XRay);
+    }
+    if world.get::<EmpProtection>(camera).is_some() {
+        parts.push(Part::EmpProof);
+    }
+    if world.get::<MotionSensor>(camera).is_some() {
+        parts.push(Part::Motion);
+    }
+    parts
+}
+
+/// `drop_upgrade` + `removeXRay` / `removeEmpProof` / `removeMotion`.
+fn drop_part(world: &mut World, camera: Entity, part: Part, pos: TilePos) {
+    match part {
+        Part::XRay => {
+            world.entity_mut(camera).remove::<XRay>();
+            crate::silicon::cameras::sync_camera(world, camera);
+            refresh_look(world, camera);
+            crate::construction::spawn_obj(world, ANALYZER, pos);
+        }
+        Part::EmpProof => {
+            world.entity_mut(camera).remove::<EmpProtection>();
+            crate::construction::spawn_stack(world, PLASMA, pos, 1);
+        }
+        Part::Motion => {
+            remove_motion(world, camera);
+            crate::construction::spawn_obj(world, PROX_SENSOR, pos);
+        }
+    }
+}
+
+/// The part picked for the crowbar, at the moment of effect: the camera still finished and
+/// open with that part, the user conscious next to it (`can_perform_action`).
+fn part_chosen(world: &mut World, mut answers: Local<MessageCursor<PromptAnswered>>) {
+    let pending: Vec<(Entity, Entity, Option<PromptAnswer>)> = answers
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.answer.clone()))
+        .collect();
+    for (prompt, client, answer) in pending {
+        let Some(ask) = world.get::<PartPrompt>(prompt).cloned() else {
+            continue;
+        };
+        let Some(PromptAnswer::Item(i)) = answer else {
+            continue;
+        };
+        let Some(&part) = ask.parts.get(i) else {
+            continue;
+        };
+        let Some(&pos) = world.get::<TilePos>(ask.camera) else {
+            continue;
+        };
+        if world.get::<CameraFrame>(ask.camera).is_some()
+            || !panel_open(world, ask.camera)
+            || !parts_of(world, ask.camera).contains(&part)
+            || world.get::<Stat>(ask.mob) != Some(&Stat::Conscious)
+            || !crate::storage::in_reach(world, ask.mob, ask.camera)
+        {
+            continue;
+        }
+        drop_part(world, ask.camera, part, pos);
+        let text = format!(
+            "Вы извлекаете {} из {}.",
+            part.name(),
+            name_of(world, ask.camera)
+        );
+        tell(world, client, Span::Notice, text);
+    }
+}
+
+/// `triggerCameraAlarm` with its `cancelCameraAlarm` 10 s later.
+pub fn camera_alarm(world: &mut World, camera: Entity) {
+    let until = now(world) + CAMERA_ALARM_SECS;
+    set_kind_alarm(world, camera, AlarmKind::Camera, true);
+    world.entity_mut(camera).insert(CameraAlarmUntil(until));
+}
+
+fn clear_camera_alarms(world: &mut World) {
+    let t = now(world);
+    let mut q = world.query::<(Entity, &CameraAlarmUntil)>();
+    let due: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, u)| t >= u.0)
+        .map(|(e, _)| e)
+        .collect();
+    for camera in due {
+        world.entity_mut(camera).remove::<CameraAlarmUntil>();
+        set_kind_alarm(world, camera, AlarmKind::Camera, false);
+    }
 }
 
 fn weld_job(from: u8) -> Job {
@@ -472,9 +675,8 @@ fn deconstruct(world: &mut World, camera: Entity) {
     if wired {
         crate::construction::spawn_stack(world, CABLE, pos, 2);
     }
-    if world.get::<MotionSensor>(camera).is_some() {
-        remove_motion(world, camera);
-        crate::construction::spawn_obj(world, PROX_SENSOR, pos);
+    for part in parts_of(world, camera) {
+        drop_part(world, camera, part, pos);
     }
     world
         .resource_mut::<crate::silicon::cameras::CameraNet>()
@@ -515,7 +717,7 @@ fn place_assembly(
             .resource::<SpatialIndex>()
             .on_tile(at)
             .iter()
-            .any(|&e| is_camera(world, e))
+            .any(|&e| is_camera(world, e) && world.get::<MobCamera>(e).is_none())
     {
         tell(world, client, Span::Warning, "Здесь уже есть камера!");
         return true;
@@ -553,7 +755,7 @@ fn autoname(world: &mut World, camera: Entity, at: TilePos) -> String {
     let Some(area) = world.resource::<Areas>().area_at(at) else {
         return String::new();
     };
-    let mut cams = world.query_filtered::<(Entity, &TilePos), With<Camera>>();
+    let mut cams = world.query_filtered::<(Entity, &TilePos), (With<Camera>, Without<MobCamera>)>();
     let count = cams
         .iter(world)
         .filter(|(e, p)| *e != camera && world.resource::<Areas>().area_at(**p) == Some(area))
@@ -696,15 +898,20 @@ fn motion_sensors(world: &mut World, mut next: Local<f64>) {
 
 /// `alarm_manager.send_alarm(ALARM_MOTION)` / `clear_alarm`: true when the area's alarm changed.
 fn set_alarm(world: &mut World, camera: Entity, on: bool) -> bool {
+    set_kind_alarm(world, camera, AlarmKind::Motion, on)
+}
+
+/// `alarm_manager.send_alarm(kind)` / `clear_alarm(kind)` of a camera.
+fn set_kind_alarm(world: &mut World, camera: Entity, kind: AlarmKind, on: bool) -> bool {
     let Some(&pos) = world.get::<TilePos>(camera) else {
         return false;
     };
-    let area = world.resource::<Areas>().area_at(pos);
+    let area = world.get_resource::<Areas>().and_then(|a| a.area_at(pos));
     let info = area.map(|a| area_info(world, a, pos.z));
     let Some(mut alarms) = world.get_resource_mut::<StationAlarms>() else {
         return false;
     };
-    let change = alarms.set(AlarmKind::Motion, camera, area, on, |_| {
+    let change = alarms.set(kind, camera, area, on, |_| {
         info.unwrap_or(AreaInfo {
             name: String::new(),
             station: false,
@@ -729,7 +936,7 @@ fn area_info(world: &mut World, area: Entity, z: u16) -> AreaInfo {
     let station = world
         .get::<DmPower>(area)
         .is_some_and(|p| is_under(&p.path, "/area/station") || is_under(&p.path, "/area/mine"));
-    let mut cams = world.query_filtered::<(Entity, &TilePos), With<Camera>>();
+    let mut cams = world.query_filtered::<(Entity, &TilePos), (With<Camera>, Without<MobCamera>)>();
     let cameras = cams
         .iter(world)
         .filter(|(_, p)| world.resource::<Areas>().area_at(**p) == Some(area))
