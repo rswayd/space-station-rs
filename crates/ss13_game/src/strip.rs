@@ -20,7 +20,7 @@
 //! highlighted (`interacting`).
 // shortcut: no alternate actions (internals valves, suit sensors, shoelaces, item cuffs),
 // per-item `strip_delay` and `equip_delay_other` are tg's defaults (4 s and 2 s: not converted
-// per type yet), no legcuffs, no AFK theft log, no fireman carry exception (`should_strip`).
+// per type yet), no AFK theft log, no fireman carry exception (`should_strip`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -38,6 +38,7 @@ use ss13_tgui::server::{
 use crate::health::{DEFAULT_MESSAGE_RANGE, Stat};
 use crate::hud::HudIcon;
 use crate::inventory::{CarriedBy, Inventory, can_equip, unequip};
+use crate::legcuffs::Legcuffed;
 use crate::panels::{
     OBSCURING_COMPLETELY, OBSCURING_HIDDEN, OBSCURING_INACCESSIBLE, OBSCURING_NONE, STRIP_USE,
     StripItem, StripMenuData, StripMenuUi, StripSlot,
@@ -60,11 +61,13 @@ enum Reach {
     Slot(InventorySlot),
     /// `ITEM_SLOT_HANDCUFFED`: shown only while cuffed, nothing can be put there.
     Handcuffs,
+    /// `ITEM_SLOT_LEGCUFFED`: the same for the legs.
+    Legcuffs,
 }
 
-/// `strippable_human_items` for a human with two hands (the upper hands, legcuffs and the
-/// BandaStation headpocket do not show).
-const ENTRIES: [(&str, Reach); 18] = [
+/// `strippable_human_items` for a human with two hands (the upper hands and the BandaStation
+/// headpocket do not show).
+const ENTRIES: [(&str, Reach); 19] = [
     ("head", Reach::Slot(InventorySlot::Head)),
     ("back", Reach::Slot(InventorySlot::Back)),
     ("mask", Reach::Slot(InventorySlot::Mask)),
@@ -83,6 +86,7 @@ const ENTRIES: [(&str, Reach); 18] = [
     ("left_hand", Reach::Slot(InventorySlot::LeftHand)),
     ("right_hand", Reach::Slot(InventorySlot::RightHand)),
     ("handcuffs", Reach::Handcuffs),
+    ("legcuffs", Reach::Legcuffs),
 ];
 
 fn is_pocket(reach: Reach) -> bool {
@@ -109,10 +113,16 @@ impl StripJob {
 }
 
 /// `get_item(source)`.
-fn item_in(inventory: &Inventory, cuffs: Option<&Handcuffed>, reach: Reach) -> Option<Entity> {
+fn item_in(
+    inventory: &Inventory,
+    cuffs: Option<&Handcuffed>,
+    legcuffs: Option<&Legcuffed>,
+    reach: Reach,
+) -> Option<Entity> {
     match reach {
         Reach::Slot(slot) => inventory.slot(slot),
         Reach::Handcuffs => cuffs.map(|c| c.0),
+        Reach::Legcuffs => legcuffs.map(|c| c.0),
     }
 }
 
@@ -166,14 +176,30 @@ impl ServerUi for StripMenuUi {
         &'static Inventory,
         Option<&'static Handcuffed>,
         Option<&'static Name>,
+        Option<&'static Legcuffed>,
     );
     type UserParam = UserQueries;
     type Act = u8;
 
-    fn static_data(_: (Entity, &Inventory, Option<&Handcuffed>, Option<&Name>)) {}
+    fn static_data(
+        _: (
+            Entity,
+            &Inventory,
+            Option<&Handcuffed>,
+            Option<&Name>,
+            Option<&Legcuffed>,
+        ),
+    ) {
+    }
 
     fn data(
-        (owner, inventory, cuffs, name): (Entity, &Inventory, Option<&Handcuffed>, Option<&Name>),
+        (owner, inventory, cuffs, name, legcuffs): (
+            Entity,
+            &Inventory,
+            Option<&Handcuffed>,
+            Option<&Name>,
+            Option<&Legcuffed>,
+        ),
         user: Entity,
         (items, actions, clothing): &SystemParamItem<'_, '_, UserQueries>,
     ) -> StripMenuData {
@@ -188,10 +214,11 @@ impl ServerUi for StripMenuUi {
         let slots = ENTRIES
             .iter()
             .enumerate()
-            // `handcuffs/should_show`.
+            // `handcuffs/should_show`, `legcuffs/should_show`.
             .filter(|(_, (_, reach))| *reach != Reach::Handcuffs || cuffs.is_some())
+            .filter(|(_, (_, reach))| *reach != Reach::Legcuffs || legcuffs.is_some())
             .map(|(i, &(key, reach))| {
-                let item = item_in(inventory, cuffs, reach);
+                let item = item_in(inventory, cuffs, legcuffs, reach);
                 let obscured = obscuring(inventory, reach, item, |e| {
                     clothing_flags(clothing.get(e).ok())
                 });
@@ -316,14 +343,17 @@ fn use_slot(world: &mut World, client: Entity, user: Entity, owner: Entity, entr
         return;
     };
     let cuffs = world.get::<Handcuffed>(owner).copied();
-    if reach == Reach::Handcuffs && cuffs.is_none() {
+    let legs = world.get::<Legcuffed>(owner).copied();
+    if (reach == Reach::Handcuffs && cuffs.is_none())
+        || (reach == Reach::Legcuffs && legs.is_none())
+    {
         return;
     }
     if world.get::<DoAfter>(user).is_some() {
         return;
     }
     // `ui_act` `use`: nothing on a slot the clothing hides or covers.
-    let current = item_in(&inventory, cuffs.as_ref(), reach);
+    let current = item_in(&inventory, cuffs.as_ref(), legs.as_ref(), reach);
     let obscured = obscuring(&inventory, reach, current, |e| {
         clothing_flags(world.get::<DmClothing>(e))
     });
@@ -342,7 +372,7 @@ fn use_slot(world: &mut World, client: Entity, user: Entity, owner: Entity, entr
         return;
     };
     let (who, whom) = (name_of(world, user), name_of(world, owner));
-    match item_in(&inventory, cuffs.as_ref(), reach) {
+    match item_in(&inventory, cuffs.as_ref(), legs.as_ref(), reach) {
         // `strippable_item/start_unequip`: `TRAIT_NODROP` (tg "You can't remove ...").
         Some(item) if crate::inventory::no_drop(world, item) => {
             let what = name_of(world, item);
@@ -468,7 +498,7 @@ fn fits(world: &World, owner: Entity, reach: Reach, item: Entity) -> bool {
         return false;
     };
     match reach {
-        Reach::Handcuffs => false,
+        Reach::Handcuffs | Reach::Legcuffs => false,
         Reach::Slot(slot @ (InventorySlot::LeftHand | InventorySlot::RightHand)) => {
             inventory.slot(slot).is_none()
         }
@@ -500,7 +530,8 @@ pub fn complete(world: &mut World, user: Entity, action: &DoAfter, job: StripJob
         return;
     }
     let cuffs = world.get::<Handcuffed>(owner).copied();
-    let current = item_in(&inventory, cuffs.as_ref(), reach);
+    let legs = world.get::<Legcuffed>(owner).copied();
+    let current = item_in(&inventory, cuffs.as_ref(), legs.as_ref(), reach);
     match job {
         StripJob::Unequip { item, .. } => {
             // "They changed the item in the meantime".
@@ -510,6 +541,7 @@ pub fn complete(world: &mut World, user: Entity, action: &DoAfter, job: StripJob
             // `doStrip` -> `dropItemToGround`.
             match reach {
                 Reach::Handcuffs => crate::restraints::uncuff(world, owner, pos),
+                Reach::Legcuffs => crate::legcuffs::remove(world, owner, pos),
                 Reach::Slot(slot) => {
                     unequip(world, owner, pos, slot);
                     world.entity_mut(item).remove::<CarriedBy>().insert(pos);
@@ -613,12 +645,13 @@ mod tests {
             .unwrap(),
             13
         );
-        assert!(
+        assert_eq!(
             StripMenuUi::parse_act(
                 STRIP_USE,
                 &UiParams::new(&[("key".into(), "legcuffs".into())])
             )
-            .is_err()
+            .unwrap(),
+            18
         );
         assert!(StripMenuUi::parse_act("alt", &UiParams::new(&[])).is_err());
         assert!(is_pocket(ENTRIES[13].1) && is_pocket(ENTRIES[14].1) && !is_pocket(ENTRIES[15].1));

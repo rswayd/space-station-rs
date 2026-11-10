@@ -107,6 +107,7 @@
 //! | 3277 | `antag::revenant::scatter_residue` (the glimmering residue scattered by hand) |
 //! | 3285 | `recycling::conveyor::attack_self` (a switch assembly links nearby belt stacks) |
 //! | 3295 | `power::cable_coil::attack_self` (the layer menu) |
+//! | 3305 | `legcuffs::attack_self` (a bear trap arms and disarms) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -243,6 +244,7 @@
 //! | 3221 | `service::slots` (the slot machine window) |
 //! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
 //! | 3300 | `defenses::server::interact` |
+//! | 3305 | `defenses::turret_build::attack_hand` (a frame's gun or sensor back out) |
 //! | 3400 | `silicon::law_rack::interact` |
 //! | 3470 | `station_goals::interact` (satellites) |
 //! | 3473 | `devices::beacons::attack_self` (right click toggles a tracking beacon) |
@@ -275,6 +277,7 @@
 //! | 3547 | `instruments::attack_hand` (piano editor, jukebox window and right-click toggle, boombox menu) |
 //! | 3559 | `events::meteors::punch` (a legendary athlete punches a meteor away) |
 //! | 3565 | `recycling::conveyor::switch_hand` (the lever; right click: backwards) |
+//! | 3575 | `legcuffs::attack_hand` (an energy snare springs on the hand that touches it) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -306,7 +309,9 @@
 //! | 600 | `grenades::item_interaction` |
 //! | 603 | `science::cell_lines::swab_interaction` (swabs and biopsy tools: sampling, onto petri dishes) |
 //! | 700 | `implants::item_interaction` |
-//! | 800 | `defenses::server::item_interaction` |
+//! | 800 | `defenses::server::item_interaction` (turrets, panels, cameras, scanner gates) |
+//! | 805 | `defenses::turret_build::item_interaction` (a frame's parts and tools) |
+//! | 815 | `defenses::barricades::item_interaction` (welder and crowbar on barricades, planks on doors and windows) |
 //! | 900 | `silicon::law_rack::item_interaction` |
 //! | 1000 | `forensics::server::item_interaction` |
 //! | 1100 | `explosions::sources::c4_interact` |

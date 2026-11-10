@@ -115,6 +115,10 @@ pub fn refresh(world: &mut World, mob: Entity) {
         .is_some_and(crate::status_effects::StatusEffects::pacified);
     // The Hippocrates bust's oath (`crate::service`).
     pacifist |= crate::service::hippocratic_sworn(world, mob);
+    // `/datum/status_effect/gonbola_pacify`: `TRAIT_PACIFISM`, `TRAIT_MUTE`.
+    let gonbola = crate::legcuffs::gonbola_worn(world, mob);
+    pacifist |= gonbola;
+    speech.mute |= gonbola;
     // The mime's vow (`TRAIT_MIMING`, `can_speak(allow_mimes = FALSE)`).
     speech.mute |= world.get::<crate::service::MimeVow>(mob).is_some();
     // A stuck item, a slit throat (`crate::afflictions`).

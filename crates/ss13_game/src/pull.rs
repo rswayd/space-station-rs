@@ -959,7 +959,9 @@ fn resist_intents(world: &mut World, mut intents: Local<MessageCursor<IntentRece
         } else if !traits.immobilized && crate::fire::on_fire(world, mob) {
             // tg `execute_resist`: able to move and on fire -> stop, drop and roll.
             crate::fire::resist_fire(world, mob);
-        } else if traits.restrained && !traits.immobilized {
+        } else if (traits.restrained || world.get::<crate::legcuffs::Legcuffed>(mob).is_some())
+            && !traits.immobilized
+        {
             // `mobility_flags & MOBILITY_MOVE` -> `resist_restraints`.
             crate::restraints::resist_restraints(world, client, mob);
         }

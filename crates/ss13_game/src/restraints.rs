@@ -21,7 +21,7 @@
 //!   off by any path drops what the wearer holds (`doUnEquip`: "suit is restraining").
 // shortcut: the straight jacket's `equip_delay_self` (5 s) and `strip_delay` (6 s) are not
 // ported: the inventory has no self-equip delays and the strip menu uses tg's defaults.
-// shortcut: no legcuffs, no clumsy self-cuffing, no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
+// shortcut: no clumsy self-cuffing, no `canBeHandcuffed` arm count (humans always have two arms here), no wirecutters
 // on weak cuffs.
 
 use bevy::prelude::*;
@@ -67,6 +67,8 @@ pub enum RestraintJob {
     Resist { cuffs: Entity },
     /// The actor gets out of the restraining `suit`.
     ResistSuit { suit: Entity },
+    /// The actor gets out of the leg restraints (`crate::legcuffs`).
+    ResistLegs { cuffs: Entity },
 }
 
 pub struct RestraintsPlugin;
@@ -83,13 +85,20 @@ fn forget_cuffs(
     remove: On<Remove<CarriedBy>>,
     carried: Query<&CarriedBy>,
     cuffed: Query<&Handcuffed>,
+    legcuffed: Query<&crate::legcuffs::Legcuffed>,
     mut commands: Commands,
 ) {
     let item = remove.entity;
-    if let Ok(&CarriedBy(mob)) = carried.get(item)
-        && cuffed.get(mob).is_ok_and(|c| c.0 == item)
-    {
+    let Ok(&CarriedBy(mob)) = carried.get(item) else {
+        return;
+    };
+    if cuffed.get(mob).is_ok_and(|c| c.0 == item) {
         commands.entity(mob).try_remove::<Handcuffed>();
+    }
+    if legcuffed.get(mob).is_ok_and(|c| c.0 == item) {
+        commands
+            .entity(mob)
+            .try_remove::<crate::legcuffs::Legcuffed>();
     }
 }
 
@@ -300,6 +309,22 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: Restraint
                 &[(mob, Span::Notice, format!("Вы успешно снимаете {item}."))],
             );
         }
+        RestraintJob::ResistLegs { cuffs } => {
+            let current = world.get::<crate::legcuffs::Legcuffed>(mob);
+            if current != Some(&crate::legcuffs::Legcuffed(cuffs)) {
+                return;
+            }
+            let (user, item) = (name_of(world, mob), cuffs_name(world, cuffs));
+            crate::legcuffs::remove(world, mob, action.user_pos);
+            show(
+                world,
+                action.user_pos,
+                DEFAULT_MESSAGE_RANGE,
+                ChatChannel::Combat,
+                (Span::Danger, format!("{user} снимает {item}!")),
+                &[(mob, Span::Notice, format!("Вы успешно снимаете {item}."))],
+            );
+        }
         RestraintJob::Resist { cuffs } => {
             if world.get::<Handcuffed>(mob) != Some(&Handcuffed(cuffs)) {
                 return;
@@ -393,6 +418,13 @@ pub fn resist_restraints(world: &mut World, client: Entity, mob: Entity) {
                 .get::<DmHandcuffs>(cuffs)
                 .map_or(600.0, |c| c.breakouttime);
             (cuffs, breakout, RestraintJob::Resist { cuffs })
+        } else if let Some(crate::legcuffs::Legcuffed(cuffs)) =
+            world.get::<crate::legcuffs::Legcuffed>(mob).copied()
+        {
+            let breakout = world
+                .get::<ss13_mapload::DmLegcuffs>(cuffs)
+                .map_or(300.0, |c| c.breakouttime);
+            (cuffs, breakout, RestraintJob::ResistLegs { cuffs })
         } else if let Some(SuitRestrained(suit)) = world.get::<SuitRestrained>(mob).copied() {
             (
                 suit,

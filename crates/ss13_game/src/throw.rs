@@ -311,6 +311,7 @@ fn throw_clicks(world: &mut World, mut clicks: Local<MessageCursor<ThrowClick>>)
             },
         ));
         // tg `quickstart`: the first tick runs at once.
+        crate::legcuffs::on_thrown(world, item, from);
         fly_one(world, item, now * 10.0);
     }
 }
@@ -389,7 +390,7 @@ fn throw_grabbed(world: &mut World, mob: Entity, from: TilePos, click: ThrowClic
 }
 
 /// tg `iscarbon`: a living mob with hands that is not a silicon or a basic mob.
-fn is_carbon(world: &World, mob: Entity) -> bool {
+pub(crate) fn is_carbon(world: &World, mob: Entity) -> bool {
     world.get::<Health>(mob).is_some()
         && world.get::<Inventory>(mob).is_some()
         && world.get::<crate::silicon::Silicon>(mob).is_none()
@@ -527,6 +528,7 @@ pub fn throw_at(world: &mut World, item: Entity, target: TilePos, range: u32, sp
         target: None,
         last_dir: None,
     });
+    crate::legcuffs::on_thrown(world, item, from);
     fly_one(world, item, now_ds);
     true
 }
@@ -675,6 +677,13 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     if world.get::<Health>(hit).is_some() {
         hit_living(world, item, thrown, hit);
         crate::holodeck::dodgeball_hit(world, item, hit);
+        // `bola/throw_impact`: not caught.
+        if world.get_entity(item).is_ok() && world.get::<CarriedBy>(item).is_none() {
+            crate::legcuffs::thrown(world, item, hit);
+        }
+        if world.get_entity(item).is_err() {
+            return;
+        }
         // `frozen/shatter_on_throw`: not caught.
         if world.get_entity(item).is_ok() && crate::effects::frozen::shatter(world, item) {
             return;
@@ -737,7 +746,8 @@ fn hit_living(world: &mut World, item: Entity, thrown: &Thrown, mob: Entity) {
     let catches = catcher.is_some()
         && world.get::<ThrowMode>(mob) == Some(&ThrowMode(true))
         && world.get::<Stat>(mob) == Some(&Stat::Conscious)
-        && dm.pickable();
+        && dm.pickable()
+        && !crate::legcuffs::uncatchable(world, item);
     if catches {
         let hand = catcher.map_or(0, |inv| inv.active);
         crate::inventory::pick_up(world, mob, item, hand);

@@ -636,6 +636,7 @@ pub(crate) fn carried_items(world: &World, mob: Entity) -> Vec<Entity> {
         .map(|inv| ALL_SLOTS.iter().filter_map(|&s| inv.slot(s)).collect())
         .unwrap_or_default();
     carried.extend(world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0));
+    carried.extend(world.get::<crate::legcuffs::Legcuffed>(mob).map(|l| l.0));
     carried
 }
 
@@ -667,6 +668,8 @@ pub fn gib_with(world: &mut World, mob: Entity, flags: u8) {
     gib_moodlets(world, mob, pos);
     ghostize_gone(world, mob);
     if flags & DROP_ITEMS != 0 {
+        // A snare fizzles instead of dropping; a bola or a trap falls.
+        crate::legcuffs::remove(world, mob, pos);
         for item in carried_items(world, mob) {
             if world.get::<NoDrop>(item).is_some() {
                 world.despawn(item);

@@ -100,13 +100,14 @@ const fn look(
     }
 }
 
-const SLOT_LOOKS: [SlotLook; 18] = [
+const SLOT_LOOKS: [SlotLook; 19] = [
     look("eyes", "eyewear", (0, 0), Some("glasses"), None),
     look("head", "headwear", (0, 1), Some("head"), None),
     look("neck", "neckwear", (1, 0), Some("neck"), None),
     look("mask", "mask", (1, 1), Some("mask"), None),
     look("ears", "earwear", (0, 2), Some("ears"), None),
     look("handcuffs", "handcuffs", (3, 5), None, None),
+    look("legcuffs", "legcuffs", (4, 2), None, None),
     look("jumpsuit", "uniform", (2, 1), Some("uniform"), None),
     look("suit", "suit", (2, 2), Some("suit"), None),
     look("gloves", "gloves", (3, 4), Some("gloves"), None),

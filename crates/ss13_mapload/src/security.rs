@@ -16,9 +16,11 @@ pub const BATON_ROOT: &str = "/obj/item/melee/baton";
 pub const SECURITY_BATON_ROOT: &str = "/obj/item/melee/baton/security";
 pub const TELESCOPIC_BATON_ROOT: &str = "/obj/item/melee/baton/telescopic";
 pub const HANDCUFFS_ROOT: &str = "/obj/item/restraints/handcuffs";
+pub const LEGCUFFS_ROOT: &str = "/obj/item/restraints/legcuffs";
 
 const BATON_COMPONENT: &str = "dm_baton";
 const HANDCUFFS_COMPONENT: &str = "dm_handcuffs";
+const LEGCUFFS_COMPONENT: &str = "dm_legcuffs";
 
 /// `/obj/item/melee/baton` vars, times in deciseconds as in DM.
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
@@ -52,6 +54,18 @@ pub struct DmHandcuffs {
     pub breakouttime: f32,
     /// Used zipties cannot cuff again (`used`).
     pub used: bool,
+}
+
+/// `/obj/item/restraints/legcuffs` vars, deciseconds. `armed` is live (bear traps open and shut).
+#[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
+pub struct DmLegcuffs {
+    pub path: String,
+    pub breakouttime: f32,
+    /// Bear traps: `armed`, `trap_damage`.
+    pub armed: bool,
+    pub trap_damage: f32,
+    /// Bolas: `knockdown` of the victim.
+    pub knockdown: f32,
 }
 
 /// Converter fields of `path`.
@@ -108,6 +122,14 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             out.push(ext(c, var, format!("{:?}", n(var) as f32)));
         }
         out.push(ext(c, "used", truthy(get("used")).to_string()));
+    }
+    if is_under(path, LEGCUFFS_ROOT) {
+        let c = LEGCUFFS_COMPONENT;
+        out.push(ext(c, "path", str_ron(path)));
+        for var in ["breakouttime", "trap_damage", "knockdown"] {
+            out.push(ext(c, var, format!("{:?}", n(var) as f32)));
+        }
+        out.push(ext(c, "armed", truthy(get("armed")).to_string()));
     }
     out
 }

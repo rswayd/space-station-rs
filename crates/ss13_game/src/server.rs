@@ -292,6 +292,7 @@ impl Plugin for GameServerPlugin {
             crate::point::PointServerPlugin,
         ))
         .add_plugins(crate::mob_holder::MobHolderPlugin)
+        .add_plugins(crate::legcuffs::LegcuffsPlugin)
         .add_plugins(crate::janitor::JanitorServerPlugin)
         .add_plugins(crate::crayons::CrayonsPlugin)
         .add_plugins(crate::buffs::BuffsPlugin)

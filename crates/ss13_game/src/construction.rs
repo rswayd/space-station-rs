@@ -195,6 +195,10 @@ pub enum Job {
     },
     /// Cuffing, taking cuffs off, breaking out (`crate::restraints`).
     Restraints(crate::restraints::RestraintJob),
+    /// A welder on a turret frame (`crate::defenses::turret_build`).
+    TurretBuild(crate::defenses::turret_build::TurretBuildJob),
+    /// Barricade welds, prying and plank nailing (`crate::defenses::barricades`).
+    Barricade(crate::defenses::barricades::BarricadeJob),
     /// Pulling taser electrodes out of yourself (`crate::taser`).
     RemoveElectrodes,
     /// A gun in the mouth or to a head (`crate::guns`, tg `handle_suicide`).
@@ -1383,6 +1387,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         |world: &mut World| item.is_none_or(|i| crate::tools::consume(world, i, action.amount));
     match &action.job {
         &Job::Restraints(job) => crate::restraints::complete(world, mob, action, job),
+        &Job::TurretBuild(job) => crate::defenses::turret_build::complete(world, action, job),
+        &Job::Barricade(job) => crate::defenses::barricades::complete(world, action, job),
         Job::RemoveElectrodes => crate::taser::complete_removal(world, mob),
         Job::GunSuicide => crate::guns::complete_suicide(world, mob, action),
         Job::Gunpoint => crate::gunpoint::complete_aim(world, mob, action),

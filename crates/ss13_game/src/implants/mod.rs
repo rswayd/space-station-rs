@@ -910,6 +910,15 @@ pub fn freedom_can_trigger(world: &World, mob: Entity) -> bool {
         .get::<crate::restraints::Handcuffed>(mob)
         .and_then(|c| world.get::<DmHandcuffs>(c.0))
         .is_some_and(|c| c.breakouttime <= FREEDOM_RESIST_DS)
+        || freedom_breaks_legcuffs(world, mob)
+}
+
+/// `uncuff(resist_strength)` also takes off leg restraints it can break.
+fn freedom_breaks_legcuffs(world: &World, mob: Entity) -> bool {
+    world
+        .get::<crate::legcuffs::Legcuffed>(mob)
+        .and_then(|c| world.get::<ss13_mapload::DmLegcuffs>(c.0))
+        .is_some_and(|c| c.breakouttime <= FREEDOM_RESIST_DS)
 }
 
 /// `freedom/activate`: `uncuff(resist_strength)`; gone after the last use.
@@ -924,7 +933,16 @@ fn activate_freedom(world: &mut World, mob: Entity, id: u32) {
     let Some(left) = use_charge(world, mob, id) else {
         return;
     };
-    crate::restraints::uncuff(world, mob, pos);
+    if world
+        .get::<crate::restraints::Handcuffed>(mob)
+        .and_then(|c| world.get::<DmHandcuffs>(c.0))
+        .is_some_and(|c| c.breakouttime <= FREEDOM_RESIST_DS)
+    {
+        crate::restraints::uncuff(world, mob, pos);
+    }
+    if freedom_breaks_legcuffs(world, mob) {
+        crate::legcuffs::remove(world, mob, pos);
+    }
     if left == 0 {
         tell_mob(world, mob, Span::Warning, "Имплант деградировал!");
         remove_implant(world, mob, id, true);

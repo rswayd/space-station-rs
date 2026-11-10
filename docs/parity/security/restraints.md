@@ -29,17 +29,17 @@
 Закованные ноги: сильное замедление (`slowdown` 7), освобождение сопротивлением за 30 с.
 
 - **Код:** [`/obj/item/restraints/legcuffs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L409)
-- **Статус в ss13-rs:** ❌ нет — `restraints.rs` явно без legcuffs (shortcut)
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/legcuffs.rs` (`Legcuffed`), `crates/ss13_mapload/src/security.rs` (`DmLegcuffs`): слот ног — компонент на мобе, замедление `slowdown` суммируется в `clothing::slowdown`, оверлей `legcuff`, снятие сопротивлением (`restraints.rs`, `breakouttime`), меню раздевания (строка `legcuffs`), импланты свободы, при потере ноги и при гибе
 
 ### Капкан (beartrap)
 Взведённый капкан на полу захлопывается на наступившем: 20 урона ноге и путы на ногах; энергетический капкан (у киборгов и вариант-ловушка) исчезает со временем.
 
 - **Код:** [`/obj/item/restraints/legcuffs/beartrap`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L432), [`proc/spring_trap()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L530), [`/obj/item/restraints/legcuffs/beartrap/energy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L572)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/legcuffs.rs` (`spring_trap`, `stepped_on`): взведение в руке, срабатывание на наступившем (не на мелких и невесомых, ездоку на самокате капкан ловит ноги, в другом транспорте просто захлопывается), 20 урона ноге с ранением и путы при двух ногах; энергетический капкан рассеивается через 10 с и пропадает при снятии, срабатывает от касания на полу. Нет неуклюжих промахов при взведении и поднятии (клоунских черт в порте нет), `on_found`; выдача киборгам и арахнидам — группы модулей/мобов
 
 ### Бола
 Метательное оружие: попав в бегущего, опутывает ноги (выход 3.5 с); тактическая бола ещё и сбивает с ног (3.5 с), энергетическая — от гана/киборга, gonbola — живая и держит 30 с.
 
 - **Код:** [`/obj/item/restraints/legcuffs/bola`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L607), [`proc/ensnare()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L649), [`/obj/item/restraints/legcuffs/bola/tactical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L663), [`/obj/item/restraints/legcuffs/bola/energy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L677), [`/obj/item/restraints/legcuffs/bola/gonbola`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/handcuffs.dm#L704)
 - **BandaStation:** [`modular_bandastation/contraband/code/legcuffs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/contraband/code/legcuffs.dm#L1) — тактическая бола помечена как контрабанда (`TRAIT_CONTRABAND`)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/legcuffs.rs` (`thrown`, `ensnare`), `crates/ss13_game/src/throw.rs`: не пойманная бола опутывает ноги углерода, звук броска, сбивание с ног у тактической (`knockdown`), энергетическая не ловится и надевает энергетический капкан, gonbola пацифицирует и лишает речи на время ношения (баг tg с вечным пацифизмом при промахе не перенесён, настроение `gondola`). Культистская бола: кроме прохода сквозь культистов — группа культа (нет выдачи и обратного эффекта при поднятии). Крафт бол из `ranged_weapon.dm` и контрабандная метка — группы крафта и контрабанды

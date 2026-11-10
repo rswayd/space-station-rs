@@ -612,6 +612,10 @@ fn apply(world: &mut World, client: Entity, action: Action) {
         }
         Action::AltSlot(slot) => {
             if let Some(item) = inventory.slot(slot)
+                && crate::defenses::barricades::toggle_barrier(world, client, item)
+            {
+                // A barrier grenade's mode changed.
+            } else if let Some(item) = inventory.slot(slot)
                 && world.get::<crate::internals::TankAir>(item).is_some()
             {
                 crate::internals::toggle(world, client, mob, item);
@@ -1218,6 +1222,7 @@ type MobItem<'a> = (
     &'a PlayerMob,
     Has<crate::restraints::Handcuffed>,
     Option<&'a crate::antag::cult::server::CultHalo>,
+    Has<crate::legcuffs::Legcuffed>,
 );
 
 /// Look and HUD of mobs whose inventory changed (pickups, drops, swaps; spawn counts).
@@ -1229,7 +1234,8 @@ fn refresh_mobs(
     mut open: MessageWriter<OpenUi>,
     worn: crate::clothing::WornLook,
 ) {
-    for (mob, (inventory, body, mut hud, appearance, player, cuffed, halo)) in &mut mobs {
+    for (mob, (inventory, body, mut hud, appearance, player, cuffed, halo, legcuffed)) in &mut mobs
+    {
         let icon = |slot: Option<Entity>| {
             let (_, _, appearance) = items.get(slot?).ok()?;
             appearance.map(|a| HudIcon {
@@ -1286,6 +1292,10 @@ fn refresh_mobs(
             .unwrap_or_default();
         // tg `update_worn_handcuffs`.
         if cuffed && let Some(cuffs) = icons.as_deref().and_then(crate::restraints::overlay) {
+            sprites.push(cuffs);
+        }
+        // tg `update_worn_legcuffs`.
+        if legcuffed && let Some(cuffs) = icons.as_deref().and_then(crate::legcuffs::overlay) {
             sprites.push(cuffs);
         }
         // tg `/datum/status_effect/cult_halo/add_halo`.

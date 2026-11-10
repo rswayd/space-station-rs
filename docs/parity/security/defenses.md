@@ -23,23 +23,23 @@
 Пошаговая сборка рамы: металл, гаечный ключ, энергооружие внутрь (определяет снаряды), датчик движения, сварка; крышка турели с замком.
 
 - **Код:** [`/obj/machinery/porta_turret_construct`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/porta_turret/portable_turret_construct.dm#L11), [`/obj/machinery/porta_turret_cover`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/porta_turret/portable_turret_cover.dm#L6)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/defenses/turret_build.rs` (`TurretFrame`), `ss13_mapload::guns::install_gun`: все шаги рамы (ключ, железо, энергооружие, датчик движения, отвёртка, железо, сварка), откат инструментами и пустой рукой; готовая турель стреляет снарядами установленного оружия, лазертаг даёт турель своей команды, замок ID — в `defenses/server.rs`. Нет переименования рамы ручкой (`finish_name`), гаечного ключа и лома у готовой турели (крышка — спрайт самой турели, см. пункт «Портативная турель»)
 
 ### Сканер-ворота (scanner gate)
 Рамка, сканирующая проходящих в выбранном режиме: майндщит, болезни (порог тяжести), оружие, розыск, вид, голод/полнота; при срабатывании — тревога и красная полоса, можно инвертировать; настройка по ID, панель с проводами, емаг ломает. Пресет на оружие.
 
 - **Код:** [`/obj/machinery/scanner_gate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/scanner_gate.dm#L9), [`proc/perform_scan()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/scanner_gate.dm#L192), [`/datum/wires/scanner_gate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wires/scanner_gate.dm#L1), [`/obj/machinery/scanner_gate/preset_guns`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/scanner_gate.dm#L372); tgui: [`ScannerGate.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/ScannerGate.jsx)
 - **BandaStation:** [`modular_bandastation/tts/code/base_seeds/objs/objs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/tts/code/base_seeds/objs/objs.dm#L189) — голос TTS у сканер-ворот
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/defenses/scanner_gate.rs` (`ScannerGate`, `perform_scan`), окно `ScannerGate` (`defenses/client.rs`), провода (`machine_wires.rs`): все режимы (майндщит, болезнь с порогом, оружие с допуском/майндщитом, розыск, вид включая подтипы и спящих зомби, голод/ожирение), инверсия, ложные срабатывания, тревога и полосы сканирования, замок ID, панель и провода (импульс на сборку при срабатывании/промахе), емаг снимает замок, пресет на оружие. Нет поворота ключом, тира сканирующих модулей (фиксировано как у базовых деталей), расхода энергии на скан, `TRAIT_CONTRABAND_BLOCKER`, ворот люкс-шаттла (группа шаттла), TTS-голоса (группа TTS); розыск ищет запись по настоящему имени, как турель
 
 ### Баррикады
 Блокирующие проход структуры: деревянные (из досок, грубые, снежные), мешки с песком, охранная баррикада; ломаются уроном, частично защищают от выстрелов.
 
 - **Код:** [`/obj/structure/barricade`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/deployable.dm#L11), [`/obj/structure/barricade/wooden`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/deployable.dm#L66), [`/obj/structure/barricade/sandbags`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/deployable.dm#L113), [`/obj/structure/barricade/security`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/deployable.dm#L132)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/defenses/barricades.rs`: плотные ломающиеся баррикады всех подтипов (`obj_damage`), `proj_pass_rate` по типу и проход выстрелов от соседнего стрелка (`projectile.rs`), сварка металлических (4 с, 10 топлива), лом деревянных, обломки досок, доски на двери и окна (грубая баррикада за 5 с). Нет перелезания и подъёма у мешков с песком, брони охранной баррикады против снарядов (только `armor_melee`), прохода с уже занятого баррикадой тайла
 
 ### Граната-баррикада и складной пулемёт
 Граната охраны разворачивает баррикаду выбранного типа (стена, коридор, ...); складной тяжёлый пулемёт разворачивается в стационарную турель.
 
 - **Код:** [`/obj/item/grenade/barrier`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/deployable.dm#L149), [`/obj/item/deployable_turret_folded`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/deployable.dm#L205)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ граната — `crates/ss13_game/src/grenades.rs` (`Kind::Barrier`), `defenses/barricades.rs` (`deploy`, `toggle_barrier`): одиночный/вертикальный/горизонтальный режим по Alt-клику (и в слоте), центр ставится всегда, бока — на свободные тайлы; складной пулемёт — уже был в `crates/ss13_game/src/deployable_turrets.rs`. Нет кнопки действия гранаты (`ui_action_click`)
