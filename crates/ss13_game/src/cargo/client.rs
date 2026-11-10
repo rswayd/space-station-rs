@@ -44,6 +44,8 @@ impl Plugin for CargoClientPlugin {
         app.register_ui_view::<CargoUi>()
             .register_ui_view::<CargoExpressUi>()
             .register_ui_view::<MatMarketUi>()
+            .register_ui_view::<super::market_ui::BlackMarketUi>()
+            .register_ui_view::<super::market_ui::LtsrbtUi>()
             .add_observer(submit_request);
     }
 }

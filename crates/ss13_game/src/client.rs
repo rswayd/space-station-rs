@@ -86,6 +86,7 @@ impl Plugin for GameClientPlugin {
         .add_plugins(crate::shuttle_console_client::ShuttleConsoleClientPlugin)
         .add_plugins(crate::transport_ui_client::TransportClientPlugin)
         .add_plugins(crate::bots::client::BotsClientPlugin)
+        .add_plugins(crate::chem_machines::client::ChemMachinesClientPlugin)
         .add_plugins(crate::antag::cult::client::CultClientPlugin)
         .add_plugins(crate::antag::revolution::client::RevolutionClientPlugin)
         .add_plugins(crate::antag::heretic::client::HereticClientPlugin)

@@ -481,6 +481,14 @@ pub(crate) fn transfer_to_mob(
     let blood = chem.id(crate::medical::blood::BLOOD_REAGENT);
     let blood_before = blood.map_or(0.0, |id| a.amount(id));
     let blood_data = blood.and_then(|id| a.has(id)).and_then(|r| r.data.clone());
+    // A vaccine's disease ids (`crate::chem_machines::pandemic`).
+    let vaccine = chem.id(crate::chem_machines::pandemic::VACCINE);
+    let vaccine_before = vaccine.map_or(0.0, |id| a.amount(id));
+    let vaccine_ids = vaccine
+        .and_then(|id| a.has(id))
+        .and_then(|r| r.data.as_deref())
+        .map(crate::chem_machines::pandemic::vaccine_ids)
+        .unwrap_or_default();
     // tg `expel_ingested`: without a stomach what is swallowed comes back out.
     // shortcut: it is lost (no vomit decal with the reagents).
     let expelled =
@@ -493,6 +501,7 @@ pub(crate) fn transfer_to_mob(
         moved = a.trans_to(&chem, target, amount, 1.0, None, false, false);
     }
     let injected = blood_before - blood.map_or(0.0, |id| a.amount(id));
+    let vaccinated = vaccine_before - vaccine.map_or(0.0, |id| a.amount(id));
     put(world, from, a);
     if !ingest {
         crate::medical::blood::expose_inject(world, mob, injected, blood_data);
@@ -500,6 +509,9 @@ pub(crate) fn transfer_to_mob(
     // The viruses and antibodies of the blood (`blood_reagent` `on_expose_mob`).
     if injected > 0.0 && !expelled {
         crate::medical::diseases::blood_exposed(world, from, mob, ingest);
+    }
+    if vaccinated > 0.0 && !expelled {
+        crate::medical::diseases::vaccinate(world, mob, &vaccine_ids);
     }
     moved
 }
@@ -1803,6 +1815,7 @@ fn process_reactions(world: &mut World) {
     for e in reacting {
         crate::chem_heater::reaction_step(world, e, seconds);
         crate::teapot::reaction_step(world, e, seconds);
+        crate::chem_machines::recipe_debug::reaction_step(world, e, seconds);
         if let Some(mut reagents) = world.get_mut::<Reagents>(e) {
             reagents.0.process(&chem, seconds);
         }

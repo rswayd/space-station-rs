@@ -46,6 +46,8 @@ pub const SMOKE_SLEEPING: &str = "/obj/effect/particle_effect/fluid/smoke/sleepi
 pub const SMOKE_CHEM: &str = "/obj/effect/particle_effect/fluid/smoke/chem";
 pub const SMOKE_CHEM_QUICK: &str = "/obj/effect/particle_effect/fluid/smoke/chem/quick";
 pub const SMOKE_CHEM_MEDIUM: &str = "/obj/effect/particle_effect/fluid/smoke/chem/medium";
+/// The smoke machine's: transparent (`opacity = FALSE`, `alpha = 100`).
+pub const SMOKE_CHEM_MACHINE: &str = "/obj/effect/particle_effect/fluid/smoke/chem/smoke_machine";
 
 /// `SSsmoke`: `spread_wait`, `effect_wait`.
 const SPREAD_WAIT: f64 = 0.1;
@@ -77,6 +79,8 @@ pub enum SmokeKind {
     Chem,
     ChemQuick,
     ChemMedium,
+    /// `crate::chem_machines::smoke_machine`.
+    ChemMachine,
 }
 
 impl SmokeKind {
@@ -93,6 +97,7 @@ impl SmokeKind {
             Self::Chem => SMOKE_CHEM,
             Self::ChemQuick => SMOKE_CHEM_QUICK,
             Self::ChemMedium => SMOKE_CHEM_MEDIUM,
+            Self::ChemMachine => SMOKE_CHEM_MACHINE,
         }
     }
 
@@ -102,14 +107,17 @@ impl SmokeKind {
             Self::Basic | Self::Transparent | Self::Freezing => 10.0,
             Self::Quick => 1.0,
             Self::Bad | Self::BadGreen | Self::BadBlack => 16.0,
-            Self::Sleeping | Self::Chem => 20.0,
+            Self::Sleeping | Self::Chem | Self::ChemMachine => 20.0,
             Self::ChemQuick => 4.0,
             Self::ChemMedium => 8.0,
         }
     }
 
     pub fn chem(self) -> bool {
-        matches!(self, Self::Chem | Self::ChemQuick | Self::ChemMedium)
+        matches!(
+            self,
+            Self::Chem | Self::ChemQuick | Self::ChemMedium | Self::ChemMachine
+        )
     }
 
     fn bad(self) -> bool {

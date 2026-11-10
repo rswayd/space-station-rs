@@ -612,6 +612,17 @@ pub struct UplinkItemDef {
     pub limited_discount_stock: i32,
     pub population_minimum: u32,
     pub restricted_roles: Vec<String>,
+    /// `uplink_item_flags` (`SYNDIE_ILLEGAL_TECH`, `SYNDIE_TRIPS_CONTRABAND`).
+    #[serde(default = "default_uplink_flags")]
+    pub uplink_item_flags: u32,
+}
+
+/// `SYNDIE_TRIPS_CONTRABAND`: the item counts as contraband (`is_contraband`).
+pub const SYNDIE_TRIPS_CONTRABAND: u32 = 1 << 1;
+
+/// The `/datum/uplink_item` default, `SYNDIE_ILLEGAL_TECH | SYNDIE_TRIPS_CONTRABAND`.
+fn default_uplink_flags() -> u32 {
+    (1 << 0) | SYNDIE_TRIPS_CONTRABAND
 }
 
 /// A `/datum/objective_item/steal` of `objective_type` `normal` (tg `GLOB.possible_items`).
@@ -879,6 +890,9 @@ pub fn resolve(types: &DmTypes) -> AntagData {
                     .map_or(-1, |v| int(Some(v)) as i32),
                 population_minimum: int(types.resolved(p, "population_minimum")).max(0) as u32,
                 restricted_roles: strings(types.resolved(p, "restricted_roles")),
+                uplink_item_flags: types
+                    .resolved(p, "uplink_item_flags")
+                    .map_or_else(default_uplink_flags, |v| int(Some(v)) as u32),
             })
         })
         .collect();

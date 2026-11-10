@@ -252,6 +252,8 @@ pub fn refresh(world: &mut World, machine: Entity) {
     crate::chem_dispenser::refresh_parts(world, machine);
     crate::chem_master::refresh_parts(world, machine);
     crate::chem_heater::refresh_parts(world, machine);
+    crate::chem_machines::refresh_parts(world, machine);
+    crate::cargo::black_market::refresh_parts(world, machine);
     crate::power::smes::refresh_parts(world, machine);
     crate::eng_machines::flatpacker::refresh_parts(world, machine);
 }

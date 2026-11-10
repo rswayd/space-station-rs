@@ -138,3 +138,25 @@ pub fn blood_exposed(world: &mut World, container: Entity, mob: Entity, ingest: 
     }
     forget_if_bloodless(world, container);
 }
+
+/// tg `/datum/reagent/vaccine/expose_mob` (`INGEST` or `INJECT`): the diseases whose id the
+/// vaccine names are cured with a resistance, and the mob resists those ids from now on.
+pub fn vaccinate(world: &mut World, mob: Entity, ids: &[String]) {
+    if world.get::<Diseases>(mob).is_none() || ids.is_empty() {
+        return;
+    }
+    let mut index = of_mob(world, mob).len();
+    while index > 0 {
+        index -= 1;
+        if ids.contains(&of_mob(world, mob)[index].id()) {
+            cure(world, mob, index, true);
+        }
+    }
+    if let Some(mut all) = world.get_mut::<Diseases>(mob) {
+        for id in ids {
+            if !all.resistances.contains(id) {
+                all.resistances.push(id.clone());
+            }
+        }
+    }
+}

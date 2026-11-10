@@ -132,9 +132,13 @@ pub enum Family {
     ShieldModule,
     /// Manufactorio machines (`crate::eng_machines::manufactorio`).
     Manufacturing,
+    /// Smoke machines, HPLC machines and PANDEMICs (`crate::chem_machines`).
+    ChemMachine,
+    /// LTSRBT pads (`crate::cargo::black_market`).
+    Ltsrbt,
 }
 
-const FAMILIES: [(&str, Family); 45] = [
+const FAMILIES: [(&str, Family); 49] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -213,6 +217,19 @@ const FAMILIES: [(&str, Family); 45] = [
         crate::eng_machines::manufactorio::ROOT,
         Family::Manufacturing,
     ),
+    (
+        crate::chem_machines::smoke_machine::SMOKE_MACHINE,
+        Family::ChemMachine,
+    ),
+    (
+        crate::chem_machines::mass_spec::MASS_SPEC,
+        Family::ChemMachine,
+    ),
+    (
+        crate::chem_machines::pandemic::PANDEMIC,
+        Family::ChemMachine,
+    ),
+    (crate::cargo::black_market::LTSRBT, Family::Ltsrbt),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -1181,6 +1198,10 @@ pub fn setup_built(world: &mut World, machine: Entity) {
             crate::eng_machines::modular_shield::setup(world, machine)
         }
         Family::Manufacturing => crate::eng_machines::manufactorio::setup(world, machine),
+        Family::ChemMachine => {
+            crate::chem_machines::ensure(world, machine);
+        }
+        Family::Ltsrbt => crate::cargo::black_market::setup(world, machine),
     }
 }
 

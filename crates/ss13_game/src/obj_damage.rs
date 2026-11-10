@@ -564,6 +564,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         || crate::displaycase::deconstruct(world, target, &obj, pos, disassembled)
         || crate::flora::deconstruct(world, target, &obj)
         || crate::defenses::barricades::deconstruct(world, &obj, pos)
+        || crate::chem_machines::separator::deconstruct(world, target, &obj, pos)
     {
         // A chair's, bed's, bathroom fixture's, decor's or flora's debris is out.
     }

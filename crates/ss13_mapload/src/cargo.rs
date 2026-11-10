@@ -166,6 +166,34 @@ pub struct CargoData {
     /// `/obj/item/mail` `generic_goodies`: (type, weight).
     #[serde(default)]
     pub mail_generic_goodies: Vec<(String, u32)>,
+    /// The `/datum/market_item` types `SSmarket` can stock (an `item` set), by type path.
+    #[serde(default)]
+    pub market_items: Vec<MarketItemDef>,
+}
+
+/// A `/datum/market_item` (`code/modules/cargo/markets/market_items/`).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct MarketItemDef {
+    pub id: String,
+    pub name: String,
+    pub desc: String,
+    pub category: String,
+    /// The item type it sells.
+    pub item: String,
+    /// A fixed `price` (else `rand(price_min, price_max)`).
+    pub price: Option<f64>,
+    pub price_min: f64,
+    pub price_max: f64,
+    /// A fixed `stock` (else `rand(stock_min, stock_max)`).
+    pub stock: Option<f64>,
+    pub stock_min: f64,
+    pub stock_max: f64,
+    pub availability_prob: f64,
+    /// `markets`: `/datum/market` types.
+    pub markets: Vec<String>,
+    /// `shipping_override`: (method, fee).
+    pub shipping_override: Vec<(String, f64)>,
+    pub restockable: bool,
 }
 
 impl CargoData {
@@ -198,6 +226,7 @@ impl CargoData {
             .collect();
         out.insert(MANIFEST_PAPER);
         out.extend(self.mail_generic_goodies.iter().map(|(t, _)| t.as_str()));
+        out.extend(self.market_items.iter().map(|m| m.item.as_str()));
         out.extend(
             self.jobs
                 .iter()
@@ -386,13 +415,61 @@ pub fn resolve(types: &DmTypes) -> CargoData {
         .into_iter()
         .filter_map(|p| job(types, p))
         .collect();
+    let mut market_paths: Vec<&str> = types
+        .types
+        .keys()
+        .map(String::as_str)
+        .filter(|p| is_under(p, MARKET_ITEM_ROOT) && *p != MARKET_ITEM_ROOT)
+        .collect();
+    market_paths.sort_unstable();
+    let market_items = market_paths
+        .into_iter()
+        .filter_map(|p| market_item(types, p))
+        .collect();
     CargoData {
         packs,
         exports,
         bounties,
         jobs,
         mail_generic_goodies: weighted(types, types.resolved(MAIL, "generic_goodies")),
+        market_items,
     }
+}
+
+const MARKET_ITEM_ROOT: &str = "/datum/market_item";
+
+/// `SSmarket.initialize_item`: a type with an `item` (abstract paths have none).
+fn market_item(types: &DmTypes, p: &str) -> Option<MarketItemDef> {
+    let item = path(types.resolved(p, "item")).filter(|t| types.types.contains_key(t))?;
+    if path(types.resolved(p, "abstract_path")).as_deref() == Some(p) {
+        return None;
+    }
+    let maybe = |var: &str| types.resolved(p, var).and_then(Value::as_f64);
+    let shipping_override = list(types.resolved(p, "shipping_override"))
+        .into_iter()
+        .filter_map(|(k, v)| Some((k.as_str()?.to_owned(), v?.as_f64()?)))
+        .collect();
+    let markets = match types.resolved(p, "markets") {
+        Some(v) if v.get("list").is_some() => paths(Some(v)),
+        _ => vec!["/datum/market/blackmarket".to_owned()],
+    };
+    Some(MarketItemDef {
+        id: p.to_owned(),
+        name: text(types.resolved(p, "name")),
+        desc: text(types.resolved(p, "desc")),
+        category: text(types.resolved(p, "category")),
+        item,
+        price: maybe("price"),
+        price_min: num(types.resolved(p, "price_min")),
+        price_max: num(types.resolved(p, "price_max")),
+        stock: maybe("stock"),
+        stock_min: maybe("stock_min").unwrap_or(1.0),
+        stock_max: num(types.resolved(p, "stock_max")),
+        availability_prob: num(types.resolved(p, "availability_prob")),
+        markets,
+        shipping_override,
+        restockable: maybe("restockable").is_none_or(|v| v != 0.0),
+    })
 }
 
 const BOUNTY_ITEM: &str = "/datum/bounty/item";

@@ -231,6 +231,7 @@ pub mod chem;
 pub mod chem_dispenser;
 #[cfg(feature = "server")]
 pub mod chem_heater;
+pub mod chem_machines;
 #[cfg(feature = "server")]
 pub mod chem_master;
 #[cfg(feature = "server")]
