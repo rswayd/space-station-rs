@@ -144,7 +144,7 @@ fn row(sensor: &CrewSensor) -> impl Scene + use<> {
 /// `useSharedState('crewConsole-tab', 'List')` and `MapView`'s `selectedLevel`.
 const LOCAL_TAB: &str = "tab";
 const LOCAL_Z: &str = "z";
-const MARKER: f32 = 10.0;
+const MARKER: f32 = 14.0;
 
 fn table(data: &CrewConsoleData) -> impl Scene + use<> {
     let rows: Vec<_> = data.sensors.iter().map(row).collect();
@@ -180,13 +180,20 @@ fn map_view(map: &MapUiData, data: &CrewConsoleData, local: &UiLocalState) -> im
         .filter(|z| levels.contains(z))
         .or(Some(map.main_floor));
     let tabs = crate::nanomap::level_tabs(map, level, LOCAL_Z);
+    let zoom = crate::nanomap::zoom_value(local.value(crate::nanomap::LOCAL_ZOOM));
     let markers: Vec<_> = data
         .sensors
         .iter()
         .filter_map(|sensor| {
             let pos = sensor.pos.filter(|p| Some(p.z) == level)?;
-            let (x, y) = crate::nanomap::tile_px(pos.x, pos.y);
+            let (x, y) =
+                crate::nanomap::tile_px(pos.x, pos.y, crate::nanomap::map_side(Vec2::ZERO, zoom));
             let half = MARKER / 2.0;
+            let marker = crate::nanomap::NanomapMarker {
+                x: pos.x,
+                y: pos.y,
+                half,
+            };
             let color = UiColor::Css(
                 sensor
                     .vitals
@@ -224,19 +231,23 @@ fn map_view(map: &MapUiData, data: &CrewConsoleData, local: &UiLocalState) -> im
                     padding: UiRect::ZERO,
                 }
                 name
+                marker
             })
         })
         .collect();
-    let area = crate::nanomap::map_area(map, level, markers);
+    let area = crate::nanomap::map_area(map, level, zoom, markers);
+    let zoom_buttons = crate::nanomap::zoom_buttons(zoom);
     bsn! {
         @Stack { @vertical: true, @fill: true }
         Children [
             @StackItem Children [ @Tabs Children [ {tabs} ] ]
             --
+            @StackItem Children [ @Stack Children [ {zoom_buttons} ] ]
+            --
             @StackItem { @grow: 1.0 }
             Node { min_height: px(0) }
             Children [
-                @Section { @fill: true, @scrollable: true }
+                @Section { @fill: true }
                 Children [ {EntityScene(area)} ]
             ]
         ]

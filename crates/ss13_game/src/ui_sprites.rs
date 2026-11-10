@@ -17,12 +17,15 @@ pub struct UiSpritesPlugin;
 impl Plugin for UiSpritesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<crate::nanomap::NanomapImages>()
+            .add_observer(crate::nanomap::wheel_zoom)
+            .add_observer(crate::nanomap::drag_pan)
             .add_systems(
                 PostUpdate,
                 (
                     resolve_sprites,
                     resolve_emojis,
                     crate::nanomap::resolve_images,
+                    crate::nanomap::fit_maps.before(bevy::ui::UiSystems::Layout),
                 ),
             );
     }

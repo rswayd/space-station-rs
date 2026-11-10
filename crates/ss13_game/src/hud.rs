@@ -138,6 +138,9 @@ pub struct HealthHudData {
     pub immobile: bool,
     /// It walks through anything (a ghost, the AI's eye): prediction ignores what blocks.
     pub phasing: bool,
+    /// Its steps drive something else (a mech's pilot, a vehicle's driver): they are sent at
+    /// `move_delay` but not predicted, since the vehicle (drawn from the server) carries it.
+    pub relayed: bool,
     /// tg `zone_selected`, drawn on the zone selector.
     pub zone_selected: TargetZone,
 }

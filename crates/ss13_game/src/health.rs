@@ -1079,6 +1079,7 @@ fn body_state(
             // A driver's steps drive its vehicle (`crate::vehicles`).
             immobile: (!health.can_move(*stat) || traits.immobilized) && rider.is_none(),
             phasing: false,
+            relayed: pilot.is_some() || rider.is_some(),
             zone_selected: zone.copied().unwrap_or_default().0,
         });
         if let Some(player) = player {

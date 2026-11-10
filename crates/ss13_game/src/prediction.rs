@@ -64,6 +64,13 @@ pub struct OwnImmobile(pub bool);
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct OwnPhasing(pub bool);
 
+/// The own mob's steps drive a vehicle (a mech's pilot, a driver; `crate::health_client`):
+/// they are sent at [`OwnMoveDelay`] but not taken locally. The vehicle moves on the server (a
+/// step may only turn it) and carries the mob, so the mob and the camera follow the server's
+/// position instead of running ahead of the vehicle.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OwnRelayed(pub bool);
+
 /// `Update`: reconcile, predict, write the own mob.
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PredictionSystems;
@@ -75,9 +82,16 @@ impl Plugin for PredictionPlugin {
             .init_resource::<OwnMoveDelay>()
             .init_resource::<OwnImmobile>()
             .init_resource::<OwnPhasing>()
+            .init_resource::<OwnRelayed>()
             .add_systems(
                 Update,
-                (track_control, reconcile, predict_steps, write_own_mob)
+                (
+                    track_control,
+                    reconcile,
+                    predict_steps,
+                    write_own_mob,
+                    follow_vehicle.run_if(resource_equals(OwnRelayed(true))),
+                )
                     .chain()
                     .in_set(PredictionSystems),
             );
@@ -423,6 +437,7 @@ fn predict_steps(
     input: Res<MoveInput>,
     delay: Res<OwnMoveDelay>,
     immobile: Res<OwnImmobile>,
+    relayed: Res<OwnRelayed>,
     time: Res<Time>,
     mut state: ResMut<Prediction>,
     mut intents: MessageWriter<SendIntent>,
@@ -440,6 +455,19 @@ fn predict_steps(
         return;
     }
     let seq = state.last_seq + 1;
+    if relayed.0 {
+        // The vehicle's pace, nothing predicted: the server moves (or turns) the vehicle.
+        state.ready_at = next_ready_at(
+            state.ready_at,
+            now,
+            TICK_DURATION.as_secs_f64(),
+            delay.0,
+            false,
+        );
+        state.last_seq = seq;
+        intents.write(SendIntent(ClientIntent::Move { dir, seq }));
+        return;
+    }
     let wall = walls.check(state.entity);
     let learnt = &state.blocked;
     let push = shoves(dir);
@@ -465,9 +493,14 @@ fn predict_steps(
 /// the prediction back before anything draws it. Writes only on a difference.
 fn write_own_mob(
     state: Res<Prediction>,
+    relayed: Res<OwnRelayed>,
     mobs: Query<(&TilePos, Option<&Facing>)>,
     mut commands: Commands,
 ) {
+    // Carried by a vehicle: the server's position stands ([`follow_vehicle`]).
+    if relayed.0 {
+        return;
+    }
     let (Some(entity), Some(pos)) = (state.entity, state.pos) else {
         return;
     };
@@ -482,6 +515,22 @@ fn write_own_mob(
         && facing.is_none_or(|f| f.0 != dir)
     {
         mob.try_insert(Facing(dir));
+    }
+}
+
+/// While [`OwnRelayed`]: the prediction takes the server's position of the own mob, so it
+/// resumes from there once the mob leaves the vehicle. Runs only then, so walking keeps the
+/// prediction read-only after it is reconciled.
+fn follow_vehicle(mut state: ResMut<Prediction>, mobs: Query<(&TilePos, Option<&Facing>)>) {
+    let Some((current, facing)) = state.entity.and_then(|e| mobs.get(e).ok()) else {
+        return;
+    };
+    if state.pos != Some(*current) {
+        state.pos = Some(*current);
+    }
+    let facing = facing.map(|f| f.0);
+    if facing.is_some() && state.facing != facing {
+        state.facing = facing;
     }
 }
 

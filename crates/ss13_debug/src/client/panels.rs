@@ -649,6 +649,14 @@ pub(super) fn ui(
     mut ui_state: ResMut<DebugUi>,
     tracker: Res<UiTracker>,
     windows: Option<Res<ClientWindows>>,
+    sizes: Query<&bevy::ui::ComputedNode>,
+    children: Query<&Children>,
+    parents: Query<&ChildOf>,
+    fields: Query<(
+        &bevy::text::EditableText,
+        &bevy::ui::ComputedNode,
+        &InheritedVisibility,
+    )>,
 ) -> Result {
     window(
         &mut contexts,
@@ -666,12 +674,46 @@ pub(super) fn ui(
                 .max_height(300.0)
                 .show(ui, |ui| {
                     for (id, w) in &tracker.windows {
+                        // The drawn window's laid out size, logical px (what a resize sets).
+                        let size = windows
+                            .as_ref()
+                            .and_then(|ws| ws.0.get(id))
+                            .and_then(|e| sizes.get(*e).ok())
+                            .map(|n| n.size * n.inverse_scale_factor)
+                            .map_or_else(String::new, |s| format!(" {:.0}×{:.0}", s.x, s.y));
                         egui::CollapsingHeader::new(format!(
-                            "#{id} {} \"{}\" {:?}",
+                            "#{id} {} \"{}\" {:?}{size}",
                             w.interface, w.title, w.status
                         ))
                         .id_salt(id)
                         .show(ui, |ui| {
+                            // The window's text inputs: their value, the editor's text and widths.
+                            if let Some(root) = windows.as_ref().and_then(|ws| ws.0.get(id)) {
+                                let width =
+                                    |n: &bevy::ui::ComputedNode| n.size.x * n.inverse_scale_factor;
+                                for e in children.iter_descendants(*root) {
+                                    if let Ok((text, node, visible)) = fields.get(e) {
+                                        // Widths up the tree: the `Input` root, the item's slot,
+                                        // the item row, the list.
+                                        let chain: Vec<String> = parents
+                                            .iter_ancestors(e)
+                                            .take(5)
+                                            .map(|p| {
+                                                sizes.get(p).map_or("?".to_owned(), |n| {
+                                                    format!("{:.0}", width(n))
+                                                })
+                                            })
+                                            .collect();
+                                        ui.monospace(format!(
+                                            "input '{}' {:.0}px <- {}{}",
+                                            text.value(),
+                                            width(node),
+                                            chain.join(" <- "),
+                                            if visible.get() { "" } else { " hidden" },
+                                        ));
+                                    }
+                                }
+                            }
                             match ui_json(&w.interface, &w.static_data, &w.data) {
                                 Ok((static_data, data)) => {
                                     egui::CollapsingHeader::new("static data")

@@ -237,19 +237,42 @@ fn editable(crew_ref: &str, field: &str, value: String) -> impl Scene + use<> {
     ];
     let node = format!("records: {field}");
     bsn! {
-        Input { value: value, fluid: true, max_length: {Some(512)} }
+        Input { value: value, max_length: {Some(512)} }
+        // Fills the rest of its row by growth, not `fluid`'s `width: 100%`.
+        Node { width: px(0), flex_grow: 1.0, flex_basis: px(0), min_width: px(0) }
         ActOnSubmit { action: {EDIT_FIELD.to_owned()}, param: {"value".to_owned()}, params: params }
         Name(node)
     }
 }
 
+/// A record field: its label, then the editable value filling the row.
+// shortcut: a plain row instead of a `LabeledListItem`: in the item's wrapping, baseline-aligned
+// slot the input collapsed to its border at some fractional window sizes (a live client showed
+// slot 412 px, input 10 px, editor 0 px); revisit when the labeled list's slot stops wrapping.
 fn field(label: &str, body: impl Scene) -> impl Scene {
-    let label = label.to_owned();
+    let label = format!("{label}:");
+    let color = UiColor::Label
+        .text()
+        .unwrap_or(ss13_ui_kit::theme::COLOR_TEXT);
     bsn! {
-        @LabeledListItem { @label: label }
-        Children [ {EntityScene(body)} ]
+        Node {
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(6),
+            padding: UiRect::vertical(px(2)),
+        }
+        Children [
+            Node { width: px(FIELD_LABEL_PX), flex_shrink: 0.0 }
+            Propagate::<TextColor>(TextColor(color))
+            Children [ Text(label) ]
+            --
+            {EntityScene(body)}
+        ]
     }
 }
+
+/// The label column of the record fields: the widest label ("Примечание:") and a margin.
+const FIELD_LABEL_PX: f32 = 110.0;
 
 /// The logged-in frame: tabs, the view, the logout notice.
 fn auth_frame(tabs: impl Scene, view: impl Scene, footer: &'static str) -> impl Scene {
@@ -350,6 +373,10 @@ fn security_record(
     local: &UiLocalState,
 ) -> impl Scene + use<> {
     let crew = r.crew_ref.clone();
+    // tgui `hasValidCrimes`: Arrest needs a valid crime (the server refuses it without crimes).
+    // BandaStation's translated statuses never match tgui's `'Arrest'`, so its button never
+    // greys out; the intent is ported, not that.
+    let has_valid_crimes = r.crimes.iter().any(|c| c.valid);
     let status_buttons: Vec<_> = data
         .available_statuses
         .iter()
@@ -364,10 +391,15 @@ fn security_record(
             let icon = if sel { "check" } else { "" };
             let params = p(&[("crew_ref", &crew), ("status", status)]);
             let node = format!("wanted: {status}");
-            let tooltip = status.clone();
+            let disabled = status.as_str() == WANTED_ARREST && !has_valid_crimes;
+            let tooltip = if disabled {
+                format!("{status}: сначала добавьте преступление")
+            } else {
+                status.clone()
+            };
             bsn! {
                 @ss13_ui_kit::Button { @content: letter, @icon: icon, @tooltip: tooltip }
-                ss13_ui_kit::Button { color: color }
+                ss13_ui_kit::Button { color: color, disabled: disabled }
                 Act({SET_WANTED.to_owned()})
                 params
                 Name(node)
@@ -448,7 +480,10 @@ fn security_record(
             Node { flex_grow: 1.0, flex_basis: px(0), flex_direction: FlexDirection::Column, min_height: px(0) }
             Children [
                 @Section { @fill: true, @scrollable: true }
-                Children [ @LabeledList Children [ {fields} ] ]
+                Children [
+                    Node { flex_direction: FlexDirection::Column }
+                    Children [ {fields} ]
+                ]
             ]
         ]
     }

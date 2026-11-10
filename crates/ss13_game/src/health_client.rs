@@ -308,6 +308,7 @@ fn receive_hud(
     mut delay: ResMut<OwnMoveDelay>,
     mut immobile: ResMut<OwnImmobile>,
     mut phasing: ResMut<crate::prediction::OwnPhasing>,
+    mut relayed: ResMut<crate::prediction::OwnRelayed>,
 ) {
     for UiMessageReceived(message) in received.read() {
         let data = match message {
@@ -339,6 +340,7 @@ fn receive_hud(
                     }
                     immobile.set_if_neq(OwnImmobile(data.immobile));
                     phasing.set_if_neq(crate::prediction::OwnPhasing(data.phasing));
+                    relayed.set_if_neq(crate::prediction::OwnRelayed(data.relayed));
                     hud.data = data;
                 }
                 Err(e) => warn!("undecodable health HUD data: {e}"),

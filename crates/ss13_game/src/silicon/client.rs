@@ -266,7 +266,7 @@ impl ClientUi for CameraConsoleUi {
 const LOCAL_TAB: &str = "tab";
 const LOCAL_SEARCH: &str = "search";
 const LOCAL_Z: &str = "z";
-const NANOMAP_MARKER: f32 = 8.0;
+const NANOMAP_MARKER: f32 = 14.0;
 
 /// tgui `selectCameras`: named cameras matching `search` (`createSearch`: case-insensitive
 /// substring of the name); the list comes sorted by name.
@@ -387,6 +387,7 @@ fn camera_map(
         .and_then(|z| z.parse::<u16>().ok())
         .filter(|z| levels.contains(z))
         .or(main);
+    let zoom = crate::nanomap::zoom_value(local.value(crate::nanomap::LOCAL_ZOOM));
     let tabs: Vec<_> = levels
         .iter()
         .map(|&z| {
@@ -414,8 +415,14 @@ fn camera_map(
             } else {
                 UiColor::Bad
             };
-            let (x, y) = crate::nanomap::tile_px(c.x, c.y);
+            let (x, y) =
+                crate::nanomap::tile_px(c.x, c.y, crate::nanomap::map_side(Vec2::ZERO, zoom));
             let half = NANOMAP_MARKER / 2.0;
+            let marker = crate::nanomap::NanomapMarker {
+                x: c.x,
+                y: c.y,
+                half,
+            };
             let name = Name::new(format!("camera marker: {}", c.name));
             let params = switch(c.cam_ref.clone());
             bsn! {
@@ -431,21 +438,25 @@ fn camera_map(
                     padding: UiRect::ZERO,
                 }
                 name
+                marker
                 Act({SWITCH_CAMERA.to_owned()})
                 params
             }
         })
         .collect();
-    let area = crate::nanomap::map_area(map, level, markers);
+    let area = crate::nanomap::map_area(map, level, zoom, markers);
+    let zoom_buttons = crate::nanomap::zoom_buttons(zoom);
     bsn! {
         @Stack { @vertical: true, @fill: true }
         Children [
             @StackItem Children [ @Tabs Children [ {tabs} ] ]
             --
+            @StackItem Children [ @Stack Children [ {zoom_buttons} ] ]
+            --
             @StackItem { @grow: 1.0 }
             Node { min_height: px(0) }
             Children [
-                @Section { @fill: true, @scrollable: true }
+                @Section { @fill: true }
                 Children [ {EntityScene(area)} ]
             ]
         ]

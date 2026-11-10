@@ -453,8 +453,10 @@ pub fn update_data(world: &mut World, z: u16) -> Vec<CrewSensor> {
         if pos.z != z && !(station.contains(&pos.z) && station.contains(&z)) {
             continue;
         }
+        // tg `get_idcard(hand_first = FALSE)` on a human: `wear_id?.GetID() || belt?.GetID()` (a
+        // PDA on the belt holding the card counts; held cards do not).
         let card = world.get::<Inventory>(mob).and_then(|i| {
-            [i.id, i.hands[i.active], i.hands[1 - i.active]]
+            [i.id, i.belt]
                 .into_iter()
                 .flatten()
                 .find_map(|item| crate::inventory::get_id(world, item))
