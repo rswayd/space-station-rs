@@ -113,6 +113,7 @@
 //! | 3305 | `legcuffs::attack_self` (a bear trap arms and disarms) |
 //! | 3309 | `kitchen_ware::attack_self` (pizza boxes open and close, tongs drop or clack) |
 //! | 3319 | `toys::toggle_sword` (a toy sword flicks out and in) |
+//! | 3325 | `cargo::black_market::attack_self` (the market uplink's window) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!
@@ -193,6 +194,7 @@
 //! | 1000 | `stove::interact` |
 //! | 1100 | `barsign::interact` |
 //! | 1200 | `icecream::interact` |
+//! | 1295 | `chem_machines::interact` (smoke machine, distillation apparatus, HPLC, debug synthesizer, reaction tester, PANDEMIC; right click: a beaker out) |
 //! | 1300 | `chem_dispenser::interact` |
 //! | 1400 | `chem_master::interact` |
 //! | 1500 | `chem_heater::interact` |
@@ -291,6 +293,7 @@
 //! | 3559 | `events::meteors::punch` (a legendary athlete punches a meteor away) |
 //! | 3565 | `recycling::conveyor::switch_hand` (the lever; right click: backwards) |
 //! | 3575 | `legcuffs::attack_hand` (an energy snare springs on the hand that touches it) |
+//! | 3585 | `cargo::black_market::ltsrbt_hand` (the LTSRBT opens and closes; right click: its window) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -342,9 +345,11 @@
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1505 | `extinguisher::refill_click` (a tank refills it) |
 //! | 1527 | `science::ordnance_machines::item_interaction` (data disks into the doppler array and tank compressor, tanks into the compressor, doppler wrench) |
+//! | 1535 | `chem_machines::item_interaction` (containers, fuel, condensers, droppers and syringes, tools refused while working, wrenches) |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
 //! | 1545 | `science::teleportation::hand_tele::item_interaction` (dispelling its portals, right click portal; items on a portal) |
 //! | 1511 | `mobs::lavaland::minebot` (a welder repairs a minebot) |
+//! | 1515 | `cargo::black_market::ltsrbt_item` (an item into the open LTSRBT, money restocking the market) |
 //! | 1519 | `events::meteors::attacked` (a mining tool breaks a meteor, a baseball bat sends it away) |
 //! | 1555 | `inducer::interact_with_atom` (charging a cell) |
 //! | 1557 | `telecomms_config` (a multitool on a telecomms machine opens its window) |

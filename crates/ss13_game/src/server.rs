@@ -399,6 +399,7 @@ impl Plugin for GameServerPlugin {
         ))
         .add_plugins((
             crate::teapot::TeapotPlugin,
+            crate::chem_machines::ChemMachinesPlugin,
             crate::papershredder::PaperShredderPlugin,
             crate::fireplace::FireplacePlugin,
             crate::eng_machines::EngMachinesPlugin,

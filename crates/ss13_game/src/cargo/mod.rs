@@ -13,6 +13,10 @@ use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::vending::ProductIcon;
 
 #[cfg(feature = "server")]
+pub mod black_market;
+#[cfg(feature = "client")]
+pub mod black_market_client;
+#[cfg(feature = "server")]
 pub mod bounty;
 #[cfg(feature = "client")]
 pub mod bounty_client;
@@ -20,6 +24,8 @@ pub mod bounty_client;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod console;
+#[cfg(feature = "server")]
+pub mod contraband;
 #[cfg(feature = "server")]
 pub mod coupon;
 #[cfg(feature = "server")]
@@ -34,6 +40,7 @@ pub mod express_client;
 pub mod mail;
 #[cfg(feature = "server")]
 pub mod mail_sorter;
+pub mod market_ui;
 #[cfg(feature = "server")]
 pub mod materials_market;
 #[cfg(feature = "client")]
@@ -76,6 +83,7 @@ impl bevy::prelude::Plugin for CargoServerPlugin {
             express::ExpressPlugin,
             materials_market::MaterialsMarketPlugin,
             money::MoneyPlugin,
+            black_market::BlackMarketPlugin,
         ));
     }
 }
@@ -90,6 +98,7 @@ pub fn examine_lines(
     mail_sorter::examine_lines(world, target, lines);
     materials_market::examine_lines(world, target, lines);
     money::examine_lines(world, target, lines);
+    black_market::examine_lines(world, target, lines);
 }
 
 /// tg `MONEY_SYMBOL` / `MONEY_NAME`.
