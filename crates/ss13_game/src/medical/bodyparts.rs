@@ -461,27 +461,53 @@ pub fn item_interaction(world: &mut World, mob: Entity, held: Entity, target: En
     true
 }
 
-/// tg `spill_organs(DROP_ALL_REMAINS)` and `spread_bodyparts` of a gib: the chest's organs and
-/// the arms, legs and head (its organs inside) fly 1-3 tiles off.
-pub fn spill_remains(world: &mut World, mob: Entity, pos: TilePos) {
+/// tg carbon `spill_organs(drop_bitflags)` and `spread_bodyparts` of a gib: the dropped organs
+/// (only the chest's when limbs drop: the head carries its own) and limbs fly 1-3 tiles off; any
+/// other organ goes with the body.
+pub fn spill_remains(world: &mut World, mob: Entity, pos: TilePos, flags: u8) {
+    use crate::health::{DROP_BODYPARTS, DROP_BRAIN, DROP_ORGANS};
     if world.get::<Limbs>(mob).is_none() {
         return;
     }
     let mut rng = super::fork_rng(world);
     let mut thrown = Vec::new();
-    for organ in zone_organs(world, mob, BodyZone::Chest) {
-        organs::remove(world, organ, true);
-        crate::storage::take_out(world, organ, pos);
-        thrown.push(organ);
+    let drop_limbs = flags & DROP_BODYPARTS != 0;
+    let brain = organs::organ(world, mob, organs::Slot::Brain);
+    for zone in BodyZone::ALL {
+        for organ in zone_organs(world, mob, zone) {
+            let wanted = if Some(organ) == brain {
+                DROP_BRAIN
+            } else {
+                DROP_ORGANS
+            };
+            if flags & wanted != 0 {
+                if !drop_limbs || zone == BodyZone::Chest {
+                    organs::remove(world, organ, true);
+                    crate::storage::take_out(world, organ, pos);
+                    thrown.push(organ);
+                }
+            } else {
+                organs::remove(world, organ, true);
+                if let Ok(organ) = world.get_entity_mut(organ) {
+                    organ.despawn();
+                }
+            }
+        }
     }
-    for zone in [
-        BodyZone::Head,
-        BodyZone::LArm,
-        BodyZone::RArm,
-        BodyZone::LLeg,
-        BodyZone::RLeg,
-    ] {
-        thrown.extend(drop_limb(world, mob, zone));
+    if drop_limbs {
+        for zone in [
+            BodyZone::Head,
+            BodyZone::LArm,
+            BodyZone::RArm,
+            BodyZone::LLeg,
+            BodyZone::RLeg,
+        ] {
+            // `spread_bodyparts`: the head stays unless the brain is wanted.
+            if zone == BodyZone::Head && flags & DROP_BRAIN == 0 {
+                continue;
+            }
+            thrown.extend(drop_limb(world, mob, zone));
+        }
     }
     for item in thrown {
         throw_away(world, &mut rng, item, pos);

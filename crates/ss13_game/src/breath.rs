@@ -219,6 +219,22 @@ impl Alert {
             }
             _ => {}
         }
+        // `/atom/movable/screen/alert/highgravity`, `veryhighgravity` (`crate::gravity`).
+        if self.category == AlertCategory::Gravity && self.state == "paralysis" {
+            return if self.severity >= 2 {
+                (
+                    "Сокрушительная гравитация",
+                    "Вас давит высокая гравитация, из-за чего подбор предметов и передвижение \
+                     замедлятся. Также вы чувствуете как ваши кости начинают трещать!",
+                )
+            } else {
+                (
+                    "Высокая гравитация",
+                    "Вас давит высокая гравитация, из-за чего подбор предметов и передвижение \
+                     замедлятся.",
+                )
+            };
+        }
         // `/atom/movable/screen/alert/status_effect/gravity_sickness` shares the `paralysis` state.
         if self.category == AlertCategory::GravitySickness {
             return (

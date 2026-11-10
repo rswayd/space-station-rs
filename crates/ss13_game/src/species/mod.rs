@@ -1543,12 +1543,33 @@ pub fn set_species(world: &mut World, mob: Entity, id: SpeciesId) {
     // `on_species_gain` of the zombie, `COMSIG_SPECIES_GAIN` of the zombie status.
     crate::antag::zombie::species_changed(world, mob, old, id);
     if old.is_some() {
+        worn_items_fit_body_check(world, mob);
         let name = def.name;
         if let Some(client) = world.get::<crate::server::PlayerMob>(mob).map(|p| p.client) {
             crate::tools::tell(world, client, Span::Notice, format!("Теперь вы — {name}."));
         }
     }
     info!("{mob} is now {:?}", id);
+}
+
+/// tg `worn_items_fit_body_check`: what the new species cannot wear falls to the floor.
+// shortcut: only the `no_equip_flags` (no `mob_can_equip` per item).
+fn worn_items_fit_body_check(world: &mut World, mob: Entity) {
+    use crate::inventory::{ALL_SLOTS, Inventory, put_down, slot_bit, unequip};
+    let (Some(&pos), Some(inventory)) = (
+        world.get::<ss13_shared::TilePos>(mob),
+        world.get::<Inventory>(mob).cloned(),
+    ) else {
+        return;
+    };
+    for slot in ALL_SLOTS {
+        if let Some(item) = inventory.slot(slot)
+            && !can_wear(world, mob, slot_bit(slot))
+        {
+            unequip(world, mob, pos, slot);
+            put_down(world, item, pos);
+        }
+    }
 }
 
 /// `on_species_loss` / `on_species_gain`: the old species' language holder is taken back and

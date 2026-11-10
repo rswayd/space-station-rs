@@ -108,6 +108,9 @@ pub enum ClientIntent {
     SmartEquip(InventorySlot),
     /// BandaStation `quick_accessory_draw` (Shift+F).
     QuickAccessoryDraw,
+    /// tg `/datum/keybinding/living/give` (key V): offers the active hand's item to whoever is
+    /// next to the mob.
+    GiveItem,
 }
 
 /// One end of a [`ClientIntent::Drag`].

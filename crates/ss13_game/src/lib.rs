@@ -352,6 +352,8 @@ pub mod gibber;
 #[cfg(feature = "server")]
 pub mod gifts;
 #[cfg(feature = "server")]
+pub mod gravity;
+#[cfg(feature = "server")]
 pub mod grenades;
 #[cfg(feature = "server")]
 pub mod gun_attachments;
@@ -536,6 +538,8 @@ pub mod restaurant;
 #[cfg(feature = "server")]
 pub mod restraints;
 #[cfg(feature = "server")]
+pub mod rot;
+#[cfg(feature = "server")]
 pub mod round;
 #[cfg(feature = "server")]
 pub mod round_news;
@@ -652,6 +656,8 @@ pub mod testing;
 pub mod throw;
 #[cfg(feature = "server")]
 pub mod tools;
+#[cfg(feature = "server")]
+pub mod transform;
 #[cfg(feature = "server")]
 pub mod traps;
 #[cfg(feature = "server")]

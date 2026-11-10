@@ -480,6 +480,10 @@ fn send_inventory_keys(
     if shift && keys.just_pressed(KeyCode::KeyV) {
         intents.write(smart(InventorySlot::Back));
     }
+    // BandaStation `keybinding/living/give`: V.
+    if !shift && !alt && keys.just_pressed(KeyCode::KeyV) {
+        intents.write(SendIntent(ClientIntent::GiveItem));
+    }
     if alt && keys.just_pressed(KeyCode::Digit1) {
         intents.write(smart(InventorySlot::LeftPocket));
     }

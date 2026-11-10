@@ -532,7 +532,10 @@ fn weightless_hud(
             continue;
         };
         if let Some(mut alerts) = alerts {
-            let shown = alerts.get(AlertCategory::Gravity).is_some();
+            // `crate::gravity` shares the category with the high gravity alerts.
+            let shown = alerts
+                .get(AlertCategory::Gravity)
+                .is_some_and(|a| a.state == "weightless");
             if weightless.is_some() && !shown {
                 alerts.throw(AlertCategory::Gravity, "weightless", 0);
             } else if weightless.is_none() && shown {

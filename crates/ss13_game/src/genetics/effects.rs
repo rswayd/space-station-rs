@@ -856,9 +856,10 @@ fn fire_breath(world: &mut World, mob: Entity, pos: TilePos) {
 // ---------------------------------------------------------------------------------------------
 // Monkey
 
-/// `race/on_acquiring` -> `monkeyize(instant)`: the species and name are kept to come back to.
-// shortcut: instant (no `TRANSFORMATION_DURATION` animation); the clothes a monkey cannot wear
-// stay on and no `uncuff`.
+/// `race/on_acquiring` -> `crate::transform::monkeyize`: the species and name are kept to come
+/// back to.
+// shortcut: instant (tg `monkeyize()` animates for 2.2 s); use `monkeyize(world, mob, false)` once
+// the mutation can wait for it.
 fn monkeyize(world: &mut World, mob: Entity) {
     let species = crate::species::species_of(world, mob);
     if species == SpeciesId::Monkey {
@@ -871,13 +872,10 @@ fn monkeyize(world: &mut World, mob: Entity) {
     let mut state = world.get::<MutationState>(mob).cloned().unwrap_or_default();
     state.original = Some((species, name));
     world.entity_mut(mob).insert(state);
-    crate::species::set_species(world, mob, SpeciesId::Monkey);
-    // `name = LOWER_TEXT(dna.species.name)`.
-    let name = SpeciesId::Monkey.def().name.to_lowercase();
-    world.entity_mut(mob).insert(Name::new(name));
+    crate::transform::monkeyize(world, mob, true);
 }
 
-/// `race/on_losing` -> `humanize(original_species)` and the name back; a dead monkey stays.
+/// `race/on_losing` -> `crate::transform::humanize` and the name back; a dead monkey stays.
 fn humanize(world: &mut World, mob: Entity) {
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         return;
@@ -889,7 +887,7 @@ fn humanize(world: &mut World, mob: Entity) {
         return;
     }
     let (species, name) = original.unwrap_or((SpeciesId::Human, String::new()));
-    crate::species::set_species(world, mob, species);
+    crate::transform::humanize(world, mob, species, true);
     if !name.is_empty() {
         world.entity_mut(mob).insert(Name::new(name));
     }
