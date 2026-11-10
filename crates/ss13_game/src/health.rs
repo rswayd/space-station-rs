@@ -550,85 +550,282 @@ impl ServerUi for HealthHudUi {
     }
 }
 
-/// What a living carbon mob gets at spawn.
-/// tg `gib(DROP_ALL_REMAINS)`: the body is gone, its items fall (a `NoDrop` one goes with
-/// it), its chest organs and limbs fly off (`crate::medical::bodyparts::spill_remains`), its
-/// player becomes a ghost; its gibs splash about (`spawn_gibs`: `gibspawner/human` for a body
-/// with limbs, `generic` for the rest, `crate::effects::gibs`).
+/// tg `DROP_*` (`__DEFINES/blood.dm`), what a gib drops; the rest goes with the body.
+pub const DROP_BRAIN: u8 = 1 << 0;
+pub const DROP_ORGANS: u8 = 1 << 1;
+pub const DROP_BODYPARTS: u8 = 1 << 2;
+pub const DROP_ITEMS: u8 = 1 << 3;
+pub const DROP_ALL_REMAINS: u8 = DROP_BRAIN | DROP_ORGANS | DROP_BODYPARTS | DROP_ITEMS;
+
+/// tg `gib(DROP_ALL_REMAINS)`, what most of the game calls ([`gib_with`]).
 pub fn gib(world: &mut World, mob: Entity) {
-    use crate::inventory::{ALL_SLOTS, Inventory, NoDrop};
-    let Some(&pos) = world.get::<TilePos>(mob) else {
-        return;
-    };
-    world.entity_mut(mob).insert(Stat::Dead);
-    if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client)
-        && let Some(ghost) = crate::ghost::ghostize_client(world, client)
-        && let Some(mut g) = world.get_mut::<crate::ghost::Ghost>(ghost)
-    {
-        g.body = None;
-    }
-    if let Some(inventory) = world.get::<Inventory>(mob).cloned() {
-        let items: Vec<Entity> = ALL_SLOTS
-            .iter()
-            .filter_map(|&s| inventory.slot(s))
-            .collect();
-        for item in items {
-            if world.get::<NoDrop>(item).is_some() {
-                world.despawn(item);
-            } else {
-                crate::inventory::put_down(world, item, pos);
-            }
-        }
-    }
-    if let Some(cuffs) = world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0) {
-        crate::inventory::put_down(world, cuffs, pos);
-    }
-    let gibs = if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
-        crate::effects::gibs::Gibspawner::Human
-    } else {
-        crate::effects::gibs::Gibspawner::Generic
-    };
-    crate::medical::bodyparts::spill_remains(world, mob, pos);
-    world.despawn(mob);
-    crate::effects::gibs::spawn_gibs(world, gibs, pos);
-    crate::construction::tile_changed(world, pos);
+    gib_with(world, mob, DROP_ALL_REMAINS);
 }
 
-/// tg `dust()` with its defaults (`drop_items = FALSE`): the mob dies, its player becomes a
-/// ghost, the body goes with everything it carries, and `spawn_dust` leaves remains (human
-/// remains of a body with limbs, ash of the rest).
-// shortcut: no dust animation, death moodlets or plasmaman/xeno/robot remains.
-pub fn dust(world: &mut World, mob: Entity) {
-    use crate::inventory::{ALL_SLOTS, Inventory};
-    let Some(&pos) = world.get::<TilePos>(mob) else {
+/// `get_gibs_type` of a carbon, a robot or anything else.
+fn gibs_type(world: &World, mob: Entity, flags: u8) -> crate::effects::gibs::Gibspawner {
+    use crate::effects::gibs::Gibspawner as G;
+    let limbs = flags & DROP_BODYPARTS != 0;
+    if let Some(xeno) = world.get::<crate::antag::xeno::Xeno>(mob) {
+        return match (xeno.caste == crate::antag::xeno::Caste::Larva, limbs) {
+            (true, true) => G::Larva,
+            (true, false) => G::LarvaBodypartless,
+            (false, true) => G::Xeno,
+            (false, false) => G::XenoBodypartless,
+        };
+    }
+    if world.get::<crate::silicon::cyborg::Cyborg>(mob).is_some() {
+        return G::Robot;
+    }
+    match (
+        world.get::<crate::medical::wounds::Limbs>(mob).is_some(),
+        limbs,
+    ) {
+        (true, true) => G::Human,
+        (true, false) => G::HumanBodypartless,
+        _ => G::Generic,
+    }
+}
+
+/// `gib_animation`: `/obj/effect/temp_visual/gib_animation` of the body's kind (nothing for the
+/// others).
+fn gib_animation(world: &mut World, mob: Entity, pos: TilePos) {
+    let state = if let Some(xeno) = world.get::<crate::antag::xeno::Xeno>(mob) {
+        if xeno.caste == crate::antag::xeno::Caste::Larva {
+            "gibbed-l"
+        } else {
+            "gibbed-a"
+        }
+    } else if world.get::<crate::silicon::cyborg::Cyborg>(mob).is_some() {
+        "gibbed-r"
+    } else if world.get::<crate::species::Species>(mob).is_some() {
+        if crate::species::species_of(world, mob) == crate::species::SpeciesId::Monkey {
+            "gibbed-m"
+        } else {
+            "gibbed-h"
+        }
+    } else {
         return;
     };
-    world.entity_mut(mob).insert(Stat::Dead);
+    let visual = crate::effects::temp_visual::Visual::new("icons/mob/simple/mob.dmi", state, 1.5);
+    crate::effects::temp_visual::spawn(world, pos, visual);
+}
+
+/// `send_death_moodlets` where a bare test world has no one to see it.
+fn gib_moodlets(world: &mut World, mob: Entity, pos: TilePos) {
+    if world.contains_resource::<SpatialIndex>() && world.contains_resource::<Time>() {
+        crate::mood::send_death_moodlets(world, mob, pos);
+    }
+}
+
+/// `ghostize()` for good: the ghost has no body to return to.
+fn ghostize_gone(world: &mut World, mob: Entity) {
     if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client)
         && let Some(ghost) = crate::ghost::ghostize_client(world, client)
         && let Some(mut g) = world.get_mut::<crate::ghost::Ghost>(ghost)
     {
         g.body = None;
     }
+}
+
+/// Everything the mob holds and wears, and its handcuffs.
+pub(crate) fn carried_items(world: &World, mob: Entity) -> Vec<Entity> {
+    use crate::inventory::{ALL_SLOTS, Inventory};
     let mut carried: Vec<Entity> = world
         .get::<Inventory>(mob)
         .map(|inv| ALL_SLOTS.iter().filter_map(|&s| inv.slot(s)).collect())
         .unwrap_or_default();
     carried.extend(world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0));
-    let remains = if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
-        "/obj/effect/decal/remains/human"
-    } else {
-        "/obj/effect/decal/cleanable/ash"
-    };
-    for item in carried {
+    carried
+}
+
+/// Despawns what the body takes along (`qdel` of its contents).
+pub(crate) fn despawn_all(world: &mut World, items: Vec<Entity>) {
+    for item in items {
         if let Ok(item) = world.get_entity_mut(item) {
             item.despawn();
         }
     }
-    world.despawn(mob);
-    crate::construction::spawn_obj(world, remains, pos);
 }
 
+/// tg `gib(drop_bitflags)`: the gibs splash about (`spawn_gibs`, not for a hologram), a standing
+/// body plays its animation, the mob dies (`death(TRUE)` skips the emote), bystanders see it, the
+/// player becomes a ghost. `DROP_ITEMS` drops what it carries (half a tile aside, a `NoDrop` one
+/// goes with it, as without the flag); mobs inside come out; organs and limbs follow the flags
+/// (`crate::medical::bodyparts::spill_remains`).
+pub fn gib_with(world: &mut World, mob: Entity, flags: u8) {
+    use crate::inventory::NoDrop;
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    let gibs = gibs_type(world, mob, flags);
+    let hologram = world.get::<crate::holodeck::Hologram>(mob).is_some();
+    if !world.get::<BodyPosition>(mob).is_some_and(|b| b.lying()) {
+        gib_animation(world, mob, pos);
+    }
+    world.entity_mut(mob).insert(Stat::Dead);
+    gib_moodlets(world, mob, pos);
+    ghostize_gone(world, mob);
+    if flags & DROP_ITEMS != 0 {
+        for item in carried_items(world, mob) {
+            if world.get::<NoDrop>(item).is_some() {
+                world.despawn(item);
+                continue;
+            }
+            crate::inventory::put_down(world, item, pos);
+            let stepped = {
+                let mut rng = world.resource_mut::<crate::combat::CombatRng>();
+                rng.chance(50.0).then(|| {
+                    const ALL: [ss13_shared::Dir; 8] = ss13_shared::Dir::DMI_ORDER;
+                    ALL[rng.range(0, 7) as usize]
+                })
+            };
+            if let Some(dir) = stepped
+                && !crate::effects::step_blocked(world, pos, dir, crate::effects::Pass::Particle)
+            {
+                world.entity_mut(item).insert(pos.step(dir));
+            }
+        }
+    } else {
+        let carried = carried_items(world, mob);
+        despawn_all(world, carried);
+    }
+    // carbon `gib`: `for(var/mob/M in src) M.forceMove(Tsec)`, ejected before the body goes.
+    let inside: Vec<Entity> = world
+        .query::<(Entity, &crate::closets::InCloset)>()
+        .iter(world)
+        .filter(|(_, c)| c.closet == mob)
+        .map(|(e, _)| e)
+        .collect();
+    for eaten in inside {
+        crate::closets::let_out(world, eaten);
+        let text = format!(
+            "{} вырывается из {}!",
+            crate::security::name_of(world, eaten),
+            crate::security::name_of(world, mob)
+        );
+        crate::chem::visible(world, eaten, &text, &text, ss13_shared::chat::Span::Danger);
+    }
+    crate::medical::bodyparts::spill_remains(world, mob, pos, flags);
+    world.despawn(mob);
+    if !hologram {
+        crate::effects::gibs::spawn_gibs(world, gibs, pos);
+    }
+    crate::construction::tile_changed(world, pos);
+}
+
+/// tg `inflate_gib`: the body swells up over `anim_secs`, then gibs after `gib_secs`.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Inflating {
+    at: f64,
+    flags: u8,
+}
+
+/// tg `inflate_gib(drop_bitflags, gib_time, anim_time)`; a body already swelling is left alone.
+pub fn inflate_gib(world: &mut World, mob: Entity, flags: u8, gib_secs: f64, anim_secs: f32) {
+    if world.get_entity(mob).is_err() || world.get::<Inflating>(mob).is_some() {
+        return;
+    }
+    let at = world.resource::<Time>().elapsed_secs_f64() + gib_secs;
+    world.entity_mut(mob).insert(Inflating { at, flags });
+    use ss13_shared::animation::{Animation, AnimationStep, EaseCurve, Easing, TransformAnimation};
+    crate::animation::play(
+        world,
+        mob,
+        Animation::Transform(TransformAnimation {
+            steps: vec![AnimationStep {
+                scale: [1.8, 1.2],
+                time_ds: anim_secs * 10.0,
+                easing: Easing::of(EaseCurve::Sine),
+                ..AnimationStep::rest(0.0)
+            }],
+            loops: 1,
+        }),
+    );
+}
+
+/// The `inflate_gib` defaults: `DROP_BRAIN|DROP_ORGANS|DROP_ITEMS`, 2.5 s, 4 s.
+pub fn inflate_gib_default(world: &mut World, mob: Entity) {
+    inflate_gib(world, mob, DROP_BRAIN | DROP_ORGANS | DROP_ITEMS, 2.5, 4.0);
+}
+
+fn inflating_mobs(world: &mut World) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let due: Vec<(Entity, u8)> = world
+        .query::<(Entity, &Inflating)>()
+        .iter(world)
+        .filter(|(_, i)| i.at <= now)
+        .map(|(e, i)| (e, i.flags))
+        .collect();
+    for (mob, flags) in due {
+        gib_with(world, mob, flags);
+    }
+}
+
+/// tg `dust()` with its defaults ([`dust_with`]).
+pub fn dust(world: &mut World, mob: Entity) {
+    dust_with(world, mob, false, false, true);
+}
+
+/// tg `spawn_dust`'s path for the body.
+fn dust_remains(world: &World, mob: Entity, just_ash: bool) -> &'static str {
+    /// `MOB_SIZE_LARGE`.
+    const MOB_SIZE_LARGE: u8 = 3;
+    let ash = if crate::mobs::pets::mob_size(world, mob) >= MOB_SIZE_LARGE {
+        "/obj/effect/decal/cleanable/ash/large"
+    } else {
+        "/obj/effect/decal/cleanable/ash"
+    };
+    if just_ash {
+        return ash;
+    }
+    if world.get::<crate::antag::xeno::Xeno>(mob).is_some() {
+        "/obj/effect/decal/remains/xeno"
+    } else if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
+        if crate::species::species_of(world, mob) == crate::species::SpeciesId::Plasmaman {
+            "/obj/effect/decal/remains/plasma"
+        } else {
+            "/obj/effect/decal/remains/human"
+        }
+    } else {
+        ash
+    }
+}
+
+/// tg `dust(just_ash, drop_items, give_moodlet)`: the mob dies, its player becomes a ghost, the
+/// body goes with what it carries (or what it carries falls first) and leaves remains.
+// shortcut: no dust animation and instant removal (tg fades the mob for 1.3 s; a body lingering
+// that long needs every caller to expect it), no robot override (the MMI is ported with brains).
+pub fn dust_with(
+    world: &mut World,
+    mob: Entity,
+    just_ash: bool,
+    drop_items: bool,
+    give_moodlet: bool,
+) {
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    if give_moodlet {
+        gib_moodlets(world, mob, pos);
+    }
+    world.entity_mut(mob).insert(Stat::Dead);
+    ghostize_gone(world, mob);
+    let carried = carried_items(world, mob);
+    if drop_items {
+        for item in carried {
+            crate::inventory::put_down(world, item, pos);
+        }
+    } else {
+        despawn_all(world, carried);
+    }
+    let remains = dust_remains(world, mob, just_ash);
+    world.despawn(mob);
+    crate::construction::spawn_obj(world, remains, pos);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// What a living carbon mob gets at spawn.
 pub fn living_bundle() -> impl Bundle {
     (
         Health::default(),
@@ -655,6 +852,12 @@ impl Plugin for HealthServerPlugin {
             .add_systems(
                 Update,
                 body_state.in_set(HealthSystems).before(UiSystems::Open),
+            )
+            .add_systems(
+                Update,
+                inflating_mobs
+                    .before(HealthSystems)
+                    .run_if(any_with_component::<Inflating>),
             )
             .add_systems(PostUpdate, lying_appearance.before(NetServerSystems::Send));
     }

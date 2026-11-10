@@ -508,8 +508,18 @@ fn blood_loss_effects(world: &mut World, mob: Entity, volume: f32, secs: f32) {
     let word = ["головокружение", "дурость", "слабость"][rng.range(0, 2) as usize];
     let spt = |rng: &mut CombatRng, p: f32| super::wounds::spt_prob(rng, p, secs);
     match BloodBand::of(volume) {
-        // shortcut: no `inflate_gib`: lethal excess only warns.
-        BloodBand::Lethal | BloodBand::Excess => {
+        BloodBand::Lethal => {
+            if spt(&mut rng, 7.5) {
+                tell_mob(
+                    world,
+                    mob,
+                    Span::Danger,
+                    "Кровь начинает разрывать вашу кожу. Вы сейчас лопнете!",
+                );
+                crate::health::inflate_gib_default(world, mob);
+            }
+        }
+        BloodBand::Excess => {
             if spt(&mut rng, 5.0) {
                 tell_mob(
                     world,

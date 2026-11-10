@@ -912,8 +912,8 @@ const QUICK_EQUIP_SLOTS: [InventorySlot; 15] = [
 
 /// tg `execute_quick_equip` -> `equip_to_best_slot`: the first free slot in priority order, else
 /// a held or worn storage (`equip_priorities`).
-// shortcut: no `equip_delay_self` wait (the slot click has none either) and no `active_storage`
-// first; add both with the equip delays.
+// shortcut: no `equip_delay_self` wait (the slot click has none either); add with the equip
+// delays.
 fn quick_equip(world: &mut World, client: Entity, mob: Entity, inventory: &Inventory) {
     let Some(item) = inventory.active_item() else {
         crate::tools::tell(
@@ -932,6 +932,15 @@ fn quick_equip(world: &mut World, client: Entity, mob: Entity, inventory: &Inven
         .find(|&s| can_equip(world, mob, inventory, item, s))
     {
         equip_from_hand(world, mob, inventory.active, item, slot);
+        return;
+    }
+    // `user.active_storage?.attempt_insert`: the storage the player has open.
+    if let Some(storage) = world
+        .get::<crate::storage::StorageView>(mob)
+        .and_then(|v| v.storage)
+        && crate::storage::can_insert(world, storage, item).is_ok()
+    {
+        crate::storage::insert_from_hand(world, item, storage);
         return;
     }
     let storages = [

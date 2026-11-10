@@ -23,7 +23,7 @@
 Клавиша quick-equip надевает предмет в подходящий слот или кладёт в рюкзак/пояс; «умная» экипировка достаёт предмет из пояса/рюкзака.
 
 - **Код:** [`verb/quick_equip`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/inventory.dm#L706), [`proc/equip_to_appropriate_slot()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/inventory.dm#L634), [`proc/smart_equip_targeted()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/human/inventory.dm#L385), [`/datum/keybinding/human/quick_equip`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/keybinding/human.dm#L8)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/inventory.rs` (`quick_equip`, `smart_equip`), клавиши `crates/ss13_game/src/inventory_client.rs` (E, Shift+E, Shift+V, Shift+Q, Alt+1, Alt+2): предмет в первый подходящий слот, затем в открытое хранилище (`active_storage`) и надетые хранилища в порядке tg; умная экипировка кладёт в слот или достаёт последнее из него. `equip_delay_self` общий с записью «Задержка надевания» выше; `slot_equipment_priority` отдельных предметов не перенесён
 
 ### Скрытые слоты и отображение надетого
 Шлемы и костюмы скрывают слоты под ними (`flags_inv`, `obscured_slots`): маску, глаза, униформу — при осмотре и раздевании; спрайт человека собирается из оверлеев надетых предметов.
@@ -45,16 +45,10 @@ _«Хранилища (/datum/storage)» описано в [../items/storage.md]
 Предмет можно предложить соседу (ctrl+shift-клик/клавиша): тот получает оповещение и берёт его кликом.
 
 - **Код:** [`/datum/status_effect/offering`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/neutral.dm#L207)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/click.rs` (shortcut: ctrl+shift ничего не делает)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/buffs.rs` (`give`, `take`, `give_key`), `crates/ss13_game/src/click.rs` (`GiveClick`), клавиша V — `crates/ss13_game/src/inventory_client.rs` (`ClientIntent::GiveItem`): Ctrl+Shift-клик предлагает соседу, V — всем вокруг (`orange(1)`, годные из `is_taker_elligible`), оповещение и взятие кликом, проверки дистанции и состояния. «Дай пять» и «помочь подняться» — в записи [status-effects-buffs.md](status-effects-buffs.md#передача-предмета-и-дай-пять)
 
 ### Двуручные предметы
 Компонент `two_handed`: предмет нужно держать двумя руками (wield) для полной силы или вообще для использования.
 
 - **Код:** [`/datum/component/two_handed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/twohanded.dm#L7)
-- **Статус в ss13-rs:** ❌ нет
-
-### Мобы в руках (mob holder)
-Мелких мобов (мышей, кошек, дронов, пАИ) можно поднять в руку или надеть на голову как предмет.
-
-- **Код:** [`/obj/item/mob_holder`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/inhand_holder.dm#L3)
-- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/mob_holder.rs`: моб с `can_be_held` (`MobDef::can_be_held`, из `AddElement` в `Initialize`) или пИИ в голоформе переносимого шасси, перетащенный на себя при агрессивном захвате, за 2 с поднимается в свободную руку держателем `/obj/item/mob_holder` (улитка — `/snail`) с видом моба, `held_state` в руках и `worn_slot_flags` на голове; моб внутри (`InCloset`, скрыт) следует за держателем; выпускается, когда держатель на полу, при попытке шагнуть, удалении держателя, сворачивании пИИ; тест `tests/it/mob_holder.rs`; `// shortcut:` нет ударов моба через держатель, веса держателя, броска моба, спрайта дрона, разрушаемого держателя пчёл, подбора не-людьми
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weapons/two_handed.rs`: wield/unwield, сила в двух руках (значения и множители предмета), `/obj/item/offhand` с блокировкой смены руки, `require_twohands` (падает, если нельзя удержать двумя), звуки, спрайты `[base]0/1`, заточка; перечень двуручных предметов — `SPECS`. Нет суффикса « (Wielded)» в имени, `TRAIT_NO_TWOHANDING` и фэнтези/материальных бонусов (эти механизмы не перенесены)

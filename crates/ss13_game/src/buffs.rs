@@ -4,7 +4,8 @@
 //! `buffs/food/_food_effect.dm` and `haste.dm`, `debuffs/drugginess.dm` and the reagents that
 //! drive them.
 //!
-//! - Offering: ctrl+shift on a living mob next to the giver ([`crate::click::GiveClick`], tg
+//! - Offering: ctrl+shift on a living mob next to the giver or the V key to everyone next to it
+//!   ([`crate::click::GiveClick`], `ClientIntent::GiveItem`, tg
 //!   `click_ctrl_shift` -> `give(src)`) offers the active hand's item. The taker gets an alert
 //!   ([`AlertCategory::Offer`]); its click ([`crate::hud::ALERT_CLICK`]) takes the item into an
 //!   empty hand (`take`). The offer ends when the item leaves the giver's hands or the taker is
@@ -32,9 +33,12 @@
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
 use ss13_chat::server::Emoted;
+use ss13_net::server::IntentReceived;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
+use ss13_shared::protocol::ClientIntent;
 use ss13_tgui::server::{UiActed, UiSystems};
+use ss13_world::SpatialIndex;
 
 use crate::breath::{AlertCategory, Alerts, clicked_alert};
 use crate::chem::{name_of, tell_mob, visible};
@@ -127,7 +131,7 @@ impl Plugin for BuffsPlugin {
         app.add_message::<Emoted>()
             .add_systems(
                 Update,
-                (give_clicks, security_pen_clicks)
+                (give_clicks, give_key, security_pen_clicks)
                     .chain()
                     .after(ResolveClicks),
             )
@@ -204,13 +208,41 @@ fn give_clicks(world: &mut World, mut clicks: Local<MessageCursor<GiveClick>>) {
     for click in clicks {
         // `/mob/living/click_ctrl_shift`: only on a living mob that can hold items.
         if world.get::<Stat>(click.target).is_some() && can_hold_items(world, click.target) {
-            give(world, click.mob, click.target);
+            give(world, click.mob, Some(click.target));
         }
     }
 }
 
-/// tg `/mob/living/proc/give(offered)`: offers the active hand's item to `taker`.
-pub fn give(world: &mut World, giver: Entity, taker: Entity) {
+/// `/datum/keybinding/living/give`: an offer to everyone next to the mob.
+fn give_key(world: &mut World, mut intents: Local<MessageCursor<IntentReceived>>) {
+    // Also without the network (tests of the other offer routes).
+    let Some(messages) = world.get_resource::<Messages<IntentReceived>>() else {
+        return;
+    };
+    let clients: Vec<Entity> = intents
+        .read(messages)
+        .filter(|i| i.intent == ClientIntent::GiveItem)
+        .map(|i| i.client)
+        .collect();
+    for client in clients {
+        let Some(mob) = world.resource::<crate::server::Players>().mob(client) else {
+            continue;
+        };
+        // `can_use`: an active-hand item and `TRAIT_CAN_HOLD_ITEMS`.
+        if world
+            .get::<Inventory>(mob)
+            .and_then(Inventory::active_item)
+            .is_some()
+            && can_hold_items(world, mob)
+        {
+            give(world, mob, None);
+        }
+    }
+}
+
+/// tg `/mob/living/proc/give(offered)`: offers the active hand's item to `taker` (`None`:
+/// everyone next to the giver who can take it).
+pub fn give(world: &mut World, giver: Entity, taker: Option<Entity>) {
     let tell = |world: &mut World, text: &str| tell_mob(world, giver, Span::Warning, text);
     if world.get::<Offering>(giver).is_some() {
         return tell(world, "Вы уже передаёте что-то!");
@@ -225,57 +257,93 @@ pub fn give(world: &mut World, giver: Entity, taker: Entity) {
         return tell(world, "Вы не держите ничего, чтобы передать!");
     };
     let item_name = name_of(world, item);
-    if taker == giver {
-        // `swap_hand(get_inactive_hand_index())`, then `put_in_active_hand`.
-        let other = 1 - inventory.active;
-        if !crate::medical::bodyparts::has_hand(world, giver, other) {
-            return tell(
+    if let Some(taker) = taker {
+        if taker == giver {
+            // `swap_hand(get_inactive_hand_index())`, then `put_in_active_hand`.
+            let other = 1 - inventory.active;
+            if !crate::medical::bodyparts::has_hand(world, giver, other) {
+                return tell(
+                    world,
+                    &format!("Вы пытаетесь взять {item_name} у себя, но не смогли."),
+                );
+            }
+            let mut inventory = world.get_mut::<Inventory>(giver).expect("cloned above");
+            inventory.active = other;
+            if inventory.hands[other].is_some() {
+                return tell(
+                    world,
+                    &format!("Вы пытаетесь взять {item_name} у себя, но не смогли."),
+                );
+            }
+            inventory.hands[1 - other] = None;
+            inventory.hands[other] = Some(item);
+            return tell_mob(
                 world,
-                &format!("Вы пытаетесь взять {item_name} у себя, но не смогли."),
+                giver,
+                Span::Notice,
+                &format!("Вы берёте {item_name} у себя"),
             );
         }
-        let mut inventory = world.get_mut::<Inventory>(giver).expect("cloned above");
-        inventory.active = other;
-        if inventory.hands[other].is_some() {
-            return tell(
-                world,
-                &format!("Вы пытаетесь взять {item_name} у себя, но не смогли."),
-            );
+        if !able(world, taker) {
+            return tell(world, "Он не может ничего взять в текущем состоянии!");
         }
-        inventory.hands[1 - other] = None;
-        inventory.hands[other] = Some(item);
-        return tell_mob(
-            world,
-            giver,
-            Span::Notice,
-            &format!("Вы берёте {item_name} у себя"),
-        );
+        if !adjacent(world, giver, taker) {
+            return tell(world, "Вы должны быть рядом для передачи!");
+        }
+        if !can_hold_items(world, taker) {
+            return tell(world, "Он не может удержать ничего, что вы предлагаете!");
+        }
     }
-    if !able(world, taker) {
-        return tell(world, "Он не может ничего взять в текущем состоянии!");
+    // `orange(1, src)` of living mobs, `is_taker_elligible`.
+    let around: Vec<Entity> = world
+        .get::<TilePos>(giver)
+        .copied()
+        .map(|pos| {
+            world
+                .resource::<SpatialIndex>()
+                .in_radius(pos, 1)
+                .filter(|&m| {
+                    m != giver
+                        && world.get::<Stat>(m).is_some()
+                        && world.get::<TilePos>(m) != Some(&pos)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if taker.is_none() && around.is_empty() {
+        return tell(world, "Рядом с вами нет никого, кто мог бы взять это!");
     }
-    if !adjacent(world, giver, taker) {
-        return tell(world, "Вы должны быть рядом для передачи!");
-    }
-    if !can_hold_items(world, taker) {
-        return tell(world, "Он не может удержать ничего, что вы предлагаете!");
-    }
-    let (giver_name, taker_name) = (name_of(world, giver), name_of(world, taker));
+    let giver_name = name_of(world, giver);
+    let target_text = taker.map_or(String::new(), |t| format!("{} ", name_of(world, t)));
+    crate::balloon::balloon_alert_to_viewers(world, giver, "предлагает что-то", None, &[]);
     visible(
         world,
         giver,
-        &format!("Вы предлагаете {taker_name} {item_name}."),
-        &format!("{giver_name} предлагает {taker_name} {item_name}."),
+        &format!("Вы предлагаете {target_text}{item_name}."),
+        &format!("{giver_name} предлагает {target_text}{item_name}."),
         Span::Notice,
     );
-    // `offering/on_creation` -> `register_candidate`: no alert, no taker, no offer.
-    if !throw_alert(world, taker, AlertCategory::Offer(giver), "template", 0) {
+    let candidates: Vec<Entity> = match taker {
+        Some(t) => vec![t],
+        None => around
+            .into_iter()
+            .filter(|&m| adjacent(world, giver, m) && able(world, m) && can_hold_items(world, m))
+            .collect(),
+    };
+    // `offering/on_creation` -> `register_candidate`: no alert, no taker; no takers, no offer.
+    let mut takers = Vec::new();
+    for candidate in candidates {
+        if throw_alert(world, candidate, AlertCategory::Offer(giver), "template", 0) {
+            takers.push(candidate);
+        }
+    }
+    if takers.is_empty() {
         return;
     }
     let alert_name = format!("{giver_name} предлагает {item_name}");
     world.entity_mut(giver).insert(Offering {
         item,
-        takers: vec![taker],
+        takers,
         alert_desc: format!("{alert_name}. Нажмите на уведомление, чтобы взять."),
         alert_name,
     });

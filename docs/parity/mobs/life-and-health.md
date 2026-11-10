@@ -49,7 +49,7 @@
 `gib()` разрывает моба на ошмётки, разбрасывая органы, конечности и вещи (флаги `DROP_*`); `inflate_gib` — с анимацией раздувания; `dust()` оставляет кучку пепла и, возможно, скелет.
 
 - **Код:** [`proc/gib()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L11), [`proc/inflate_gib()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L39), [`proc/spread_bodyparts()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L86), [`proc/spawn_dust()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/death.dm#L165)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/health.rs` (`gib`/`gib_with`, флаги `DROP_*`, `inflate_gib`, `dust`/`dust_with`), `crates/ss13_game/src/medical/bodyparts.rs` (`spill_remains`), `crates/ss13_game/src/effects/gibs.rs`: гибы по типу тела и флагам (человек/без частей тела, ксеноморф, личинка, робот, прочее), анимация стоящего тела, моодлеты свидетелей, призрак без тела, вещи падают с шансом сдвига, органы и конечности по флагам, вылезают съеденные; `inflate_gib` с раздуванием, вызывается при смертельном избытке крови (`crates/ss13_game/src/medical/blood.rs`); `dust` с кучкой/скелетом по типу. Нет анимации распада (пыль мгновенная, тело исчезает сразу), робота `dust` (MMI); прочие источники `inflate_gib` (мятный экстракт, баллон) и `dust` — за своими механиками
 
 ### Хаск (husk)
 Сильные ожоги (или высасывание генокрадом) превращают тело в хаска: обезличенное, неклонируемое без лечения ожогов/синтфлеша. Черта `TRAIT_UNHUSKABLE` защищает.
@@ -61,7 +61,7 @@
 Мёртвое тело без бальзамирования через время начинает гнить (`attach_rot`), выделяя миазмы и не поддаваясь дефибрилляции.
 
 - **Код:** [`proc/attach_rot()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/carbon.dm#L1167)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/rot.rs` (`Rot`, `attach_rot`): органический или нежить-карбон после настоящей смерти (не фейк, не голограмма) гниёт: задержка 6 мин, нарастание 10 мин; формальдегид ≥ 15 / криостилан / ядро ≤ T0C-10 / хаск останавливают отсчёт (с сохранением отбытой задержки), оживление убирает; касание, удар, клик, захват (`Pulling`) и вход на тайл дают `prob(сила × нарастание)` на слабую случайную болезнь `Unknown` (воздух ≤ T0C-10 не заражает). В tg гниль не влияет на дефибрилляцию и не выделяет миазмов — описание пункта устарело. Нет реакции на удар летящим телом (bump), блокеры опрашиваются раз в секунду
 
 ### Поддаться смерти (succumb) и самоубийство
 В крите игрок может поддаться (`succumb`) и умереть сразу; глагол `suicide` убивает моба способом, зависящим от предмета в руке (у предметов свои `suicide_act`), и запрещает клонирование/возрождение.
@@ -93,7 +93,7 @@
 При гравитации выше нормы моб получает brute-урон за тик и замедляется; при нулевой гравитации — плавает (см. movement.md).
 
 - **Код:** [`proc/handle_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L125), [`proc/handle_high_gravity()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/life.dm#L135)
-- **Статус в ss13-rs:** ❌ нет — гравитация есть только «нормальная или нулевая» (`crates/ss13_game/src/multiz.rs` `has_gravity`, `crates/ss13_game/src/spacemove.rs`); нет уровней гравитации, генераторов и аномалий, которые её повышают
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/gravity.rs` (`ForcedGravity`, `high_gravity`): выше 1 замедление на `гравитация - 1` децисекунд за тайл (`MoveSpeedModifier`) и уведомления высокой/сокрушительной гравитации, от порога 3 brute-урон `min(0.5 × (g - 3), 1.5)` в секунду (мёртвым тоже, кроме стазиса); источник — инверсный гравитум в крови (5) и компонент `ForcedGravity`. Нет генераторов гравитации и портативных генераторов (поля с тайловой гравитацией — их группа: инженерия), размытия `gravity_animate` и отрицательной гравитации
 
 ### Лёжа, отдых и сон
 Моб может лечь (`toggle_resting`, клавиша), встать с задержкой, уснуть глаголом `Sleep`; лёжа он не плотный, ползает медленнее, поза влияет на попадания и спрайт.
@@ -118,4 +118,4 @@
 Набор процедур превращения: человек ↔ обезьяна (генетика, мутаген), в корги, краба, гориллу, слайма, оверминда блоба и в произвольный тип моба.
 
 - **Код:** [`proc/monkeyize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L7), [`proc/humanize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L47), [`proc/corgize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L193), [`proc/gorillize()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L210), [`proc/transform_into_mob()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/transform_procs.dm#L232)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/transform.rs`: общий API `crate::transform::{monkeyize, humanize, transform_into_mob, corgize, crabize, gorillize, slimeize, alienize, is_monkey, is_transforming}`; монки/человек с анимацией 2,2 с (`Transforming`, оглушение, скрытие, спрайт `h2monkey`/`monkey2h`) или мгновенно, снятие наручников; перенос разума в новый моб, вещи падают или удаляются. Смена вида роняет то, что новый вид не может носить (`worn_items_fit_body_check` в `crates/ss13_game/src/species/mod.rs`). Генетика (`crates/ss13_game/src/genetics/effects.rs`) вызывает этот API мгновенно (иначе ломается ожидание в тесте); нет `Robotize`, `AIize`, `become_overmind`, `Animalize`; остальные источники (jungle flu, шлем обезьяны, кости, ген. мелтдаун, лессерформ) — за своими механиками

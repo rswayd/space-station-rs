@@ -510,6 +510,26 @@ fn mutation_effects() {
     assert_eq!(s.get::<Species>(b).0, SpeciesId::Human);
     assert_eq!(s.get::<Name>(b).as_str(), name);
 
+    // The animated change: refused while under way, then the species flips after 2.2 s.
+    {
+        let world = s.0.server.world_mut();
+        assert!(ss13_game::transform::monkeyize(world, b, false));
+        assert!(!ss13_game::transform::monkeyize(world, b, false));
+    }
+    assert!(s.try_get::<ss13_game::transform::Transforming>(b).is_some());
+    s.run_until("monkeyized", |s| s.get::<Species>(b).0 == SpeciesId::Monkey);
+    assert!(s.try_get::<ss13_game::transform::Transforming>(b).is_none());
+    {
+        let world = s.0.server.world_mut();
+        assert!(ss13_game::transform::humanize(
+            world,
+            b,
+            SpeciesId::Human,
+            true
+        ));
+        world.entity_mut(b).insert(Name::new(name.clone()));
+    }
+
     // A cryo beam at oneself hits at once and chills the body (-350 twice, unprotected).
     let cryo = id("/datum/mutation/cryokinesis");
     {

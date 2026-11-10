@@ -74,6 +74,21 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `transform`, `health::gib_with`/`dust_with`: gorillas, gibs of carbons and aliens, remains.
+    "/mob/living/basic/gorilla",
+    "/mob/living/basic/gorilla/genetics",
+    "/obj/effect/decal/remains/plasma",
+    "/obj/effect/decal/remains/xeno",
+    "/obj/effect/decal/cleanable/blood/gibs/torso",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/up",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/down",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/body",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/limb",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/core",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/torso",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/larva",
+    "/obj/effect/decal/cleanable/blood/gibs/xeno/larva/body",
     // `power::singularity`, `power::tesla`: what a delamination or a collapsing tear leaves.
     "/obj/singularity",
     "/obj/tesla_ball",

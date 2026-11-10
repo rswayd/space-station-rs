@@ -7,7 +7,7 @@
 //! Robot debris throws sparks.
 //!
 //! The decals are runtime types (`ss13_mapload::runtime::GAME_RUNTIME_TYPES`). Callers:
-//! `crate::health::gib` (human gibs for a carbon, generic ones for other mobs).
+//! `crate::health::gib_with` (`get_gibs_type` of the body and the drop flags).
 // shortcut: the streak lands at once (tg glides it a step per 0.2 s); no blood DNA or
 // diseases on the gibs; splatters also fall on groundless tiles.
 
@@ -23,6 +23,16 @@ const GIBS_DOWN: &str = "/obj/effect/decal/cleanable/blood/gibs/down";
 const GIBS_BODY: &str = "/obj/effect/decal/cleanable/blood/gibs/body";
 const GIBS_LIMB: &str = "/obj/effect/decal/cleanable/blood/gibs/limb";
 const GIBS_CORE: &str = "/obj/effect/decal/cleanable/blood/gibs/core";
+const GIBS_TORSO: &str = "/obj/effect/decal/cleanable/blood/gibs/torso";
+const XENO: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno";
+const XENO_UP: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/up";
+const XENO_DOWN: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/down";
+const XENO_BODY: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/body";
+const XENO_LIMB: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/limb";
+const XENO_CORE: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/core";
+const XENO_TORSO: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/torso";
+const LARVA: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/larva";
+const LARVA_BODY: &str = "/obj/effect/decal/cleanable/blood/gibs/xeno/larva/body";
 const ROBOT: &str = "/obj/effect/decal/cleanable/blood/gibs/robot_debris";
 const ROBOT_UP: &str = "/obj/effect/decal/cleanable/blood/gibs/robot_debris/up";
 const ROBOT_DOWN: &str = "/obj/effect/decal/cleanable/blood/gibs/robot_debris/down";
@@ -53,6 +63,16 @@ pub enum Gibspawner {
     Generic,
     /// `gibspawner/human`.
     Human,
+    /// `gibspawner/human/bodypartless`.
+    HumanBodypartless,
+    /// `gibspawner/xeno`.
+    Xeno,
+    /// `gibspawner/xeno/bodypartless`.
+    XenoBodypartless,
+    /// `gibspawner/larva`.
+    Larva,
+    /// `gibspawner/larva/bodypartless`.
+    LarvaBodypartless,
     /// `gibspawner/robot`.
     Robot,
 }
@@ -82,6 +102,28 @@ impl Gibspawner {
                 ],
                 50.0,
             ),
+            // The assoc lists dedupe here as well; the i-th key takes the i-th directions.
+            Self::HumanBodypartless => (
+                vec![(GIBS, NORTHS), (GIBS_CORE, SOUTHS), (GIBS_TORSO, WESTS)],
+                50.0,
+            ),
+            Self::Xeno => (
+                vec![
+                    (XENO_UP, NORTHS),
+                    (XENO_DOWN, SOUTHS),
+                    (XENO, WESTS),
+                    (XENO_BODY, EASTS),
+                    (XENO_LIMB, ALL),
+                    (XENO_CORE, ALL),
+                ],
+                60.0,
+            ),
+            Self::XenoBodypartless => (
+                vec![(XENO, NORTHS), (XENO_CORE, SOUTHS), (XENO_TORSO, WESTS)],
+                60.0,
+            ),
+            Self::Larva => (vec![(LARVA, NORTHS), (LARVA_BODY, SOUTHS)], 60.0),
+            Self::LarvaBodypartless => (vec![(LARVA, NORTHS)], 60.0),
             Self::Robot => {
                 let mut list = vec![(ROBOT_UP, NORTHS), (ROBOT_DOWN, SOUTHS), (ROBOT, WESTS)];
                 // `gibtypes[limb] = pick(0, 1, 2)`.
