@@ -136,6 +136,20 @@ pub mod events {
         -15.0,
         0.0,
     );
+    pub const BAD_SMELL: MoodEvent = ev(
+        "bad_smell",
+        "Я чувствую ужасный запах разложения в этой комнате.",
+        -6.0,
+        0.0,
+    );
+    pub const NAUSEATING_STENCH: MoodEvent = ev(
+        "nauseating_stench",
+        "Вонь от гниющих трупов невыносима!",
+        -12.0,
+        0.0,
+    );
+    pub const CHEMICAL_EUPHORIA: MoodEvent =
+        ev("chemical_euphoria", "Хех... Хехехе... Хехе...", 4.0, 0.0);
     // food_events.dm
     pub const GROSS_FOOD: MoodEvent = ev(
         "gross_food",

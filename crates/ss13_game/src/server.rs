@@ -1014,7 +1014,7 @@ pub(crate) fn forward_moves(
             (eye, blob),
             pilot,
             coma,
-            (jaunting, incorporeal),
+            (jaunting, incorporeal, observed),
             rider,
         )) = mobs.get_mut(mob)
         else {
@@ -1086,6 +1086,8 @@ pub(crate) fn forward_moves(
             }
             (Some(health), Some(&stat)) if !health.can_move(stat) => {}
             _ if traits.is_some_and(|t| t.immobilized) => {}
+            // A seen statue (`unobserved_actor` `NO_OBSERVED_MOVEMENT`).
+            _ if observed => {}
             _ if mover.is_some() => {
                 let dir = crate::status_effects::confused_step(effects, &mut rng, dir);
                 if weightless.contains(mob) {
@@ -1120,6 +1122,7 @@ type MoveItem<'a> = (
     (
         Has<crate::spells::Jaunting>,
         Has<crate::antag::revenant::Incorporeal>,
+        Has<crate::mobs::space_fauna::Observed>,
     ),
     Option<&'a crate::vehicles::Rider>,
 );

@@ -21,14 +21,17 @@
 //!   `parrot` (speech learning), `critters` (crabs, turtles), `ranged` (shooting mobs),
 //!   `troopers` (NPC soldiers' guns and drops),
 //!   `lavaland` (the mining level's fauna, their abilities and cave population).
-//!   `megafauna` (the lavaland bosses).
+//!   `megafauna` (the lavaland bosses), `space_fauna` (statues, the regal rat, the changeling's
+//!   creatures), `gorilla`, `bees`.
 
 pub mod ai;
+pub mod bees;
 pub mod constructs;
 pub mod critters;
 pub mod defense;
 pub mod eating;
 pub mod farm;
+pub mod gorilla;
 pub mod illusion;
 pub mod lavaland;
 pub mod megafauna;
@@ -36,6 +39,7 @@ pub mod oneoffs;
 pub mod parrot;
 pub mod pets;
 pub mod ranged;
+pub mod space_fauna;
 pub mod spawn;
 pub mod trader;
 pub mod troopers;
@@ -169,6 +173,8 @@ impl Plugin for MobsServerPlugin {
         oneoffs::build(app);
         lavaland::build(app);
         megafauna::build(app);
+        space_fauna::build(app);
+        bees::build(app);
     }
 }
 
@@ -323,6 +329,9 @@ fn attach(world: &mut World, entity: Entity) {
     oneoffs::attach(world, entity, &def);
     lavaland::attach(world, entity, &def);
     megafauna::attach(world, entity, &def);
+    space_fauna::attach(world, entity, &def);
+    gorilla::attach(world, entity, &def);
+    bees::attach(world, entity, &def);
     crate::antag::xeno::attach(world, entity, &def);
     set_look(world, entity, false);
 }
@@ -568,6 +577,8 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     constructs::on_death(world, def, pos);
     trader::on_death(world, def, pos);
     oneoffs::on_death(world, def, pos);
+    space_fauna::on_death(world, def, pos);
+    bees::on_death(world, mob, pos);
     crate::antag::slaughter::on_death(world, mob, def, pos);
     crate::spells::shapeshift::on_shape_death(world, mob);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
@@ -611,6 +622,7 @@ pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<crate::examine:
     farm::examine_lines(world, mob, lines);
     critters::examine_lines(world, mob, lines);
     constructs::examine_lines(world, mob, lines);
+    space_fauna::examine_lines(world, mob, lines);
     if world.get::<Stat>(mob) == Some(&Stat::Dead) {
         // tg `span_deadsay`, untranslated in BandaStation; the plural pronoun of
         // `p_they()` without a gender.

@@ -1627,7 +1627,7 @@ fn gun_blowout(world: &mut World, implant: Entity, mob: Entity, slot: ImplantSlo
 }
 
 /// `owner.reagents.add_reagent(path, amount)`.
-fn add_blood_reagent(world: &mut World, mob: Entity, path: &str, amount: f32) {
+pub(crate) fn add_blood_reagent(world: &mut World, mob: Entity, path: &str, amount: f32) {
     if let (Some(chem), Some(mut reagents)) = (
         world
             .get_resource::<crate::chem::Chem>()

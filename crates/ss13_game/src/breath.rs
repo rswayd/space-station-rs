@@ -57,6 +57,26 @@ pub const N2O_SLEEP_MIN: f64 = 5.0;
 /// `MIN_TOXIC_GAS_DAMAGE`, `MAX_TOXIC_GAS_DAMAGE`.
 pub const MIN_TOXIC_GAS_DAMAGE: f64 = 1.0;
 pub const MAX_TOXIC_GAS_DAMAGE: f64 = 10.0;
+/// `MIN_TOXIC_GAS_LUNG_DAMAGE`, `MAX_TOXIC_GAS_LUNG_DAMAGE`.
+const MIN_TOXIC_GAS_LUNG_DAMAGE: f64 = 0.1;
+const MAX_TOXIC_GAS_LUNG_DAMAGE: f64 = 15.0;
+/// Lungs `BZ_trip_balls_min`, `BZ_brain_damage_min`, `gas_stimulation_min`,
+/// `healium_para_min`, `healium_sleep_min`, kPa.
+const BZ_TRIP_BALLS_MIN: f64 = 1.0;
+const BZ_BRAIN_DAMAGE_MIN: f64 = 10.0;
+const GAS_STIMULATION_MIN: f64 = 0.002;
+const HEALIUM_PARA_MIN: f64 = 3.0;
+const HEALIUM_SLEEP_MIN: f64 = 6.0;
+/// Lungs `tritium_irradiation_*` and `antinoblium_irradiation_*`: (moles min, moles max,
+/// chance min, chance max).
+const TRITIUM_IRRADIATION: [f64; 4] = [1.0, 15.0, 10.0, 60.0];
+const ANTINOBLIUM_IRRADIATION: [f64; 4] = [0.5, 30.0, 5.0, 90.0];
+/// `COLD_LEVEL_*_THRESHOLD`, `HEAT_LEVEL_*_THRESHOLD` (K) and the burn of a breath past each
+/// (`COLD_GAS_DAMAGE_LEVEL_*`, `HEAT_GAS_DAMAGE_LEVEL_*`); `TEMPERATURE_LUNG_DAMAGE` at level 3.
+const COLD_BREATH: [(f64, f64); 3] = [(260.0, 0.5), (200.0, 1.5), (120.0, 3.0)];
+const HEAT_BREATH: [(f64, f64); 3] = [(360.0, 2.0), (400.0, 4.0), (1000.0, 8.0)];
+const TEMPERATURE_LUNG_DAMAGE: f32 = 3.0;
+const BURNING_CHEST: &str = "You feel a burning sensation in your chest";
 /// `PLUOXIUM_PROPORTION`: lungs read a mole of pluoxium as 8 of oxygen.
 const PLUOXIUM_PROPORTION: f64 = 8.0;
 
@@ -467,6 +487,35 @@ pub enum LifeEvent {
     Unconscious(f32),
     /// `Sleeping(min(AmountSleeping() + add, max))`.
     SleepUpTo { add: f32, max: f32 },
+    /// `if(!IsSleeping()) Sleeping(secs)`.
+    SleepIfAwake(f32),
+    /// `reagents.add_reagent(path, amount)`; `up_to`: only what tops the blood up to `amount`
+    /// (`max(0, amount - get_reagent_amount(path))`).
+    Reagent {
+        path: &'static str,
+        amount: f32,
+        up_to: bool,
+    },
+    /// `adjust_organ_loss(slot, amount, maximum)`.
+    OrganLoss {
+        slot: crate::medical::organs::Slot,
+        amount: f32,
+        maximum: Option<f32>,
+    },
+    /// `AddComponent(/datum/component/irradiated)` when `can_irradiate_basic`.
+    Irradiate,
+    /// `set_<timed>(secs)`; `only_if_higher`: `set_<timed>_if_lower`.
+    Timed {
+        kind: crate::status_effects::Timed,
+        secs: f32,
+        only_if_higher: bool,
+    },
+    /// `add_mood_event(category, event)`.
+    Mood(&'static str, &'static crate::mood::MoodEvent),
+    /// `clear_mood_event(category)`.
+    ClearMood(&'static str),
+    /// `vomit(VOMIT_CATEGORY_DEFAULT)`.
+    Vomit,
 }
 
 /// What one `Life()` reads and writes besides the mob's [`Respiration`].
@@ -509,6 +558,9 @@ pub struct Respiration {
     pub old_bodytemperature: f64,
     /// tg `seconds_in_low_pressure`.
     pub seconds_in_low_pressure: f64,
+    /// Lungs `n2o_euphoria`, `healium_euphoria` (`EUPHORIA_ACTIVE`).
+    pub n2o_euphoria: bool,
+    pub healium_euphoria: bool,
     /// What the body's species and lungs make of breathing and temperature, refreshed every
     /// `Life()` ([`BodyLife::of`]).
     pub body: BodyLife,
@@ -610,6 +662,8 @@ impl Default for Respiration {
             coretemperature: BODYTEMP_NORMAL,
             old_bodytemperature: BODYTEMP_NORMAL,
             seconds_in_low_pressure: 0.0,
+            n2o_euphoria: false,
+            healium_euphoria: false,
             body: BodyLife::default(),
         }
     }
@@ -668,9 +722,6 @@ impl Respiration {
     /// Lungs `check_breath` of a human. `breath` (`None`: nothing to breathe) is changed in
     /// place: O2 becomes CO2, pluoxium is consumed, it takes the body temperature. Returns
     /// whether the breath succeeded.
-    // shortcut: BZ, freon, healium, helium, hypernoblium, miasma, nitrium, tritium, zauker and
-    // antinoblium have no effect yet; breath temperature does not damage the
-    // lungs (tg's early return, see below).
     pub fn check_breath(&mut self, breath: Option<&mut GasMixture>, ctx: &mut LifeCtx) -> bool {
         let mut empty = GasMixture::vacuum();
         let breath = breath.unwrap_or(&mut empty);
@@ -716,9 +767,12 @@ impl Respiration {
         {
             ctx.alerts.clear(AlertCategory::TooMuchPlasma);
         }
-        if present[n2o] && too_much_n2o(pp[n2o], last[n2o], ctx) {
+        let old_euphoria = self.n2o_euphoria || self.healium_euphoria;
+        if present[n2o] && too_much_n2o(pp[n2o], last[n2o], &mut self.n2o_euphoria, ctx) {
+            self.n2o_euphoria = false;
             ctx.alerts.clear(AlertCategory::TooMuchN2o);
         }
+        self.exotic_gases(breath, &present, &pp, ctx);
         // Gases of the last breath that this one lacks.
         if last[co2] > 0.0 && breath.moles[co2] == 0.0 {
             self.safe_co2(ctx);
@@ -727,18 +781,248 @@ impl Respiration {
             ctx.alerts.clear(AlertCategory::TooMuchPlasma);
         }
         if last[n2o] > 0.0 && breath.moles[n2o] == 0.0 {
+            self.n2o_euphoria = false;
             ctx.alerts.clear(AlertCategory::TooMuchN2o);
         }
+        // tg reads the breath after the lungs consumed these gases, so `lose_healium` and
+        // `safe_miasma` ran right after every breath of them (the stench moodlet was cleared
+        // as soon as given); the bug is not ported: they run when the breath had none.
+        if last[gas(GasId::HEALIUM)] > 0.0 && !present[gas(GasId::HEALIUM)] {
+            self.healium_euphoria = false;
+        }
+        if last[gas(GasId::MIASMA)] > 0.0 && !present[gas(GasId::MIASMA)] {
+            ctx.events.push(LifeEvent::ClearMood("smell"));
+        }
         self.last_pp = pp;
+        let new_euphoria = self.n2o_euphoria || self.healium_euphoria;
+        if !old_euphoria && new_euphoria {
+            ctx.events.push(LifeEvent::Mood(
+                "chemical_euphoria",
+                &crate::mood::events::CHEMICAL_EUPHORIA,
+            ));
+        } else if old_euphoria && !new_euphoria {
+            ctx.events.push(LifeEvent::ClearMood("chemical_euphoria"));
+        }
         if has_moles {
-            // `handle_breath_temperature`: tg returns before any damage when the breath is
-            // above `cold_level_1_threshold` OR below `heat_level_1_threshold`, which every
-            // temperature is, so a breath only takes the body temperature.
+            self.breath_temperature(temperature, ctx);
             breath.temperature = self.bodytemperature;
             breath.merge(&out);
         }
         breath.garbage_collect();
         !self.failed_last_breath
+    }
+
+    /// The lungs' `breath_present` reactions to the rarer gases (`too_much_bz`,
+    /// `too_much_freon`, `too_much_halon`, `consume_healium`, `consume_helium`,
+    /// `consume_hypernoblium`, `too_much_miasma`, `too_much_nitrium`, `too_much_tritium`,
+    /// `too_much_zauker`, `too_much_antinoblium`). The consumed gases leave the breath
+    /// (`breathe_gas_volume` without an exhaled gas).
+    // shortcut: helium does not make the voice small (the chat has no small span); miasma
+    // gives no floor diseases (not ported) or disgust (not ported); no `TRAIT_ANOSMIA`.
+    fn exotic_gases(
+        &mut self,
+        breath: &mut GasMixture,
+        present: &[bool; GAS_COUNT],
+        pp: &[f64; GAS_COUNT],
+        ctx: &mut LifeCtx,
+    ) {
+        let has = |g: GasId| present[gas(g)];
+        let p = |g: GasId| pp[gas(g)];
+        let reagent = |ctx: &mut LifeCtx, path: &'static str, amount: f32, up_to: bool| {
+            ctx.events.push(LifeEvent::Reagent {
+                path,
+                amount,
+                up_to,
+            });
+        };
+        if has(GasId::BZ) {
+            let bz = p(GasId::BZ);
+            if bz > BZ_TRIP_BALLS_MIN {
+                let amount = bz.clamp(1.0, 5.0) as f32;
+                reagent(ctx, "/datum/reagent/bz_metabolites", amount, false);
+            }
+            if bz > BZ_BRAIN_DAMAGE_MIN && ctx.chance(33.0) {
+                ctx.events.push(LifeEvent::OrganLoss {
+                    slot: crate::medical::organs::Slot::Brain,
+                    amount: 3.0,
+                    maximum: Some(150.0),
+                });
+            }
+        }
+        if has(GasId::FREON) {
+            let freon = p(GasId::FREON);
+            take_all(breath, GasId::FREON);
+            if freon > GAS_STIMULATION_MIN {
+                reagent(ctx, "/datum/reagent/freon", 1.0, false);
+            }
+            if freon > 40.0 {
+                ctx.events.push(LifeEvent::Emote("gasp"));
+                ctx.damage(DamageType::Burn, 15.0);
+                if ctx.chance(freon / 2.0) {
+                    ctx.events
+                        .push(LifeEvent::Chat(Span::Warning, "Your throat closes up!"));
+                    ctx.events.push(LifeEvent::Timed {
+                        kind: crate::status_effects::Timed::Silence,
+                        secs: 6.0,
+                        only_if_higher: true,
+                    });
+                }
+            } else {
+                ctx.damage(DamageType::Burn, freon / 4.0);
+            }
+            lung_loss(ctx, freon * 0.5);
+            if ctx.chance(freon) {
+                ctx.events
+                    .push(LifeEvent::Chat(Span::Warning, BURNING_CHEST));
+            }
+        }
+        if has(GasId::HALON) {
+            take_all(breath, GasId::HALON);
+            if p(GasId::HALON) > GAS_STIMULATION_MIN {
+                ctx.damage(DamageType::Oxy, 5.0);
+                reagent(ctx, "/datum/reagent/halon", 1.0, true);
+            }
+        }
+        if has(GasId::HEALIUM) {
+            let healium = p(GasId::HEALIUM);
+            take_all(breath, GasId::HEALIUM);
+            if healium > GAS_STIMULATION_MIN {
+                if ctx.chance(15.0) {
+                    ctx.events.push(LifeEvent::Chat(
+                        Span::Warning,
+                        "Your head starts spinning and your lungs burn!",
+                    ));
+                    self.healium_euphoria = true;
+                    ctx.events.push(LifeEvent::Emote("gasp"));
+                }
+            } else {
+                self.healium_euphoria = false;
+            }
+            if healium > HEALIUM_PARA_MIN && ctx.chance(30.0) {
+                let secs = ctx.rng.range(30, 50) as f32 / 10.0;
+                ctx.events.push(LifeEvent::SleepIfAwake(secs));
+            }
+            if healium > HEALIUM_SLEEP_MIN {
+                reagent(ctx, "/datum/reagent/healium", 1.0, true);
+            }
+        }
+        if has(GasId::HELIUM) {
+            take_all(breath, GasId::HELIUM);
+        }
+        if has(GasId::HYPERNOBLIUM) {
+            take_all(breath, GasId::HYPERNOBLIUM);
+            if p(GasId::HYPERNOBLIUM) > GAS_STIMULATION_MIN {
+                reagent(ctx, "/datum/reagent/hypernoblium", 1.0, true);
+            }
+        }
+        if has(GasId::MIASMA) {
+            too_much_miasma(p(GasId::MIASMA), ctx);
+            take_all(breath, GasId::MIASMA);
+        }
+        if has(GasId::NITRIUM) {
+            let nitrium = p(GasId::NITRIUM);
+            take_all(breath, GasId::NITRIUM);
+            if ctx.chance(20.0) {
+                ctx.events.push(LifeEvent::Emote("burp"));
+            }
+            if ctx.chance(nitrium) && nitrium > 15.0 {
+                lung_loss(ctx, nitrium * 0.1);
+                ctx.events
+                    .push(LifeEvent::Chat(Span::Warning, BURNING_CHEST));
+            }
+            if nitrium > 5.0 {
+                reagent(ctx, "/datum/reagent/nitrium_low_metabolization", 2.0, true);
+            }
+            if nitrium > 10.0 {
+                reagent(ctx, "/datum/reagent/nitrium_high_metabolization", 2.0, true);
+            }
+        }
+        if has(GasId::TRITIUM) {
+            let trit = p(GasId::TRITIUM);
+            radioactive_breath(breath, GasId::TRITIUM, trit, 15.0, TRITIUM_IRRADIATION, ctx);
+        }
+        if has(GasId::ZAUKER) {
+            let zauker = p(GasId::ZAUKER);
+            take_all(breath, GasId::ZAUKER);
+            if zauker > GAS_STIMULATION_MIN {
+                reagent(ctx, "/datum/reagent/zauker", 1.0, true);
+            }
+            lung_loss(ctx, zauker * 2.0);
+            if ctx.chance(zauker) {
+                ctx.events
+                    .push(LifeEvent::Chat(Span::Warning, BURNING_CHEST));
+            }
+        }
+        if has(GasId::ANTINOBLIUM) {
+            // tg breathes it out twice, so the second call (whose result it reads) finds none
+            // and the toxin damage never happens; the bug is not ported.
+            let anti = p(GasId::ANTINOBLIUM);
+            radioactive_breath(
+                breath,
+                GasId::ANTINOBLIUM,
+                anti,
+                30.0,
+                ANTINOBLIUM_IRRADIATION,
+                ctx,
+            );
+        }
+    }
+
+    /// Lungs `handle_breath_temperature` of a breath inhaled at `temperature`.
+    /// tg returns early when the breath is above `cold_level_1_threshold` OR below
+    /// `heat_level_1_threshold` (every temperature), so it never hurt; the intended AND is
+    /// ported.
+    // shortcut: no frosty breath particle (`emit_breath_particle`); the lungs subtypes keep
+    // the human thresholds.
+    pub fn breath_temperature(&mut self, temperature: f64, ctx: &mut LifeCtx) {
+        if temperature > COLD_BREATH[0].0 && temperature < HEAT_BREATH[0].0 {
+            return;
+        }
+        if !self.body.resist_cold && temperature <= COLD_BREATH[0].0 {
+            let level = COLD_BREATH
+                .iter()
+                .rposition(|&(threshold, _)| temperature <= threshold)
+                .unwrap_or(0);
+            ctx.damage(DamageType::Burn, COLD_BREATH[level].1 * self.body.coldmod);
+            if level == 2 {
+                ctx.events.push(LifeEvent::OrganLoss {
+                    slot: crate::medical::organs::Slot::Lungs,
+                    amount: TEMPERATURE_LUNG_DAMAGE,
+                    maximum: None,
+                });
+            }
+            let effect_prob: f64 = [25.0, 50.0, 100.0][level];
+            if ctx.chance(effect_prob.sqrt() * 4.0) {
+                ctx.events.push(LifeEvent::Chat(
+                    Span::Warning,
+                    "You feel your face freezing and an icicle forming in your lungs!",
+                ));
+                if ctx.chance(50.0) {
+                    ctx.events.push(LifeEvent::Emote("shiver"));
+                }
+            }
+        }
+        if !self.body.resist_heat && temperature >= HEAT_BREATH[0].0 {
+            let level = HEAT_BREATH
+                .iter()
+                .rposition(|&(threshold, _)| temperature >= threshold)
+                .unwrap_or(0);
+            ctx.damage(DamageType::Burn, HEAT_BREATH[level].1 * self.body.heatmod);
+            if level == 2 {
+                ctx.events.push(LifeEvent::OrganLoss {
+                    slot: crate::medical::organs::Slot::Lungs,
+                    amount: TEMPERATURE_LUNG_DAMAGE,
+                    maximum: None,
+                });
+            }
+            let message_prob: f64 = [25.0, 50.0, 100.0][level];
+            if ctx.chance(message_prob.sqrt() * 4.0) {
+                ctx.events.push(LifeEvent::Chat(
+                    Span::Warning,
+                    "You feel your face burning and a searing heat in your lungs!",
+                ));
+            }
+        }
     }
 
     fn breathe_oxygen(
@@ -887,6 +1171,7 @@ impl Respiration {
             DamageType::Tox,
             ratio.clamp(MIN_TOXIC_GAS_DAMAGE, MAX_TOXIC_GAS_DAMAGE),
         );
+        lung_loss(ctx, plasma_pp * 0.5);
         if ctx.chance(plasma_pp) {
             ctx.events.push(LifeEvent::Chat(
                 Span::Warning,
@@ -1083,10 +1368,163 @@ fn exchange(
     out.moles[gas(into)] += moved;
 }
 
-/// Lungs `too_much_n2o`; `true`: the N2O is gone (`BREATH_LOST`).
-// shortcut: no euphoria mood or drugginess (the giggles are there), no sleep immunity or
-// anosmia.
-fn too_much_n2o(n2o_pp: f64, old_n2o_pp: f64, ctx: &mut LifeCtx) -> bool {
+/// `BODYTEMP_HEAT_DIVISOR` / `BODYTEMP_COLD_DIVISOR`, `BODYTEMP_HEATING_MAX` /
+/// `BODYTEMP_COOLING_MAX` of `adjust_bodytemperature(use_steps)`.
+const BODYTEMP_STEP_DIVISOR: f64 = 15.0;
+const BODYTEMP_STEP_MAX: f64 = 30.0;
+
+/// tg carbon `adjust_bodytemperature(amount, use_insulation = TRUE, use_steps = TRUE)`.
+fn adjust_bodytemperature_insulated(world: &mut World, mob: Entity, amount: f64) {
+    let Some(skin) = world.get::<Respiration>(mob).map(|r| r.bodytemperature) else {
+        return;
+    };
+    // `get_insulation_protection(bodytemperature + amount)`.
+    let worn = world
+        .get::<Inventory>(mob)
+        .map(|i| Worn::read(world, i))
+        .unwrap_or_default();
+    let exposed = skin + amount;
+    let protection = if exposed > skin {
+        worn.heat_protection(exposed)
+    } else {
+        worn.cold_protection(exposed)
+    };
+    let step = (amount * (1.0 - protection) / BODYTEMP_STEP_DIVISOR)
+        .clamp(-BODYTEMP_STEP_MAX, BODYTEMP_STEP_MAX);
+    if let Some(mut resp) = world.get_mut::<Respiration>(mob) {
+        resp.adjust_bodytemperature(step);
+    }
+}
+
+/// tg `share_bodytemperature` of a hug: `mob` and `other` each move half their skin
+/// temperature difference towards the other (through insulation, in steps).
+pub fn share_bodytemperature(world: &mut World, mob: Entity, other: Entity) {
+    let skin = |e: Entity| world.get::<Respiration>(e).map(|r| r.bodytemperature);
+    let (Some(own), Some(theirs)) = (skin(mob), skin(other)) else {
+        return;
+    };
+    let diff = own - theirs;
+    adjust_bodytemperature_insulated(world, other, diff * 0.5);
+    adjust_bodytemperature_insulated(world, mob, -diff * 0.5);
+}
+
+/// `help_shake_act`'s hug after the heat is shared: each one is told when the other is
+/// overheated or freezing (`BODYTEMP_HEAT_DAMAGE_LIMIT`, `BODYTEMP_COLD_DAMAGE_LIMIT`).
+pub fn hug_temperature_warnings(world: &mut World, helper: Entity, target: Entity) {
+    let skin = |e: Entity| world.get::<Respiration>(e).map(|r| r.bodytemperature);
+    let name = |e: Entity| crate::chem::name_of(world, e);
+    let state = |t: Option<f64>| match t {
+        Some(t) if t > BODYTEMP_HEAT_DAMAGE_LIMIT => Some("перегрева"),
+        Some(t) if t < BODYTEMP_COLD_DAMAGE_LIMIT => Some("переохлаждения"),
+        _ => None,
+    };
+    let (helper_state, target_state) = (state(skin(helper)), state(skin(target)));
+    let (helper_name, target_name) = (name(helper), name(target));
+    if let Some(s) = helper_state {
+        crate::tools::tell_mob(
+            world,
+            target,
+            Span::Warning,
+            format!("Кажется, что {helper_name} в состоянии {s}, когда он обнимает вас."),
+        );
+    }
+    if let Some(s) = target_state {
+        crate::tools::tell_mob(
+            world,
+            helper,
+            Span::Warning,
+            format!("Кажется, что {target_name} в состоянии {s}, когда вы обнимаете его."),
+        );
+    }
+}
+
+/// Lungs `breathe_gas_volume(breath, id)`: all of it leaves the breath; the moles taken.
+fn take_all(breath: &mut GasMixture, id: GasId) -> f64 {
+    std::mem::take(&mut breath.moles[gas(id)])
+}
+
+/// `adjust_organ_loss(ORGAN_SLOT_LUNGS, clamp(amount, MIN/MAX_TOXIC_GAS_LUNG_DAMAGE))`.
+fn lung_loss(ctx: &mut LifeCtx, amount: f64) {
+    ctx.events.push(LifeEvent::OrganLoss {
+        slot: crate::medical::organs::Slot::Lungs,
+        amount: amount.clamp(MIN_TOXIC_GAS_LUNG_DAMAGE, MAX_TOXIC_GAS_LUNG_DAMAGE) as f32,
+        maximum: None,
+    });
+}
+
+/// Lungs `too_much_tritium` / `too_much_antinoblium`: toxin from the moles breathed past the
+/// visible amount (`* tox_per_mole`), a chance to be irradiated growing with the pressure
+/// (`[moles min, moles max, chance min, chance max]`), lung damage.
+fn radioactive_breath(
+    breath: &mut GasMixture,
+    id: GasId,
+    pp: f64,
+    tox_per_mole: f64,
+    [moles_min, moles_max, chance_min, chance_max]: [f64; 4],
+    ctx: &mut LifeCtx,
+) {
+    let moles_visible = id.info().moles_visible * BREATH_PERCENTAGE;
+    let breathed = take_all(breath, id);
+    if breathed > moles_visible {
+        ctx.damage(
+            DamageType::Tox,
+            (breathed * tox_per_mole).clamp(MIN_TOXIC_GAS_DAMAGE, MAX_TOXIC_GAS_DAMAGE),
+        );
+    }
+    if pp > moles_min {
+        let scale = moles_max.min(pp - moles_min) / (moles_max - moles_min);
+        if ctx.chance(chance_min + (chance_max - chance_min) * scale) {
+            ctx.events.push(LifeEvent::Irradiate);
+        }
+    }
+    lung_loss(ctx, pp);
+    if ctx.chance(pp) {
+        ctx.events
+            .push(LifeEvent::Chat(Span::Warning, BURNING_CHEST));
+    }
+}
+
+/// Lungs `too_much_miasma`: the stench warnings, moodlets and vomiting by pressure.
+fn too_much_miasma(miasma_pp: f64, ctx: &mut LifeCtx) {
+    use crate::mood::events::{BAD_SMELL, NAUSEATING_STENCH};
+    // `prob(0.5 * miasma_pp)`: a floor disease (not ported); the roll is kept for parity.
+    ctx.chance(0.5 * miasma_pp);
+    // DM `switch` ranges are inclusive, the first match wins.
+    if (0.25..=5.0).contains(&miasma_pp) {
+        ctx.events.push(LifeEvent::ClearMood("smell"));
+        if ctx.chance(5.0) {
+            ctx.events.push(LifeEvent::Chat(
+                Span::Notice,
+                "There is an unpleasant smell in the air.",
+            ));
+        }
+    } else if (5.0..=15.0).contains(&miasma_pp) {
+        if ctx.chance(15.0) {
+            ctx.events.push(LifeEvent::Chat(
+                Span::Warning,
+                "You smell something horribly decayed inside this room.",
+            ));
+            ctx.events.push(LifeEvent::Mood("smell", &BAD_SMELL));
+        }
+    } else if miasma_pp >= 15.0 {
+        let chance = if miasma_pp <= 30.0 { 5.0 } else { 15.0 };
+        if ctx.chance(chance) {
+            ctx.events.push(LifeEvent::Chat(
+                Span::Warning,
+                "The stench of rotting carcasses is unbearable!",
+            ));
+            ctx.events
+                .push(LifeEvent::Mood("smell", &NAUSEATING_STENCH));
+            ctx.events.push(LifeEvent::Vomit);
+        }
+    } else {
+        ctx.events.push(LifeEvent::ClearMood("smell"));
+    }
+}
+
+/// Lungs `too_much_n2o`; `true`: the N2O is gone (`BREATH_LOST`). `euphoria`: `n2o_euphoria`.
+// shortcut: no sleep immunity or anosmia (neither trait is ported).
+fn too_much_n2o(n2o_pp: f64, old_n2o_pp: f64, euphoria: &mut bool, ctx: &mut LifeCtx) -> bool {
     if n2o_pp < N2O_PARA_MIN {
         if n2o_pp <= N2O_DETECT_MIN {
             return old_n2o_pp > N2O_DETECT_MIN;
@@ -1094,9 +1532,15 @@ fn too_much_n2o(n2o_pp: f64, old_n2o_pp: f64, ctx: &mut LifeCtx) -> bool {
         if old_n2o_pp >= N2O_PARA_MIN || old_n2o_pp <= N2O_DETECT_MIN {
             ctx.alerts.clear(AlertCategory::TooMuchN2o);
         }
-        if ctx.chance(20.0) {
+        *euphoria = ctx.chance(20.0);
+        if *euphoria {
             let key = if ctx.chance(50.0) { "giggle" } else { "laugh" };
             ctx.events.push(LifeEvent::Emote(key));
+            ctx.events.push(LifeEvent::Timed {
+                kind: crate::status_effects::Timed::Drugginess,
+                secs: 30.0,
+                only_if_higher: false,
+            });
         }
         return false;
     }
@@ -1104,6 +1548,7 @@ fn too_much_n2o(n2o_pp: f64, old_n2o_pp: f64, ctx: &mut LifeCtx) -> bool {
         ctx.alerts
             .throw(AlertCategory::TooMuchN2o, "too_much_n2o", 0);
     }
+    *euphoria = true;
     // "give them one second of grace to wake up and run away a bit!"
     ctx.events.push(LifeEvent::Unconscious(6.0));
     if n2o_pp > N2O_SLEEP_MIN {
@@ -1622,6 +2067,75 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
                 );
                 continue;
             }
+            LifeEvent::SleepIfAwake(secs) => {
+                let sleeping = world
+                    .get::<crate::status_effects::StatusEffects>(mob)
+                    .is_some_and(|e| e.remaining(crate::status_effects::Incap::Sleeping) > 0.0);
+                if !sleeping {
+                    crate::status_effects::apply(
+                        world,
+                        mob,
+                        crate::status_effects::Incap::Sleeping,
+                        secs,
+                    );
+                }
+                continue;
+            }
+            LifeEvent::Reagent {
+                path,
+                amount,
+                up_to,
+            } => {
+                let amount = if up_to {
+                    amount - crate::chem::blood_amount(world, mob, path)
+                } else {
+                    amount
+                };
+                if amount > 0.0 {
+                    crate::medical::cyberimps::add_blood_reagent(world, mob, path, amount);
+                }
+                continue;
+            }
+            LifeEvent::OrganLoss {
+                slot,
+                amount,
+                maximum,
+            } => {
+                use crate::medical::organs;
+                match maximum {
+                    Some(max) => organs::adjust_organ_loss_up_to(world, mob, slot, amount, max),
+                    None => organs::adjust_organ_loss(world, mob, slot, amount),
+                }
+                continue;
+            }
+            LifeEvent::Irradiate => {
+                // From the inside: rad-proof clothing does not help.
+                if crate::radiation::can_irradiate_basic(world, mob) {
+                    crate::radiation::add_irradiated(world, mob);
+                }
+                continue;
+            }
+            LifeEvent::Timed {
+                kind,
+                secs,
+                only_if_higher,
+            } => {
+                crate::status_effects::set_timed(world, mob, kind, secs, only_if_higher);
+                continue;
+            }
+            LifeEvent::Mood(category, event) => {
+                crate::mood::add_event(world, mob, category, event);
+                continue;
+            }
+            LifeEvent::ClearMood(category) => {
+                crate::mood::clear_event(world, mob, category);
+                continue;
+            }
+            LifeEvent::Vomit => {
+                // `VOMIT_CATEGORY_DEFAULT`: a message, harm and a stun; 10 nutrition, 1 tile.
+                crate::medical::diseases::effects::vomit(world, mob, 10.0, true, false, 1);
+                continue;
+            }
         };
         if let Some(client) = client {
             world.write_message(SendChat {
@@ -2113,5 +2627,122 @@ mod tests {
         assert_eq!(alerts.0[1].icon_state(), "lowpressure2");
         alerts.clear(AlertCategory::Pressure);
         assert_eq!(alerts.0.len(), 1);
+    }
+
+    #[test]
+    fn breath_temperature_burns_past_the_thresholds() {
+        // Station air: nothing.
+        let mut resp = Respiration::default();
+        let mut body = Body::new();
+        resp.breath_temperature(293.15, &mut body.ctx(Stat::Conscious));
+        assert_eq!(body.health.burn, 0.0);
+        // 150 K: cold level 2, 1.5 burn; 100 K: level 3, 3 burn and lung damage.
+        let mut body = Body::new();
+        resp.breath_temperature(150.0, &mut body.ctx(Stat::Conscious));
+        assert!((body.health.burn - 1.5).abs() < 0.1, "{}", body.health.burn);
+        let mut body = Body::new();
+        let mut ctx = body.ctx(Stat::Conscious);
+        resp.breath_temperature(100.0, &mut ctx);
+        assert!(ctx.events.iter().any(|e| matches!(
+            e,
+            LifeEvent::OrganLoss {
+                slot: crate::medical::organs::Slot::Lungs,
+                ..
+            }
+        )));
+        drop(ctx);
+        assert!((body.health.burn - 3.0).abs() < 0.1);
+        // 1200 K: heat level 3, 8 burn; resistance to heat: nothing.
+        let mut body = Body::new();
+        resp.breath_temperature(1200.0, &mut body.ctx(Stat::Conscious));
+        assert!((body.health.burn - 8.0).abs() < 0.1);
+        resp.body.resist_heat = true;
+        let mut body = Body::new();
+        resp.breath_temperature(1200.0, &mut body.ctx(Stat::Conscious));
+        assert_eq!(body.health.burn, 0.0);
+    }
+
+    #[test]
+    fn exotic_gases_follow_the_lungs_reactions() {
+        // 50 kPa of freon: 15 burn, the gas is consumed, a freon reagent.
+        let mut resp = Respiration::default();
+        let mut body = Body::new();
+        let mut breath = breath_of(&[(GasId::O2, 21.0), (GasId::FREON, 50.0)]);
+        let mut ctx = body.ctx(Stat::Conscious);
+        resp.check_breath(Some(&mut breath), &mut ctx);
+        assert!(ctx.events.contains(&LifeEvent::Reagent {
+            path: "/datum/reagent/freon",
+            amount: 1.0,
+            up_to: false,
+        }));
+        drop(ctx);
+        assert!(
+            (body.health.burn - 15.0).abs() < 0.1,
+            "{}",
+            body.health.burn
+        );
+        assert_eq!(breath.get(GasId::FREON), 0.0);
+        // BZ above 1 kPa: metabolites, clamped to 5 u.
+        let mut body = Body::new();
+        let mut ctx = body.ctx(Stat::Conscious);
+        resp.check_breath(
+            Some(&mut breath_of(&[(GasId::O2, 21.0), (GasId::BZ, 8.0)])),
+            &mut ctx,
+        );
+        assert!(ctx.events.contains(&LifeEvent::Reagent {
+            path: "/datum/reagent/bz_metabolites",
+            amount: 5.0,
+            up_to: false,
+        }));
+        // Tritium past its visible moles: toxin, lung damage.
+        let mut body = Body::new();
+        let mut breath = breath_of(&[(GasId::O2, 21.0), (GasId::TRITIUM, 20.0)]);
+        resp.check_breath(Some(&mut breath), &mut body.ctx(Stat::Conscious));
+        assert!(body.health.tox >= 1.0 - 1e-4);
+        assert_eq!(breath.get(GasId::TRITIUM), 0.0);
+    }
+
+    #[test]
+    fn n2o_euphoria_adds_and_clears_the_moodlet() {
+        let mut resp = Respiration::default();
+        let mut body = Body::new();
+        let mut ctx = body.ctx(Stat::Conscious);
+        // Enough to knock out: euphoric.
+        resp.check_breath(
+            Some(&mut breath_of(&[(GasId::O2, 21.0), (GasId::N2O, 2.0)])),
+            &mut ctx,
+        );
+        assert!(resp.n2o_euphoria);
+        assert!(
+            ctx.events
+                .iter()
+                .any(|e| matches!(e, LifeEvent::Mood("chemical_euphoria", _)))
+        );
+        let mut body = Body::new();
+        let mut ctx = body.ctx(Stat::Conscious);
+        resp.check_breath(Some(&mut breath_of(&[(GasId::O2, 21.0)])), &mut ctx);
+        assert!(!resp.n2o_euphoria);
+        assert!(
+            ctx.events
+                .contains(&LifeEvent::ClearMood("chemical_euphoria"))
+        );
+    }
+
+    #[test]
+    fn hugs_share_body_temperature() {
+        let mut world = World::new();
+        let cold = world
+            .spawn(Respiration {
+                bodytemperature: 250.0,
+                ..default()
+            })
+            .id();
+        let warm = world.spawn(Respiration::default()).id();
+        share_bodytemperature(&mut world, cold, warm);
+        let skin = |e: Entity| world.get::<Respiration>(e).unwrap().bodytemperature;
+        // Half the 60.15 K difference, in steps of 1/15, without clothing.
+        let half = (BODYTEMP_NORMAL - 250.0) * 0.5 / 15.0;
+        assert!((skin(cold) - (250.0 + half)).abs() < 1e-9);
+        assert!((skin(warm) - (BODYTEMP_NORMAL - half)).abs() < 1e-9);
     }
 }

@@ -350,6 +350,7 @@ pub(super) fn step_movers(world: &mut World) {
             || (pulled && c.traits & STOP_MOVING_WHEN_PULLED != 0)
             || crate::bots::busy(world, e)
             || crate::mobs::farm::immobilized(world, e)
+            || crate::mobs::space_fauna::observed(world, e)
         {
             continue;
         }

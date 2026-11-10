@@ -135,6 +135,8 @@ pub enum Key {
     VendingTiltCooldown,
     VendingUntiltCooldown,
     VendingLastHit,
+    /// The bee's `BB_TARGET_HYDRO` (`crate::mobs::bees`).
+    TargetHydro,
 }
 
 #[derive(Clone, Debug, PartialEq)]

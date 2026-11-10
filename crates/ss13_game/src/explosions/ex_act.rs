@@ -305,6 +305,18 @@ fn ex_act_basic(world: &mut World, mob: Entity, severity: Severity) {
     {
         return;
     }
+    // `/mob/living/basic/demon/slaughter/laughter/ex_act`: a devastating blast kills it whole
+    // (its `death` lets its friends out) instead of gibbing it.
+    if matches!(severity, Severity::Devastate)
+        && world.get::<crate::mobs::BasicMob>(mob).is_some_and(|b| {
+            ss13_mapload::fidelity::is_under(&b.def.path, crate::antag::slaughter::LAUGHTER)
+        })
+    {
+        if let Some(mut stat) = world.get_mut::<crate::health::Stat>(mob) {
+            stat.set_if_neq(crate::health::Stat::Dead);
+        }
+        return;
+    }
     // shortcut: basic mobs wear no armor here (`getarmor` is 0).
     let bomb_armor = 0.0_f32;
     let multi = (1.0 - bomb_armor / 166.6).clamp(0.0, 1.0);

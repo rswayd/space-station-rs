@@ -325,6 +325,12 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     if !reach || !alive || !ready || world.get::<Health>(target).is_none() {
         return false;
     }
+    // A seen statue, a regal rat's subjects, the cargorilla's `TRAIT_PACIFISM`.
+    if super::space_fauna::blocks_melee(world, attacker, target)
+        || super::gorilla::pacifist(world, attacker)
+    {
+        return false;
+    }
     // tg `face_atom`.
     if let Some(dir) = crate::pull::dir_between(from, to)
         && let Some(mut facing) = world.get_mut::<ss13_shared::Facing>(attacker)
@@ -395,6 +401,9 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     hurt(world, target, kind, damage, Some(zone));
     ai::record_attacker(world, target, attacker);
     super::oneoffs::after_melee(world, attacker, target);
+    super::space_fauna::after_melee(world, attacker, target);
+    super::gorilla::after_melee(world, attacker, target);
+    super::bees::after_melee(world, attacker, target);
     true
 }
 

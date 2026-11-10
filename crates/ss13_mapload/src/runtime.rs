@@ -77,6 +77,20 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `transform`, `health::gib_with`/`dust_with`: gorillas, gibs of carbons and aliens, remains.
     "/mob/living/basic/gorilla",
     "/mob/living/basic/gorilla/genetics",
+    // `mobs::space_fauna`: the regal rat's minions and domain mess, Frosty's injector, the
+    // flesh spider's blood; `mobs::bees`: a dead bee.
+    "/mob/living/basic/cockroach/sewer",
+    "/mob/living/basic/cockroach/glockroach/gang",
+    "/mob/living/basic/cockroach/glockroach/mobroach/goon",
+    "/mob/living/basic/cockroach/hauberoach/imperial",
+    "/mob/living/basic/frog/crazy",
+    "/mob/living/basic/frog/crazy/rare",
+    "/mob/living/basic/snail/angry",
+    "/obj/effect/decal/cleanable/vomit/old",
+    "/obj/effect/decal/cleanable/blood/oil/slippery",
+    "/obj/effect/decal/cleanable/blood/bubblegum",
+    "/obj/item/dnainjector/geladikinesis",
+    "/obj/item/trash/bee",
     "/obj/effect/decal/remains/plasma",
     "/obj/effect/decal/remains/xeno",
     "/obj/effect/decal/cleanable/blood/gibs/torso",
