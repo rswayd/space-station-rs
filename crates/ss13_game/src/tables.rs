@@ -565,8 +565,12 @@ fn pushable(world: &World, e: Entity) -> bool {
 
 /// tg `climbable/mousedrop_receive`: `dropped` is the user, onto a table or rack it reaches.
 pub fn mousedropped_onto(world: &mut World, actor: Actor, over: Entity, dropped: Entity) -> bool {
+    // Sandbags are climbable too (`crate::defenses::barricades`).
     if dropped != actor.mob
-        || (!is_table(world, over) && !is_rack(world, over) && !is_railing(world, over))
+        || (!is_table(world, over)
+            && !is_rack(world, over)
+            && !is_railing(world, over)
+            && !crate::defenses::barricades::is_sandbags(world, over))
     {
         return false;
     }

@@ -7,10 +7,14 @@
 //!   apart (2 s, its planks). Destroyed, a wooden one leaves its planks.
 //! - Planks on a door or a full-tile window: 5 s and 2 planks nail a crude barricade there.
 //! - The barrier grenade (`crate::grenades`) deploys security barriers.
-// shortcut: no sandbag climbing or elevation (`climbable`, `elevation`), no diagonal-from-a-
+//! - Sandbags are climbed like a table (`climbable`: drag yourself onto them,
+//!   `crate::tables::mousedropped_onto`).
+//! - The security barrier's projectile armour (bullet, laser, energy 50, [`projectile_armor`])
+//!   replaces its melee armour against shots (`crate::projectile`).
+// shortcut: no sandbag elevation (the 12 px shift of who stands on them), no diagonal-from-a-
 // barricade passage (`locate(barricade) in get_turf(mover)` for a mover already standing on one,
-// which only a grenade barrier built onto someone can cause), no armour of the security barrier
-// against projectiles. Add with climbing and per-flag armor.
+// which only a grenade barrier built onto someone can cause); the projectile armour is the
+// security barrier's alone (per-flag object armour is not in the converted data).
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -32,6 +36,25 @@ const SECURITY_BARRIER: &str = "/obj/structure/barricade/security";
 const WOOD: &str = "/obj/item/stack/sheet/mineral/wood";
 const DOOR: &str = "/obj/machinery/door";
 const WINDOW: &str = "/obj/structure/window";
+
+/// `/datum/armor/barricade_security`: `bullet`, `laser`, `energy`.
+const SECURITY_PROJECTILE_ARMOR: f32 = 50.0;
+
+/// `/obj/structure/barricade/sandbags` (`AddElement(/datum/element/climbable)`).
+pub fn is_sandbags(world: &World, e: Entity) -> bool {
+    world
+        .get::<DmObj>(e)
+        .is_some_and(|o| is_under(&o.path, SANDBAGS))
+}
+
+/// The armour of `e` against a projectile of `flag` (`bullet`, `laser`, `energy`) where it is
+/// not its melee armour: the security barrier's.
+pub fn projectile_armor(world: &World, e: Entity, flag: &str) -> Option<f32> {
+    let security = world
+        .get::<DmObj>(e)
+        .is_some_and(|o| is_under(&o.path, SECURITY_BARRIER));
+    (security && matches!(flag, "bullet" | "laser" | "energy")).then_some(SECURITY_PROJECTILE_ARMOR)
+}
 
 const REPAIR_DS: f32 = 40.0;
 const REPAIR_FUEL: u32 = 10;

@@ -39,7 +39,7 @@ use ss13_mapload::fidelity::{IconIndex, is_under};
 use ss13_mapload::light::{DmLight, MINIMUM_USEFUL_LIGHT_RANGE, source};
 use ss13_mapload::wallmount::{
     BUTTON_ROOT, EXTINGUISHER_CABINET_ROOT, FIREALARM_ROOT, FIREAXE_CABINET_ROOT, FLASHER_ROOT,
-    IGNITER_ROOT, LIGHT_SWITCH_ROOT, MASS_DRIVER_ROOT, PORTABLE_FLASHER, SPARKER_ROOT,
+    IGNITER_ROOT, LIGHT_SWITCH_ROOT, MASS_DRIVER_ROOT, SPARKER_ROOT,
 };
 use ss13_mapload::{Areas, DmAtom, DmWallMount};
 use ss13_shared::protocol::ClickModifiers;
@@ -67,6 +67,12 @@ pub enum WallJob {
     ToggleLock,
     /// BandaStation's `firedoor/attack_hand`: opening a firelock by hand.
     OpenFirelock,
+    /// `detectiveboard/wrench_act_secondary` (`crate::forensics::board`).
+    UnsecureBoard,
+    /// `flasher/wirecutter_act`: the bulb out.
+    FlasherBulb,
+    /// `flasher/wrench_act`: the flasher off the wall into its frame.
+    UnsecureFlasher,
 }
 
 pub struct WallMountPlugin;
@@ -104,6 +110,7 @@ impl Plugin for WallMountPlugin {
                     firelock::run_firelocks,
                     fire_alarm::ring_alarms,
                     controls::run_timers,
+                    controls::portable_proximity,
                     machines::process_igniters,
                     power_looks,
                 )
@@ -138,7 +145,8 @@ fn init_wallmounts(world: &mut World) {
             }
         } else if is_under(path, BUTTON_ROOT) {
             controls::add_button(world, e, &dm);
-        } else if is_under(path, FLASHER_ROOT) && !is_under(path, PORTABLE_FLASHER) {
+        } else if is_under(path, FLASHER_ROOT) {
+            // Mounted and portable flashers (`controls::Flasher::portable`).
             controls::add_flasher(world, e, &dm);
         } else if is_under(path, EXTINGUISHER_CABINET_ROOT) {
             cabinets::add_extinguisher_cabinet(world, e);
@@ -205,6 +213,9 @@ pub fn complete(world: &mut World, client: Entity, mob: Entity, target: Entity, 
     match job {
         WallJob::ToggleLock => cabinets::finish_toggle_lock(world, client, target),
         WallJob::OpenFirelock => firelock::finish_hand_open(world, mob, target),
+        WallJob::UnsecureBoard => crate::forensics::board::finish_unsecure(world, target),
+        WallJob::FlasherBulb => controls::finish_bulb_out(world, client, mob, target),
+        WallJob::UnsecureFlasher => controls::finish_unsecure(world, client, target),
     }
 }
 

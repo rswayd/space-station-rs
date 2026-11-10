@@ -118,6 +118,8 @@ pub struct ClaimConsole {
     /// The linked unit's points and whether the shuttle exists, for the window.
     pub unclaimed: i64,
     pub shuttle_exists: bool,
+    /// `initiated_launch`: this console sent the shuttle; its takeoff is checked again.
+    pub initiated_launch: bool,
 }
 
 /// `/obj/machinery/mineral/labor_points_checker`.
@@ -733,6 +735,40 @@ fn say_cooled(world: &mut World, console: Entity, text: &str) {
     say(world, console, text);
 }
 
+/// `on_laborshuttle_can_move` (`COMSIG_SHUTTLE_SHOULD_MOVE`) when the `laborcamp` shuttle
+/// `port` is about to leave: a console that launched it aborts the takeoff if more than one
+/// prisoner is aboard by now. Each launch is checked once (tg never clears `initiated_launch`
+/// after a takeoff, so later flights would be checked too).
+pub fn takeoff_blocked(world: &mut World, port: Entity) -> bool {
+    let labor = world
+        .get::<crate::shuttle::MobileDock>(port)
+        .is_some_and(|m| m.id == SHUTTLE_ID);
+    if !labor {
+        return false;
+    }
+    let mut q = world.query::<(Entity, &ClaimConsole)>();
+    let launched: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, c)| c.initiated_launch)
+        .map(|(e, _)| e)
+        .collect();
+    let mut blocked = false;
+    for console in launched {
+        if let Some(mut c) = world.get_mut::<ClaimConsole>(console) {
+            c.initiated_launch = false;
+        }
+        if shuttle_prisoners(world, console).len() > 1 {
+            say(
+                world,
+                console,
+                "Takeoff aborted. Prisoners may only be released one at a time.",
+            );
+            blocked = true;
+        }
+    }
+    blocked
+}
+
 fn has_brig_access(world: &World, mob: Entity) -> bool {
     world
         .get::<Inventory>(mob)
@@ -826,6 +862,9 @@ pub fn claim_act(world: &mut World, user: Entity, console: Entity, act: ClaimAct
                 say_cooled(world, console, "No permission to dock could be granted.");
                 return;
             }
+            if let Some(mut c) = world.get_mut::<ClaimConsole>(console) {
+                c.initiated_launch = true;
+            }
             let name = world
                 .get::<Name>(user)
                 .map(|n| n.to_string())
@@ -870,6 +909,11 @@ pub enum GateVerdict {
     Served,
     /// `BLOCK_EXIT`: points left on the sentence.
     Remaining(u32),
+    /// A brig gate and a timed prisoner ID (`crate::brig::sentence`): the sentence starts, has
+    /// been served (both pass), or is still running.
+    SentenceStart(Entity),
+    SentenceServed(Entity),
+    SentenceOngoing,
     Denied,
 }
 
@@ -877,7 +921,12 @@ impl GateVerdict {
     pub fn passes(self) -> bool {
         matches!(
             self,
-            Self::Free | Self::Clearance | Self::Escort | Self::Served
+            Self::Free
+                | Self::Clearance
+                | Self::Escort
+                | Self::Served
+                | Self::SentenceStart(_)
+                | Self::SentenceServed(_)
         )
     }
 }
@@ -925,13 +974,24 @@ pub fn gate_verdict(world: &World, mover: Entity, gate: Entity) -> GateVerdict {
                 .into_iter()
                 .flatten()
                 .chain(i.equipped())
-                .filter_map(|e| world.get::<PrisonerCard>(e).copied())
+                .filter_map(|e| Some((e, world.get::<PrisonerCard>(e).copied()?)))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    for card in cards {
-        // `labour/allow_prisoner_id`; a station gate's timed sentences are not ported.
-        if !labour || card.goal == 0 {
+    let now_ms = super::sentence::now_ms(world);
+    for (entity, card) in cards {
+        if !labour {
+            // `prisongate/allow_prisoner_id`: the timed sentence.
+            use super::sentence::SentenceVerdict as V;
+            match super::sentence::gate_check(&card, now_ms) {
+                None => continue,
+                Some(V::Start) => return GateVerdict::SentenceStart(entity),
+                Some(V::Served) => return GateVerdict::SentenceServed(entity),
+                Some(V::Ongoing) => return GateVerdict::SentenceOngoing,
+            }
+        }
+        // `labour/allow_prisoner_id`.
+        if card.goal == 0 {
             continue;
         }
         return if card.points >= card.goal {
@@ -976,6 +1036,39 @@ fn gate_messages(
     let now = world.resource::<Time>().elapsed_secs_f64();
     for (mover, gate) in events {
         let verdict = gate_verdict(world, mover, gate);
+        // A timed ID's start and release happen on every pass, past the spam cooldown.
+        match verdict {
+            GateVerdict::SentenceStart(card) => {
+                let name = world
+                    .get::<crate::outfit::IdRegistration>(card)
+                    .map(|r| r.registered_name.clone())
+                    .unwrap_or_else(|| crate::examine::name_of(world, card));
+                say(
+                    world,
+                    gate,
+                    &format!(
+                        "Prison ID with active sentence detected. Please enjoy your stay in our \
+                         corporate rehabilitation center, {name}!"
+                    ),
+                );
+                sound(world, gate, CHIME, 50.0);
+                super::sentence::start(world, card);
+                continue;
+            }
+            GateVerdict::SentenceServed(card) => {
+                say(
+                    world,
+                    gate,
+                    "Prison ID with served sentence detected. Access granted.",
+                );
+                sound(world, gate, CHIME, 50.0);
+                if let Some(mut c) = world.get_mut::<PrisonerCard>(card) {
+                    c.timed = false;
+                }
+                continue;
+            }
+            _ => {}
+        }
         let ready = world
             .get::<PrisonGateState>(gate)
             .is_some_and(|g| g.ready_at <= now);
@@ -1003,6 +1096,11 @@ fn gate_messages(
                 format!("{n} point(s) remaining on sentence. Access denied."),
                 Some(BUZZ),
             ),
+            GateVerdict::SentenceOngoing => (
+                "Prison ID with ongoing sentence detected. Access denied.".to_owned(),
+                Some(BUZZ),
+            ),
+            GateVerdict::SentenceStart(_) | GateVerdict::SentenceServed(_) => continue,
             GateVerdict::Denied | GateVerdict::Free => {
                 if let Some(client) = world
                     .get::<crate::server::PlayerMob>(mover)
@@ -1048,6 +1146,7 @@ mod tests {
         let away = PrisonerCard {
             goal: 200,
             points: 150,
+            ..Default::default()
         };
         assert_eq!(
             status(Some(&away), false),
@@ -1057,6 +1156,7 @@ mod tests {
         let met = PrisonerCard {
             goal: 200,
             points: 200,
+            ..Default::default()
         };
         assert_eq!(status(Some(&met), false), (true, "Goal met!".to_owned()));
         assert_eq!(

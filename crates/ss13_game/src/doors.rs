@@ -1103,6 +1103,14 @@ fn door_bumps(
         else {
             continue;
         };
+        // `try_to_activate_door` / `window/bumpopen`: `add_fingerprint(user)` (only living
+        // mobs leave any, `crate::forensics`).
+        if !door.is_operating() {
+            let mover = bump.entity;
+            commands.queue(move |world: &mut World| {
+                crate::forensics::server::add_fingerprint(world, entity, mover, false);
+            });
+        }
         // A bot opens with its access card (`/mob/living/basic/bot` `access_card`).
         let access = inventory
             .and_then(|i| i.access(&cards))
@@ -1225,6 +1233,11 @@ fn door_clicks(
             });
             continue;
         }
+        // `try_to_activate_door`: `add_fingerprint(user)` first.
+        let mob = click.mob;
+        commands.queue(move |world: &mut World| {
+            crate::forensics::server::add_fingerprint(world, entity, mob, false);
+        });
         let access = inventory.and_then(|i| i.access(&cards));
         if activate(
             &mut door,

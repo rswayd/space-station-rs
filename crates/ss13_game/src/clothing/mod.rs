@@ -226,6 +226,7 @@ mod server {
         items: Query<'w, 's, (&'static DmItem, Option<&'static DmAtom>)>,
         wear: Query<'w, 's, &'static damage::ClothingWear>,
         mod_overlays: Query<'w, 's, &'static crate::modsuit::modules::ModOverlays>,
+        forensics: Query<'w, 's, &'static crate::forensics::server::Forensics>,
     }
 
     impl WornLook<'_, '_> {
@@ -234,6 +235,15 @@ mod server {
             cover::obscured_by(inventory, |e| {
                 self.clothing.get(e).map_or(0, |c| c.flags_inv)
             })
+        }
+
+        /// The worn clothes' blood (`crate::forensics::server::blood_overlays`), tinted.
+        pub fn blood(
+            &self,
+            shown: &Inventory,
+            icons: &IconIndex,
+        ) -> Vec<(f32, ss13_shared::Overlay)> {
+            crate::forensics::server::blood_overlays(shown, &self.forensics, icons)
         }
 
         /// Overlays on top of the worn items of `shown` (the inventory as drawn): the

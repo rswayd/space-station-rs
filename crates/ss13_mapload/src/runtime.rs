@@ -852,6 +852,11 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/fireaxecabinet/empty",
     "/obj/structure/fireaxecabinet/mechremoval/empty",
     "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
+    // The detective board's frame and board (`ss13_game::forensics::board`), the flasher's
+    // bulb out of wirecutters (`ss13_game::wallmount::controls`).
+    "/obj/item/wallframe/detectiveboard",
+    "/obj/structure/detectiveboard",
+    "/obj/item/assembly/flash/handheld",
     // Printed photos and picture frames on and off the wall (`ss13_game::service` photos).
     "/obj/item/photo",
     "/obj/item/wallframe/picture",

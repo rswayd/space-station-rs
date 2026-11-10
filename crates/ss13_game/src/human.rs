@@ -644,6 +644,16 @@ impl HumanAppearances {
         look: &HumanLook,
         items: &[(f32, IconStateId)],
     ) -> Result<Appearance, LookError> {
+        self.dressed_with(look, items, &[])
+    }
+
+    /// [`Self::dressed`] with overlays of their own color among the items (worn blood).
+    pub fn dressed_with(
+        &mut self,
+        look: &HumanLook,
+        items: &[(f32, IconStateId)],
+        tinted: &[(f32, Overlay)],
+    ) -> Result<Appearance, LookError> {
         let (base, layers) = self.cached(look)?;
         let mut overlays: Vec<(f32, Overlay)> = layers
             .iter()
@@ -655,6 +665,7 @@ impl HumanAppearances {
                 .iter()
                 .map(|&(layer, icon_state)| (layer, Overlay::new(icon_state))),
         );
+        overlays.extend(tinted.iter().cloned());
         // Stable: items go above body parts of the same layer.
         overlays.sort_by(|a, b| b.0.total_cmp(&a.0));
         Ok(Appearance {

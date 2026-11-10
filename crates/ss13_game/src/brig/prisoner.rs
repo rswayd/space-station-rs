@@ -71,11 +71,19 @@ pub struct PrisonerConsole {
     pub view: PrisonerManagementData,
 }
 
-/// `/obj/item/card/id/advanced/prisoner`: `goal` and `points` of the labor camp.
+/// `/obj/item/card/id/advanced/prisoner`: `goal` and `points` of the labor camp, and the timed
+/// sentence (`crate::brig::sentence`).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PrisonerCard {
     pub goal: u32,
     pub points: u32,
+    /// `timed`: a sentence is set; the brig's prison gates read it.
+    pub timed: bool,
+    /// `time_to_assign`, seconds: starts when the prisoner passes a prison gate.
+    pub time_to_assign: u32,
+    /// The game time (ms) the running sentence ends (`time_left` counting down); `None` when it
+    /// is not running.
+    pub sentence_end_ms: Option<u64>,
 }
 
 /// On an implanted mob that died: when (tg `timeofdeath`), for the tracking implant's

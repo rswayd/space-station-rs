@@ -91,7 +91,7 @@ pub use paper::{Paper, PaperBin, write_printed};
 #[cfg(feature = "server")]
 pub use photo::{
     Camera, Photo, PhotoJob, Picture, PictureFrame, capture, complete as photo_complete,
-    examined as photo_examined, frame_moved as picture_frame_moved, portrait,
+    examined as photo_examined, frame_moved as picture_frame_moved, portrait, show as photo_show,
 };
 #[cfg(feature = "server")]
 pub use religion::{

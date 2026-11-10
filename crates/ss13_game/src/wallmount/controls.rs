@@ -24,7 +24,13 @@
 // shortcut: curtain, crematorium, photobooth and ticket buttons do nothing; no panel (devices and boards in and
 // out, renaming, skins), no shuttle id prefixes (`connect_to_shuttle`), the airlock controller's
 // shock bit sets the intended toggle (tg's `secondsElectrified` check is inverted). Flashers:
-// no bulb removal or replacement (wirecutters), no flick or flash light, no portable flasher.
+// no flick or flash light, a frame's channel id is not shown on examine.
+//!
+//! A flasher's bulb (`bulb`, a handheld flash) comes out with wirecutters (3 s) and goes in by
+//! hand; without one it never flashes. A wrench (4 s, bulb out first) takes it off the wall into
+//! its frame, which keeps the channel `id`. The portable flasher (`flasher/portable`) is
+//! wrenched to the floor and back, and while bolted flashes a living mob that comes within
+//! range not walking (`HasProximity`).
 
 use std::collections::HashMap;
 
@@ -69,6 +75,13 @@ const FLASH_COOLDOWN: f64 = 15.0;
 const FLASH_RECHARGE: f64 = 30.0;
 const FLASH_ENERGY: f64 = 1000.0;
 const FLASH_SOUND: &str = "sound/items/weapons/flash.ogg";
+const HANDHELD_FLASH: &str = "/obj/item/assembly/flash/handheld";
+const FLASHER_FRAME: &str = "/obj/item/wallframe/flasher";
+const IRON: &str = "/obj/item/stack/sheet/iron";
+/// `wirecutter_act`: `use_tool(src, user, 30)`; `wrench_act`: `use_tool(src, user, 40)`.
+const BULB_DS: f32 = 30.0;
+const UNSECURE_DS: f32 = 40.0;
+const DECONSTRUCT_SOUND: &str = "sound/items/deconstruct.ogg";
 
 /// The `assembly/control` in a button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -130,6 +143,12 @@ pub struct ButtonPending;
 #[derive(Component, Clone, Debug)]
 pub struct Flasher {
     pub id: Option<String>,
+    /// A bulb is in (`bulb`); its state is the fields below.
+    pub bulb: bool,
+    /// The handheld flash that went in by hand (a mapped bulb has no item yet).
+    pub bulb_item: Option<Entity>,
+    /// `/obj/machinery/flasher/portable`.
+    pub portable: bool,
     pub range: u32,
     /// `strength`, seconds of paralysis.
     pub strength: f32,
@@ -247,6 +266,9 @@ pub(super) fn add_flasher(world: &mut World, e: Entity, dm: &DmWallMount) {
     link(world, |l| &mut l.flashers, &id, e);
     world.entity_mut(e).insert(Flasher {
         id,
+        bulb: true,
+        bulb_item: None,
+        portable: is_under(&dm.path, ss13_mapload::wallmount::PORTABLE_FLASHER),
         range: dm.flash_range.max(0.0) as u32,
         strength: dm.strength / 10.0,
         ready_at: 0.0,
@@ -274,9 +296,12 @@ pub(super) fn item_interaction(
     world: &mut World,
     client: Entity,
     mob: Entity,
-    _held: Entity,
+    held: Entity,
     target: Entity,
 ) -> bool {
+    if let Some(handled) = flasher_item(world, client, mob, held, target) {
+        return handled;
+    }
     if world.get::<Button>(target).is_none()
         || world
             .get::<crate::combat::CombatMode>(mob)
@@ -549,15 +574,336 @@ pub(super) fn flasher_look(world: &World, e: Entity, flasher: &Flasher, powered:
     let base = world
         .get::<DmWallMount>(e)
         .map_or("mflash", |d| d.base_icon_state.as_str());
-    let dark = if flasher.burnt_out || !powered {
+    let anchored = crate::obj_damage::anchored(world, e);
+    // `flasher/powered()`: not without a bulb or (portable) unbolted.
+    let works = powered && flasher.bulb && (anchored || !flasher.portable);
+    let dark = if flasher.burnt_out || !works {
         "-p"
     } else {
         ""
     };
+    // `portable/wrench_act`: `add_overlay("[base_icon_state]-s")` while bolted.
+    let overlays = if flasher.portable && anchored {
+        vec![(format!("{base}-s"), false)]
+    } else {
+        Vec::new()
+    };
     Look {
         icon_state: format!("{base}1{dark}"),
-        overlays: Vec::new(),
+        overlays,
         light: None,
+    }
+}
+
+/// `flasher/item_interaction` (a handheld flash as the bulb), `wirecutter_act` and
+/// `wrench_act`. `None`: not the flasher's click.
+pub(super) fn flasher_item(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> Option<bool> {
+    let state = world.get::<Flasher>(target)?.clone();
+    crate::forensics::server::add_fingerprint(world, target, mob, false);
+    let name = crate::examine::name_of(world, target);
+    let held_path = world
+        .get::<ss13_mapload::DmItem>(held)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    let actor = crate::tools::Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    if is_under(&held_path, HANDHELD_FLASH) {
+        if state.bulb {
+            tell(
+                world,
+                client,
+                Span::Warning,
+                format!("A flashbulb is already installed in {name}!"),
+            );
+            return Some(true);
+        }
+        if crate::inventory::no_drop(world, held) {
+            return Some(true);
+        }
+        insert_bulb(world, mob, target, held);
+        let user = crate::examine::name_of(world, mob);
+        let flash = crate::examine::name_of(world, held);
+        crate::chem::visible(
+            world,
+            mob,
+            &format!("You install {flash} into {name}."),
+            &format!("{user} installs {flash} into {name}."),
+            Span::Notice,
+        );
+        return Some(true);
+    }
+    match crate::tools::tool_of(world, held).map(|(k, _)| k) {
+        Some(crate::tools::ToolKind::Wirecutters) => {
+            if !state.bulb {
+                return None;
+            }
+            let user = crate::examine::name_of(world, mob);
+            crate::chem::visible(
+                world,
+                mob,
+                &format!("You begin to disconnect {name}'s flashbulb..."),
+                &format!("{user} begins to disconnect {name}'s flashbulb."),
+                Span::Notice,
+            );
+            crate::tools::use_tool(
+                world,
+                actor,
+                target,
+                BULB_DS,
+                0,
+                crate::construction::Job::WallMount(super::WallJob::FlasherBulb),
+            );
+            Some(true)
+        }
+        Some(crate::tools::ToolKind::Wrench) if state.portable => {
+            toggle_portable(world, client, target);
+            Some(true)
+        }
+        Some(crate::tools::ToolKind::Wrench) => {
+            if state.bulb {
+                tell(
+                    world,
+                    client,
+                    Span::Warning,
+                    format!("Remove a flashbulb from {name} first!"),
+                );
+                return Some(true);
+            }
+            tell(
+                world,
+                client,
+                Span::Notice,
+                "You start unsecuring the flasher frame...",
+            );
+            crate::tools::use_tool(
+                world,
+                actor,
+                target,
+                UNSECURE_DS,
+                0,
+                crate::construction::Job::WallMount(super::WallJob::UnsecureFlasher),
+            );
+            Some(true)
+        }
+        _ => None,
+    }
+}
+
+/// A handheld flash into the empty socket: its wear becomes the flasher's (`Entered`).
+fn insert_bulb(world: &mut World, mob: Entity, flasher: Entity, flash: Entity) {
+    if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
+        for hand in inventory.hands.iter_mut() {
+            if *hand == Some(flash) {
+                *hand = None;
+            }
+        }
+    }
+    let wear = world.get::<crate::security::Flash>(flash).cloned();
+    crate::storage::put_inside(world, flash, flasher);
+    if let Some(mut f) = world.get_mut::<Flasher>(flasher) {
+        f.bulb = true;
+        f.bulb_item = Some(flash);
+        if let Some(wear) = wear {
+            f.burnt_out = wear.burnt_out;
+            f.times_used = wear.times_used;
+            f.last_used = wear.last_used;
+        }
+    }
+    refresh_look(world, flasher);
+}
+
+/// The bulb out onto the flasher's tile with its wear (`bulb.forceMove(loc)`).
+fn take_bulb(world: &mut World, flasher: Entity) -> Option<Entity> {
+    let state = world.get::<Flasher>(flasher)?.clone();
+    if !state.bulb {
+        return None;
+    }
+    let &pos = world.get::<TilePos>(flasher)?;
+    let bulb = match state.bulb_item.filter(|&b| world.get_entity(b).is_ok()) {
+        Some(b) => {
+            crate::storage::take_out(world, b, pos);
+            Some(b)
+        }
+        None => crate::construction::spawn_obj(world, HANDHELD_FLASH, pos),
+    };
+    if let Some(b) = bulb {
+        world.entity_mut(b).insert(crate::security::Flash {
+            times_used: state.times_used,
+            burnt_out: state.burnt_out,
+            last_used: state.last_used,
+        });
+    }
+    if let Some(mut f) = world.get_mut::<Flasher>(flasher) {
+        f.bulb = false;
+        f.bulb_item = None;
+        f.burnt_out = false;
+        f.times_used = 0;
+    }
+    refresh_look(world, flasher);
+    bulb
+}
+
+/// The end of the wirecutters, the bulb still in.
+pub(super) fn finish_bulb_out(world: &mut World, client: Entity, mob: Entity, flasher: Entity) {
+    if take_bulb(world, flasher).is_none() {
+        return;
+    }
+    let (user, name) = (
+        crate::examine::name_of(world, mob),
+        crate::examine::name_of(world, flasher),
+    );
+    crate::chem::visible(
+        world,
+        mob,
+        &format!("You disconnect {name}'s flashbulb."),
+        &format!("{user} disconnects {name}'s flashbulb!"),
+        Span::Notice,
+    );
+    let _ = client;
+}
+
+/// The end of the wrench: `deconstruct(TRUE)` into a frame with the channel id.
+pub(super) fn finish_unsecure(world: &mut World, client: Entity, flasher: Entity) {
+    let Some(state) = world.get::<Flasher>(flasher).cloned() else {
+        return;
+    };
+    if state.bulb || state.portable {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(flasher) else {
+        return;
+    };
+    tell(
+        world,
+        client,
+        Span::Notice,
+        "You unsecure the flasher frame.",
+    );
+    match crate::construction::spawn_obj(world, FLASHER_FRAME, pos) {
+        Some(frame) => {
+            crate::forensics::server::transfer_fingerprints_to(world, flasher, frame);
+            world
+                .entity_mut(frame)
+                .insert(FrameChannel(state.id.clone()));
+            playsound(world, PlaySound::new(pos, DECONSTRUCT_SOUND, 50.0, true));
+        }
+        None => {
+            crate::construction::spawn_stack(world, IRON, pos, 2);
+        }
+    }
+    if let Some(id) = &state.id {
+        let mut links = world.resource_mut::<Links>();
+        if let Some(list) = links.flashers.get_mut(id) {
+            list.retain(|&e| e != flasher);
+        }
+    }
+    world.despawn(flasher);
+    crate::construction::tile_changed(world, pos);
+}
+
+/// `wallframe/flasher` `id`: the channel a flasher built from it listens on.
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub struct FrameChannel(pub Option<String>);
+
+/// `wallframe/flasher/after_attach`: the built flasher takes the frame's channel.
+pub(super) fn set_channel(world: &mut World, flasher: Entity, id: Option<String>) {
+    let Some(mut f) = world.get_mut::<Flasher>(flasher) else {
+        return;
+    };
+    f.id = id.clone();
+    link(world, |l| &mut l.flashers, &id, flasher);
+}
+
+/// `flasher/attack_ai`: the AI fires a bolted flasher. True when `target` is a flasher.
+pub fn attack_ai(world: &mut World, target: Entity) -> bool {
+    let Some(f) = world.get::<Flasher>(target) else {
+        return false;
+    };
+    if !f.portable || crate::obj_damage::anchored(world, target) {
+        flash(world, target);
+    }
+    true
+}
+
+/// `portable/wrench_act`: bolted (not in space) or loose.
+fn toggle_portable(world: &mut World, client: Entity, flasher: Entity) {
+    let Some(&pos) = world.get::<TilePos>(flasher) else {
+        return;
+    };
+    playsound(
+        world,
+        PlaySound::new(pos, "sound/items/tools/ratchet.ogg", 100.0, true),
+    );
+    let name = crate::examine::name_of(world, flasher);
+    let in_space = crate::construction::turf_at(world, pos)
+        .and_then(|t| crate::construction::path_of(world, t))
+        .is_some_and(|p| is_under(&p, "/turf/open/space"));
+    if !crate::obj_damage::anchored(world, flasher) && !in_space {
+        crate::obj_damage::set_anchored(world, flasher, true);
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("{name} is now secured."),
+        );
+    } else {
+        crate::obj_damage::set_anchored(world, flasher, false);
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("{name} can now be moved."),
+        );
+    }
+    refresh_look(world, flasher);
+}
+
+/// `portable/HasProximity`: a living mob not walking moved within range of a bolted portable
+/// flasher.
+// Cost: per step of a mob, one pass over the portable flashers (a handful per map).
+pub fn portable_proximity(
+    world: &mut World,
+    mut moves: Local<bevy::ecs::message::MessageCursor<ss13_world::Moved>>,
+) {
+    let moved: Vec<(Entity, TilePos)> = moves
+        .read(world.resource::<Messages<ss13_world::Moved>>())
+        .map(|m| (m.entity, m.to))
+        .collect();
+    if moved.is_empty() {
+        return;
+    }
+    let mut q = world.query::<(Entity, &Flasher, &TilePos)>();
+    let portables: Vec<(Entity, u32, TilePos)> = q
+        .iter(world)
+        .filter(|(_, f, _)| f.portable)
+        .map(|(e, f, p)| (e, f.range, *p))
+        .collect();
+    if portables.is_empty() {
+        return;
+    }
+    for (mob, to) in moved {
+        let walking = world
+            .get::<crate::janitor::Walking>(mob)
+            .is_some_and(|w| w.0);
+        if world.get::<Health>(mob).is_none() || walking {
+            continue;
+        }
+        for &(flasher, range, at) in &portables {
+            if crate::obj_damage::anchored(world, flasher)
+                && to.chebyshev(at).is_some_and(|d| d <= range)
+            {
+                flash(world, flasher);
+            }
+        }
     }
 }
 
@@ -570,7 +916,14 @@ pub fn flash(world: &mut World, flasher: Entity) -> bool {
         return false;
     };
     let t = now(world);
-    if world.get::<Unpowered>(flasher).is_some() || state.burnt_out || t < state.ready_at {
+    // `powered()`: a bulb in, a portable one bolted.
+    let loose = state.portable && !crate::obj_damage::anchored(world, flasher);
+    if world.get::<Unpowered>(flasher).is_some()
+        || !state.bulb
+        || loose
+        || state.burnt_out
+        || t < state.ready_at
+    {
         return false;
     }
     // `bulb.flash_recharge(30)`: a charge back per 30 s, then the burnout roll.

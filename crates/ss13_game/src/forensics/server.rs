@@ -22,12 +22,20 @@
 //!   which clears it.
 //! - An evidence bag holds one item up to normal size: clicked on an item it bags it; its sprite
 //!   shows the item, its weight class becomes the item's; used in hand it empties.
-// shortcut: no blood overlay on items or worn clothes (tg draws `itemblood` inset into the
-// item's sprite, a blend mode the renderer lacks), no bloody hands or gloves transferring blood
-// to what they touch (tg's `/atom/add_fibers` that would do it is never called), no bloody
-// soles, no blood DNA from blood reagents (they carry only the type), no admin view of the
-// hidden prints yet (no view-variables panel), no prints from doors bumped open, strip menus,
-// crafting transfers or the AI; `md5` is a 128-bit FNV pair (same length, never shown as md5).
+//! - Worn clothes with blood draw tg's `<state>blood` overlay of `icons/effects/blood.dmi` in the
+//!   blood's color ([`blood_overlays`], `get_blood_overlay`); [`transfer_fingerprints_to`] moves
+//!   prints when a thing becomes another (a wall frame mounted); doors take the prints of who
+//!   bumps or clicks them (`try_to_activate_door`).
+//! - An admin (`R_ADMIN`, checked here on the server) examining an atom also gets its hidden
+//!   prints ([`admin_examine`]; tg shows them in the view-variables panel).
+// shortcut: no blood overlay on items on the floor or in hands (tg draws `itemblood` inset into
+// the item's sprite, a blend mode the renderer lacks), every suit bleeds as `suitblood` (no
+// `blood_overlay_type` armor/coat in the converted data), no bloody hands or gloves
+// transferring blood to what they touch (tg's `/atom/add_fibers` that would do it is never
+// called), no bloody soles, no blood DNA from blood reagents (they carry only the type), no
+// prints from strip menus or the AI; prints move only on the transfers ported here (most tg
+// `transfer_fingerprints_to` callers build things not yet ported); `md5` is a 128-bit FNV pair
+// (same length, never shown as md5).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -153,6 +161,8 @@ impl Plugin for ForensicsServerPlugin {
                 crate::forensics::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        super::spoofer::build(app);
+        super::board::build(app);
         app.register_ui::<ForensicScannerUi>()
             .add_observer(add_item_parts)
             .add_systems(
@@ -435,6 +445,154 @@ fn merge_blood(world: &mut World, target: Entity, dna: &[(String, BloodType)]) {
             }
         }
     });
+    redraw_wearer(world, target);
+}
+
+/// A worn or held item's blood changed: its wearer is drawn again (the worn blood overlay).
+fn redraw_wearer(world: &mut World, item: Entity) {
+    if let Some(&CarriedBy(mob)) = world.get::<CarriedBy>(item) {
+        crate::inventory::refresh_look(world, mob);
+    }
+}
+
+/// `/datum/blood_type` `color` (`get_color`) of the ported blood types.
+pub fn blood_type_color(blood_type: BloodType) -> [u8; 4] {
+    match blood_type {
+        BloodType::Lizard => [0x03, 0x5a, 0x00, 0xff],
+        // `/datum/reagent/consumable/liquidelectricity::color`.
+        BloodType::Ethereal => [0x97, 0xee, 0x63, 0xff],
+        BloodType::Oil => [0x2c, 0x2c, 0x2c, 0xff],
+        // `/datum/reagent/toxin/slimejelly::color`.
+        BloodType::Slime => [0xa6, 0x95, 0x9d, 0xff],
+        // `/datum/reagent/water::color` `#AAAAAA77`.
+        BloodType::Water => [0xaa, 0xaa, 0xaa, 0x77],
+        BloodType::Skrell => [0x1e, 0x40, 0xff, 0xff],
+        BloodType::Moth => [0xb9, 0xae, 0x9c, 0xff],
+        _ => [0xaa, 0x10, 0x10, 0xff],
+    }
+}
+
+/// `get_color_from_blood_list`: one blood type its own color, several the average of theirs.
+pub fn blood_color(dna: &[(String, BloodType)]) -> [u8; 4] {
+    match dna {
+        [] => blood_type_color(BloodType::OPlus),
+        [(_, only)] => blood_type_color(*only),
+        _ => {
+            let n = dna.len() as u32;
+            let mut sum = [0u32; 3];
+            for (_, blood_type) in dna {
+                let c = blood_type_color(*blood_type);
+                for (s, v) in sum.iter_mut().zip(c) {
+                    *s += u32::from(v);
+                }
+            }
+            let avg = |v: u32| ((v + n / 2) / n) as u8;
+            [avg(sum[0]), avg(sum[1]), avg(sum[2]), 0xff]
+        }
+    }
+}
+
+/// `icons/effects/blood.dmi`, the worn blood overlays.
+const BLOOD_DMI: &str = "icons/effects/blood.dmi";
+
+/// tg `get_blood_overlay(blood_state)` of the worn clothes in `shown` (the inventory as drawn):
+/// `(layer, overlay)` pairs just above each bloody piece, tinted with its blood's color.
+pub fn blood_overlays(
+    shown: &Inventory,
+    forensics: &Query<&Forensics>,
+    icons: &IconIndex,
+) -> Vec<(f32, Overlay)> {
+    use crate::human::layers::{
+        FACEMASK_LAYER, GLOVES_LAYER, HEAD_LAYER, NECK_LAYER, SHOES_LAYER, SUIT_LAYER,
+        UNIFORM_LAYER,
+    };
+    let worn = [
+        (shown.uniform, UNIFORM_LAYER, "uniform"),
+        (shown.suit, SUIT_LAYER, "suit"),
+        (shown.gloves, GLOVES_LAYER, "glove"),
+        (shown.shoes, SHOES_LAYER, "shoe"),
+        (shown.head, HEAD_LAYER, "helmet"),
+        (shown.mask, FACEMASK_LAYER, "mask"),
+        (shown.neck, NECK_LAYER, "mask"),
+    ];
+    worn.into_iter()
+        .filter_map(|(item, layer, state)| {
+            let f = forensics
+                .get(item?)
+                .ok()
+                .filter(|f| !f.blood_dna.is_empty())?;
+            let id = icons.get(BLOOD_DMI, &format!("{state}blood"))?;
+            Some((
+                layer - 0.1,
+                Overlay {
+                    color: Some(blood_color(&f.blood_dna)),
+                    ..Overlay::new(id)
+                },
+            ))
+        })
+        .collect()
+}
+
+/// `/atom/proc/transfer_fingerprints_to`: `from`'s prints and hidden prints (and who touched it
+/// last) onto `to`, when a thing becomes another.
+pub fn transfer_fingerprints_to(world: &mut World, from: Entity, to: Entity) {
+    let Some(f) = world.get::<Forensics>(from).cloned() else {
+        return;
+    };
+    edit(world, to, |t| {
+        for print in f.fingerprints {
+            push_unique(&mut t.fingerprints, print);
+        }
+        // `add_hiddenprint_list`: assoc assignment, the newer entry wins.
+        for (key, text) in f.hiddenprints {
+            match t.hiddenprints.iter_mut().find(|(k, _)| *k == key) {
+                Some(slot) => slot.1 = text,
+                None => t.hiddenprints.push((key, text)),
+            }
+        }
+        t.last_ckey = f.last_ckey;
+    });
+}
+
+/// `add_fingerprint_list` / `add_fiber_list` of one print or fiber (the forensics spoofer).
+pub fn add_trace(world: &mut World, target: Entity, fiber: bool, value: String) {
+    edit(world, target, |f| {
+        push_unique(
+            if fiber {
+                &mut f.fibers
+            } else {
+                &mut f.fingerprints
+            },
+            value,
+        );
+    });
+}
+
+/// The admin's view of an atom's hidden prints (tg's view-variables `forensics`), sent on
+/// examine to a client with `R_ADMIN` only.
+pub fn admin_examine(world: &mut World, client: Entity, target: Entity) {
+    let admin = world
+        .get::<crate::votes::VoteRights>(client)
+        .is_some_and(|r| r.admin);
+    if !admin {
+        return;
+    }
+    let Some(f) = world.get::<Forensics>(target) else {
+        return;
+    };
+    if f.hiddenprints.is_empty() {
+        return;
+    }
+    let mut text = String::from("Скрытые отпечатки (видны только администраторам):");
+    for (_, entry) in &f.hiddenprints {
+        text.push('\n');
+        text.push_str(entry);
+    }
+    if let Some(last) = &f.last_ckey {
+        text.push_str("\nПоследним касался: ");
+        text.push_str(last);
+    }
+    tell(world, client, Span::Info, text);
 }
 
 /// `ITEM_SLOT_ICLOTHING|ITEM_SLOT_OCLOTHING|ITEM_SLOT_GLOVES|ITEM_SLOT_HEAD|ITEM_SLOT_MASK`.
@@ -504,6 +662,9 @@ pub fn clean_act(world: &mut World, target: Entity, clean_types: u32) -> bool {
     }
     if fibers {
         f.fibers.clear();
+    }
+    if blood {
+        redraw_wearer(world, target);
     }
     true
 }
@@ -745,7 +906,7 @@ pub fn item_interaction(
     if world.get::<EvidenceBag>(held).is_some() {
         return bag_item(world, client, held, target);
     }
-    false
+    super::spoofer::item_interaction(world, client, mob, held, target)
 }
 
 /// A click past reach: the scanner scans what is in sight within its range.
@@ -855,6 +1016,9 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         ));
         return true;
     }
+    if super::spoofer::attack_self(world, client, mob, item) {
+        return true;
+    }
     if world.get::<EvidenceBag>(item).is_some() {
         empty_bag(world, client, mob, item);
         return true;
@@ -899,8 +1063,21 @@ pub enum ScannerAct {
 }
 
 /// The window stays open while the actor holds the scanner; disabled out of consciousness.
+/// The spoofer's window needs it in a hand (`hands_state`).
 fn scanner_status(mut windows: Query<&mut UiWindow>, users: Query<(&Inventory, Option<&Stat>)>) {
     for mut window in &mut windows {
+        if window.interface == super::ForensicsSpooferUi::NAME {
+            let (holding, conscious) = users.get(window.actor).map_or((false, false), |(i, s)| {
+                (
+                    i.hands.contains(&Some(window.source)),
+                    s.is_none_or(|s| *s == Stat::Conscious),
+                )
+            });
+            if let Some(status) = super::spoofer::window_status(holding, conscious) {
+                window.cap_status(status);
+            }
+            continue;
+        }
         if window.interface != ForensicScannerUi::NAME {
             continue;
         }
@@ -1107,5 +1284,51 @@ fn evidence_bag_looks(
         commands
             .entity(bag)
             .insert((look, DmWeight { w_class }, DmName { name, desc }));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blood_colors_mix_by_average() {
+        let red = [0xaa, 0x10, 0x10, 0xff];
+        assert_eq!(blood_color(&[]), red, "no DNA: O+ red");
+        assert_eq!(
+            blood_color(&[("a".into(), BloodType::Water)]),
+            [0xaa, 0xaa, 0xaa, 0x77],
+            "one type keeps its alpha"
+        );
+        let mixed = blood_color(&[
+            ("a".into(), BloodType::APlus),
+            ("b".into(), BloodType::Lizard),
+        ]);
+        assert_eq!(mixed, [0x57, 0x35, 0x08, 0xff]);
+    }
+
+    #[test]
+    fn prints_move_with_the_newer_hidden_print_winning() {
+        let mut world = World::new();
+        let from = world
+            .spawn(Forensics {
+                fingerprints: vec!["p1".into()],
+                hiddenprints: vec![("ck".into(), "new".into())],
+                last_ckey: Some("ck".into()),
+                ..default()
+            })
+            .id();
+        let to = world
+            .spawn(Forensics {
+                fingerprints: vec!["p1".into(), "p0".into()],
+                hiddenprints: vec![("ck".into(), "old".into())],
+                ..default()
+            })
+            .id();
+        transfer_fingerprints_to(&mut world, from, to);
+        let f = world.get::<Forensics>(to).unwrap();
+        assert_eq!(f.fingerprints, vec!["p1".to_owned(), "p0".to_owned()]);
+        assert_eq!(f.hiddenprints, vec![("ck".to_owned(), "new".to_owned())]);
+        assert_eq!(f.last_ckey.as_deref(), Some("ck"));
     }
 }
