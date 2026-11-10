@@ -76,8 +76,9 @@ fn look_of(path: &str) -> CoreLook {
         CoreLook {
             preserved_state: None,
             inert_state: Some("hivelord_core_decayed"),
+            // BandaStation: modular_bandastation/balance/code/regenerative_core.dm.
             desc_preserved: Some(
-                "All that remains of a hivelord. It is preserved, allowing you to use it to heal completely without danger of decay.",
+                "All that remains of a hivelord. It is preserved, allowing you to use it to heal partially without danger of decay.",
             ),
             desc_inert: Some(
                 "All that remains of a hivelord. It has decayed, and is completely useless.",

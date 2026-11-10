@@ -18,7 +18,7 @@
 Компонент оружия: удар сзади наносит повышенный урон с перезарядкой.
 
 - **Код:** [`/datum/component/backstabs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/backstab.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — единственный носитель, выкидной нож (`knives.dm`), без трансформации (раскрытия) не наносит урона; нужен сначала `transforming` компонент (../combat/melee-weapons.md)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/weapons/backstab.rs` (вызов из `crates/ss13_game/src/combat.rs` до блоков и брони): выкидной нож ×2 (+`force` в грудь без брони), КД 2 с, цель в сознании, оба смотрят по направлению удара; нет раны от добавочного удара и `log_combat`. Раскрытие ножа (`transforming`: 3→20) — ../combat/melee-weapons.md
 
 ### Разрывание стен (rip_and_tear)
 Компонент тяжёлого оружия (кувалда, легендарные мечи): серия ударов по стене разрушает её, с затратой выносливости и требованием держать двумя руками; укреплённые стены — дольше.
@@ -42,7 +42,7 @@
 Компонент бодикамеры, которая обновляется только пока за ней кто-то наблюдает; носитель видит алерт «за вами наблюдают».
 
 - **Код:** [`/datum/component/pausable_bodycam`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/pausable_bodycam.dm#L2), [`/obj/machinery/camera/bodycam`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/~components/code/bodycam_camera.dm#L2)
-- **Статус в ss13-rs:** ❌ нет — камер нет
+- **Статус в ss13-rs:** ❌ нет — зависимость: камеры есть (`crates/ss13_game/src/silicon/cameras.rs`), но консоли видят только картовые неподвижные камеры; движущаяся камера на мобе — ../security/cameras.md «Нательные камеры (bodycam)»
 
 ### Отчёт о вышедших на старте раунда
 Список игроков, вышедших из игры в начале раунда (имя, ckey, работа, статус, антаг), для админов.
@@ -68,7 +68,7 @@
 Датум, задающий, как обрезается спрайт униформы для женского телосложения у отдельных вещей форка.
 
 - **Код:** [`female_uniform_datum.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/datums/female_uniform_datum.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — зависимость: женской маски униформы (`wear_female_version`) нет вообще (`crates/ss13_game/src/human.rs` shortcut) — ../items/clothing-core.md, ../items/bandastation-clothing.md «Женские версии униформ»
 
 ### Служебная инфраструктура форка
 Дефайны (`_defines220`), сигналы (`_signals220`) и синглтоны (`_singletons`) форка; пример модпака (`example`). Видимого игроку эффекта нет — нужны только как опора для других модпаков.
