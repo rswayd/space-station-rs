@@ -33,7 +33,7 @@
 
 - **Код:** [`/datum/controller/subsystem/job/proc/setup_officer_positions()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/job.dm#L624)
 - **BandaStation:** [`job.dm#L630`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/job.dm#L630) — `security_min_positions`/`security_max_positions`
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/round.rs` (`SECURITY_SCALING_COEFF` 8, мин. 5, макс. 12 — константами, не из конфига): нет доп. шкафчиков
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/round.rs` (`divide_occupations`: готовые / `SECURITY_SCALING_COEFF` с округлением вниз, как DM `round()`, в пределах мин. 5 и макс. 12); `crates/ss13_game/src/jobs/security.rs` (`spawn_extra_lockers`): шкафчики офицера `secure_closet/security/sec` на landmark `secequipment` по числу недостающих (BandaStation `security_closets_count`). Нет: чтения коэффициента и пределов из конфига (константы = дефолты конфига) — группа конфига
 
 ### Требования по времени игры
 Профессии требуют наигранных часов (общих или по отделу) и возраста аккаунта; окно `TrackedPlaytime` показывает наигранное время.

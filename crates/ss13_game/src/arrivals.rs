@@ -52,7 +52,7 @@ const CHAIR: &str = "/obj/structure/chair";
 const REQUESTS_CONSOLE: &str = "/obj/machinery/requests_console";
 const PERSON_ABOARD: &str = "обнаружена форма жизни на борту";
 const DISK_ABOARD: &str = "на борту обнаружено критически важное устройство станции";
-const ANNOUNCEMENT_SYSTEM: &str = "/obj/machinery/announcement_system";
+pub(crate) const ANNOUNCEMENT_SYSTEM: &str = "/obj/machinery/announcement_system";
 /// `/obj/machinery/announcement_system` `name`.
 const AAS_NAME: &str = "Автоматическая система оповещений";
 

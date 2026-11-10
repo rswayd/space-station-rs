@@ -845,7 +845,29 @@ pub fn implant(
     world: &mut World,
     target: Entity,
     user: Option<Entity>,
+    imp: Implant,
+) -> Result<(), (Implant, Option<String>)> {
+    implant_as(world, target, user, imp, false)
+}
+
+/// `implant(target, null, silent = TRUE)`, as an outfit implants its wearer: no message to the
+/// host.
+#[allow(clippy::result_large_err)]
+pub fn implant_silent(
+    world: &mut World,
+    target: Entity,
+    imp: Implant,
+) -> Result<(), (Implant, Option<String>)> {
+    implant_as(world, target, None, imp, true)
+}
+
+#[allow(clippy::result_large_err)]
+fn implant_as(
+    world: &mut World,
+    target: Entity,
+    user: Option<Entity>,
     mut imp: Implant,
+    silent: bool,
 ) -> Result<(), (Implant, Option<String>)> {
     if !can_be_implanted_in(world, target, &imp) {
         let reason = (imp.kind == ImplantKind::Deathrattle && imp.group.is_none())
@@ -921,12 +943,15 @@ pub fn implant(
         world
             .entity_mut(target)
             .insert(crate::antag::revolution::server::Mindshield);
-        tell_mob(
-            world,
-            target,
-            Span::Notice,
-            "Вы чувствуете умиротворение и безопасность. Теперь вы защищены от промывки мозгов.",
-        );
+        if !silent {
+            tell_mob(
+                world,
+                target,
+                Span::Notice,
+                "Вы чувствуете умиротворение и безопасность. Теперь вы защищены от промывки \
+                 мозгов.",
+            );
+        }
     }
     // `empprotection/implant`: `AddElement(/datum/element/empprotection, EMP_PROTECT_ALL)`.
     if kind == ImplantKind::EmpProtection {

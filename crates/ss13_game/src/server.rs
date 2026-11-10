@@ -197,6 +197,8 @@ const MAINTENANCE_LANDMARK: &str = "/obj/effect/landmark/generic_maintenance_lan
 const BLOBSTART_LANDMARK: &str = "/obj/effect/landmark/blobstart";
 /// `GLOB.emergencyresponseteamspawn`.
 const ERT_LANDMARK: &str = "/obj/effect/landmark/ert_spawn";
+/// `GLOB.secequipment` (`crate::jobs::security::spawn_extra_lockers`).
+const SECEQUIPMENT_LANDMARK: &str = "/obj/effect/landmark/secequipment";
 /// tg `/obj/effect/landmark/start/ai` with `primary_ai = TRUE` (not its `/secondary`).
 const PRIMARY_AI_LANDMARK: &str = "/obj/effect/landmark/start/ai";
 
@@ -645,6 +647,15 @@ fn find_spawn_points(world: &mut World) {
             .iter()
             .map(|p| p.objects.iter().any(|o| is_under(&o.path, ERT_LANDMARK)))
             .collect();
+        let secequipment_marks: Vec<bool> = map
+            .prefabs
+            .iter()
+            .map(|p| {
+                p.objects
+                    .iter()
+                    .any(|o| is_under(&o.path, SECEQUIPMENT_LANDMARK))
+            })
+            .collect();
         let (sx, sy, sz) = map.size;
         for mz in 1..=sz {
             for y in 1..=sy {
@@ -673,6 +684,9 @@ fn find_spawn_points(world: &mut World) {
                     }
                     if ert_marks[i] {
                         ert.push(pos);
+                    }
+                    if secequipment_marks[i] {
+                        jobs.secequipment.push(pos);
                     }
                     if observer[i] && observer_start.is_none() {
                         observer_start = Some(pos);

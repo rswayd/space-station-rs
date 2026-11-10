@@ -1585,6 +1585,17 @@ pub const SECDEF_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stock_parts/power_store/cell/super",
     "/obj/item/stock_parts/power_store/cell/hyper",
     "/obj/item/stock_parts/power_store/cell/bluespace",
+    // `ss13_game::jobs::security`: the departmental officers' headsets and armbands, the extra
+    // officer lockers.
+    "/obj/item/radio/headset/headset_sec/alt/department/engi",
+    "/obj/item/radio/headset/headset_sec/alt/department/med",
+    "/obj/item/radio/headset/headset_sec/alt/department/sci",
+    "/obj/item/radio/headset/headset_sec/alt/department/supply",
+    "/obj/item/clothing/accessory/armband/engine",
+    "/obj/item/clothing/accessory/armband/medblue",
+    "/obj/item/clothing/accessory/armband/science",
+    "/obj/item/clothing/accessory/armband/cargo",
+    "/obj/structure/closet/secure_closet/security/sec",
 ];
 
 /// Every DM type the game spawns by a constant path: the tables above and every

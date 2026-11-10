@@ -46,6 +46,8 @@ use crate::outfit::{OutfitTemplates, equip};
 use crate::round::{JobPreferences, NewPlayer, RoundConfig};
 use crate::server::{PlayerMob, SpawnPoints};
 
+pub mod security;
+
 /// tgui window title (`new(user, src, "JobSelection", "Latejoin Menu")`).
 pub const WINDOW_TITLE: &str = "Latejoin Menu";
 /// The default job's card when there is no `jobs.ron`: `/datum/job` gives every job this ID.
@@ -63,6 +65,7 @@ impl Plugin for JobsServerPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui::<JobSelectionWindow>()
             .init_resource::<JobSpawns>()
+            .init_resource::<security::SecurityDistribution>()
             .add_systems(
                 Startup,
                 (load_jobs, build_outfit_templates)
@@ -308,6 +311,9 @@ pub struct JobSpawns {
     pub by_title: HashMap<String, Vec<TilePos>>,
     /// `/obj/effect/landmark/start/ai` without `/secondary` (tg `primary_ai`).
     pub primary_ai: Vec<TilePos>,
+    /// `/obj/effect/landmark/secequipment` (tg `GLOB.secequipment`): where extra officer lockers
+    /// go, in map order.
+    pub secequipment: Vec<TilePos>,
     next: HashMap<String, usize>,
 }
 
@@ -399,6 +405,7 @@ pub fn fallback_jobs() -> JobsData {
                 // `/datum/outfit/job::box`.
                 backpack_contents: vec![(ss13_mapload::RUNTIME_CONTAINER_TYPES[1].into(), 1)],
                 accessory: None,
+                implants: Vec::new(),
             }),
             trim: Some("/datum/id_trim/job/assistant".into()),
             assignment: "Assistant".into(),
@@ -527,7 +534,15 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     if latejoin && forced.is_none() {
         crate::arrivals::require_undocked(world);
     }
+    // `/datum/job/security_officer`: the department, and at round start its post (`move_to`).
+    let department =
+        (def.title == security::SECURITY_OFFICER).then(|| security::pick_department(world));
     let pos = forced
+        .or_else(|| {
+            department
+                .filter(|_| !latejoin)
+                .and_then(|d| security::post_tile(world, d))
+        })
         .or_else(|| at_job_spawn.then(|| job_spawn(world, &def.title)).flatten())
         .unwrap_or_else(|| crate::server::pick_latejoin(world));
     let mob = crate::server::spawn_mob(world, client, pos, name.clone());
@@ -544,7 +559,20 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
         crate::outfit::fill_backpack(world, pack, outfit);
     }
     world.entity_mut(mob).insert(inventory);
-    crate::modpc::pda::post_equip(world, mob, &name, &def.assignment);
+    // `/datum/outfit/job/detective/post_equip`: the cigarette is lit.
+    if def
+        .outfit
+        .as_ref()
+        .is_some_and(|o| o.path == security::DETECTIVE_OUTFIT)
+    {
+        security::light_mask_cigarette(world, mob);
+    }
+    // `setup_department`: the department's armband, headset and trim (the PDA follows it).
+    let assignment = match department {
+        Some(d) => security::setup_department(world, client, mob, &def, d),
+        None => def.assignment.clone(),
+    };
+    crate::modpc::pda::post_equip(world, mob, &name, &assignment);
     // tg `equip_characters` / `AttemptLateSpawn`: `SSquirks.AssignQuirks` after the outfit.
     crate::quirks::assign(world, client, mob);
     // `/datum/preference/personality/apply_to_human`.
@@ -556,10 +584,18 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
     crate::service::chaplain_spawned(world, client, mob);
     crate::records::manifest::inject_joiner(world, mob, job);
+    // `/datum/job/prisoner/handle_prisoner_joining`.
+    if def.title == security::PRISONER {
+        security::prisoner_joined(world, client, &name);
+    }
     // `equip_rank`: `job.announce_job(equipping)`.
     announce_head(world, mob, &name, &def.title);
     // `AttemptLateSpawn`: `SSshuttle.arrivals.QueueAnnounce(humanc, rank)`, the captaincy.
     if latejoin {
+        // `/datum/job/security_officer/after_latejoin_spawn`.
+        if let Some(d) = department {
+            security::announce_latejoin(world, &name, d);
+        }
         crate::arrivals::queue_announce(world, mob, &def.title);
         latejoin_captaincy(world, mob, &name, &def.title);
     }
