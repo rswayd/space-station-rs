@@ -198,8 +198,13 @@ mod tests {
             ballistic: true,
             ..default()
         };
+        // A real round has a path: an empty one is a cylinder's empty chamber.
         let data = MagazineData {
             max_ammo: 12,
+            ammo: ss13_mapload::CasingData {
+                path: "/obj/item/ammo_casing/c9mm".into(),
+                ..default()
+            },
             ..default()
         };
         let mut gun = Gun {

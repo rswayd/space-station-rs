@@ -16,7 +16,7 @@
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
-use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
+use ss13_shared::chat::{ChatSegment, Span};
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems, ask_world};
 
 use super::hud::{perp_name, wearer_huds};

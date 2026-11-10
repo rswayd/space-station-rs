@@ -1374,11 +1374,11 @@ fn shoot(
     }
     // `shoot_live_shot` -> `simulate_recoil` -> `calculate_recoil`.
     // shortcut: the `min_recoil_multiplier` preference is always its default (100%).
-    let sawn = world
-        .get::<Gun>(gun_entity)
-        .is_some_and(|g| g.sawn_off)
-        .then_some(dm.sawoff_bonus_recoil)
-        .unwrap_or(0.0);
+    let sawn = if world.get::<Gun>(gun_entity).is_some_and(|g| g.sawn_off) {
+        dm.sawoff_bonus_recoil
+    } else {
+        0.0
+    };
     let recoil = (dm.recoil + sawn).max(dm.min_recoil);
     if recoil > 0.0 {
         let deviation = dm.recoil_deviation.max(0.0) as u32;

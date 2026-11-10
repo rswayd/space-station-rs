@@ -379,10 +379,17 @@ pub fn try_sawoff(
         mob,
         item: Some(saw),
     };
+    // A held gun has no tile: the `do_after` then follows the user, and the gun in the other
+    // hand is looked up again when it ends.
+    let target = if world.get::<TilePos>(gun).is_some() {
+        gun
+    } else {
+        mob
+    };
     crate::tools::do_after(
         world,
         actor,
-        gun,
+        target,
         SAWOFF_DS,
         0,
         crate::construction::Job::SawOff,
@@ -391,8 +398,21 @@ pub fn try_sawoff(
 }
 
 /// `try_sawoff` after its `do_after`.
-pub fn complete_sawoff(world: &mut World, mob: Entity, gun: Entity) {
-    if world.get::<Gun>(gun).is_none_or(|g| g.sawn_off) {
+pub fn complete_sawoff(world: &mut World, mob: Entity, target: Entity) {
+    let gun = if target == mob {
+        let Some(inv) = world.get::<crate::inventory::Inventory>(mob) else {
+            return;
+        };
+        let Some(gun) = inv.hands[1 - inv.active] else {
+            return;
+        };
+        gun
+    } else {
+        target
+    };
+    if world.get::<Gun>(gun).is_none_or(|g| g.sawn_off)
+        || !world.get::<DmGun>(gun).is_some_and(|d| d.can_be_sawn_off)
+    {
         return;
     }
     if let Some(&at) = world.get::<TilePos>(mob) {

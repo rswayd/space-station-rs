@@ -236,6 +236,10 @@ fn fixture_assets(test: &str) -> PathBuf {
     let mut used = vec![
         "/obj/effect/landmark/start/assistant",
         "/obj/effect/landmark/start/security_officer",
+        "/obj/effect/landmark/start/depsec/supply",
+        "/obj/effect/landmark/start/depsec/medical",
+        "/obj/effect/landmark/start/depsec/engineering",
+        "/obj/effect/landmark/start/depsec/science",
         "/obj/effect/landmark/latejoin",
         "/obj/effect/landmark/observer_start",
         "/obj/machinery/door/airlock",
