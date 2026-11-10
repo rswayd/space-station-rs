@@ -807,6 +807,18 @@ fn hit_living(world: &mut World, item: Entity, thrown: &Thrown, mob: Entity) {
             return;
         }
     }
+    // tg `hitby`: `get_random_valid_zone(BODY_ZONE_CHEST, 65)`.
+    let zone = crate::medical::random_valid_zone(
+        &mut world.resource_mut::<CombatRng>(),
+        BodyZone::Chest,
+        65.0,
+    );
+    // `COMSIG_MOVABLE_IMPACT_ZONE`: an item that lodges in does nothing else.
+    if crate::embedding::try_embed_thrown(world, item, mob, zone, thrown.path.speed)
+        || world.get_entity(item).is_err()
+    {
+        return;
+    }
     let chat = visible_message(
         world,
         at,
@@ -825,12 +837,6 @@ fn hit_living(world: &mut World, item: Entity, thrown: &Thrown, mob: Entity) {
         (world.get::<Health>(mob).cloned(), world.get::<Stat>(mob))
     {
         let mut new_stat = stat;
-        // tg `hitby`: `get_random_valid_zone(BODY_ZONE_CHEST, 65)`.
-        let zone = crate::medical::random_valid_zone(
-            &mut world.resource_mut::<CombatRng>(),
-            BodyZone::Chest,
-            65.0,
-        );
         let before = health.part(zone).damage();
         let multiplier = world
             .get::<crate::medical::wounds::Limbs>(mob)

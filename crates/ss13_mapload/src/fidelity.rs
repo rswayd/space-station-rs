@@ -289,6 +289,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::mob_spawn::type_fields(self.types, path));
         fields.extend(crate::security::type_fields(self.types, path));
         fields.extend(crate::melee::type_fields(self.types, path));
+        fields.extend(crate::embed::type_fields(self.types, path));
         fields.extend(crate::guns::type_fields(self.types, path));
         fields.extend(crate::medical::type_fields(self.types, path));
         fields.extend(crate::dock::type_fields(self.types, path));

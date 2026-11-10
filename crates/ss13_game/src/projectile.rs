@@ -779,6 +779,8 @@ fn hit_living(world: &mut World, p: &Projectile, name: &str, target: Entity) {
         }
         _ => {}
     }
+    // `on_hit` -> `try_embed_projectile`: the bullet may stay in the body.
+    crate::embedding::try_embed_projectile(world, &p.data, name, target, zone, armor, distance);
     // `create_projectile_hit_effects`: a brute hit splatters blood.
     if DamageType::from_dm(&p.data.damage_type) == Some(DamageType::Brute) {
         let dir = crate::effects::temp_visual::angle_dir(p.angle);

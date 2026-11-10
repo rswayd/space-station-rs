@@ -180,6 +180,8 @@ pub enum AlertCategory {
     Strandling,
     /// `ALERT_SUCCUMB` (`crate::death`): in crit, a click succumbs.
     Succumb,
+    /// `ALERT_EMBEDDED_OBJECT` (`crate::embedding`): a click checks oneself.
+    EmbeddedObject,
     /// BandaStation `ALERT_BODYCAM_VIEWED` (`crate::silicon::mob_cameras`).
     BodycamViewed,
 }
@@ -447,6 +449,13 @@ impl Alert {
             ),
             // An offer's name and text come from the offer (`crate::buffs::Offering`).
             "template" => ("Предложение", ""),
+            "embeddedobject" => (
+                "Застрявший предмет",
+                "Что-то застряло в вашей плоти и вызывает сильное кровотечение. Со временем оно \
+                 может выпасть, но хирургическое вмешательство - самый безопасный способ. Если \
+                 готовы рискнуть, то осмотрите себя и нажмите на подчеркнутый пункт, чтобы \
+                 извлечь предмет.",
+            ),
             _ => ("Alert", ""),
         }
     }

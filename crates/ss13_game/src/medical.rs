@@ -98,6 +98,7 @@ pub fn heal_all(world: &mut World, mob: Entity) {
     crate::death::cure_husk(world, mob, false);
     organs::regenerate(world, mob);
     bodyparts::regenerate_limbs(world, mob);
+    crate::embedding::remove_all(world, mob);
     if let Some(mut blood) = world.get_mut::<blood::Blood>(mob) {
         blood.volume = blood::BLOOD_VOLUME_NORMAL;
     }

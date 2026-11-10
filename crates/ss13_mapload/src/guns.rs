@@ -79,6 +79,12 @@ pub struct ProjectileData {
     /// hotspots around it (`/obj/projectile/bullet/incendiary`, `p50/incendiary`); 0 elsewhere.
     pub fire_stacks: f32,
     pub fireblast_radius: u32,
+    /// `embed_type` (none: `path` empty) and the item left in the body, `shrapnel_type`
+    /// (both are needed to embed).
+    pub embed: crate::embed::EmbedData,
+    pub shrapnel_type: String,
+    /// Added to `embed_chance` per tile flown.
+    pub embed_falloff_tile: f32,
 }
 
 /// `/obj/item/ammo_casing` vars, with its projectile resolved.
@@ -144,6 +150,8 @@ pub struct DmGun {
     pub bolt_type: u32,
     pub casing_ejector: bool,
     pub semi_auto: bool,
+    /// `/obj/item/gun/ballistic/rifle`: nothing is loaded while the bolt is closed.
+    pub need_bolt_lock_to_interact: bool,
     /// `/obj/item/gun/energy`: its `ammo_type` list, cell and charging. A special gun
     /// (syringe, DNA and reagent guns, the meat hook) has its internal casing as the only shot.
     pub energy: bool,
@@ -418,6 +426,9 @@ pub fn projectile(types: &DmTypes, path: &str) -> ProjectileData {
         reflectable: truthy(types.resolved(path, "reflectable")),
         fire_stacks: incendiary(types, path).0,
         fireblast_radius: incendiary(types, path).1,
+        embed: crate::embed::embed_data(types, &crate::embed::type_var(types, path, "embed_type")),
+        shrapnel_type: crate::embed::type_var(types, path, "shrapnel_type"),
+        embed_falloff_tile: n("embed_falloff_tile"),
     }
 }
 
@@ -524,6 +535,8 @@ pub fn gun(types: &DmTypes, path: &str) -> DmGun {
         bolt_type: if ballistic { n("bolt_type") as u32 } else { 0 },
         casing_ejector: ballistic && truthy(types.resolved(path, "casing_ejector")),
         semi_auto: ballistic && truthy(types.resolved(path, "semi_auto")),
+        need_bolt_lock_to_interact: ballistic
+            && truthy(types.resolved(path, "need_bolt_lock_to_interact")),
         energy,
         shots: if energy {
             type_list(types, path, "ammo_type")
@@ -742,6 +755,11 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             ext(c, "bolt_type", ron(&g.bolt_type)),
             ext(c, "casing_ejector", ron(&g.casing_ejector)),
             ext(c, "semi_auto", ron(&g.semi_auto)),
+            ext(
+                c,
+                "need_bolt_lock_to_interact",
+                ron(&g.need_bolt_lock_to_interact),
+            ),
             ext(c, "energy", ron(&g.energy)),
             ext(c, "shots", ron(&g.shots)),
             ext(c, "cell_maxcharge", ron(&g.cell_maxcharge)),

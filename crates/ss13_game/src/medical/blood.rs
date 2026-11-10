@@ -428,7 +428,8 @@ pub fn handle_blood(world: &mut World, mob: Entity, secs: f32, now: f64) {
     let rate = world
         .get::<super::wounds::Limbs>(mob)
         .map_or(0.0, |l| l.bleed_rate(lying))
-        * super::bioware::bleed_mod(world, mob);
+        * super::bioware::bleed_mod(world, mob)
+        + crate::embedding::bleed_rate(world, mob);
     if rate > 0.0 {
         let bled = -blood.adjust(-rate * secs, 0.0, BLOOD_VOLUME_MAXIMUM);
         crate::janitor::bleed_splatter(world, mob, bled);

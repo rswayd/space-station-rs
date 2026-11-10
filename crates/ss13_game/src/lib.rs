@@ -298,6 +298,8 @@ pub mod effects;
 #[cfg(feature = "server")]
 pub mod emag;
 #[cfg(feature = "server")]
+pub mod embedding;
+#[cfg(feature = "server")]
 pub mod emojis;
 #[cfg(feature = "server")]
 pub mod emp;

@@ -677,8 +677,15 @@ fn melee(
                     }),
                 }
             }
-            // shortcut: tg `check_self_for_injuries` lists the own wounds; nothing yet.
-            None if attacker == target => None,
+            // shortcut: tg `check_self_for_injuries` of a human also lists each bodypart's
+            // state and wounds; only the embeds are listed.
+            None if attacker == target => {
+                let client = click.client;
+                commands.queue(move |world: &mut World| {
+                    crate::embedding::check_self(world, client, attacker);
+                });
+                None
+            }
             // tg `help`: CPR on a lying target that is dead or not stable.
             None if lying && *target_stat != Stat::Conscious => {
                 let (client, rescuer) = (click.client, attacker);

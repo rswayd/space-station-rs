@@ -315,6 +315,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 3 | `modsuit::ninja` cloak (a cloaked wearer hitting something living drops the cloak; never takes the click) |
+//! | 43 | `embedding::item_interaction` (a hemostat or wirecutters pluck what is embedded in the aimed bodypart) |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction`, `fishing::mount::item_interaction` (a fish onto a trophy mount, its screwdriver), `fishing::catalog::analyze` (the fish analyzer) |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
 //! | 79 | `gym::item_interaction` (punching bag wrench/crowbar right clicks, the loom) |

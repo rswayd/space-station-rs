@@ -1648,6 +1648,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         SECDEF_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
+    // What a bullet or a fragment leaves in a body (`ss13_game::embedding`).
+    out.extend(crate::embed::SHRAPNEL_RUNTIME_TYPES);
     // Conjured things, the Grand Ritual, the runic scepter, the demon bottles (`ss13_game`).
     out.extend(antag::SPELL_RUNTIME_TYPES);
     // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).

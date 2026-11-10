@@ -164,6 +164,19 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
             Span::Plain,
             format!("Это {} предмет.", weight_class_text(w_class.w_class)),
         ));
+        // `/datum/embedding/examined_tags`.
+        if let Some(embed) = crate::embedding::embed_of(world, target) {
+            lines.push((
+                Span::Plain,
+                if embed.is_harmless(false) {
+                    "Этот предмет, вероятно, прилипнет к кому-нибудь, если его правильно бросить!"
+                } else {
+                    "У него тонкое остриё, и вероятно, он может вонзиться в кого-нибудь, если \
+                     правильно бросить!"
+                }
+                .to_owned(),
+            ));
+        }
     }
     // `multitool/examine`.
     if matches!(
@@ -424,6 +437,15 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
             click.examiner,
             click.target,
         ) {
+            world.write_message(SendChat {
+                clients: vec![click.client],
+                message,
+            });
+        }
+        // What is lodged in a carbon, with the links to pull it out.
+        for message in
+            crate::embedding::examine_messages(world, click.client, click.examiner, click.target)
+        {
             world.write_message(SendChat {
                 clients: vec![click.client],
                 message,

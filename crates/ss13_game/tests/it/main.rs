@@ -40,6 +40,7 @@ mod doors;
 mod drag;
 mod effects;
 mod emag;
+mod embedding;
 mod emp;
 mod eng_machines;
 mod eng_tools;

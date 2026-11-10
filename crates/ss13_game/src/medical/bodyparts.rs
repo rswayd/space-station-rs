@@ -278,6 +278,7 @@ pub fn drop_limb(world: &mut World, mob: Entity, zone: BodyZone) -> Option<Entit
     limb.missing = true;
     limb.surgery = state::SKIN_OPEN;
     world.entity_mut(mob).insert(limbs);
+    crate::embedding::limb_removed(world, mob, zone);
     // `dropItemToGround(legcuffed, force = TRUE)` of a removed leg.
     if matches!(zone, BodyZone::LLeg | BodyZone::RLeg) {
         crate::legcuffs::remove(world, mob, pos);
