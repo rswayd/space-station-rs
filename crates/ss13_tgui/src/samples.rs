@@ -52,6 +52,8 @@ use crate::interfaces::gas_analyzer::{
 };
 use crate::interfaces::gps::{GpsData, GpsSignal, GpsUi};
 use crate::interfaces::holodeck::{HoloProgram, HolodeckData, HolodeckUi};
+use crate::interfaces::implant_chair::{ImplantChairData, ImplantChairOccupant, ImplantChairUi};
+use crate::interfaces::implant_pad::{ImplantPadData, ImplantPadUi};
 use crate::interfaces::iv_drip::{IvDripData, IvDripUi};
 use crate::interfaces::job_selection::{
     DepartmentSlots, DepartmentStatic, JobSelectionData, JobSelectionStatic, JobSelectionUi,
@@ -703,6 +705,33 @@ pub fn sample(name: &str) -> Option<Sample> {
                 min_temp: 0.0,
                 max_temp: 60.0,
                 current_temp: Some(14.0),
+            },
+        ),
+        ImplantChairUi::NAME => of::<ImplantChairUi>(
+            "mindshield implanter",
+            &(),
+            &ImplantChairData {
+                occupied: true,
+                open: false,
+                occupant: Some(ImplantChairOccupant {
+                    name: "Robert Smith".into(),
+                    stat: 0,
+                }),
+                special_name: None,
+                ready_implants: 3,
+                ready: true,
+                replenishing: false,
+            },
+        ),
+        ImplantPadUi::NAME => of::<ImplantPadUi>(
+            "implant pad",
+            &(),
+            &ImplantPadData {
+                has_case: true,
+                has_implant: true,
+                case_information: "<b>Implant Specifications:</b><br>Name: Tracking Implant".into(),
+                saved_deathrattle_group: None,
+                current_deathrattle_group: None,
             },
         ),
         TankUi::NAME => of::<TankUi>(

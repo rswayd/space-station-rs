@@ -190,8 +190,9 @@ wwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 14] = [
+const STATES: [(&str, &str); 15] = [
     ("t.dmi", "floor"),
+    ("i.dmi", "toy"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
     ("h.dmi", "human_basic"),
