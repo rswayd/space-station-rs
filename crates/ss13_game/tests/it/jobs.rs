@@ -18,6 +18,7 @@ use ss13_game::doors::{Door, DoorState};
 use ss13_game::ghost::Ghost;
 use ss13_game::human::{AppearancePrefs, HumanLook, SKIN_TONES};
 use ss13_game::inventory::{IdCard, Inventory};
+use ss13_game::jobs::security::{DEPARTMENTS, SecDept, SecurityDistribution};
 use ss13_game::jobs::{CharacterName, JobSpawns, Jobs, PlayerJob, fallback_jobs};
 use ss13_game::lobby::{
     CHARACTER_SETUP, GameState, JobPrefsUi, LobbyData, OBSERVE, SET_APPEARANCE, SET_JOB_PREFERENCE,
@@ -58,6 +59,16 @@ const TYPES: &str = r##"{
         "vars": { "name": "Assistant" }, "declared_vars": { "name": "Assistant" } },
     "/obj/effect/landmark/start/security_officer": { "parent": "/obj/effect/landmark/start",
         "vars": { "name": "Security Officer" }, "declared_vars": { "name": "Security Officer" } },
+    "/obj/effect/landmark/start/depsec": { "parent": "/obj/effect/landmark/start",
+        "vars": { "name": "department_sec" }, "declared_vars": { "name": "department_sec" } },
+    "/obj/effect/landmark/start/depsec/supply": { "parent": "/obj/effect/landmark/start/depsec",
+        "vars": { "name": "supply_sec" }, "declared_vars": { "name": "supply_sec" } },
+    "/obj/effect/landmark/start/depsec/medical": { "parent": "/obj/effect/landmark/start/depsec",
+        "vars": { "name": "medical_sec" }, "declared_vars": { "name": "medical_sec" } },
+    "/obj/effect/landmark/start/depsec/engineering": { "parent": "/obj/effect/landmark/start/depsec",
+        "vars": { "name": "engineering_sec" }, "declared_vars": { "name": "engineering_sec" } },
+    "/obj/effect/landmark/start/depsec/science": { "parent": "/obj/effect/landmark/start/depsec",
+        "vars": { "name": "science_sec" }, "declared_vars": { "name": "science_sec" } },
     "/obj/effect/landmark/latejoin": { "parent": "/obj/effect/landmark" },
     "/obj/effect/landmark/observer_start": { "parent": "/obj/effect/landmark" },
     "/obj/item": { "parent": "/obj", "declared_vars": {
@@ -119,7 +130,8 @@ const TYPES: &str = r##"{
 }"##;
 
 /// Rows top-down, the last line is y = 1. `s` assistant start (2,2), `S` security officer start
-/// (6,2), `D` (7,2) needs security access, `L` latejoin (3,3), `O` observer start (9,3).
+/// (6,2), `D` (7,2) needs security access, `L` latejoin (3,3), `O` observer start (9,3), the
+/// departmental officers' posts `1`..`4` (4..7,3: supply, medical, engineering, science).
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
@@ -127,10 +139,14 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "D" = (/obj/machinery/door/airlock{req_access = list("security")},/turf/open/floor,/area/space)
 "L" = (/obj/effect/landmark/latejoin,/turf/open/floor,/area/space)
 "O" = (/obj/effect/landmark/observer_start,/turf/open/floor,/area/space)
+"1" = (/obj/effect/landmark/start/depsec/supply,/turf/open/floor,/area/space)
+"2" = (/obj/effect/landmark/start/depsec/medical,/turf/open/floor,/area/space)
+"3" = (/obj/effect/landmark/start/depsec/engineering,/turf/open/floor,/area/space)
+"4" = (/obj/effect/landmark/start/depsec/science,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwwwwww
-wfLfffffOw
+wfL1234fOw
 wsfffSDffw
 wwwwwwwwww
 "}
@@ -459,6 +475,12 @@ impl Station {
     }
 }
 
+/// The department `setup_department` gave the officer `mob`.
+fn department_of(world: &World, mob: Entity) -> &'static SecDept {
+    let name = world.resource::<SecurityDistribution>().0[&mob];
+    DEPARTMENTS.iter().find(|d| d.name == name).unwrap()
+}
+
 fn fixture_map(test: &str) -> MapLoadPlugin {
     testing::fixture_map(&fixture_assets(test), &["map.dmm"])
 }
@@ -549,13 +571,14 @@ fn latejoin_officer_slots_and_access() {
     let b_name = s.lobby_name_of(b);
     let world = s.server.world();
     let card = s.id_card(b);
-    assert_eq!(
-        world.get::<IdCard>(card).unwrap().access,
-        ["brig", "security", "maint_tunnels"]
-    );
+    // `setup_department`: the department's trim adds its access and names the card.
+    let dept = department_of(world, s.mob(b));
+    let mut access = vec!["brig", "security", "maint_tunnels"];
+    access.extend(dept.access);
+    assert_eq!(world.get::<IdCard>(card).unwrap().access, access);
     assert_eq!(
         world.get::<DmName>(card).unwrap().name,
-        format!("ID-карта «{b_name}» (Офицер)")
+        format!("ID-карта «{b_name}» ({})", dept.assignment)
     );
     let registration = world.get::<IdRegistration>(card).unwrap();
     assert_eq!(
@@ -767,7 +790,10 @@ fn lobby_round_start_latejoin_and_reboot() {
     s.run_until("the round starts", |s| s.state() >= GameState::Playing);
     assert!(s.has_mob(a) && s.has_mob(b), "spawned with the round start");
     assert_eq!(s.job(a), OFFICER);
-    assert_eq!(s.pos(a), OFFICER_START);
+    // `setup_department(move_to = TRUE)`: the officer starts at the department's post.
+    let dept = department_of(s.server.world(), s.mob(a));
+    let post = s.server.world().resource::<JobSpawns>().by_title[dept.landmark].clone();
+    assert_eq!(vec![s.pos(a)], post, "{}", dept.name);
     assert_eq!(s.job(b), "Assistant");
     assert_eq!(s.pos(b), SPAWN);
     s.wait_chat(a, "Игра начинается...");
@@ -895,9 +921,13 @@ fn metastation_security_officer() {
     s.run_until("the round starts", |s| s.has_mob(a));
     assert_eq!(s.job(a), OFFICER);
     let pos = s.pos(a);
-    let starts = s.server.world().resource::<JobSpawns>().by_title[OFFICER].clone();
-    println!("officer spawned at {pos:?}; security officer starts: {starts:?}");
-    assert!(starts.contains(&pos), "not on a security officer start");
+    let dept = department_of(s.server.world(), s.mob(a));
+    let starts = s.server.world().resource::<JobSpawns>().by_title[dept.landmark].clone();
+    println!(
+        "officer spawned at {pos:?}; {} posts: {starts:?}",
+        dept.name
+    );
+    assert!(starts.contains(&pos), "not on the department's post");
     let world = s.server.world();
     let card = s.id_card(a);
     let access = world.get::<IdCard>(card).unwrap().access.clone();

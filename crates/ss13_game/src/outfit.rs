@@ -5,6 +5,7 @@
 //! backpack comes from `crate::jobs::join` and gets `box` and `backpack_contents`
 //! ([`fill_backpack`]).
 // The outfit's `accessory` is pinned to its uniform (`crate::clothing::accessories::pin`).
+// The outfit's `implants` go in last, silently ([`implant_outfit`]).
 // shortcut: no `can_equip` check (tg deletes an item that does not fit), no `belt_contents`,
 // no `internals_slot` (tg opens that tank at spawn).
 
@@ -91,7 +92,21 @@ pub fn equip(world: &mut World, mob: Entity, job: &Job, name: &str) -> Inventory
             });
         }
     }
+    implant_outfit(world, mob, outfit);
     inventory
+}
+
+/// The end of tg `equip`: every `implants` type goes in silently (`implant(user, null, TRUE)`).
+/// A type the port has no implant for is skipped.
+pub fn implant_outfit(world: &mut World, mob: Entity, outfit: &Outfit) {
+    for path in &outfit.implants {
+        let id = crate::implants::next_id(world);
+        let Some(imp) = crate::implants::Implant::new(path, id) else {
+            warn!("{}: no implant {path}", outfit.path);
+            continue;
+        };
+        let _ = crate::implants::implant_silent(world, mob, imp);
+    }
 }
 
 /// The slot loop of tg `/datum/outfit/proc/equip`: `outfit`'s items (all but `back`) from

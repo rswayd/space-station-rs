@@ -698,6 +698,8 @@ fn setup(world: &mut World, now: f64) {
     ready.retain(|(c, _)| !operatives.contains(c) && !clowns.contains(c) && !wizards.contains(c));
     let prefs: Vec<&JobPreferences> = ready.iter().map(|(_, p)| p).collect();
     let assigned = divide_occupations(&mut world.resource_mut::<Jobs>(), &prefs);
+    // `setup_officer_positions`: lockers for the officer slots the map lacks.
+    crate::jobs::security::spawn_extra_lockers(world, SECURITY_MAX_POSITIONS);
     let mut spawned = Vec::new();
     for ((client, _), assignment) in ready.iter().zip(assigned) {
         match assignment {
@@ -1010,7 +1012,7 @@ pub enum Assignment {
 }
 
 /// BYOND `shuffle`.
-fn shuffle<T>(items: &mut [T], rng: &mut ss13_mapload::spawner::Rng) {
+pub(crate) fn shuffle<T>(items: &mut [T], rng: &mut ss13_mapload::spawner::Rng) {
     for i in (1..items.len()).rev() {
         let j = rng.range(0, i as i64) as usize;
         items.swap(i, j);
@@ -1034,7 +1036,8 @@ pub fn divide_occupations(jobs: &mut Jobs, players: &[&JobPreferences]) -> Vec<A
     if let Some(officer) = jobs.data.job(SECURITY_OFFICER) {
         let job = &mut jobs.data.jobs[officer];
         if job.spawn_positions > 0 {
-            let n = (unassigned.len() as f64 / SECURITY_SCALING_COEFF).round() as i32;
+            // DM's one-argument `round` is a floor.
+            let n = (unassigned.len() as f64 / SECURITY_SCALING_COEFF).floor() as i32;
             let n = n.clamp(SECURITY_MIN_POSITIONS, SECURITY_MAX_POSITIONS);
             job.total_positions = n;
             job.spawn_positions = n;
@@ -2164,8 +2167,12 @@ mod tests {
         let players = vec![prefs(&[], JoblessRole::BeOverflow); 100];
         divide(&mut jobs, &players);
         let officer = &jobs.data.jobs[OFFICER];
-        // round(100 / 8) = 13, capped at 12.
+        // round(100 / 8) = 12.
         assert_eq!((officer.total_positions, officer.spawn_positions), (12, 12));
+        // DM `round(55 / 8)` floors 6.875 to 6.
+        let mut jobs = Jobs::new(data(), 1);
+        divide(&mut jobs, &vec![prefs(&[], JoblessRole::BeOverflow); 55]);
+        assert_eq!(jobs.data.jobs[OFFICER].spawn_positions, 6);
         let mut jobs = Jobs::new(data(), 1);
         divide(&mut jobs, &[prefs(&[], JoblessRole::BeOverflow)]);
         assert_eq!(jobs.data.jobs[OFFICER].spawn_positions, 5);
