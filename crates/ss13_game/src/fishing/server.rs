@@ -24,6 +24,7 @@ use crate::combat::CombatRng;
 use crate::health::Stat;
 use crate::inventory::Inventory;
 use crate::server::PlayerMob;
+use crate::skills::Skill;
 use crate::storage::{Stored, StoredIn};
 
 /// `/obj/item/food`: every food is bait (`TRAIT_FISHING_BAIT`).
@@ -63,6 +64,8 @@ const LINE_CAST_RANGE: f32 = 2.0;
 /// `wait_time_range` of `/datum/fishing_challenge`, seconds.
 const WAIT_MIN: u32 = 3;
 const WAIT_MAX: u32 = 25;
+/// `experience_multiplier *= 0.5` of `interrupt` and `stop_fishing`.
+const INTERRUPTED_EXP_MULT: f32 = 0.5;
 /// `casting_cd`.
 const CAST_COOLDOWN: f64 = 1.0;
 /// A window that does not open (no client view) ends the challenge after this.
@@ -99,14 +102,15 @@ pub struct FishingRod {
 }
 
 impl FishingRod {
-    /// `get_cast_range` without the skill bonus.
-    pub fn cast_range(&self) -> u32 {
+    /// `get_cast_range` for a holder at fishing skill `level`.
+    pub fn cast_range(&self, level: u8) -> u32 {
         let line = if self.stats.has_line {
             LINE_CAST_RANGE
         } else {
             0.0
         };
-        (self.stats.cast_range + line).max(1.0) as u32
+        let base = (self.stats.cast_range + line).max(1.0);
+        (base + (f32::from(level) * 0.3).round()).max(1.0) as u32
     }
 }
 
@@ -162,7 +166,7 @@ pub struct FishCounts {
 }
 
 impl FishCounts {
-    fn left(&self, source: &'static FishSourceDef, reward: &str) -> Option<u32> {
+    pub fn left(&self, source: &'static FishSourceDef, reward: &str) -> Option<u32> {
         let def = source.counts.iter().find(|(p, ..)| *p == reward)?;
         Some(
             self.left
@@ -214,20 +218,25 @@ impl Plugin for FishingServerPlugin {
             c.held.is_some_and(|held| {
                 held_on_target(w, c.client, c.mob, held, c.target)
                     || super::aquarium::item_interaction(w, c.client, c.mob, held, c.target)
+                    || super::mount::item_interaction(w, c.client, c.mob, held, c.target)
+                    || super::catalog::analyze(w, c.client, c.mob, held, c.target)
             })
         })
         .add_click_handler(ClickPhase::OtherHand, 450, |w, c| {
             c.held.is_some_and(|held| {
                 insert_bait(w, c.client, c.mob, held, c.target)
                     || super::aquarium::item_interaction(w, c.client, c.mob, held, c.target)
+                    || super::catalog::analyze(w, c.client, c.mob, held, c.target)
             })
         })
         .add_click_handler(ClickPhase::AttackSelf, 3050, |w, c| {
             attack_self(w, c.client, c.mob, c.target)
                 || super::aquarium::attack_self(w, c.client, c.mob, c.target)
+                || super::catalog::attack_self(w, c.client, c.mob, c.target)
         })
         .add_click_handler(ClickPhase::EmptyHand, 3250, |w, c| {
             super::aquarium::interact(w, c.client, c.mob, c.target)
+                || super::mount::interact(w, c.client, c.mob, c.target)
         })
         .register_ui::<FishingMinigameUi>()
         .init_resource::<FishCounts>()
@@ -245,6 +254,9 @@ impl Plugin for FishingServerPlugin {
         .add_observer(add_rod);
         super::fish::plugin(app);
         super::aquarium::plugin(app);
+        super::mount::plugin(app);
+        super::catalog::plugin(app);
+        super::admin::plugin(app);
     }
 }
 
@@ -280,12 +292,17 @@ fn add_rod(add: On<Add<DmFishingRod>>, rods: Query<&DmFishingRod>, mut commands:
 /// The bait's weighting facts.
 pub fn bait_info(world: &World, bait: Entity) -> BaitInfo {
     let path = item_path(world, bait).unwrap_or_default();
+    bait_info_of(path, world.get::<DmFood>(bait).map_or(0, |f| f.foodtypes))
+}
+
+/// The weighting facts of a bait of type `path` with `foodtypes`.
+pub fn bait_info_of(path: &str, foodtypes: u32) -> BaitInfo {
     BaitInfo {
         quality: BAIT_QUALITIES
             .iter()
             .find(|(root, _)| is_under(path, root))
             .map(|&(_, q)| q),
-        foodtypes: world.get::<DmFood>(bait).map_or(0, |f| f.foodtypes),
+        foodtypes,
         grown: is_under(path, GROWN_ROOT),
     }
 }
@@ -326,7 +343,7 @@ fn attack_self(world: &mut World, _client: Entity, mob: Entity, rod: Entity) -> 
     }
     if world.get::<Fishing>(mob).is_some_and(|f| f.rod == rod) {
         tell(world, mob, Span::Notice, "stopped fishing");
-        complete(world, mob, false);
+        complete(world, mob, false, INTERRUPTED_EXP_MULT);
         return true;
     }
     let Some(bait) = world.get::<FishingRod>(rod).and_then(|r| r.bait) else {
@@ -433,7 +450,8 @@ fn cast_line(world: &mut World, mob: Entity, rod: Entity, target: Entity) -> boo
     ) else {
         return false;
     };
-    if at.chebyshev(pos).is_none_or(|d| d > r.cast_range()) {
+    let level = crate::skills::level(world, mob, Skill::Fishing);
+    if at.chebyshev(pos).is_none_or(|d| d > r.cast_range(level)) {
         return false;
     }
     world
@@ -498,7 +516,7 @@ fn challenges(world: &mut World) {
     for (mob, fishing) in fishers {
         if let Some(reason) = interruption(world, mob, &fishing) {
             tell(world, mob, Span::Warning, reason);
-            complete(world, mob, false);
+            complete(world, mob, false, INTERRUPTED_EXP_MULT);
             continue;
         }
         match fishing.phase {
@@ -523,7 +541,7 @@ fn challenges(world: &mut World) {
                 {
                     // The window was closed: the fish gets away.
                     tell(world, mob, Span::Warning, "it got away!");
-                    complete(world, mob, false);
+                    complete(world, mob, false, INTERRUPTED_EXP_MULT);
                 }
             }
             _ => {}
@@ -549,9 +567,10 @@ fn interruption(world: &World, mob: Entity, fishing: &Fishing) -> Option<&'stati
     if own_source(world, fishing.spot).is_none_or(|s| s.path != fishing.source.path) {
         return Some("fishing spot gone!");
     }
+    let level = crate::skills::level(world, mob, Skill::Fishing);
     let range = world
         .get::<FishingRod>(fishing.rod)
-        .map_or(1, FishingRod::cast_range);
+        .map_or(1, |r| r.cast_range(level));
     if at.chebyshev(spot).is_none_or(|d| d > range) {
         return Some("line snapped");
     }
@@ -567,8 +586,76 @@ fn start_biting(world: &mut World, mob: Entity, fishing: &Fishing, now: f64) {
         f.reward = reward;
         f.next_at = now + minigame::BITING_SECS;
     }
-    tell(world, mob, Span::Notice, "!!!");
+    let alert = if crate::skills::fishing_insight(world, mob, crate::skills::REVEAL_FISH) {
+        let path = match reward {
+            Reward::Path(path) => Some(path),
+            Reward::Fish(e) => item_path(world, e),
+            Reward::Dud => None,
+        };
+        reveal_alert(path.unwrap_or_default())
+    } else {
+        "!!!"
+    };
+    tell(world, mob, Span::Notice, alert);
     sound_at(world, fishing.spot, FISH_SPLASH, 100.0);
+}
+
+/// `GLOB.specific_fish_icons` of the reward as `TRAIT_REVEAL_FISH`'s alert (the most specific
+/// type wins; anything unlisted is a fish).
+pub fn reveal_alert(path: &str) -> &'static str {
+    const ICONS: [(&str, &str); 46] = [
+        ("/datum/data/vending_product", "valuable!!!"),
+        ("/mob/living/basic/axolotl", "critter!!!"),
+        ("/obj/effect/spawner/random/frog", "critter!!!"),
+        ("/mob/living/basic/carp", "fish!!!"),
+        ("/mob/living/basic/mining", "hostile!!!"),
+        ("/mob/living/basic/skeleton", "bones!!!"),
+        ("/mob/living/basic/stickman", "hostile!!!"),
+        ("/obj/effect/decal/remains", "bones!!!"),
+        ("/obj/effect/mob_spawn/corpse", "bones!!!"),
+        ("/obj/effect/spawner/message_in_a_bottle", "bottle!!!"),
+        ("/obj/item/coin", "valuable!!!"),
+        ("/obj/item/fish", "fish!!!"),
+        ("/obj/item/fish/armorfish", "crustacean!!!"),
+        ("/obj/item/fish/boned", "bones!!!"),
+        ("/obj/item/fish/chainsawfish", "weapon!!!"),
+        ("/obj/item/fish/chasm_crab", "crustacean!!!"),
+        ("/obj/item/fish/gunner_jellyfish", "jellyfish!!!"),
+        ("/obj/item/fish/holo/crab", "crustacean!!!"),
+        ("/obj/item/fish/holo/puffer", "round fish!!!"),
+        ("/obj/item/fish/jumpercable", "zappy!!!"),
+        ("/obj/item/fish/lavaloop", "weapon!!!"),
+        ("/obj/item/fish/mastodon", "bones!!!"),
+        ("/obj/item/fish/pike/armored", "weapon!!!"),
+        ("/obj/item/fish/pufferfish", "round fish!!!"),
+        ("/obj/item/fish/sand_crab", "crustacean!!!"),
+        ("/obj/item/fish/skin_crab", "crustacean!!!"),
+        ("/obj/item/fish/slimefish", "slime!!!"),
+        ("/obj/item/fish/sludgefish", "slime!!!"),
+        ("/obj/item/fish/starfish", "starfish!!!"),
+        ("/obj/item/fish/stingray", "weapon!!!"),
+        ("/obj/item/fish/swordfish", "weapon!!!"),
+        ("/obj/item/fish/zipzap", "zappy!!!"),
+        ("/obj/item/fishing_rod", "valuable!!!"),
+        ("/obj/item/instrument/trumpet/spectral", "bones!!!"),
+        ("/obj/item/instrument/saxophone/spectral", "bones!!!"),
+        ("/obj/item/instrument/trombone/spectral", "bones!!!"),
+        ("/obj/item/knife/carp", "weapon!!!"),
+        ("/obj/item/seeds/grass", "seed!!!"),
+        ("/obj/item/seeds/random", "seed!!!"),
+        ("/obj/item/storage/wallet", "valuable!!!"),
+        ("/obj/item/stack/sheet/bone", "bones!!!"),
+        ("/obj/item/stack/sheet/mineral", "ore!!!"),
+        ("/obj/item/stack/ore", "ore!!!"),
+        ("/obj/item/survivalcapsule/fishing", "valuable!!!"),
+        ("/obj/structure/closet/crate", "valuable!!!"),
+        ("/obj/structure/mystery_box", "valuable!!!"),
+    ];
+    ICONS
+        .iter()
+        .filter(|(root, _)| is_under(path, root))
+        .max_by_key(|(root, _)| root.len())
+        .map_or("fish!!!", |&(_, alert)| alert)
 }
 
 /// One row of a fish table: the reward, its weight and the fish's traits (fish only).
@@ -579,12 +666,11 @@ pub struct Row {
     pub traits: Option<Vec<String>>,
 }
 
-/// `get_fish_table` of the challenge's source at its spot.
-fn fish_table(world: &World, fishing: &Fishing) -> Vec<Row> {
-    let source = fishing.source;
+/// `get_fish_table` of `source` at `spot`.
+fn fish_table(world: &World, spot: Entity, source: &'static FishSourceDef) -> Vec<Row> {
     if source.path == AQUARIUM_SOURCE {
         let fish: Vec<Row> = world
-            .get::<Stored>(fishing.spot)
+            .get::<Stored>(spot)
             .map(|s| s.items().to_vec())
             .unwrap_or_default()
             .into_iter()
@@ -723,6 +809,53 @@ pub fn trait_catch_mult(traits: &[String], bait: Option<&BaitInfo>) -> f64 {
     mult
 }
 
+/// `fishing_spot/on_examined` + `get_catchable_fish_names`: a Journeyman angler
+/// (`TRAIT_EXAMINE_FISHING_SPOT`) sees the catalogued fish a spot holds.
+// shortcut: listed on the first look (no examine_more), without the rod-setup bold/small hints.
+pub fn spot_examine_lines(
+    world: &World,
+    examiner: Entity,
+    target: Entity,
+    lines: &mut Vec<(Span, String)>,
+) {
+    if !crate::skills::fishing_insight(world, examiner, crate::skills::EXAMINE_FISHING_SPOT) {
+        return;
+    }
+    let Some(source) = own_source(world, target) else {
+        return;
+    };
+    let protos = world.get_resource::<ss13_proto::Prototypes>();
+    let mut names: Vec<String> = Vec::new();
+    for row in fish_table(world, target, source) {
+        let name = match row.reward {
+            Reward::Fish(e) => world
+                .get::<DmFish>(e)
+                .is_some_and(super::catalog::in_catalog)
+                .then(|| crate::chem::name_of(world, e)),
+            Reward::Path(path) if row.traits.is_some() => protos
+                .and_then(|p| p.get(path))
+                .and_then(|p| p.get::<DmFish>())
+                .is_some_and(super::catalog::in_catalog)
+                .then(|| crate::machine_frame::type_name(world, path)),
+            _ => None,
+        };
+        if let Some(name) = name
+            && !names.contains(&name)
+        {
+            names.push(name);
+        }
+    }
+    if !names.is_empty() {
+        lines.push((
+            Span::Info,
+            format!(
+                "You can catch the following fish here: {}.",
+                names.join(", ")
+            ),
+        ));
+    }
+}
+
 /// `pick_weight`.
 fn pick(rows: &[Row], rng: &mut CombatRng) -> Reward {
     let total: f64 = rows.iter().map(|r| r.weight).sum();
@@ -744,15 +877,20 @@ fn roll_reward(world: &mut World, fishing: &Fishing) -> Reward {
         .get::<FishingRod>(fishing.rod)
         .and_then(|r| r.bait)
         .map(|b| bait_info(world, b));
-    let rows = modified_table(fish_table(world, fishing), bait.as_ref());
+    let rows = modified_table(
+        fish_table(world, fishing.spot, fishing.source),
+        bait.as_ref(),
+    );
     pick(&rows, &mut world.resource_mut::<CombatRng>())
 }
 
-/// `calculate_difficulty` + the skill modifier, before `get_difficulty`'s clamp.
+/// `calculate_difficulty_minigame`: + the fisher's fishing `SKILL_VALUE_MODIFIER`
+/// (`skill_value`), before `get_difficulty`'s clamp.
 pub fn difficulty(
     source: &FishSourceDef,
     rod: &DmFishingRod,
     fish: Option<(&DmFish, &[String])>,
+    skill_value: f32,
 ) -> f32 {
     let mut d = source.fishing_difficulty + rod.difficulty_modifier;
     if let Some((fish, traits)) = fish {
@@ -764,7 +902,7 @@ pub fn difficulty(
             }
         }
     }
-    d + minigame::NO_SKILL_MODIFIER
+    d + skill_value
 }
 
 /// The fish data of a reward, from the instance or the type's prototype.
@@ -794,13 +932,16 @@ fn start_minigame(world: &mut World, mob: Entity) {
         .as_ref()
         .map(|f| f.fish_traits.clone())
         .unwrap_or_default();
+    let skill_value =
+        crate::skills::modifier(world, mob, Skill::Fishing, crate::skills::Modifier::Value);
     let raw = difficulty(
         fishing.source,
         &rod.stats,
         fish.as_ref().map(|f| (f, traits.as_slice())),
+        skill_value,
     );
     if raw <= 0.0 {
-        complete(world, mob, true);
+        complete(world, mob, true, 1.0);
         return;
     }
     let has = |t: &str| traits.iter().any(|x| x.ends_with(t));
@@ -821,6 +962,7 @@ fn start_minigame(world: &mut World, mob: Entity) {
         lubed: has("/lubed"),
         antigrav: has("/antigrav"),
         camo: has("/camouflage"),
+        skill_value,
     };
     let mut params = {
         let mut rng = world.resource_mut::<CombatRng>();
@@ -848,13 +990,23 @@ fn start_minigame(world: &mut World, mob: Entity) {
     }
 }
 
-/// `complete(win)`: the challenge ends; a win dispenses the reward.
-fn complete(world: &mut World, mob: Entity, win: bool) {
+/// `complete(win)`: the challenge ends with the fishing experience of its minigame (none when it
+/// never reached one); a win dispenses the reward. `exp_mult` is the challenge's
+/// `experience_multiplier` (halved when interrupted).
+fn complete(world: &mut World, mob: Entity, win: bool, exp_mult: f32) {
     let Some(fishing) = world.get::<Fishing>(mob).cloned() else {
         return;
     };
     // The window closes with it (its source lost `Fishing`).
     world.entity_mut(mob).remove::<Fishing>();
+    if let Some(params) = fishing.params.as_ref()
+        && world.get::<PlayerMob>(mob).is_some()
+    {
+        let seconds = (now(world) - fishing.started_at) as f32;
+        let level = crate::skills::level(world, mob, Skill::Fishing);
+        let exp = crate::skills::fishing_experience(seconds, params.difficulty, level, exp_mult);
+        crate::skills::adjust_experience(world, mob, Skill::Fishing, exp, false);
+    }
     if !win {
         return;
     }
@@ -965,12 +1117,12 @@ fn minigame_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<Fishin
         match act {
             MinigameAct::Lose => {
                 tell(world, actor, Span::Warning, "it got away!");
-                complete(world, actor, false);
+                complete(world, actor, false, 1.0);
             }
             MinigameAct::Win => {
                 let min = fishing.params.as_ref().map_or(0.0, minigame::min_win_secs);
                 if now - fishing.started_at + 0.05 >= min {
-                    complete(world, actor, true);
+                    complete(world, actor, true, 1.0);
                 } else {
                     debug!(
                         "fishing win from {actor} after {:.2}s refused",
@@ -1063,8 +1215,19 @@ mod tests {
         };
         let wary = ["/datum/fish_trait/wary".to_owned()];
         // 30 - 5 + 10 + 5 + 1 (no fishing skill).
-        assert_eq!(difficulty(source, &rod, Some((&pike, &wary))), 41.0);
-        assert_eq!(difficulty(source, &rod, None), 26.0);
+        let none = minigame::NO_SKILL_MODIFIER;
+        assert_eq!(difficulty(source, &rod, Some((&pike, &wary)), none), 41.0);
+        assert_eq!(difficulty(source, &rod, None, none), 26.0);
+        // A Legendary fisher: -10 instead of +1.
+        assert_eq!(difficulty(source, &rod, None, -10.0), 15.0);
+    }
+
+    #[test]
+    fn master_anglers_see_what_bites() {
+        assert_eq!(reveal_alert("/obj/item/fish/pike"), "fish!!!");
+        assert_eq!(reveal_alert("/obj/item/fish/pike/armored"), "weapon!!!");
+        assert_eq!(reveal_alert("/obj/item/stack/ore/iron"), "ore!!!");
+        assert_eq!(reveal_alert(""), "fish!!!");
     }
 
     #[test]

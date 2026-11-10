@@ -56,7 +56,18 @@ pub struct DmFish {
     pub icon_state_dead: String,
     /// `death_text` with `%SRC`.
     pub death_text: String,
+    /// `fish_flags` (`FISH_FLAG_*`).
+    pub fish_flags: u32,
+    /// `food`: the reagent path it eats.
+    pub food: String,
+    /// `random_case_rarity` (0: never in fish cases).
+    pub random_case_rarity: u32,
 }
+
+/// `FISH_FLAG_SHOW_IN_CATALOG`.
+pub const FISH_FLAG_SHOW_IN_CATALOG: u32 = 1 << 0;
+/// The `food` of `/obj/item/fish`.
+pub const FISH_DEFAULT_FOOD: &str = "/datum/reagent/consumable/nutriment";
 
 /// One fishing rod type (prototype data).
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]
@@ -125,6 +136,9 @@ pub fn fish(types: &DmTypes, path: &str) -> Option<DmFish> {
             t if t.is_empty() => "%SRC dies.".to_owned(),
             t => t,
         },
+        fish_flags: number(get("fish_flags"), 11.0) as u32,
+        food: path_of(get("food")).unwrap_or_else(|| FISH_DEFAULT_FOOD.to_owned()),
+        random_case_rarity: number(get("random_case_rarity"), 1000.0) as u32,
     })
 }
 
@@ -178,6 +192,9 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             ext(c, "stable_population", ron(&f.stable_population)),
             ext(c, "icon_state_dead", ron(&f.icon_state_dead)),
             ext(c, "death_text", ron(&f.death_text)),
+            ext(c, "fish_flags", ron(&f.fish_flags)),
+            ext(c, "food", ron(&f.food)),
+            ext(c, "random_case_rarity", ron(&f.random_case_rarity)),
         ];
     }
     if let Some(r) = rod(types, path) {
@@ -428,7 +445,26 @@ pub fn runtime_types() -> impl Iterator<Item = &'static str> {
         .flat_map(|s| s.table.iter().map(|&(p, _)| p))
         .filter(|&p| p != DUD)
         .chain(PREFILLED_FISH)
+        .chain(RUNTIME_EXTRA)
 }
+
+/// Every fish type: the fish catalog lists them and a trophy mount's first fish is any of them.
+pub fn fish_closure(types: &DmTypes) -> Vec<String> {
+    types
+        .types
+        .keys()
+        .filter(|p| is_under(p, FISH_ROOT))
+        .cloned()
+        .collect()
+}
+
+/// The fish analyzer, the catalog and the trophy mount's frame (`ss13_game::fishing`).
+pub const RUNTIME_EXTRA: [&str; 4] = [
+    "/obj/item/fish_analyzer",
+    "/obj/item/book/manual/fish_catalog",
+    "/obj/item/wallframe/fish",
+    "/obj/structure/fish_mount",
+];
 
 #[cfg(test)]
 mod tests {
@@ -474,7 +510,7 @@ mod tests {
         let bare = rod(&types, "/obj/item/fishing_rod/unslotted").unwrap();
         assert!(!bare.has_line && !bare.has_hook);
         assert!(type_fields(&types, "/obj/item").is_empty());
-        assert_eq!(type_fields(&types, "/obj/item/fish/pike").len(), 12);
+        assert_eq!(type_fields(&types, "/obj/item/fish/pike").len(), 15);
     }
 
     #[test]

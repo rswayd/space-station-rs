@@ -158,7 +158,9 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::forensics::server::examine_lines(world, target, &mut lines);
     crate::radiation::examine_lines(world, target, &mut lines);
     crate::clothing::examine_lines(world, target, &mut lines);
-    crate::fishing::fish::examine_lines(world, target, &mut lines);
+    crate::fishing::fish::examine_lines(world, examiner, target, &mut lines);
+    crate::fishing::server::spot_examine_lines(world, examiner, target, &mut lines);
+    crate::fishing::mount::examine_lines(world, target, &mut lines);
     crate::mining::examine_lines(world, target, &mut lines);
     crate::science::quantum_pad::examine_lines(world, target, &mut lines);
     crate::science::teleportation::teleporter::examine_lines(world, target, &mut lines);

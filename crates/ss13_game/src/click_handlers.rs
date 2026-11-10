@@ -76,7 +76,7 @@
 //! | 2999 | `service::sparring` contract menu |
 //! | 3000 | `service::server::attack_self` |
 //! | 3010 | `service::barber::attack_self` (lipstick twist, the dye spray on oneself) |
-//! | 3050 | `fishing::server::attack_self` (rods), `fishing::aquarium::attack_self` (fish tanks) |
+//! | 3050 | `fishing::server::attack_self` (rods), `fishing::aquarium::attack_self` (fish tanks), `fishing::catalog::attack_self` (the fish catalog) |
 //! | 3097 | `plumbing_net::attack_self` (a duct stack's layer) |
 //! | 3100 | `silicon::law_rack::attack_self` |
 //! | 3150 | `vehicles::attack_self` |
@@ -127,7 +127,7 @@
 //! | 200 | `bots::construction::item_interaction` |
 //! | 300 | `forensics::server::item_interaction` |
 //! | 400 | `medical::cyberimps::item_interaction` |
-//! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction` |
+//! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
@@ -254,7 +254,7 @@
 //! | 3201 | `service::stationery::cutter_right_click` (right click) |
 //! | 3211 | `service::cards::attack_hand` (draw from a deck; right click: face up, flip a card) |
 //! | 3221 | `service::slots` (the slot machine window) |
-//! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter) |
+//! | 3250 | `fishing::aquarium::interact` (aquariums, the fish-porter), `fishing::mount::interact` (a trophy off its mount) |
 //! | 3300 | `defenses::server::interact` |
 //! | 3305 | `defenses::turret_build::attack_hand` (a frame's gun or sensor back out) |
 //! | 3400 | `silicon::law_rack::interact` |
@@ -297,7 +297,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
-//! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction` |
+//! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction`, `fishing::mount::item_interaction` (a fish onto a trophy mount, its screwdriver), `fishing::catalog::analyze` (the fish analyzer) |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
 //! | 79 | `gym::item_interaction` (punching bag wrench/crowbar right clicks, the loom) |
 //! | 69 | `cannons::item_interaction` (cannon balls, charge, fuse, wrench; mounted gun ammo and wrench) |
@@ -325,6 +325,7 @@
 //! | 600 | `grenades::item_interaction` |
 //! | 603 | `science::cell_lines::swab_interaction` (swabs and biopsy tools: sampling, onto petri dishes) |
 //! | 700 | `implants::item_interaction` |
+//! | 707 | `modsuit::pathfinder::attack` (the MOD pathfinder module implants a human) |
 //! | 800 | `defenses::server::item_interaction` (turrets, panels, cameras, scanner gates) |
 //! | 805 | `defenses::turret_build::item_interaction` (a frame's parts and tools) |
 //! | 815 | `defenses::barricades::item_interaction` (welder and crowbar on barricades, planks on doors and windows) |

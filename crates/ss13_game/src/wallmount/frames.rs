@@ -40,9 +40,10 @@ pub struct FrameKind {
 }
 
 /// The frames of `buttons.dm`, `lightswitch.dm`, `flasher.dm`, `extinguisher.dm`,
-/// `fireaxe.dm` and the photo frame (`photos/frame.dm`, its photo moves along:
+/// `fireaxe.dm`, the trophy fish mount (`crate::fishing::mount`) and the photo frame
+/// (`photos/frame.dm`, its photo moves along:
 /// [`crate::service::picture_frame_moved`]). Subtypes come before their parents.
-pub static FRAMES: [FrameKind; 8] = [
+pub static FRAMES: [FrameKind; 9] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",
@@ -78,6 +79,12 @@ pub static FRAMES: [FrameKind; 8] = [
         result: "/obj/structure/fireaxecabinet/jawsofrecovery/empty",
         pixel_shift: 32,
         materials: &[(GLASS, 5), (PLASTEEL, 5)],
+    },
+    FrameKind {
+        frame: "/obj/item/wallframe/fish",
+        result: "/obj/structure/fish_mount",
+        pixel_shift: 31,
+        materials: &[(WOOD, 2)],
     },
     FrameKind {
         frame: "/obj/item/wallframe/picture",

@@ -51,6 +51,7 @@ fn sync_vote_rights(
             holder: rights != 0,
             admin: rights & R_ADMIN != 0,
             server: rights & R_SERVER != 0,
+            debug: rights & R_DEBUG != 0,
         };
         if current != Some(&wanted) {
             commands.entity(client).insert(wanted);

@@ -41,7 +41,7 @@
 Навык растёт с уловом, облегчает мини-игру и открывает сведения о рыбе.
 
 - **Код:** [`/datum/skill/fishing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/skills/fishing.dm#L5)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/skills.rs` (`Skill::Fishing`, `SKILL_VALUE_MODIFIER` 1…−10, сообщения уровней, `fishing_experience`, `fishing_insight`), `crates/ss13_game/src/fishing/server.rs`, `fishing/minigame.rs`, `fishing/fish.rs`: опыт за мини-игру (`секунды × 2500/900 × (1 + сложность × 0,015)`, ×0,5 при прерывании/остановке, штраф опытным на лёгкой рыбе), модификатор навыка в сложности и скоростях завершения, дальность заброса `+ round(уровень × 0,3)`, по уровням: размер/вес рыбы (Novice), её здоровье (Apprentice), рыба точки ловли при осмотре (Journeyman, сразу в осмотре — нет examine_more), что клюёт (Master: «fish!!!», «weapon!!!» и т.д.); нет шляпы-награды за Legendary и достижения (награды навыков — группа КПК), черт от скиллчипа и рыбьих органов (их механики не портированы)
 
 ### Аквариум
 Аквариум и аквариумный бак держат рыбу с настройкой температуры и типа воды, кормлением, анимацией рыб внутри (tgui); улучшения (биоэлектрогенератор, блюспейс-бак), корм и кейсы для переноски рыбы.
@@ -53,7 +53,7 @@
 Анализатор показывает здоровье, черты и эволюции рыбы; книга-каталог описывает виды и где их ловить.
 
 - **Код:** [`/obj/item/fish_analyzer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/fishing/aquarium/fish_analyzer.dm#L2), [`/obj/item/book/manual/fish_catalog`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/fishing/fish_catalog.dm#L2); tgui: [`FishAnalyzer.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/FishAnalyzer.tsx), [`FishCatalog.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/FishCatalog.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/fishing/catalog.rs` (сервер), `fishing/catalog_client.rs` (окна `FishAnalyzer`, `FishCatalog`): анализатор на рыбе/аквариуме (и в другой руке) — здоровье, размер, вес, сытость, корм, температура и жидкость (подходят ли), черты с наследуемостью; окно закрывается, когда образец пропал или дальше 7 тайлов; каталог — все рыбы с `FISH_FLAG_SHOW_IN_CATALOG` (`ss13_mapload` теперь конвертирует все типы рыб), жидкость, температура, размер, вес, корм, источник, места ловли, черты, сложность; нет эволюций и таймера размножения (не портированы), сканирующих экспериментов, иконок рыб, любимой/нелюбимой наживки (в данных рыбы нет предпочтений — «Unknown»), места ловли — только портированные источники
 
 ### Портал рыбалки
 Машина открывает портал в выбранный «водоём» (океан, гипер-пространство, Синдикат при emag и т.д.) — точку ловли на станции; набор доступных зависит от исследованных источников.
@@ -65,10 +65,10 @@
 Крепление для рыбы-трофея; трофеи сохраняются между раундами.
 
 - **Код:** [`/obj/structure/fish_mount`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/fishing/fish_mount.dm#L17), [`/obj/item/wallframe/fish`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/fishing/fish_mount.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/fishing/mount.rs`, `crates/ss13_game/src/wallmount/frames.rs` (рамка `/obj/item/wallframe/fish`): рыба на крепление за 3 с (рисуется на нём, «Caught by … on …», размер и вес видны всем), снятие рукой за 3/6 с, трофей «из прошлых раундов» выживает по броску `100/(w_class + ранг веса) + 4 × уровень рыбалки` %, иначе пепел; отвёртка снимает крепление; барное крепление (`/bar`) получает случайную мёртвую рыбу с вымышленным поймавшим; нет сохранения трофеев между раундами (персистентность — в конце порта) и красоты
 
 ### Админский калькулятор рыбалки
 Админ-инструмент: шансы и сложность улова для источника/снастей.
 
 - **Код:** [`/datum/fishing_calculator`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/fishing/admin.dm#L5); tgui: [`FishingCalculator.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/FishingCalculator.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/fishing/admin.rs`, `fishing/catalog_client.rs` (окно `FishingCalculator`), админ-глагол `AdminRequest::FishingCalculator` (`R_DEBUG`, `crates/ss13_admin`; кнопка «Калькулятор рыбалки»): источник, удочка, наживка → вес, вероятность, сложность и остаток каждого исхода; `R_DEBUG` проверяется при открытии, на каждом акте и в статусе окна (`VoteRights::debug`); нет выбора крючка и лески (у удочек порта свои)

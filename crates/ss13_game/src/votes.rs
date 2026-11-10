@@ -531,6 +531,8 @@ mod server {
         pub admin: bool,
         /// `R_SERVER`.
         pub server: bool,
+        /// `R_DEBUG` (the fishing calculator, `crate::fishing::admin`).
+        pub debug: bool,
     }
 
     /// tg `message_admins`, delivered by `ss13_admin`.

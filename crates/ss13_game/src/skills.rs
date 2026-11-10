@@ -10,11 +10,12 @@
 //!   (`crate::mining::rocks`), athletics climbing time (`crate::tables`).
 //! - Experience: cleaning a dirty tile (`round(beauty / -15)` per decal, `round(1.5)` per
 //!   wash), mining a wall with a tool or a kinetic blast (the ore's `mine_experience` × amount,
-//!   4 for plain rock), climbing a table or rack (`round(5 / fitness)`).
+//!   4 for plain rock), climbing a table or rack (`round(5 / fitness)`), the fishing minigame
+//!   ([`fishing_experience`], `crate::fishing::server`).
 // shortcut: skills belong to the body, not a mind (they do not follow a mind transfer); no
 // `experience_multiplier_reasons` (the mind-expanding drug), skill rewards (the skill tracker
-// PDA app sends them), admin skill panel, `TRAIT_EXAMINE_FITNESS`, Journeyman mining scan pulses,
-// fishing (its own skill page) or gaming experience (no arcades); the athletics experience of
+// PDA app sends them), admin skill panel, `TRAIT_EXAMINE_FITNESS`, Journeyman mining scan pulses
+// or gaming experience (no arcades); the athletics experience of
 // boxing, exercise and fireman carries waits for those mechanics. The level messages use the
 // notice span (no `nicegreen` class in the chat protocol).
 
@@ -26,7 +27,9 @@ use crate::server::PlayerMob;
 /// `SKILL_LEVEL_NONE` .. `SKILL_LEVEL_LEGENDARY`.
 pub const LEVEL_NONE: u8 = 1;
 pub const LEVEL_NOVICE: u8 = 2;
+pub const LEVEL_APPRENTICE: u8 = 3;
 pub const LEVEL_JOURNEYMAN: u8 = 4;
+pub const LEVEL_MASTER: u8 = 6;
 pub const LEVEL_LEGENDARY: u8 = 7;
 /// `SKILL_EXP_LIST`: the experience each level starts at.
 pub const EXP_LIST: [f32; 7] = [0.0, 100.0, 250.0, 500.0, 900.0, 1500.0, 2500.0];
@@ -53,6 +56,7 @@ pub enum Skill {
     Mining,
     Athletics,
     Gaming,
+    Fishing,
 }
 
 /// `SKILL_*_MODIFIER`.
@@ -80,7 +84,7 @@ pub struct SkillDef {
     pub value: Option<[f32; 7]>,
 }
 
-pub const SKILLS: [SkillDef; 4] = [
+pub const SKILLS: [SkillDef; 5] = [
     SkillDef {
         skill: Skill::Cleaning,
         path: "/datum/skill/cleaning",
@@ -126,10 +130,28 @@ pub const SKILLS: [SkillDef; 4] = [
         rands: Some([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 7.0]),
         value: None,
     },
+    SkillDef {
+        skill: Skill::Fishing,
+        path: "/datum/skill/fishing",
+        name: "Fishing",
+        title: "Angler",
+        desc: "How empty and alone you are on this barren Earth.",
+        speed: None,
+        probs: None,
+        rands: None,
+        // Added to the minigame's difficulty (negative helps).
+        value: Some([1.0, 0.0, -1.0, -3.0, -5.0, -7.0, -10.0]),
+    },
 ];
 
 impl Skill {
-    pub const ALL: [Self; 4] = [Self::Cleaning, Self::Mining, Self::Athletics, Self::Gaming];
+    pub const ALL: [Self; 5] = [
+        Self::Cleaning,
+        Self::Mining,
+        Self::Athletics,
+        Self::Gaming,
+        Self::Fishing,
+    ];
 
     fn index(self) -> usize {
         self as usize
@@ -178,6 +200,22 @@ impl Skill {
                 "Through incredible determination and effort, I've reached the peak of my {name} \
                  abilities. I wonder how I can become any more powerful... Maybe gamer fuel \
                  would actually help me play better..?"
+            ),
+            (Self::Fishing, LEVEL_NOVICE) => format!(
+                "I'm starting to figure out what {name} really is! I can guess a fish size and \
+                 weight at a glance."
+            ),
+            (Self::Fishing, 3) => format!(
+                "I'm getting a little better at {name}! I can tell if a fish is hungry, dying and \
+                 otherwise."
+            ),
+            (Self::Fishing, LEVEL_JOURNEYMAN) => format!(
+                "I feel like I've become quite proficient at {name}! I can tell what fishes I can \
+                 catch at any given fishing spot."
+            ),
+            (Self::Fishing, LEVEL_MASTER) => format!(
+                "I've begun to truly understand the surprising depth behind {name}. As a master \
+                 {title}, I can guess what I'm going to catch now!"
             ),
             (_, 2) => format!("I'm starting to figure out what {name} really is!"),
             (_, 3) => format!("I'm getting a little better at {name}!"),
@@ -232,16 +270,16 @@ pub fn level_for(exp: f32) -> u8 {
 /// The mind's `known_skills`: experience and level per skill.
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct Skills {
-    exp: [f32; 4],
-    level: [u8; 4],
+    exp: [f32; Skill::ALL.len()],
+    level: [u8; Skill::ALL.len()],
 }
 
 impl Default for Skills {
     /// `init_known_skills`.
     fn default() -> Self {
         Self {
-            exp: [0.0; 4],
-            level: [LEVEL_NONE; 4],
+            exp: [0.0; Skill::ALL.len()],
+            level: [LEVEL_NONE; Skill::ALL.len()],
         }
     }
 }
@@ -433,6 +471,39 @@ pub fn mining_experience(world: &mut World, user: Entity, wall: Entity, exp_mult
     adjust_experience(world, user, Skill::Mining, xp * exp_multiplier, false);
 }
 
+/// `FISHING_SKILL_EXP_PER_SECOND`: `SKILL_EXP_LEGENDARY` over 15 minutes of minigames.
+const FISHING_EXP_PER_SECOND: f32 = 2500.0 / 900.0;
+/// `FISHING_SKILL_DIFFIULTY_EXP_MULT`.
+const FISHING_DIFFICULTY_EXP_MULT: f32 = 0.015;
+/// `EXPERIENCE_MALUS_MULT` of `/datum/fishing_challenge/complete`.
+const FISHING_EXP_MALUS_MULT: f32 = 0.08;
+
+/// The mind traits `/datum/skill/fishing/level_gained` grants, as the level they come at:
+/// `TRAIT_EXAMINE_FISH` (size and weight), `TRAIT_EXAMINE_DEEPER_FISH` (health warnings),
+/// `TRAIT_EXAMINE_FISHING_SPOT` (a spot's fish) and `TRAIT_REVEAL_FISH` (what bites).
+pub const EXAMINE_FISH: u8 = LEVEL_NOVICE;
+pub const EXAMINE_DEEPER_FISH: u8 = LEVEL_APPRENTICE;
+pub const EXAMINE_FISHING_SPOT: u8 = LEVEL_JOURNEYMAN;
+pub const REVEAL_FISH: u8 = LEVEL_MASTER;
+
+/// `HAS_MIND_TRAIT(mob, <fishing trait>)` for one of the levels above.
+// shortcut: only the skill grants them (no fish-infused organs or the fishing skillchip).
+pub fn fishing_insight(world: &World, mob: Entity, trait_level: u8) -> bool {
+    level(world, mob, Skill::Fishing) >= trait_level
+}
+
+/// The experience of a minigame (`/datum/fishing_challenge/complete`): `seconds` spent in it at
+/// `difficulty` by a fisher at `level`; `mult` is the challenge's (halved when interrupted or
+/// stopped). A fisher far above the difficulty learns less.
+pub fn fishing_experience(seconds: f32, difficulty: f32, level: u8, mult: f32) -> f32 {
+    let mut mult = mult * (1.0 + difficulty * FISHING_DIFFICULTY_EXP_MULT);
+    let malus = f32::from(level) - difficulty * 0.1;
+    if malus > 0.0 {
+        mult /= 1.0 + malus * FISHING_EXP_MALUS_MULT;
+    }
+    (seconds * FISHING_EXP_PER_SECOND * mult).round().max(0.0)
+}
+
 /// `/datum/element/climbable/climb_structure`'s fitness: the athletics level above `None`.
 pub fn fitness_level(world: &World, mob: Entity) -> f32 {
     f32::from(level(world, mob, Skill::Athletics) - 1)
@@ -508,6 +579,25 @@ mod tests {
         assert_eq!(
             mine_experience("/obj/item/stack/ore/bluespace_crystal"),
             5.0
+        );
+    }
+
+    #[test]
+    fn fishing_experience_and_insight() {
+        // 60 s at difficulty 20, level None: 60 * 2500/900 * 1.3 (no malus: 1 - 2 < 0).
+        assert_eq!(fishing_experience(60.0, 20.0, LEVEL_NONE, 1.0), 217.0);
+        // Interrupted: half.
+        assert_eq!(fishing_experience(60.0, 20.0, LEVEL_NONE, 0.5), 108.0);
+        // A Legendary fisher on an easy fish: 7 - 1 = 6 over, / 1.48.
+        assert_eq!(fishing_experience(60.0, 10.0, LEVEL_LEGENDARY, 1.0), 130.0);
+        assert_eq!(
+            Skill::Fishing.modifier(Modifier::Value, LEVEL_LEGENDARY),
+            -10.0
+        );
+        assert!(
+            Skill::Fishing
+                .level_up_message(LEVEL_MASTER)
+                .contains("master Angler")
         );
     }
 

@@ -28,6 +28,9 @@ impl Plugin for FishingClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<FishingMinigameUi>()
             .register_ui_view::<AquariumUi>()
+            .register_ui_view::<super::FishAnalyzerUi>()
+            .register_ui_view::<super::FishCatalogUi>()
+            .register_ui_view::<super::FishingCalculatorUi>()
             .add_systems(Update, run_minigames);
     }
 }

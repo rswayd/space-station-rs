@@ -225,6 +225,22 @@ fn process_fish(world: &mut World, mut next: Local<f64>) {
     }
 }
 
+/// `set_status(FISH_DEAD)` from outside the processing (a trophy that comes dead).
+pub fn kill(world: &mut World, e: Entity) {
+    let Some(def) = world.get::<DmFish>(e).cloned() else {
+        return;
+    };
+    let Some(mut f) = world.get_mut::<Fish>(e) else {
+        return;
+    };
+    if !f.alive {
+        return;
+    }
+    f.alive = false;
+    f.health = 0.0;
+    on_death(world, e, &def);
+}
+
 /// `set_status(FISH_DEAD)`: the dead sprite and the death line.
 fn on_death(world: &mut World, e: Entity, def: &DmFish) {
     let dead_state = (!def.icon_state_dead.is_empty())
@@ -251,18 +267,30 @@ fn on_death(world: &mut World, e: Entity, def: &DmFish) {
     }
 }
 
-/// `examine`: size, weight and health.
-// shortcut: everyone sees them (tg: the fishing skill's `TRAIT_EXAMINE_FISH` and
-// `TRAIT_EXAMINE_DEEPER_FISH`).
-pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
+/// `examine`: size and weight for `TRAIT_EXAMINE_FISH` (a Novice angler, or the fish on a
+/// trophy mount), health for `TRAIT_EXAMINE_DEEPER_FISH` (an Apprentice).
+pub fn examine_lines(
+    world: &World,
+    examiner: Entity,
+    target: Entity,
+    lines: &mut Vec<(Span, String)>,
+) {
     let Some(fish) = world.get::<Fish>(target) else {
         return;
     };
-    lines.push((Span::Notice, format!("It's {} cm long.", fish.size)));
-    lines.push((
-        Span::Notice,
-        format!("It weighs {} kiloclams.", fish.weight),
-    ));
+    let on_mount = world
+        .get::<StoredIn>(target)
+        .is_some_and(|s| world.get::<super::mount::FishMount>(s.0).is_some());
+    if on_mount || crate::skills::fishing_insight(world, examiner, crate::skills::EXAMINE_FISH) {
+        lines.push((Span::Notice, format!("It's {} cm long.", fish.size)));
+        lines.push((
+            Span::Notice,
+            format!("It weighs {} kiloclams.", fish.weight),
+        ));
+    }
+    if !crate::skills::fishing_insight(world, examiner, crate::skills::EXAMINE_DEEPER_FISH) {
+        return;
+    }
     if !fish.alive {
         lines.push((Span::Warning, "It's dead.".to_owned()));
         return;
@@ -285,7 +313,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, Strin
         r if r <= 0.25 => warnings.push("dying"),
         r if r <= 0.5 => warnings.push("very unhealthy"),
         r if r <= 0.75 => warnings.push("unhealthy"),
-        r if r <= 0.9 => warnings.push("a bit unhealthy"),
+        r if r <= 0.9 => warnings.push("mostly healthy"),
         _ => {}
     }
     if !warnings.is_empty() {
