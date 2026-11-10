@@ -94,9 +94,11 @@ const BLOWGUN_OXY: f32 = 20.0;
 pub struct Medbeam {
     pub target: Option<Entity>,
     /// The mob that fired it: the beam leaves with the gun's holder change (`dropped`,
-    /// `equipped`).
+    /// `equipped`). For an exosuit's beamgun, the mech.
     pub origin: Option<Entity>,
     pub last_check: f64,
+    /// `/obj/item/gun/medbeam/mech` (`mounted`): the gun is mech equipment, `origin` its mech.
+    pub mounted: bool,
 }
 
 /// A reagent gun's darts (tg `syringes_left`, `last_synth`).
@@ -594,11 +596,34 @@ fn medbeam_fire(world: &mut World, mob: Entity, gun: Entity, target: Entity) {
                 target: Some(target),
                 origin: Some(mob),
                 last_check: now,
+                mounted: false,
             }
         } else {
             Medbeam::default()
         };
     }
+}
+
+/// `/obj/item/mecha_parts/mecha_equipment/medical/mechmedbeam/action`: the mounted gun's
+/// `process_fire(target, chassis)`; the old beam lets go, a living target other than the mech is
+/// beamed from the mech.
+pub fn mounted_medbeam_fire(world: &mut World, mech: Entity, equip: Entity, target: Entity) {
+    let living = world.get::<crate::health::Health>(target).is_some() && target != mech;
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let beam = if living {
+        Medbeam {
+            target: Some(target),
+            origin: Some(mech),
+            last_check: now,
+            mounted: true,
+        }
+    } else {
+        Medbeam {
+            mounted: true,
+            ..Medbeam::default()
+        }
+    };
+    world.entity_mut(equip).insert(beam);
 }
 
 /// The tiles a beam from `from` to `to` lies on (tg `Beam` segments on `get_line`).
@@ -663,13 +688,35 @@ fn process_medbeams(world: &mut World) {
         {
             continue; // released by a crossing this tick
         }
-        // `dropped` / `equipped` / `!isliving(loc)`: the beam ends silently.
-        let held = world.get::<CarriedBy>(gun).is_some_and(|c| c.0 == origin)
+        // `dropped` / `equipped` / `!isliving(loc)`: the beam ends silently. A mounted gun
+        // stays while attached to its mech (`detach` -> `LoseTarget`), lets go when the safety
+        // is on, and does not tick without a pilot (`mechmedbeam/process`).
+        let held = if beam.mounted {
+            world
+                .get::<crate::mecha::Mech>(origin)
+                .is_some_and(|m| m.equipment().any(|e| e == gun))
+        } else {
+            world.get::<CarriedBy>(gun).is_some_and(|c| c.0 == origin)
+                && world
+                    .get::<Inventory>(origin)
+                    .is_some_and(|i| i.hands.contains(&Some(gun)))
+        };
+        let safe = beam.mounted
             && world
-                .get::<Inventory>(origin)
-                .is_some_and(|i| i.hands.contains(&Some(gun)));
-        if !held || world.get_entity(target).is_err() {
-            world.entity_mut(gun).insert(Medbeam::default());
+                .get::<crate::mecha::Mech>(origin)
+                .is_some_and(|m| m.weapons_safety);
+        if !held || safe || world.get_entity(target).is_err() {
+            world.entity_mut(gun).insert(Medbeam {
+                mounted: beam.mounted,
+                ..Medbeam::default()
+            });
+            continue;
+        }
+        if beam.mounted
+            && world
+                .get::<crate::mecha::Mech>(origin)
+                .is_some_and(|m| m.occupant.is_none())
+        {
             continue;
         }
         if now < beam.last_check + MEDBEAM_TICK_SECS {
@@ -721,9 +768,17 @@ fn process_medbeams(world: &mut World) {
     }
 }
 
-/// tg `beam_died`: the warning, then `LoseTarget`.
+/// tg `beam_died`: the warning, then `LoseTarget`. A mech's pilot gets the warning.
 fn lose_beam(world: &mut World, gun: Entity, holder: Entity) {
-    world.entity_mut(gun).insert(Medbeam::default());
+    let mounted = world.get::<Medbeam>(gun).is_some_and(|b| b.mounted);
+    world.entity_mut(gun).insert(Medbeam {
+        mounted,
+        ..Medbeam::default()
+    });
+    let holder = world
+        .get::<crate::mecha::Mech>(holder)
+        .and_then(|m| m.occupant)
+        .unwrap_or(holder);
     crate::chem::tell_mob(
         world,
         holder,

@@ -22,6 +22,19 @@ pub const THEME_ROOT: &str = "/datum/mod_theme";
 pub const CONTROL_ROOT: &str = "/obj/item/mod/control";
 pub const MODULE_ROOT: &str = "/obj/item/mod/module";
 pub const CORE_ROOT: &str = "/obj/item/mod/core";
+/// `/obj/item/mod/construction/plating`: the external plating that finishes a MOD shell.
+pub const PLATING_ROOT: &str = "/obj/item/mod/construction/plating";
+/// Spawned by constant path: the repaired and wired cores of MOD construction, the AI mini-card
+/// a destroyed unit leaves, the waddle module of the honkerative skin applier, the loaded
+/// MODlink scryer's cell.
+pub const RUNTIME_TYPES: [&str; 6] = [
+    "/obj/item/mod/core/standard",
+    "/obj/item/stock_parts/power_store/cell/high",
+    "/obj/item/mod/core/plasma/lavaland",
+    "/obj/item/mod/ai_minicard",
+    "/obj/item/mod/module/waddle",
+    CONTROL_ROOT,
+];
 /// The control unit's sounds: refusals, the part hiss, activation, installs.
 pub const SOUNDS: [&str; 5] = [
     "sound/machines/scanner/scanbuzz.ogg",
@@ -108,6 +121,9 @@ pub struct SuitDef {
     pub modules: Vec<String>,
     pub default_pins: Vec<String>,
     pub req_access: Vec<String>,
+    /// `starting_frequency` of its MODlink (`MODLINK_FREQ_*`); empty: none.
+    #[serde(default)]
+    pub starting_frequency: String,
 }
 
 /// `/datum/storage` limits of a storage module's `storage_type`.
@@ -166,6 +182,9 @@ pub struct ModData {
     pub modules: Vec<ModuleDef>,
     /// Every `/obj/item/mod/core` type.
     pub cores: Vec<String>,
+    /// `/obj/item/mod/construction/plating` types with their `theme`.
+    #[serde(default)]
+    pub platings: Vec<(String, String)>,
 }
 
 impl ModData {
@@ -193,6 +212,8 @@ impl ModData {
         }
         out.extend(self.modules.iter().map(|m| m.path.as_str()));
         out.extend(self.cores.iter().map(String::as_str));
+        // What the MOD construction and AI code spawn (`ss13_game::modsuit`).
+        out.extend(RUNTIME_TYPES);
         out.retain(|p| !p.is_empty());
         out
     }
@@ -331,6 +352,7 @@ fn suit(types: &DmTypes, p: &str) -> SuitDef {
         modules: paths(types.resolved(p, "applied_modules")),
         default_pins: paths(types.resolved(p, "default_pins")),
         req_access: texts(types.resolved(p, "req_access")),
+        starting_frequency: text(types.resolved(p, "starting_frequency")),
     }
 }
 
@@ -401,11 +423,23 @@ pub fn resolve(types: &DmTypes) -> ModData {
         .into_iter()
         .map(str::to_owned)
         .collect();
+    let platings = std::iter::once(PLATING_ROOT)
+        .chain(subtypes(types, PLATING_ROOT))
+        .filter(|p| types.types.contains_key(*p))
+        .map(|p| {
+            let theme = match type_path(types.resolved(p, "theme")) {
+                t if t.is_empty() => format!("{THEME_ROOT}/standard"),
+                t => t,
+            };
+            (p.to_owned(), theme)
+        })
+        .collect();
     ModData {
         themes,
         suits,
         modules,
         cores,
+        platings,
     }
 }
 

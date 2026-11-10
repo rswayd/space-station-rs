@@ -5,7 +5,10 @@
 //! deactivation; it cannot come off with parts out. Module installs refuse over the theme's
 //! complexity and on incompatible modules. Sealing hides what the skin's sealed
 //! `flags_inv` say; an active ion jetpack lets a weightless wearer step off nothing, paying
-//! for each thrust.
+//! for each thrust. A MOD shell becomes a unit of its plating's theme with its core; skins and
+//! paint apply to the parts; MODlink calls show the other wearer's hologram and end when a
+//! wearer is gone; an AI moves into the unit and out, and a despawned unit leaves its AI in a
+//! mini-card.
 
 use std::path::{Path, PathBuf};
 
@@ -37,6 +40,8 @@ const JETPACK: &str = "/obj/item/mod/module/jetpack";
 const HIDEEARS: u32 = 1 << 5;
 const HIDEHAIR: u32 = 1 << 8;
 const CORE: &str = "/obj/item/mod/core/standard";
+const SHELL: &str = "/obj/item/mod/construction/shell";
+const PLATING: &str = "/obj/item/mod/construction/plating";
 const CELL: &str = "/obj/item/stock_parts/power_store/cell/super";
 const STOPSPRESSUREDAMAGE: u32 = 1 << 1;
 const THICKMATERIAL: u32 = 1 << 4;
@@ -56,7 +61,19 @@ const TYPES: &str = r##"{
         "icon": { "resource": "i.dmi" }, "icon_state": "thing", "interaction_flags_item": 1,
         "slot_flags": 0, "inhand_icon_state": null, "w_class": 3,
         "lefthand_file": { "resource": "l.dmi" }, "righthand_file": { "resource": "r.dmi" },
-        "worn_icon": null, "worn_icon_state": null } },
+        "worn_icon": null, "worn_icon_state": null, "tool_behaviour": null, "toolspeed": 1 } },
+    "/obj/item/screwdriver": { "parent": "/obj/item", "declared_vars": {
+        "tool_behaviour": "screwdriver" } },
+    "/obj/item/wrench": { "parent": "/obj/item", "declared_vars": { "tool_behaviour": "wrench" } },
+    "/obj/item/crowbar": { "parent": "/obj/item", "declared_vars": { "tool_behaviour": "crowbar" } },
+    "/obj/item/mod/construction": { "parent": "/obj/item/mod" },
+    "/obj/item/mod/ai_minicard": { "parent": "/obj/item/mod" },
+    "/obj/item/mod/construction/shell": { "parent": "/obj/item/mod/construction" },
+    "/obj/item/mod/construction/helmet": { "parent": "/obj/item/mod/construction" },
+    "/obj/item/mod/construction/chestplate": { "parent": "/obj/item/mod/construction" },
+    "/obj/item/mod/construction/gauntlets": { "parent": "/obj/item/mod/construction" },
+    "/obj/item/mod/construction/boots": { "parent": "/obj/item/mod/construction" },
+    "/obj/item/mod/construction/plating": { "parent": "/obj/item/mod/construction" },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "slot_flags": 256 } },
@@ -139,6 +156,17 @@ fn fixture_assets(test: &str) -> PathBuf {
         .join(test);
     let used = [
         CONTROL,
+        "/obj/item/mod/control",
+        "/obj/item/mod/ai_minicard",
+        SHELL,
+        PLATING,
+        "/obj/item/mod/construction/helmet",
+        "/obj/item/mod/construction/chestplate",
+        "/obj/item/mod/construction/gauntlets",
+        "/obj/item/mod/construction/boots",
+        "/obj/item/screwdriver",
+        "/obj/item/wrench",
+        "/obj/item/crowbar",
         HELMET,
         CHESTPLATE,
         STORAGE,
@@ -197,14 +225,23 @@ fn data() -> ModData {
             }],
             ..Default::default()
         }],
-        suits: vec![SuitDef {
-            path: CONTROL.into(),
-            theme: "/datum/mod_theme/standard".into(),
-            core: CORE.into(),
-            cell: CELL.into(),
-            modules: vec![STORAGE.into()],
-            ..Default::default()
-        }],
+        suits: vec![
+            SuitDef {
+                path: CONTROL.into(),
+                theme: "/datum/mod_theme/standard".into(),
+                core: CORE.into(),
+                cell: CELL.into(),
+                modules: vec![STORAGE.into()],
+                starting_frequency: "NT".into(),
+                ..Default::default()
+            },
+            SuitDef {
+                path: "/obj/item/mod/control".into(),
+                theme: "/datum/mod_theme/standard".into(),
+                starting_frequency: "NT".into(),
+                ..Default::default()
+            },
+        ],
         modules: vec![
             ModuleDef {
                 path: STORAGE.into(),
@@ -240,6 +277,10 @@ fn data() -> ModData {
             },
         ],
         cores: vec![CORE.into()],
+        platings: vec![(
+            "/obj/item/mod/construction/plating".into(),
+            "/datum/mod_theme/standard".into(),
+        )],
     }
 }
 
@@ -483,4 +524,243 @@ fn jetpack_thrusts_a_weightless_wearer() {
     assert!(modules::deactivate(world, control, jet, false));
     assert!(world.get::<Jetpack>(mob).is_none());
     assert!(!process_spacemove(world, mob, Some(Dir::East), false));
+}
+
+/// `item` into `mob`'s active hand.
+fn hold(world: &mut World, mob: Entity, item: Entity) {
+    world
+        .entity_mut(item)
+        .remove::<(TilePos, ss13_game::storage::StoredIn)>()
+        .insert(CarriedBy(mob));
+    let mut inventory = world.get_mut::<Inventory>(mob).unwrap();
+    let active = inventory.active;
+    inventory.hands[active] = Some(item);
+}
+
+#[test]
+fn shell_builds_a_control_unit_with_its_core() {
+    use ss13_game::modsuit::construction::{ModShell, ShellStep, item_interaction};
+    use ss13_game::tools::Actor;
+
+    let (mut app, _, mob) = setup("construct");
+    let world = app.world_mut();
+    let client = world.spawn_empty().id();
+    let shell = ss13_game::construction::spawn_obj(world, SHELL, FLOOR).unwrap();
+    let use_on = |world: &mut World, path: &str| -> Entity {
+        let item = ss13_game::construction::spawn_obj(world, path, FLOOR).unwrap();
+        hold(world, mob, item);
+        let actor = Actor {
+            client,
+            mob,
+            item: Some(item),
+        };
+        assert!(item_interaction(world, actor, shell), "{path} on the shell");
+        item
+    };
+    let step = |world: &World| world.get::<ModShell>(shell).unwrap().step;
+
+    let core = use_on(world, CORE);
+    assert_eq!(step(world), ShellStep::Core);
+    use_on(world, "/obj/item/screwdriver");
+    assert_eq!(step(world), ShellStep::ScrewedCore);
+    let helmet = use_on(world, "/obj/item/mod/construction/helmet");
+    assert_eq!(step(world), ShellStep::Helmet);
+    // A crowbar takes the helmet back out.
+    use_on(world, "/obj/item/crowbar");
+    assert_eq!(step(world), ShellStep::ScrewedCore);
+    assert_eq!(world.get::<TilePos>(helmet), Some(&FLOOR));
+    hold(world, mob, helmet);
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(helmet),
+    };
+    assert!(item_interaction(world, actor, shell));
+    for part in [
+        "/obj/item/mod/construction/chestplate",
+        "/obj/item/mod/construction/gauntlets",
+        "/obj/item/mod/construction/boots",
+        "/obj/item/wrench",
+        "/obj/item/screwdriver",
+    ] {
+        use_on(world, part);
+    }
+    assert_eq!(step(world), ShellStep::ScrewedAssembly);
+    // The wrong part does nothing at this step.
+    let stray =
+        ss13_game::construction::spawn_obj(world, "/obj/item/mod/construction/helmet", FLOOR)
+            .unwrap();
+    hold(world, mob, stray);
+    let actor = Actor {
+        client,
+        mob,
+        item: Some(stray),
+    };
+    assert!(!item_interaction(world, actor, shell));
+
+    use_on(world, PLATING);
+    assert!(world.get_entity(shell).is_err(), "the shell is used up");
+    let held = world.get::<Inventory>(mob).unwrap().hands;
+    let control = held
+        .into_iter()
+        .flatten()
+        .find(|&e| world.get::<ModSuit>(e).is_some())
+        .expect("the unit is in the hands");
+    let suit = world.get::<ModSuit>(control).unwrap();
+    assert_eq!(suit.core, Some(core), "the shell's core powers the unit");
+    assert_eq!(suit.parts.len(), 2, "the theme's parts");
+}
+
+#[test]
+fn skins_and_colors_apply_to_inactive_units() {
+    use ss13_game::modsuit::paint::{set_mod_color, set_skin};
+
+    let (mut app, control, _) = setup("paint");
+    let world = app.world_mut();
+    assert!(set_skin(world, control, "standard"));
+    assert!(!set_skin(world, control, "no-such-skin"));
+    let red = ss13_game::modsuit::PAINT_PRESETS[0].1;
+    set_mod_color(world, control, &red);
+    let helmet = world.get::<ModSuit>(control).unwrap().parts[0].item;
+    assert_eq!(
+        world.get::<ss13_shared::Appearance>(helmet).unwrap().color,
+        Some([255, 128, 128, 255])
+    );
+    assert_eq!(
+        world.get::<ss13_shared::Appearance>(control).unwrap().color,
+        Some([255, 128, 128, 255])
+    );
+}
+
+#[test]
+fn modlink_calls_show_holograms_and_end_with_the_wearer() {
+    use ss13_game::modsuit::link::{InCall, LinkVisual, ModLink, end_call, start_call};
+
+    let (mut app, control, mob) = setup("modlink");
+    wear(&mut app, control, mob);
+    let world = app.world_mut();
+    let other = ss13_game::construction::spawn_obj(world, CONTROL, FLOOR).unwrap();
+    let callee = world
+        .spawn((
+            TilePos::new(2, 3, 1),
+            Health::default(),
+            Stat::Conscious,
+            Inventory::default(),
+        ))
+        .id();
+    app.update();
+    wear(&mut app, other, callee);
+    let world = app.world_mut();
+    let core = world.get::<ModSuit>(other).unwrap().core.unwrap();
+    let cell = world.get::<ModCore>(core).unwrap().cell.unwrap();
+    world.entity_mut(cell).insert(ItemCell(Cell {
+        charge: 10_000.0,
+        maxcharge: 10_000.0,
+        chargerate: 1000.0,
+    }));
+    let (a, b) = (
+        world.get::<ModLink>(control).cloned().unwrap(),
+        world.get::<ModLink>(other).cloned().unwrap(),
+    );
+    assert_eq!(a.frequency.as_deref(), Some("NT"), "starting_frequency");
+    assert_ne!(a.id, b.id, "unique ids");
+    assert!(ss13_game::modsuit::link::can_call(world, control));
+
+    start_call(world, control, other);
+    let link = world.get::<ModLink>(control).cloned().unwrap();
+    assert_eq!(link.call, Some(other));
+    assert!(world.get::<InCall>(mob).is_some() && world.get::<InCall>(callee).is_some());
+    let visual = link.visual.expect("the wearer's hologram");
+    assert_eq!(
+        world.get::<LinkVisual>(visual).map(|v| v.at),
+        Some(other),
+        "shown at the other end"
+    );
+    assert_eq!(world.get::<TilePos>(visual), Some(&TilePos::new(2, 3, 1)));
+    let before = charge(&app, control);
+    for _ in 0..steps(2.0) {
+        app.update();
+    }
+    let used = before - charge(&app, control);
+    assert!(used > 20.0 && used < 30.0, "12.5 W for 2 s: {used}");
+
+    // The callee takes the unit off: the call ends.
+    let world = app.world_mut();
+    world.get_mut::<Inventory>(callee).unwrap().back = None;
+    world.entity_mut(other).remove::<CarriedBy>().insert(FLOOR);
+    app.update();
+    app.update();
+    let world = app.world_mut();
+    assert!(world.get::<ModLink>(control).unwrap().call.is_none());
+    assert!(world.get_entity(visual).is_err(), "the hologram is gone");
+    assert!(world.get::<InCall>(mob).is_none());
+    end_call(world, control);
+}
+
+#[test]
+fn an_ai_rides_the_unit_and_leaves_a_minicard() {
+    use ss13_game::modsuit::ai::{
+        CHARGE_PER_STEP, MiniCard, ModAssistant, ai_enter_mod, ai_exit_mod, relaymove, suit_of_eye,
+    };
+    use ss13_game::silicon::ai::{AiCore, AiEye, AiInside};
+    use ss13_game::silicon::aicard::IntelliCard;
+    use ss13_shared::Dir;
+
+    let (mut app, control, mob) = setup("ai");
+    let world = app.world_mut();
+    let card = world.spawn(IntelliCard::default()).id();
+    let eye = world.spawn(FLOOR).id();
+    let ai = world
+        .spawn((
+            Health::default(),
+            Stat::Conscious,
+            AiCore {
+                eye,
+                control_disabled: true,
+                connected_robots: Vec::new(),
+            },
+            AiInside::Card(card),
+        ))
+        .id();
+    world.entity_mut(eye).insert(AiEye { ai, blind: false });
+    world.get_mut::<IntelliCard>(card).unwrap().ai = Some(ai);
+
+    ai_enter_mod(world, control, ai, card);
+    assert_eq!(world.get::<AiInside>(ai), Some(&AiInside::Mod(control)));
+    assert!(world.get::<IntelliCard>(card).unwrap().ai.is_none());
+    assert_eq!(suit_of_eye(world, eye), Some(control));
+    assert!(
+        !world.get::<AiCore>(ai).unwrap().control_disabled,
+        "wireless on in the unit"
+    );
+
+    // Worn but inactive, and no boots to walk with: no step, no charge.
+    wear(&mut app, control, mob);
+    let world = app.world_mut();
+    let before = ss13_game::modsuit::server::charge(world, control);
+    assert!(!relaymove(world, control, Dir::East));
+    assert_eq!(ss13_game::modsuit::server::charge(world, control), before);
+    assert!(CHARGE_PER_STEP > 0.0);
+
+    ai_exit_mod(world, control, ai, card);
+    assert_eq!(world.get::<AiInside>(ai), Some(&AiInside::Card(card)));
+    assert_eq!(world.get::<IntelliCard>(card).unwrap().ai, Some(ai));
+    assert!(world.get::<ModAssistant>(control).is_none());
+
+    // Back in, and the unit goes: a mini-card keeps the dead AI where it was.
+    world.get_mut::<IntelliCard>(card).unwrap().ai = Some(ai);
+    ai_enter_mod(world, control, ai, card);
+    world.get_mut::<Inventory>(mob).unwrap().back = None;
+    world
+        .entity_mut(control)
+        .remove::<CarriedBy>()
+        .insert(FLOOR);
+    world.despawn(control);
+    app.update();
+    let world = app.world_mut();
+    let Some(&AiInside::Card(minicard)) = world.get::<AiInside>(ai) else {
+        panic!("the AI is in a mini-card");
+    };
+    assert_eq!(world.get::<MiniCard>(minicard).unwrap().ai, Some(ai));
+    assert_eq!(world.get::<Stat>(ai), Some(&Stat::Dead));
 }

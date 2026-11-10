@@ -316,6 +316,8 @@ pub enum Job {
     AiCard(crate::silicon::aicard::CardJob),
     /// A pAI's door jack hack ([`crate::silicon::pai`]).
     Pai(crate::silicon::pai::PaiJob),
+    /// MOD construction, AI transfers into and out of MODsuits ([`crate::modsuit`]).
+    ModSuit(crate::modsuit::ModJob),
     /// Digging rock, prying an ore box apart ([`crate::mining`]).
     Mining(crate::mining::MiningJob),
     /// Switching a satellite on or off ([`crate::station_goals`]).
@@ -1466,6 +1468,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::AiCore(job) => crate::silicon::ai_core::complete(world, mob, action, job),
         &Job::AiCard(job) => crate::silicon::aicard::complete(world, mob, action, job),
         &Job::Pai(job) => crate::silicon::pai::complete(world, mob, action, job),
+        &Job::ModSuit(job) => crate::modsuit::complete(world, mob, action, job),
         &Job::Mining(job) => crate::mining::complete(world, mob, action, job),
         Job::Hijack => crate::shuttle_console_server::complete_hijack(world, mob, action),
         &Job::Door(job) => crate::doors::complete(world, client, mob, target, job),

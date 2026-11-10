@@ -1,3 +1,9 @@
+//! The exosuit windows (client). The pilot's `Mecha` window ([`MechaUi`]: name, integrity,
+//! power, the safety/ID lock/lights toggles, the diagnostic button, the equipment with the
+//! sleeper's and the syringe gun's controls) and the exosuit control console
+//! (`ExosuitControlConsole.tsx`: a section per tracked mech with "Message" and "EMP Burst") are
+//! at the end of this file.
+//!
 //! The exosuit fabricator window (client): tgui `ExosuitFabricator` (`ExosuitFabricator.tsx`
 //! with `Fabrication/DesignBrowser.tsx`, `MaterialAccessBar.tsx`): the researched designs by
 //! category (a click builds now; `+` queues, `▶` builds now; "Всё в очередь" queues the
@@ -19,7 +25,9 @@ pub struct MechaClientPlugin;
 
 impl Plugin for MechaClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<ExosuitFabricatorUi>();
+        app.register_ui_view::<ExosuitFabricatorUi>()
+            .register_ui_view::<MechaUi>()
+            .register_ui_view::<ExosuitControlConsoleUi>();
     }
 }
 
@@ -324,5 +332,397 @@ fn queue(st: &ExoFabStatic, data: &ExoFabData) -> impl Scene + use<> {
                 Children [ @Section { @fill: true, @scrollable: true } Children [ {rows} ] ]
             ]
         ]
+    }
+}
+
+// --- Mecha ----------------------------------------------------------------------------------
+
+fn gear_params(reference: u64, action: String) -> ActParams {
+    ActParams(vec![
+        (REF.to_owned(), reference.to_string()),
+        (GEAR_ACTION.to_owned(), action),
+    ])
+}
+
+fn text_item(label: &'static str, text: String) -> Box<dyn SceneList> {
+    Box::new(EntityScene(bsn! {
+        @LabeledListItem { @label: label }
+        Children [ Text(text) ]
+    }))
+}
+
+fn bar_item(label: &'static str, value: f32, text: String) -> Box<dyn SceneList> {
+    let ranges = vec![
+        (UiColor::Good, 0.7, f32::INFINITY),
+        (UiColor::Average, 0.3, 0.7),
+        (UiColor::Bad, f32::NEG_INFINITY, 0.3),
+    ];
+    Box::new(EntityScene(bsn! {
+        @LabeledListItem { @label: label }
+        Children [
+            @ProgressBar { @empty: true }
+            ProgressBar { value: value, ranges: ranges }
+            Node { flex_grow: 1.0, width: percent(100) }
+            Children [ Text(text) ]
+        ]
+    }))
+}
+
+fn toggle_item(
+    label: &'static str,
+    on: bool,
+    on_text: &'static str,
+    off_text: &'static str,
+    act: &'static str,
+) -> Box<dyn SceneList> {
+    let text = if on { on_text } else { off_text };
+    let act = act.to_owned();
+    Box::new(EntityScene(bsn! {
+        @LabeledListItem { @label: label }
+        Children [
+            @ss13_ui_kit::Button { @icon: "power-off", @content: text }
+            ss13_ui_kit::Button { selected: on }
+            Act(act)
+        ]
+    }))
+}
+
+fn gear_button(
+    reference: u64,
+    action: String,
+    label: String,
+    selected: bool,
+) -> Box<dyn SceneList> {
+    let params = gear_params(reference, action);
+    Box::new(EntityScene(bsn! {
+        @ss13_ui_kit::Button { @content: label, @compact: true }
+        ss13_ui_kit::Button { selected: selected }
+        Act(EQUIP_ACT)
+        params
+    }))
+}
+
+fn reagent_text(reagents: &[GearReagent]) -> String {
+    if reagents.is_empty() {
+        return "Нет".to_owned();
+    }
+    reagents
+        .iter()
+        .map(|r| format!("{} ({} ед.)", r.name, r.volume))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn row(children: Vec<Box<dyn SceneList>>) -> Box<dyn SceneList> {
+    Box::new(EntityScene(bsn! {
+        Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap }
+        Children [ {children} ]
+    }))
+}
+
+/// `ModulesPane`'s sleeper snowflake.
+fn sleeper_view(reference: u64, sleeper: &SleeperGear) -> Vec<Box<dyn SceneList>> {
+    let Some(p) = &sleeper.patient else {
+        return vec![text_item("Пациент", "Нет".to_owned())];
+    };
+    let mut items = vec![
+        text_item("Пациент", p.patient_name.clone()),
+        text_item("Состояние", p.patient_state.clone()),
+        bar_item(
+            "Здоровье",
+            p.patient_health,
+            format!("{:.0}%", p.patient_health * 100.0),
+        ),
+        text_item(
+            "Урон",
+            format!(
+                "Травмы {:.0} / Ожоги {:.0} / Токсины {:.0} / Удушье {:.0}",
+                p.brute_loss, p.burn_loss, p.toxin_loss, p.oxygen_loss
+            ),
+        ),
+        text_item("Реагенты", reagent_text(&p.contained_reagents)),
+    ];
+    if let Some(t) = p.core_temp {
+        items.push(text_item("Температура", format!("{t:.1} °C")));
+    }
+    if p.has_brain_damage {
+        items.push(text_item("Мозг", "Обнаружены повреждения".to_owned()));
+    }
+    if p.has_traumas {
+        items.push(text_item("Травмы мозга", "Обнаружены".to_owned()));
+    }
+    let mut buttons = vec![gear_button(
+        reference,
+        "eject".to_owned(),
+        "Извлечь".to_owned(),
+        false,
+    )];
+    for r in sleeper.injectible_reagents.iter().flatten() {
+        buttons.push(gear_button(
+            reference,
+            format!("inject_reagent_{}", r.name),
+            format!("Ввести: {} ({} ед.)", r.name, r.volume),
+            false,
+        ));
+    }
+    items.push(row(buttons));
+    items
+}
+
+/// `ModulesPane`'s syringe gun snowflake.
+fn syringe_view(reference: u64, gun: &SyringeGear) -> Vec<Box<dyn SceneList>> {
+    let mode = gear_button(
+        reference,
+        "change_mode".to_owned(),
+        format!("Режим: {}", gun.mode),
+        false,
+    );
+    let mut items = vec![
+        row(vec![mode]),
+        text_item("Шприцы", format!("{} / {}", gun.syringe, gun.max_syringe)),
+        text_item(
+            "Объём",
+            format!("{:.1} / {:.0} ед.", gun.reagents, gun.total_reagents),
+        ),
+        text_item("Содержимое", reagent_text(&gun.contained_reagents)),
+    ];
+    let mut synth = Vec::new();
+    for (name, enabled) in &gun.analyzed_reagents {
+        synth.push(gear_button(
+            reference,
+            format!("toggle_reagent_{name}"),
+            name.clone(),
+            *enabled,
+        ));
+        synth.push(gear_button(
+            reference,
+            format!("purge_reagent_{name}"),
+            "Слить".to_owned(),
+            false,
+        ));
+    }
+    synth.push(gear_button(
+        reference,
+        "purge_all".to_owned(),
+        "Слить всё".to_owned(),
+        false,
+    ));
+    items.push(row(synth));
+    items
+}
+
+fn gear_view(gear: &MechaGear) -> Box<dyn SceneList> {
+    let title = format!("{}: {}", gear.slot, gear.name);
+    let mut items: Vec<Box<dyn SceneList>> = Vec::new();
+    if let Some(sleeper) = &gear.sleeper {
+        items.extend(sleeper_view(gear.reference, sleeper));
+    }
+    if let Some(gun) = &gear.syringe {
+        items.extend(syringe_view(gear.reference, gun));
+    }
+    Box::new(EntityScene(bsn! {
+        @Section { @title: title }
+        Children [
+            @LabeledList
+            Children [ {items} ]
+        ]
+    }))
+}
+
+impl ClientUi for MechaUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 600.0;
+
+    fn content(_: &MechaStatic, data: &MechaData) -> impl Scene {
+        let diagnostic: Vec<Box<dyn SceneList>> = if data.diagnostic_status {
+            Vec::new()
+        } else {
+            vec![Box::new(EntityScene(bsn! {
+                @ss13_ui_kit::Button {
+                    @icon: "tachograph-digital",
+                    @tooltip: "Диагностика",
+                }
+                ss13_ui_kit::Button { color: UiColor::Violet }
+                Act(DIAGNOSTIC)
+            }))]
+        };
+        let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+            Node { flex_direction: FlexDirection::Row }
+            Children [ {diagnostic} ]
+        }));
+        let integrity = data.integrity / data.integrity_max.max(1.0);
+        let mut rows = vec![bar_item(
+            "Целостность",
+            integrity,
+            format!("{:.0} / {:.0}", data.integrity, data.integrity_max),
+        )];
+        rows.push(match (data.power_level, data.power_max) {
+            (Some(level), Some(max)) => bar_item(
+                "Энергия",
+                (level / max.max(1.0)) as f32,
+                format!("{:.0} / {:.0} Дж", level, max),
+            ),
+            _ => text_item("Энергия", "Нет ячейки".to_owned()),
+        });
+        rows.push(toggle_item(
+            "Оружие",
+            !data.weapons_safety,
+            "Готово",
+            "На предохранителе",
+            TOGGLE_SAFETY,
+        ));
+        rows.push(toggle_item(
+            "Блокировка ID",
+            data.id_lock,
+            "Включена",
+            "Выключена",
+            TOGGLE_ID_LOCK,
+        ));
+        if data.has_lights {
+            rows.push(toggle_item(
+                "Фары",
+                data.lights_on,
+                "Включены",
+                "Выключены",
+                TOGGLE_LIGHTS,
+            ));
+        }
+        let gear: Vec<Box<dyn SceneList>> = if data.equipment.is_empty() {
+            vec![Box::new(EntityScene(bsn! {
+                @NoticeBox
+                Children [ Text("Оборудование не установлено.") ]
+            }))]
+        } else {
+            data.equipment.iter().map(gear_view).collect()
+        };
+        let title = data.name.clone();
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: title, @buttons: buttons }
+                Children [
+                    @LabeledList
+                    Children [ {rows} ]
+                ]
+                --
+                @Section { @title: "Оборудование", @scrollable: true }
+                Children [ {gear} ]
+            ]
+        }
+    }
+}
+
+// --- ExosuitControlConsole ------------------------------------------------------------------
+
+/// tg's percent colors: `<= 30` bad, `<= 70` average, else good (`reverse` for cargo space).
+fn percent_color(value: i32, reverse: bool) -> UiColor {
+    let (low, high) = if reverse {
+        (UiColor::Good, UiColor::Bad)
+    } else {
+        (UiColor::Bad, UiColor::Good)
+    };
+    if value <= 30 {
+        low
+    } else if value <= 70 {
+        UiColor::Average
+    } else {
+        high
+    }
+}
+
+fn colored_item(label: &'static str, text: String, color: UiColor) -> Box<dyn SceneList> {
+    Box::new(EntityScene(bsn! {
+        @LabeledListItem { @label: label }
+        Children [ Text(text) TextColor({color.base()}) ]
+    }))
+}
+
+fn tracked_view(mech: &TrackedMech) -> Box<dyn SceneList> {
+    let reference = mech.tracker_ref.to_string();
+    let message_params = ActParams(vec![(TRACKER_REF.to_owned(), reference.clone())]);
+    let shock_params = ActParams(vec![(TRACKER_REF.to_owned(), reference)]);
+    let no_pilot = mech.pilot.is_empty();
+    let recharging = mech.emp_recharging;
+    let shock_text = if recharging {
+        "Перезарядка..."
+    } else {
+        "ЭМИ-импульс"
+    };
+    let buttons: Box<dyn SceneList> = Box::new(EntityScene(bsn! {
+        Node { flex_direction: FlexDirection::Row }
+        Children [
+            @ss13_ui_kit::Button { @icon: "envelope", @content: "Сообщение" }
+            ss13_ui_kit::Button { disabled: no_pilot }
+            Act(SEND_MESSAGE)
+            message_params
+            --
+            @ss13_ui_kit::Button { @icon: "wifi", @content: shock_text }
+            ss13_ui_kit::Button { color: UiColor::Bad, disabled: recharging }
+            Act(SHOCK)
+            shock_params
+        ]
+    }));
+    let mut rows = vec![colored_item(
+        "Целостность",
+        format!("{}%", mech.integrity),
+        percent_color(mech.integrity, false),
+    )];
+    rows.push(match mech.charge {
+        Some(c) => colored_item("Заряд", format!("{c}%"), percent_color(c, false)),
+        None => text_item("Заряд", "Не найдена".to_owned()),
+    });
+    rows.push(text_item(
+        "Воздух",
+        mech.airtank
+            .map_or_else(|| "Не установлен".to_owned(), |p| format!("{p:.2} кПа")),
+    ));
+    rows.push(text_item(
+        "Пилот",
+        if no_pilot {
+            "Нет".to_owned()
+        } else {
+            mech.pilot.join(" | ")
+        },
+    ));
+    rows.push(text_item(
+        "Местоположение",
+        mech.location
+            .clone()
+            .unwrap_or_else(|| "Неизвестно".to_owned()),
+    ));
+    if let Some(cargo) = mech.cargo_space {
+        rows.push(colored_item(
+            "Занято в грузовом отсеке",
+            format!("{cargo}%"),
+            percent_color(cargo, true),
+        ));
+    }
+    let title = mech.name.clone();
+    Box::new(EntityScene(bsn! {
+        @Section { @title: title, @buttons: buttons }
+        Children [
+            @LabeledList
+            Children [ {rows} ]
+        ]
+    }))
+}
+
+impl ClientUi for ExosuitControlConsoleUi {
+    const WIDTH: f32 = 500.0;
+    const HEIGHT: f32 = 500.0;
+
+    fn content(_: &(), data: &ExoControlData) -> impl Scene {
+        let sections: Vec<Box<dyn SceneList>> = if data.mechs.is_empty() {
+            vec![Box::new(EntityScene(bsn! {
+                @NoticeBox
+                Children [ Text("Экзокостюмы не обнаружены") ]
+            }))]
+        } else {
+            data.mechs.iter().map(tracked_view).collect()
+        };
+        bsn! {
+            @WindowContent { @scrollable: true }
+            Children [ {sections} ]
+        }
     }
 }

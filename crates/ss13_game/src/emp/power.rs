@@ -260,13 +260,17 @@ fn canisters(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     }
 }
 
+/// `MECH_EMP_BEACON_DESTRUCTION_PROB`, percent.
+const MECH_EMP_BEACON_DESTRUCTION_PROB: f64 = 40.0;
+
 /// On an exosuit whose equipment control is lost (tg `equipment_disabled`).
 #[derive(Component, Clone, Copy, Debug)]
 pub struct MechEquipmentDisabled;
 
 /// `/obj/vehicle/sealed/mecha/emp_act`: half the cell over `severity * capacitor rating`, burn
-/// damage `rand(100, 180)` over the same, equipment control lost for 3 s.
-// shortcut: no chassis camera refocus or tracking beacons (not ported).
+/// damage `rand(100, 180)` over the same, each tracking beacon destroyed with a 40% / severity
+/// chance (`MECH_EMP_BEACON_DESTRUCTION_PROB`), equipment control lost for 3 s.
+// shortcut: no chassis camera refocus (not ported).
 fn mechs(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
     for ev in emp_acts(world, &mut cursor) {
         let Some(mech) = world.get::<Mech>(ev.target).cloned() else {
@@ -303,6 +307,14 @@ fn mechs(world: &mut World, mut cursor: Local<MessageCursor<EmpAct>>) {
         );
         if world.get_entity(ev.target).is_err() {
             continue;
+        }
+        for tracker in crate::mecha::control::trackers_of(world, ev.target) {
+            if world
+                .resource_mut::<EmpRng>()
+                .prob(MECH_EMP_BEACON_DESTRUCTION_PROB / f64::from(ev.severity))
+            {
+                crate::mecha::control::destroy_tracker(world, tracker);
+            }
         }
         if world.get::<MechEquipmentDisabled>(ev.target).is_none() && mech.occupant.is_some() {
             crate::mecha::core::tell_occupant(

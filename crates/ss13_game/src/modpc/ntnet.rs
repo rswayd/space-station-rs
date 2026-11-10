@@ -127,7 +127,8 @@ pub fn silicon_turf(world: &World, silicon: Entity) -> Option<TilePos> {
         match world.get::<crate::silicon::ai::AiInside>(silicon)? {
             crate::silicon::ai::AiInside::Apc(e)
             | crate::silicon::ai::AiInside::Card(e)
-            | crate::silicon::ai::AiInside::Terminal(e) => crate::explosions::turf_of(world, *e),
+            | crate::silicon::ai::AiInside::Terminal(e)
+            | crate::silicon::ai::AiInside::Mod(e) => crate::explosions::turf_of(world, *e),
         }
     })
 }

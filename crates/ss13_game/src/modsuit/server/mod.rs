@@ -27,10 +27,12 @@
 //!   here).
 //! - The parts hide what their skin's `UNSEALED_INVISIBILITY`/`SEALED_INVISIBILITY` and cover
 //!   what `UNSEALED_COVER`/`SEALED_COVER` say (`flags_inv`, `flags_cover`).
-// shortcut: no wires, malfunctions, electrification, MODlink calls, AI/pAI assistants, paint
-// kits, ethereal charge (the ethereal core reads "Biological Battery Missing"), the lavaland
-// core's light and pollen, speed potions, strip actions, the spacesuit HUD charge icon or
-// hearing protection; a radial menu is a list prompt. Add them with their mechanics.
+// MODlink calls, AI assistants, paint kits and construction live beside this module
+// (`crate::modsuit::{link, ai, paint, construction}`).
+// shortcut: no wires, malfunctions, electrification, pAI assistants, ethereal charge (the
+// ethereal core reads "Biological Battery Missing"), the lavaland core's light and pollen,
+// speed potions, strip actions, the spacesuit HUD charge icon or hearing protection; a radial
+// menu is a list prompt. Add them with their mechanics.
 
 use std::collections::VecDeque;
 
@@ -264,6 +266,11 @@ impl ModSuit {
     }
 }
 
+/// On a control unit spawned with another theme than its type's (tg `Initialize(new_theme)`),
+/// before [`init_suit`] runs.
+#[derive(Component, Clone, Debug, PartialEq)]
+pub struct ThemeOverride(pub String);
+
 /// The equipment slowdown of a wearer's MOD parts, deciseconds per tile (tg
 /// `/datum/movespeed_modifier/equipment_speedmod` from the parts' `slowdown`).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
@@ -276,6 +283,8 @@ pub struct ModSuitView {
     pub data: ModSuitData,
     /// (user, module bits) pins.
     pub pins: Vec<(Entity, u64)>,
+    /// The AI assistant's eye (`is_ai` for its windows).
+    pub ai_eye: Option<Entity>,
 }
 
 /// A middle click of a wearer whose selected module is used by clicking (tg
@@ -318,6 +327,8 @@ pub enum ModAct {
     Configure(u64, String, String),
     Pin(u64),
     Deploy(u64),
+    /// `call`: a MODlink call, or hanging up.
+    Call,
 }
 
 pub struct ModSuitPlugin;
@@ -355,6 +366,28 @@ impl Plugin for ModSuitPlugin {
             };
             crate::modsuit::anomalock::item_interaction(w, actor, c.target)
         });
+        // MOD construction, paint kits and skin appliers, MODlink multitools and scryer cells
+        // (`crate::modsuit::{construction, paint, link}`): on the floor (right click: the
+        // paint's recolor, the multitool's frequency) or in the other hand.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 237, |w, c| {
+            extras_interaction(w, c.client, c.mob, c.held, c.target, c.modifiers.right)
+        });
+        app.add_click_handler(ClickPhase::OtherHand, 97, |w, c| {
+            extras_interaction(w, c.client, c.mob, c.held, c.target, false)
+        });
+        // The MODlink scryer's label.
+        app.add_click_handler(ClickPhase::AttackSelf, 1717, |w, c| {
+            crate::modsuit::link::scryer_attack_self(w, c.client, c.mob, c.target)
+        });
+        // A right click takes the scryer's cell out.
+        app.add_click_handler(ClickPhase::EmptyHand, 2037, |w, c| {
+            c.modifiers.right && crate::modsuit::link::remove_cell(w, c.client, c.mob, c.target)
+        });
+        app.add_plugins((
+            crate::modsuit::paint::ModPaintPlugin,
+            crate::modsuit::ai::ModAiPlugin,
+            crate::modsuit::link::ModLinkPlugin,
+        ));
         app.register_ui::<ModSuitUi>()
             .add_systems(Startup, load_db)
             .add_systems(
@@ -383,6 +416,29 @@ impl Plugin for ModSuitPlugin {
                 ),
             );
     }
+}
+
+/// The click hooks of `crate::modsuit::{construction, paint, link}` with `held`.
+fn extras_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Option<Entity>,
+    target: Entity,
+    right: bool,
+) -> bool {
+    let Some(held) = held else {
+        return false;
+    };
+    let actor = crate::tools::Actor {
+        client,
+        mob,
+        item: Some(held),
+    };
+    crate::modsuit::construction::item_interaction(world, actor, target)
+        || crate::modsuit::paint::item_interaction(world, actor, target, right)
+        || (right && crate::modsuit::link::multitool_act(world, client, mob, held, target))
+        || crate::modsuit::link::scryer_item_interaction(world, client, held, target)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -427,6 +483,7 @@ impl ServerUi for ModSuitUi {
 
     fn data(view: &ModSuitView, user: Entity, _: &()) -> ModSuitData {
         let mut data = view.data.clone();
+        data.suit_status.is_ai = view.ai_eye == Some(user);
         for m in &mut data.module_info {
             m.pinned = view.pins.contains(&(user, m.reference));
         }
@@ -446,6 +503,7 @@ impl ServerUi for ModSuitUi {
             SELECT => Ok(ModAct::Select(reference()?)),
             PIN => Ok(ModAct::Pin(reference()?)),
             DEPLOY => Ok(ModAct::Deploy(reference()?)),
+            CALL => Ok(ModAct::Call),
             CONFIGURE => Ok(ModAct::Configure(
                 reference()?,
                 params.text(KEY)?,

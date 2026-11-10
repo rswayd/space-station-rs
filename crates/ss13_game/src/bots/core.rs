@@ -637,6 +637,8 @@ pub enum BotUserJob {
     WireEd209,
     /// A screwdriver attaching the ED-209's gun.
     FinishEd209,
+    /// A screwdriver securing the Vim assembly's flashlight.
+    SecureVimLight,
 }
 
 /// End of a [`BotUserJob`] `do_after` (`crate::tools` checked that neither side moved).
@@ -650,7 +652,7 @@ pub fn complete_job(
         BotUserJob::AttachKnife => {
             super::cleanbot::deputize(world, action.client, mob, action.target);
         }
-        BotUserJob::WireEd209 | BotUserJob::FinishEd209 => {
+        BotUserJob::WireEd209 | BotUserJob::FinishEd209 | BotUserJob::SecureVimLight => {
             construction::complete_ed209(world, mob, action, job);
         }
     }

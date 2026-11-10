@@ -99,6 +99,9 @@ pub enum AiInside {
     /// The AI system integrity restorer (`super::ai_fixer`): like a card, its eye sits on the
     /// terminal and sees around it; its wireless is off there.
     Terminal(Entity),
+    /// A MODsuit control unit (`crate::modsuit::ai`): like a card, its eye sits on the unit and
+    /// sees around it; its steps move the suit.
+    Mod(Entity),
 }
 
 /// tg `linked_core`: the emptied core a shunted AI returns to (`resolve_core_link`).
@@ -125,7 +128,7 @@ pub fn unhouse(world: &mut World, ai: Entity, pos: TilePos) {
 pub fn carded(world: &World, core: Entity) -> bool {
     matches!(
         world.get::<AiInside>(core),
-        Some(AiInside::Card(_) | AiInside::Terminal(_))
+        Some(AiInside::Card(_) | AiInside::Terminal(_) | AiInside::Mod(_))
     )
 }
 
@@ -360,7 +363,7 @@ fn move_eyes(
         if stats.get(ai.ai).is_ok_and(|s| *s == Stat::Dead)
             || matches!(
                 inside.get(ai.ai),
-                Ok(AiInside::Card(_) | AiInside::Terminal(_))
+                Ok(AiInside::Card(_) | AiInside::Terminal(_) | AiInside::Mod(_))
             )
         {
             continue;
@@ -379,7 +382,9 @@ fn pin_carded_eyes(world: &mut World) {
     let cards: Vec<(Entity, Entity)> = q
         .iter(world)
         .filter_map(|(core, inside)| match *inside {
-            AiInside::Card(card) | AiInside::Terminal(card) => Some((core.eye, card)),
+            AiInside::Card(card) | AiInside::Terminal(card) | AiInside::Mod(card) => {
+                Some((core.eye, card))
+            }
             AiInside::Apc(_) => None,
         })
         .collect();
@@ -410,7 +415,7 @@ fn refresh_eye_views(
             super::cameras::box_bits(*pos, VIEW_RADIUS, |_| false)
         } else if matches!(
             inside.get(eye.ai),
-            Ok(AiInside::Card(_) | AiInside::Terminal(_))
+            Ok(AiInside::Card(_) | AiInside::Terminal(_) | AiInside::Mod(_))
         ) {
             super::cameras::box_bits(*pos, VIEW_RADIUS, |_| true)
         } else {

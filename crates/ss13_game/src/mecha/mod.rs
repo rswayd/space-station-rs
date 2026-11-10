@@ -4,8 +4,11 @@
 //! drill, the cargo compartment) in [`equipment`], the weapons and their ammo boxes in
 //! [`weapons`], building them from a chassis
 //! (`/datum/component/construction/mecha`) in [`construction`] and the exosuit fabricator
-//! (`/obj/machinery/mecha_part_fabricator`, tgui `ExosuitFabricator`) in [`fab`]. [`client`]
-//! draws the fabricator's window; this module holds its data, which both halves share.
+//! (`/obj/machinery/mecha_part_fabricator`, tgui `ExosuitFabricator`) in [`fab`]. The pilot's
+//! `Mecha` window, action buttons, lights and holodiagnostic are in [`panel`], the medical
+//! equipment (sleeper, syringe gun, medical beamgun) in [`medical`], the tracking beacons and
+//! the exosuit control console (tgui `ExosuitControlConsole`) in [`control`]. [`client`] draws
+//! the windows; this module holds their data, which both halves share.
 //!
 //! The mech, equipment, construction and fabricator data come from `ss13-mapload convert`
 //! (`<assets>/mecha.ron`, [`ss13_mapload::mecha`]); rerun it after updating.
@@ -23,11 +26,17 @@ pub mod client;
 #[cfg(feature = "server")]
 pub mod construction;
 #[cfg(feature = "server")]
+pub mod control;
+#[cfg(feature = "server")]
 pub mod core;
 #[cfg(feature = "server")]
 pub mod equipment;
 #[cfg(feature = "server")]
 pub mod fab;
+#[cfg(feature = "server")]
+pub mod medical;
+#[cfg(feature = "server")]
+pub mod panel;
 #[cfg(feature = "server")]
 pub mod weapons;
 
@@ -55,6 +64,9 @@ impl bevy::prelude::Plugin for MechaServerPlugin {
             fab::FabPlugin,
             bay::MechBayPlugin,
             weapons::MechWeaponsPlugin,
+            panel::MechPanelPlugin,
+            medical::MechMedicalPlugin,
+            control::MechControlPlugin,
         ));
     }
 }
@@ -138,6 +150,144 @@ pub const BUILD_QUEUE: &str = "build_queue";
 pub const STOP_QUEUE: &str = "stop_queue";
 pub use crate::science::{AMOUNT, MATERIAL_REF, REMOVE_MAT};
 
+/// tgui `Mecha` (`tgui/packages/tgui/interfaces/Mecha`): the pilot's window.
+pub struct MechaUi;
+
+impl UiInterface for MechaUi {
+    const NAME: &'static str = "Mecha";
+    type Data = MechaData;
+    type StaticData = MechaStatic;
+}
+
+/// `ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MechaStatic {
+    pub ui_theme: String,
+}
+
+/// A reagent line of the equipment data (`get_reagent_data`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct GearReagent {
+    pub name: String,
+    pub volume: f32,
+}
+
+/// The sleeper's patient (`get_snowflake_data`, `MECHA_SNOWFLAKE_ID_SLEEPER`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SleeperPatient {
+    pub patient_name: String,
+    /// `health / maxHealth`.
+    pub patient_health: f32,
+    pub patient_state: String,
+    /// Celsius, humans only.
+    pub core_temp: Option<f32>,
+    pub brute_loss: f32,
+    pub burn_loss: f32,
+    pub toxin_loss: f32,
+    pub oxygen_loss: f32,
+    pub contained_reagents: Vec<GearReagent>,
+    pub has_brain_damage: bool,
+    pub has_traumas: bool,
+}
+
+/// A sleeper's section.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SleeperGear {
+    pub patient: Option<SleeperPatient>,
+    /// The medical sleeper: the syringe gun's reagents it can inject (`injectible_reagents`).
+    pub injectible_reagents: Option<Vec<GearReagent>>,
+}
+
+/// A syringe gun's section (`MECHA_SNOWFLAKE_ID_SYRINGE`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SyringeGear {
+    /// `"Launch"` or `"Analyze"`.
+    pub mode: String,
+    pub syringe: u32,
+    pub max_syringe: u32,
+    pub reagents: f32,
+    pub total_reagents: f32,
+    /// Known reagents and whether each is being synthesized.
+    pub analyzed_reagents: Vec<(String, bool)>,
+    pub contained_reagents: Vec<GearReagent>,
+}
+
+/// One piece of equipment.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MechaGear {
+    pub name: String,
+    /// `"Left arm"`, `"Right arm"` or the category.
+    pub slot: String,
+    /// The equipment entity's bits (tg `REF(module)`).
+    pub reference: u64,
+    pub sleeper: Option<SleeperGear>,
+    pub syringe: Option<SyringeGear>,
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct MechaData {
+    pub name: String,
+    pub integrity: f32,
+    pub integrity_max: f32,
+    /// Joules; `None` without a cell.
+    pub power_level: Option<f64>,
+    pub power_max: Option<f64>,
+    pub weapons_safety: bool,
+    pub id_lock: bool,
+    pub has_lights: bool,
+    pub lights_on: bool,
+    /// The holodiagnostic was made (`TRAIT_MECHA_DIAGNOSTIC_CREATED`).
+    pub diagnostic_status: bool,
+    pub equipment: Vec<MechaGear>,
+}
+
+pub const DIAGNOSTIC: &str = "diagnostic";
+pub const TOGGLE_SAFETY: &str = "toggle_safety";
+pub const TOGGLE_ID_LOCK: &str = "toggle_id_lock";
+pub const TOGGLE_LIGHTS: &str = "toggle_lights";
+pub const EQUIP_ACT: &str = "equip_act";
+pub const REF: &str = "ref";
+pub const GEAR_ACTION: &str = "gear_action";
+
+/// tgui `ExosuitControlConsole` (`ExosuitControlConsole.tsx`).
+pub struct ExosuitControlConsoleUi;
+
+impl UiInterface for ExosuitControlConsoleUi {
+    const NAME: &'static str = "ExosuitControlConsole";
+    type Data = ExoControlData;
+    type StaticData = ();
+}
+
+/// A `mechs` entry: a mech with a tracking beacon.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct TrackedMech {
+    pub name: String,
+    /// Percent.
+    pub integrity: i32,
+    /// Percent; `None` without a cell.
+    pub charge: Option<i32>,
+    /// kPa; `None` for an open cockpit.
+    pub airtank: Option<f32>,
+    pub pilot: Vec<String>,
+    pub location: Option<String>,
+    pub emp_recharging: bool,
+    /// The beacon entity's bits.
+    pub tracker_ref: u64,
+    /// Percent, Ripleys only.
+    pub cargo_space: Option<i32>,
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ExoControlData {
+    pub mechs: Vec<TrackedMech>,
+}
+
+pub const SEND_MESSAGE: &str = "send_message";
+pub const SHOCK: &str = "shock";
+pub const TRACKER_REF: &str = "tracker_ref";
+
 /// tg `item_interaction`/`attackby` of exosuit things with `held`: sheets into a fabricator,
 /// equipment onto a mech (a right click: the right arm), an ID toggling its ID lock, other items
 /// hitting it; parts, boards and tools on a chassis; a welder or crowbar on a wreckage. True
@@ -162,6 +312,10 @@ pub fn item_interaction(
         item: Some(held),
     };
     if world.get::<Mech>(target).is_some() {
+        if control::is_tracker(world, held) {
+            control::try_attach(world, actor, held, target);
+            return true;
+        }
         // `ammo_resupply`; an unusable box falls through to hitting the mech.
         if weapons::is_ammo(world, held) && weapons::ammo_resupply(world, actor, held, target) {
             return true;
