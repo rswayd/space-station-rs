@@ -251,10 +251,8 @@ pub(super) fn complete_job(world: &mut World, mob: Entity, scepter: Entity, job:
                 s.charges -= 1;
             }
         }
-        WizardJob::RechargeScepter(item) => {
-            if magic_recharge(world, item) {
-                chat_to(world, mob, Span::Notice, "fully charged");
-            }
+        WizardJob::RechargeScepter(item) if magic_recharge(world, item) => {
+            chat_to(world, mob, Span::Notice, "fully charged");
         }
         _ => {}
     }

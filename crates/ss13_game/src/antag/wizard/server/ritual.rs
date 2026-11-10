@@ -1098,14 +1098,14 @@ fn anomalies(world: &mut World, potency: u32, pos: TilePos) {
     let base = rng_range(world, 1, 4) as f32 + lerp(-1.0, 1.0, potency);
     let count = (base.round() as usize).clamp(1, 4).min(kinds.len());
     let t = now(world);
-    for k in 0..count {
+    for &kind in kinds.iter().take(count) {
         if tiles.is_empty() {
             break;
         }
         let i = rng_range(world, 0, tiles.len() as u32 - 1) as usize;
         let tile = tiles.swap_remove(i);
         let lifespan = f64::from(rng_range(world, 15, 30));
-        let e = spawn_anomaly(world, kinds[k], tile, None);
+        let e = spawn_anomaly(world, kind, tile, None);
         world
             .entity_mut(e)
             .insert(crate::traps::DeleteAt(t + lifespan));

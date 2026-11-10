@@ -618,10 +618,9 @@ pub fn expose_by(
             {
                 crate::hazard_decals::spawn_glow(world, pos);
             }
-        } else if chem.is_type(r.id, CAPSAICIN) {
-            if living && methods & (VAPOR | TOUCH | INHALE) != 0 {
-                pepper_expose(world, target);
-            }
+        } else if chem.is_type(r.id, CAPSAICIN) && living && methods & (VAPOR | TOUCH | INHALE) != 0
+        {
+            pepper_expose(world, target);
         }
         // `/datum/reagent/expose_mob`: `penetrates_skin & methods`.
         if living && chem.def(r.id).penetrates_skin & methods != 0 {

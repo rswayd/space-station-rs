@@ -882,7 +882,7 @@ impl Plugin for WizardPlugin {
         app.add_click_handler(ClickPhase::HeldOnTarget, 3451, |w, c| {
             runic::held_on_target(w, c)
         });
-        app.add_click_handler(ClickPhase::EmptyHand, 3451, |w, c| ritual::interact(w, c));
+        app.add_click_handler(ClickPhase::EmptyHand, 3451, ritual::interact);
         if !app.world().contains_resource::<WizardConfig>() {
             app.init_resource::<WizardConfig>();
         }

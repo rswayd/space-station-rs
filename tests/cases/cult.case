@@ -51,4 +51,6 @@ test three_sacrifice_the_target
   wait 1
   alice click 6,3 /obj/effect/rune
   until alice.chat ~ "This is the one I desire! You have done well."
-  until tile(6,3).entities[].path ~ "/obj/item/card/id"
+  # The body is gibbed (server side: `tests/it/cult.rs`); its items may step to a neighbouring
+  # tile (tg `gib`, DROP_ITEMS), its organs fly off.
+  until tile(6,3).entities[].path ~ "/obj/item/organ"

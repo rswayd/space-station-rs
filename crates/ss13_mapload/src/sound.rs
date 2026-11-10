@@ -327,7 +327,15 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 299] = [
+    pub const GAME_CODE: [&str; 307] = [
+        "sound/effects/bamf.ogg",
+        "sound/effects/magic/staff_animation.ogg",
+        "sound/effects/magic/summon_karp.ogg",
+        "sound/effects/magic/timeparadox2.ogg",
+        "sound/effects/magic/voidblink.ogg",
+        "sound/items/hammering_wood.ogg",
+        "sound/items/weapons/bolathrow.ogg",
+        "sound/misc/bloop.ogg",
         // The slaughter demon's meal (`ss13_game::antag::slaughter`).
         "sound/effects/magic/demon_consume.ogg",
         // Overload Lights (`ss13_game::antag::revenant`).

@@ -587,7 +587,7 @@ impl ServerUi for ScannerGateWindow {
                 GATE_MODES
                     .iter()
                     .find(|m| **m == wanted)
-                    .map(|m| GateAct::SetMode(*m))
+                    .map(|m| GateAct::SetMode(m))
                     .ok_or_else(|| bad("new_mode"))
             }
             TOGGLE_REVERSE => Ok(GateAct::ToggleReverse),

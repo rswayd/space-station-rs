@@ -1017,8 +1017,10 @@ mod server {
                     .spawn((crate::inventory::CarriedBy(mob), crate::inventory::NoDrop))
                     .id(),
             );
-            let mut inventory = Inventory::default();
-            inventory.hands = [Some(item), Some(kept)];
+            let inventory = Inventory {
+                hands: [Some(item), Some(kept)],
+                ..Default::default()
+            };
             world.entity_mut(mob).insert(inventory);
             let console = world.spawn(CryoConsole::default()).id();
             (world, mob, item, console)

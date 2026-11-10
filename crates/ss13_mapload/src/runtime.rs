@@ -1010,6 +1010,7 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/ectoplasm/revenant",
     // The slaughter demon and its death drops (`ss13_game::antag::slaughter`).
     "/mob/living/basic/demon/slaughter",
+    "/mob/living/basic/demon/slaughter/laughter",
     "/obj/effect/decal/cleanable/blood/innards",
     "/obj/item/organ/heart/demon",
     // The blob's structures and minions (`ss13_game::antag::blob`).

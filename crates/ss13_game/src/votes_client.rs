@@ -53,7 +53,7 @@ fn new_vote_row(option: &VoteEntry, admin: bool, upper: bool) -> impl Scene + us
 fn choice_row(option: &VoteOption, vote: &ActiveVote, user: &VoteUser) -> impl Scene + use<> {
     let label = ss13_shared::capitalize(&option.name);
     let votes = option.votes.map(|v| v.to_string()).unwrap_or_default();
-    let selected = user.selections.iter().any(|s| *s == option.name);
+    let selected = user.selections.contains(&option.name);
     let single = ActParams(vec![(VOTE_OPTION.into(), option.name.clone())]);
     let multi = ActParams(vec![(VOTE_OPTION.into(), option.name.clone())]);
     let blocked = user.is_ghost || (!vote.multi && selected);

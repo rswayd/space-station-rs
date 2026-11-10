@@ -140,6 +140,7 @@ mod tests {
             .0
             .insert((SSD_DMI.to_owned(), SSD_STATE.to_owned()), ZZZ);
         app.insert_resource(icons)
+            .init_resource::<Time>()
             .add_observer(on_logout)
             .add_observer(on_login)
             .add_systems(Update, ssd_overlay);

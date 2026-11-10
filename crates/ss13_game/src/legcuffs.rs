@@ -286,7 +286,7 @@ pub fn spring_trap(
             return;
         }
     }
-    if crate::mobs::pets::mob_size(world, victim) <= MOB_SIZE_TINY {
+    if crate::mobs::pets::mob_size(world, victim) == MOB_SIZE_TINY {
         return;
     }
     if !ignore_movetypes && world.get::<crate::spacemove::Weightless>(victim).is_some() {
