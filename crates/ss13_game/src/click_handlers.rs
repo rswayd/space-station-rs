@@ -420,6 +420,7 @@
 //! | 2710 | `power::lighting::item_interaction` (bulbs, replacers, fixtures, frames, wall frames, floodlights and their frames) |
 //! | 2711 | `silicon::mob_cameras::repair` (cable on a broken bodycam or its jumpsuit) |
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
+//! | 2719 | `records::console::photo_interaction` (a photo on a security records console makes a new record) |
 //! | 2785 | `recycling::held_on_target` (belts, switches, flaps, recyclers, disposal constructs and welding, belt stacks on floors) |
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2820 | `power::apc_ui::toggle_lock` (an ID or a PDA with one on an APC) |

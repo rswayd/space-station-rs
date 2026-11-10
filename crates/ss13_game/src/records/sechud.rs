@@ -10,8 +10,9 @@
 //! minute old, the user still wears a security HUD, is conscious and not the target, can use
 //! it, and the ID in its ID slot has security access; the target's record is found again by its
 //! visible name.
-// shortcut: the medical HUD's part of the block and links (status edits, evaluation, quirks)
-// belong to the medical group; no record photo links (no photo window without an item); no
+//! The medical HUD's part of the block comes from [`super::medhud`]; the title follows the HUDs
+//! worn ("Медицинский и безопасности анализы", "Медицинский анализ", "Анализ безопасности").
+// shortcut: no record photo links (no photo window without an item); no
 // observer HUDs; emagged HUD glasses ("@%&ERROR_%$*" as the author) are not modelled.
 
 use bevy::ecs::message::MessageCursor;
@@ -27,7 +28,7 @@ use crate::health::Stat;
 use crate::tools::tell;
 
 /// The links answer for `examine_time + 1 MINUTES`.
-const LINK_SECS: f64 = 60.0;
+pub(super) const LINK_SECS: f64 = 60.0;
 /// `MAX_MESSAGE_LEN`.
 const MAX_MESSAGE_LEN: usize = 1024;
 /// `tgui_input_number(..., 50, max_fine, 5)`.
@@ -107,7 +108,7 @@ impl Plugin for SecHudPlugin {
 }
 
 /// tg `canUseHUD` (`MOBILITY_USE`): not stunned, paralysed or knocked out.
-fn can_use_hud(world: &World, mob: Entity) -> bool {
+pub(super) fn can_use_hud(world: &World, mob: Entity) -> bool {
     !crate::status_effects::knocked_out(world, mob)
         && !world
             .get::<crate::status_effects::StatusEffects>(mob)
@@ -115,14 +116,14 @@ fn can_use_hud(world: &World, mob: Entity) -> bool {
 }
 
 /// `IS_UNCONSCIOUS_OR_CRIT`.
-fn unconscious_or_crit(world: &World, mob: Entity) -> bool {
+pub(super) fn unconscious_or_crit(world: &World, mob: Entity) -> bool {
     world
         .get::<Stat>(mob)
         .is_some_and(|s| *s != Stat::Conscious)
         || crate::status_effects::knocked_out(world, mob)
 }
 
-fn is_human(world: &World, mob: Entity) -> bool {
+pub(super) fn is_human(world: &World, mob: Entity) -> bool {
     world.get::<crate::human::HumanLook>(mob).is_some()
 }
 
@@ -179,17 +180,18 @@ pub fn check(world: &World, user: Entity, target: Entity) -> Result<(u32, String
     Ok((record, author))
 }
 
-/// `get_hud_examine_info` of `target` for `examiner` with a security HUD: the block, its links
-/// made for `client`. Empty without a security HUD.
+/// `get_hud_examine_info` of `target` for `examiner` with a security or medical HUD: the
+/// block, its links made for `client`. Empty without either HUD.
 pub fn examine_messages(
     world: &mut World,
     client: Entity,
     examiner: Entity,
     target: Entity,
 ) -> Vec<ChatMessage> {
+    let (sec, med) = wearer_huds(world, examiner);
     if examiner == target
         || !is_human(world, target)
-        || !wearer_huds(world, examiner).0
+        || !(sec || med)
         || unconscious_or_crit(world, examiner)
     {
         return Vec::new();
@@ -212,12 +214,22 @@ pub fn examine_messages(
             text,
         )
     };
-    let mut out = vec![line(vec![ChatSegment::new(
-        Span::Bold,
-        "Анализ безопасности",
-    )])];
+    let title = match (med, sec) {
+        (true, true) => "Медицинский и безопасности анализы",
+        (true, false) => "Медицинский анализ",
+        _ => "Анализ безопасности",
+    };
+    let mut out = vec![line(vec![ChatSegment::new(Span::Bold, title)])];
     if let Some(r) = &record {
         out.push(line(vec![plain(format!("Должность: {}", r.rank))]));
+    }
+    if med {
+        for segments in super::medhud::lines(world, client, target, record.as_ref()) {
+            out.push(line(segments));
+        }
+    }
+    if !sec {
+        return out;
     }
     let wanted = record
         .as_ref()

@@ -224,6 +224,49 @@ impl Manifest {
         id
     }
 
+    /// `new /datum/record/crew(name, character_appearance)` of `insert_new_record`: the
+    /// constructor's defaults, the picture as its front photo. Returns its id.
+    pub fn add_from_photo(
+        &mut self,
+        name: &str,
+        picture: std::sync::Arc<crate::service::Picture>,
+    ) -> u32 {
+        let id = self.next_id();
+        self.general.push(CrewRecord {
+            id,
+            age: 18,
+            blood_type: "?".to_owned(),
+            dna_string: "Unknown".to_owned(),
+            fingerprint: "?????".to_owned(),
+            gender: "Other".to_owned(),
+            initial_rank: "Unassigned".to_owned(),
+            name: name.to_owned(),
+            rank: "Unassigned".to_owned(),
+            species: "Human".to_owned(),
+            trim: "Unassigned".to_owned(),
+            voice: String::new(),
+            job: None,
+            lock_ref: 0,
+            citations: Vec::new(),
+            crimes: Vec::new(),
+            major_disabilities: "None".to_owned(),
+            major_disabilities_desc: "No disabilities have been diagnosed at the moment."
+                .to_owned(),
+            minor_disabilities: "None".to_owned(),
+            minor_disabilities_desc: "No disabilities have been diagnosed at the moment."
+                .to_owned(),
+            medical_notes: Vec::new(),
+            physical_status: PHYSICAL_ACTIVE.to_owned(),
+            cause_of_death: String::new(),
+            mental_status: MENTAL_STABLE.to_owned(),
+            quirk_notes: String::new(),
+            security_note: String::new(),
+            wanted_status: WANTED_NONE.to_owned(),
+        });
+        self.photos.insert((id, true), picture);
+        id
+    }
+
     /// `find_record(name)`.
     pub fn find(&self, name: &str) -> Option<&CrewRecord> {
         self.general.iter().find(|r| r.name == name)

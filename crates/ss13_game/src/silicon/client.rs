@@ -4,8 +4,8 @@
 //!   view there (BYOND `client.eye`), and the tiles of the box the camera (or the AI's camera
 //!   network) does not see are drawn as static over everything below the HUD (tg
 //!   `CAMERA_STATIC_PLANE`);
-//! - the camera console window (`CameraConsole220`): the camera list with prev/next and the
-//!   active camera's name;
+//! - the camera console window (`CameraConsole220`): the Map tab (a marker per camera of the
+//!   chosen level), the List tab (search field and rows), prev/next and the active camera's name;
 //! - `ListInputModal` (tg `tgui_input_list`): one button per choice;
 //! - `StationAlertConsole`: a section per alarm type, the alarmed areas, and for the AI each
 //!   area's camera button.
@@ -16,8 +16,7 @@
 //! - `LawRack`: a row per slot (screw, weld, repair, insert or remove, by the tool in hand) and
 //!   the rack's links.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
-// shortcut: the console's camera list has no search field and no nanomap tab; its map pane is
-// the main map view.
+// shortcut: the console's camera view pane is the main map view (no `ByondUi` map in the window).
 // shortcut: the robotics console has no drones tab and its Lockdown button no confirmation.
 // shortcut: the law rack's link menus are inline button lists (tgui `Floating` popups), one
 // screw button per slot instead of two, no AI face display and no tooltips.
@@ -36,7 +35,9 @@ use ss13_render::sprites::tile_translation;
 use ss13_render::{ActiveZ, CameraTarget, RenderSystems};
 use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{TILE_SIZE, TilePos};
-use ss13_tgui::client::{AppTguiClientExt, ClientUi};
+use ss13_tgui::client::{
+    AppTguiClientExt, ClientUi, LocalOnInput, SearchRow, SetLocal, UiLocalState,
+};
 use ss13_tgui::{UiInterface, decode};
 use ss13_ui_kit::prelude::*;
 
@@ -244,11 +245,207 @@ fn draw_static(
 }
 
 impl ClientUi for CameraConsoleUi {
-    const WIDTH: f32 = 300.0;
-    const HEIGHT: f32 = 560.0;
+    const WIDTH: f32 = 560.0;
+    const HEIGHT: f32 = 720.0;
 
     fn content(st: &CameraConsoleStatic, data: &CameraConsoleData) -> impl Scene {
-        console_view(st, data)
+        console_view(st, data, &UiLocalState::default())
+    }
+
+    fn content_local(
+        st: &CameraConsoleStatic,
+        data: &CameraConsoleData,
+        local: &UiLocalState,
+    ) -> impl Scene {
+        console_view(st, data, local)
+    }
+}
+
+/// `CameraContent`'s `useState`: the tab (`Map` by default), the search text, the map level.
+const LOCAL_TAB: &str = "tab";
+const LOCAL_SEARCH: &str = "search";
+const LOCAL_Z: &str = "z";
+/// BYOND `world.maxx` / `maxy` of the station levels; the NanoMap is that square.
+const NANOMAP_TILES: i32 = 255;
+/// Pixels per tile of the NanoMap.
+const NANOMAP_SCALE: f32 = 2.0;
+const NANOMAP_MARKER: f32 = 8.0;
+
+/// tgui `selectCameras`: named cameras matching `search` (`createSearch`: case-insensitive
+/// substring of the name); the list comes sorted by name.
+pub fn select_cameras<'a>(cameras: &'a [CameraEntry], search: &str) -> Vec<&'a CameraEntry> {
+    let search = search.trim().to_lowercase();
+    cameras
+        .iter()
+        .filter(|c| !c.name.is_empty())
+        .filter(|c| search.is_empty() || c.name.to_lowercase().contains(&search))
+        .collect()
+}
+
+/// `mapData.mainFloor` stand-in: the level holding most cameras (the station's), the lowest on
+/// a tie.
+pub fn main_floor(cameras: &[CameraEntry]) -> Option<u16> {
+    let mut counts: Vec<(u16, usize)> = Vec::new();
+    for c in cameras {
+        match counts.iter_mut().find(|(z, _)| *z == c.z) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((c.z, 1)),
+        }
+    }
+    counts.sort_by_key(|&(z, n)| (std::cmp::Reverse(n), z));
+    counts.first().map(|&(z, _)| z)
+}
+
+fn set_local(key: &str, value: String) -> SetLocal {
+    SetLocal {
+        key: key.to_owned(),
+        value,
+        rerender: true,
+    }
+}
+
+/// `CameraListSelector`: the search field and the camera rows, filtered in place as one types.
+fn camera_list(
+    st: &CameraConsoleStatic,
+    active: Option<&ActiveCamera>,
+    local: &UiLocalState,
+) -> impl Scene + use<> {
+    let rows: Vec<_> = select_cameras(&st.cameras, "")
+        .into_iter()
+        .map(|c| {
+            let selected = active.is_some_and(|a| a.cam_ref == c.cam_ref);
+            let name = Name::new(format!("camera: {}", c.name));
+            let params = switch(c.cam_ref.clone());
+            let row = SearchRow {
+                key: LOCAL_SEARCH.to_owned(),
+                text: c.name.to_lowercase(),
+            };
+            bsn! {
+                @ss13_ui_kit::Button {
+                    @content: {c.name.clone()},
+                    @fluid: true,
+                    @ellipsis: true,
+                    @tooltip: {c.name.clone()},
+                }
+                ss13_ui_kit::Button { selected: selected, color: UiColor::Transparent }
+                name
+                row
+                Act({SWITCH_CAMERA.to_owned()})
+                params
+            }
+        })
+        .collect();
+    let value = local.get(LOCAL_SEARCH).to_owned();
+    let placeholder = "Search for a camera".to_owned();
+    let on_input = LocalOnInput(LOCAL_SEARCH.to_owned());
+    bsn! {
+        @Stack { @vertical: true, @fill: true }
+        Children [
+            @StackItem
+            Children [
+                Input {
+                    value: value,
+                    placeholder: placeholder,
+                    fluid: true,
+                    auto_focus: true,
+                }
+                on_input
+            ]
+            --
+            @StackItem { @grow: 1.0 }
+            Node { min_height: px(0) }
+            Children [
+                @Section { @fill: true, @scrollable: true }
+                Children [ {rows} ]
+            ]
+        ]
+    }
+}
+
+/// `CameraMapSelector`: a marker per camera of the chosen level at its coordinates, red when
+/// off, and the level tabs (`NanoMap`'s `onLevelChange`).
+// shortcut: no station map image under the markers (the port has no nanomap images) and no
+// zoom or panning; the level shown first is the one with most cameras, not `mapData.mainFloor`.
+fn camera_map(
+    st: &CameraConsoleStatic,
+    active: Option<&ActiveCamera>,
+    local: &UiLocalState,
+) -> impl Scene + use<> {
+    let cameras = select_cameras(&st.cameras, "");
+    let mut levels: Vec<u16> = cameras.iter().map(|c| c.z).collect();
+    levels.sort_unstable();
+    levels.dedup();
+    let level = local
+        .value(LOCAL_Z)
+        .and_then(|z| z.parse::<u16>().ok())
+        .filter(|z| levels.contains(z))
+        .or_else(|| main_floor(&st.cameras));
+    let tabs: Vec<_> = levels
+        .iter()
+        .map(|&z| {
+            let pick = set_local(LOCAL_Z, z.to_string());
+            let selected = level == Some(z);
+            let label = format!("Уровень {z}");
+            bsn! {
+                @TabsTab { @content: label }
+                TabsTab { selected: selected }
+                pick
+            }
+        })
+        .collect();
+    let markers: Vec<_> = cameras
+        .into_iter()
+        .filter(|c| Some(c.z) == level)
+        .map(|c| {
+            let selected = active.is_some_and(|a| a.cam_ref == c.cam_ref);
+            let color = if c.status {
+                UiColor::Default
+            } else {
+                UiColor::Bad
+            };
+            let x = (c.x.clamp(1, NANOMAP_TILES) - 1) as f32 * NANOMAP_SCALE;
+            let y = (NANOMAP_TILES - c.y.clamp(1, NANOMAP_TILES)) as f32 * NANOMAP_SCALE;
+            let half = NANOMAP_MARKER / 2.0;
+            let name = Name::new(format!("camera marker: {}", c.name));
+            let params = switch(c.cam_ref.clone());
+            bsn! {
+                @ss13_ui_kit::Button { @tooltip: {c.name.clone()}, @compact: true }
+                ss13_ui_kit::Button { selected: selected, color: color }
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: px(x - half),
+                    top: px(y - half),
+                    width: px(NANOMAP_MARKER),
+                    height: px(NANOMAP_MARKER),
+                    min_height: px(NANOMAP_MARKER),
+                    padding: UiRect::ZERO,
+                }
+                name
+                Act({SWITCH_CAMERA.to_owned()})
+                params
+            }
+        })
+        .collect();
+    let side = NANOMAP_TILES as f32 * NANOMAP_SCALE;
+    let backdrop = BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.35));
+    let map_name = Name::new("camera nanomap");
+    bsn! {
+        @Stack { @vertical: true, @fill: true }
+        Children [
+            @StackItem Children [ @Tabs Children [ {tabs} ] ]
+            --
+            @StackItem { @grow: 1.0 }
+            Node { min_height: px(0) }
+            Children [
+                @Section { @fill: true, @scrollable: true }
+                Children [
+                    Node { width: px(side), height: px(side) }
+                    backdrop
+                    map_name
+                    Children [ {markers} ]
+                ]
+            ]
+        ]
     }
 }
 
@@ -279,30 +476,30 @@ fn switch(cam_ref: String) -> ActParams {
     ActParams(vec![("camera".to_owned(), cam_ref)])
 }
 
-fn console_view(st: &CameraConsoleStatic, data: &CameraConsoleData) -> impl Scene + use<> {
+fn console_view(
+    st: &CameraConsoleStatic,
+    data: &CameraConsoleData,
+    local: &UiLocalState,
+) -> impl Scene + use<> {
     let active = data.active_camera.clone();
-    let rows: Vec<_> = st
-        .cameras
-        .iter()
-        .filter(|c| !c.name.is_empty())
-        .map(|c| {
-            let selected = active.as_ref().is_some_and(|a| a.cam_ref == c.cam_ref);
-            let name = Name::new(format!("camera: {}", c.name));
-            let params = switch(c.cam_ref.clone());
-            bsn! {
-                @ss13_ui_kit::Button {
-                    @content: {c.name.clone()},
-                    @fluid: true,
-                    @ellipsis: true,
-                    @tooltip: {c.name.clone()},
-                }
-                ss13_ui_kit::Button { selected: selected, color: UiColor::Transparent }
-                name
-                Act({SWITCH_CAMERA.to_owned()})
-                params
-            }
-        })
-        .collect();
+    let list_tab = local.get(LOCAL_TAB) == "list";
+    let tabs = [
+        ("map", "Карта", "map-marked-alt", !list_tab),
+        ("list", "Список", "table", list_tab),
+    ]
+    .map(|(key, label, icon, selected)| {
+        let pick = set_local(LOCAL_TAB, key.to_owned());
+        bsn! {
+            @TabsTab { @content: label, @icon: icon }
+            TabsTab { selected: selected }
+            pick
+        }
+    });
+    let body: Box<dyn SceneList> = if list_tab {
+        Box::new(EntityScene(camera_list(st, active.as_ref(), local)))
+    } else {
+        Box::new(EntityScene(camera_map(st, active.as_ref(), local)))
+    };
     let notice = match active.as_ref().filter(|a| a.status) {
         Some(a) => {
             let text = a.name.clone();
@@ -312,7 +509,12 @@ fn console_view(st: &CameraConsoleStatic, data: &CameraConsoleData) -> impl Scen
             @NoticeBox { @danger: true } Children [ Text("No input signal") ]
         }),
     };
-    let (prev, next) = prev_next(&st.cameras, active.as_ref()).unzip();
+    // `CameraControls` steps through the cameras the search leaves.
+    let shown: Vec<CameraEntry> = select_cameras(&st.cameras, local.get(LOCAL_SEARCH))
+        .into_iter()
+        .cloned()
+        .collect();
+    let (prev, next) = prev_next(&shown, active.as_ref()).unzip();
     let arrow = |icon: &'static str, target: Option<String>| {
         let disabled = target.is_none();
         let params = switch(target.unwrap_or_default());
@@ -341,12 +543,11 @@ fn console_view(st: &CameraConsoleStatic, data: &CameraConsoleData) -> impl Scen
                     ]
                 ]
                 --
+                @StackItem Children [ @Tabs Children [ {Vec::from(tabs)} ] ]
+                --
                 @StackItem { @grow: 1.0 }
                 Node { min_height: px(0) }
-                Children [
-                    @Section { @fill: true, @scrollable: true }
-                    Children [ {rows} ]
-                ]
+                Children [ {body} ]
             ]
         ]
     }
@@ -921,6 +1122,25 @@ mod tests {
             cam_ref: r.into(),
             ..default()
         }
+    }
+
+    #[test]
+    fn camera_search_and_main_floor() {
+        let mut list = cams(3);
+        list[1].name = "Bridge Hall".into();
+        list[2].z = 3;
+        list.push(CameraEntry { z: 3, ..default() });
+        let found: Vec<&str> = select_cameras(&list, " bridge ")
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(found, ["Bridge Hall"]);
+        // The unnamed camera is never listed.
+        assert_eq!(select_cameras(&list, "").len(), 3);
+        // Level 3 holds two cameras (one unnamed), level 0 two: the lower wins the tie.
+        assert_eq!(main_floor(&list), Some(0));
+        list[0].z = 3;
+        assert_eq!(main_floor(&list), Some(3));
     }
 
     #[test]

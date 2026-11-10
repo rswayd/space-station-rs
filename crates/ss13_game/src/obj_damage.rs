@@ -10,8 +10,8 @@
 //!
 //! Every structure and machine also gets [`Anchored`] (tg `anchored`), which pulling reads; a
 //! dense loose one is [`Pushable`] (`sync_pushable`).
-// shortcut: only windows, grilles, girders, frames, gas machines, vendors and turrets take
-// damage; other
+// shortcut: only windows, grilles, girders, frames, gas machines, vendors, turrets and cameras
+// take damage; other
 // structures and machines (tables, closets, doors) wait for their own
 // `atom_break`/`atom_deconstruct`.
 
@@ -218,7 +218,8 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         || crate::tank_storage::breakable(&obj.path)
         || crate::displaycase::breakable(&obj.path)
         || crate::spawners::breakable(&obj.path)
-        || crate::defenses::server::breakable(&obj.path);
+        || crate::defenses::server::breakable(&obj.path)
+        || is_under(&obj.path, crate::defenses::cameras::CAMERA_ROOT);
     if !breakable {
         return;
     }
@@ -383,6 +384,21 @@ fn apply_damage(
             destroyed: false,
         };
     };
+    // `camera/run_atom_armor`: a broken camera takes the damage as it is.
+    let bare;
+    let obj = if integrity.broken
+        && world
+            .get::<crate::silicon::cameras::Camera>(target)
+            .is_some()
+    {
+        let mut o = obj.clone();
+        o.armor_melee = 0.0;
+        o.damage_deflection = 0.0;
+        bare = o;
+        &bare
+    } else {
+        obj
+    };
     let hit = damage_numbers(obj, &mut integrity, amount, damtype);
     if hit.damage <= 0.0 {
         return hit;
@@ -468,6 +484,7 @@ fn atom_break(world: &mut World, target: Entity, obj: &DmObj) {
     if crate::decor::atom_break(world, target)
         || crate::displaycase::atom_break(world, target)
         || crate::defenses::server::atom_break(world, target)
+        || crate::defenses::cameras::atom_break(world, target)
     {
         return;
     }
@@ -591,6 +608,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         || crate::flora::deconstruct(world, target, &obj)
         || crate::defenses::barricades::deconstruct(world, &obj, pos)
         || crate::chem_machines::separator::deconstruct(world, target, &obj, pos)
+        || (!disassembled && crate::defenses::cameras::destroyed(world, target, pos))
     {
         // A chair's, bed's, bathroom fixture's, decor's or flora's debris is out.
     }

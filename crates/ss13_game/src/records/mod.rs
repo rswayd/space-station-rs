@@ -21,6 +21,8 @@ pub mod hud;
 #[cfg(feature = "server")]
 pub mod manifest;
 #[cfg(feature = "server")]
+pub mod medhud;
+#[cfg(feature = "server")]
 pub mod posters;
 #[cfg(feature = "server")]
 pub mod sechud;
@@ -39,6 +41,7 @@ impl bevy::prelude::Plugin for RecordsServerPlugin {
             hud::DataHudPlugin,
             warrant::WarrantConsolePlugin,
             sechud::SecHudPlugin,
+            medhud::MedHudPlugin,
         ));
     }
 }
@@ -94,14 +97,24 @@ pub struct AgeLimits {
 }
 
 /// `/obj/machinery/computer/records/security/ui_data`; only `authenticated` until a login.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct SecurityRecordsData {
     pub authenticated: bool,
+    /// The character preview (`assigned_view`) of the record the user last viewed
+    /// (`view_record`).
+    pub preview: Option<RecordPreview>,
     pub station_z: bool,
     pub available_statuses: Vec<String>,
     pub current_user: String,
     pub higher_access: bool,
     pub records: Vec<SecurityRecord>,
+}
+
+/// `update_preview`: a record's `character_appearance` (its front photo).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RecordPreview {
+    pub crew_ref: String,
+    pub picture: crate::service::PhotoData,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

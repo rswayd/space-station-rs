@@ -1,8 +1,9 @@
 //! Camera Failure (`code/modules/events/camerafailure.dm`): random cameras of the station
 //! network go dark (tg `toggle_cam(null, 0)`): the first for sure, then each next at
 //! `round(100 / iterations)` percent, `iterations` growing 2.5 times per camera turned off.
-// shortcut: a camera turned off stays off: cameras cannot be toggled back by hand yet
-// (`crate::silicon::cameras`).
+//! A camera turned off goes through `toggle_cam` without a message: its sprite and whoever
+//! looked through it follow, and wirecutters in its open panel bring it back
+//! (`crate::defenses::cameras`).
 
 use bevy::prelude::*;
 
@@ -50,7 +51,7 @@ pub fn fail_cameras(world: &mut World) -> Vec<Entity> {
             continue;
         }
         if cam.enabled {
-            crate::emp::machines::set_camera(world, camera, false);
+            crate::defenses::cameras::toggle_cam(world, camera, None, false);
             off.push(camera);
         }
         iterations *= 2.5;
