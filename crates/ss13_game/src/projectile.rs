@@ -499,6 +499,16 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
             turf = Some(e);
             continue;
         }
+        if crate::defenses::barricades::proj_pass_rate(
+            world.get::<DmObj>(e).map_or("", |o| o.path.as_str()),
+        )
+        .is_some()
+        {
+            if crate::defenses::barricades::stops_projectile(world, e, me, p.firer) {
+                return Some(e);
+            }
+            continue;
+        }
         if !passes(world, e, p.data.pass_flags) {
             return Some(e);
         }

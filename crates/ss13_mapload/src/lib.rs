@@ -126,7 +126,7 @@ pub use power::DmPower;
 pub use puzzle::DmPuzzle;
 pub use radio::DmRadio;
 pub use reagents::DmReagents;
-pub use security::{DmBaton, DmHandcuffs};
+pub use security::{DmBaton, DmHandcuffs, DmLegcuffs};
 pub use service::DmService;
 pub use silicon::{DmAiSlipper, DmCamera, DmCameraConsole};
 pub use smartfridge::DmSmartFridge;
@@ -379,6 +379,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmBaton>("dm_baton")
             .register_proto_component::<DmMelee>(melee::MELEE_COMPONENT)
             .register_proto_component::<DmHandcuffs>("dm_handcuffs")
+            .register_proto_component::<DmLegcuffs>("dm_legcuffs")
             .register_proto_component::<DmGun>("dm_gun")
             .register_proto_component::<DmMagazine>("dm_magazine")
             .register_proto_component::<DmCasing>("dm_casing")

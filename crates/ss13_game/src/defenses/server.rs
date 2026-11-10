@@ -24,7 +24,7 @@
 //!   a silicon toggles the lock from the window; locked, only silicons change it. An emag
 //!   unlocks it for good; an EMP may scramble it.
 // The windows' settings are refused on the server while locked (tg only greys the buttons out).
-// shortcut: no turret construction, wrenching, crowbar salvage, damage or breaking (the
+// shortcut: no wrenching, crowbar salvage, damage or breaking (the
 // `_REACT` anger on damage, the broken sprite), wall turrets shooting from the next tile,
 // manual (AI) control, mechs and blobs as targets, power drawn per shot; the cover is the
 // turret's own sprite (`turretCover` / `openTurretCover` under the gun) without the pop-up
@@ -119,6 +119,10 @@ impl Plugin for DefensesPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 3300, |w, c| {
             crate::defenses::server::interact(w, c.client, c.mob, c.target)
         });
+        // A turret frame: the gun or the sensor back out.
+        app.add_click_handler(ClickPhase::EmptyHand, 3305, |w, c| {
+            super::turret_build::attack_hand(w, c.client, c.target)
+        });
         // Turrets, the turret control panel and cameras: IDs, tools, assemblies.
         app.add_click_handler(ClickPhase::HeldOnTarget, 800, |w, c| {
             c.held.is_some_and(|h| {
@@ -132,6 +136,19 @@ impl Plugin for DefensesPlugin {
                 )
             })
         });
+        // A turret frame's parts and tools.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 805, |w, c| {
+            c.held.is_some_and(|h| {
+                super::turret_build::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        // A barricade's welder and crowbar, planks on doors and full-tile windows.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 815, |w, c| {
+            c.held.is_some_and(|h| {
+                super::barricades::item_interaction(w, c.client, c.mob, h, c.target)
+            })
+        });
+        app.add_plugins(super::scanner_gate::ScannerGatePlugin);
         app.register_ui::<TurretWindow>()
             .register_ui::<TurretControlWindow>()
             .add_systems(ss13_world::MapInitLate, (init_turrets, init_panels).chain())
@@ -170,34 +187,42 @@ fn faction_of(path: &str) -> Vec<String> {
 use crate::tools::now;
 
 fn init_turrets(world: &mut World) {
-    let mut query = world.query_filtered::<(Entity, &DmTurret), With<ss13_world::Mapped>>();
-    let turrets: Vec<(Entity, DmTurret)> =
-        query.iter(world).map(|(e, dm)| (e, dm.clone())).collect();
+    let mut query = world.query_filtered::<Entity, (With<DmTurret>, With<ss13_world::Mapped>)>();
+    let turrets: Vec<Entity> = query.iter(world).collect();
     info!("{} turrets", turrets.len());
-    for (i, (e, dm)) in turrets.into_iter().enumerate() {
-        let up = !dm.has_cover || dm.always_up;
-        world.entity_mut(e).insert((
-            Turret {
-                on: true,
-                lethal: dm.lethal_mode,
-                raised: up,
-                raising: None,
-                locked: true,
-                controllock: false,
-                emagged: false,
-                flags: dm.turret_flags,
-                last_fired: f64::NEG_INFINITY,
-                disabled_until: 0.0,
-                restart_at: None,
-                // Spread over the period: not every turret on the same tick.
-                next_process: (i % 20) as f64 * PROCESS_SECS / 20.0,
-            },
-            Faction(faction_of(&dm.path)),
-            // Map load skips it (`invisibility` while under its cover): the cover is its sprite.
-            Networked,
-        ));
-        refresh_look(world, e);
+    for (i, e) in turrets.into_iter().enumerate() {
+        // Spread over the period: not every turret on the same tick.
+        setup_turret(world, e, (i % 20) as f64 * PROCESS_SECS / 20.0);
     }
+}
+
+/// `/obj/machinery/porta_turret/Initialize`: its state from its type data (map load, or a turret
+/// built from a frame).
+pub fn setup_turret(world: &mut World, e: Entity, next_process: f64) {
+    let Some(dm) = world.get::<DmTurret>(e).cloned() else {
+        return;
+    };
+    let up = !dm.has_cover || dm.always_up;
+    world.entity_mut(e).insert((
+        Turret {
+            on: true,
+            lethal: dm.lethal_mode,
+            raised: up,
+            raising: None,
+            locked: true,
+            controllock: false,
+            emagged: false,
+            flags: dm.turret_flags,
+            last_fired: f64::NEG_INFINITY,
+            disabled_until: 0.0,
+            restart_at: None,
+            next_process,
+        },
+        Faction(faction_of(&dm.path)),
+        // Map load skips it (`invisibility` while under its cover): the cover is its sprite.
+        Networked,
+    ));
+    refresh_look(world, e);
 }
 
 fn init_panels(world: &mut World) {
@@ -684,8 +709,15 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
 
 fn open(world: &mut World, client: Entity, user: Entity, target: Entity) -> bool {
     if world.get::<Unpowered>(target).is_some()
-        && (world.get::<Turret>(target).is_some() || world.get::<TurretControl>(target).is_some())
+        && (world.get::<Turret>(target).is_some()
+            || world.get::<TurretControl>(target).is_some()
+            || world
+                .get::<super::scanner_gate::ScannerGate>(target)
+                .is_some())
     {
+        return true;
+    }
+    if super::scanner_gate::open(world, client, user, target) {
         return true;
     }
     if world.get::<Turret>(target).is_some() {
@@ -724,6 +756,9 @@ pub fn item_interaction(
     modifiers: ss13_shared::protocol::ClickModifiers,
 ) -> bool {
     if super::cameras::item_interaction(world, client, mob, held, target, modifiers) {
+        return true;
+    }
+    if super::scanner_gate::item_interaction(world, client, mob, held, target) {
         return true;
     }
     let turret = world.get::<Turret>(target).is_some();

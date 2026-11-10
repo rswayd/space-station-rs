@@ -5,11 +5,17 @@
 //! the windows.
 
 #[cfg(feature = "server")]
+pub mod barricades;
+#[cfg(feature = "server")]
 pub mod cameras;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod scanner_gate;
+#[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "server")]
+pub mod turret_build;
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
@@ -58,6 +64,86 @@ pub struct PortableTurretData {
     pub silicon_user: bool,
     pub lasertag_turret: bool,
 }
+
+/// tgui `ScannerGate` (`tgui/packages/tgui/interfaces/ScannerGate.jsx`).
+pub struct ScannerGateUi;
+
+impl UiInterface for ScannerGateUi {
+    const NAME: &'static str = "ScannerGate";
+    type Data = ScannerGateData;
+    type StaticData = ScannerGateStatic;
+}
+
+/// `/obj/machinery/scanner_gate/ui_static_data`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScannerGateStatic {
+    pub available_species: Vec<GateSpecies>,
+}
+
+/// One entry of `available_species`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct GateSpecies {
+    pub specie_name: String,
+    pub specie_id: String,
+}
+
+/// `/obj/machinery/scanner_gate/ui_data`.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScannerGateData {
+    pub locked: bool,
+    pub scan_mode: String,
+    pub reverse: bool,
+    pub disease_threshold: String,
+    pub target_species_id: String,
+    pub target_nutrition: u32,
+    pub target_zombie: bool,
+}
+
+/// `SCANGATE_*` (the window's route names).
+pub const MODE_OFF: &str = "Off";
+pub const MODE_WANTED: &str = "Wanted";
+pub const MODE_GUNS: &str = "Guns";
+pub const MODE_MINDSHIELD: &str = "Mindshield";
+pub const MODE_DISEASE: &str = "Disease";
+pub const MODE_SPECIES: &str = "Species";
+pub const MODE_NUTRITION: &str = "Nutrition";
+pub const GATE_MODES: [&str; 7] = [
+    MODE_OFF,
+    MODE_WANTED,
+    MODE_GUNS,
+    MODE_MINDSHIELD,
+    MODE_DISEASE,
+    MODE_SPECIES,
+    MODE_NUTRITION,
+];
+/// `NUTRITION_LEVEL_STARVING`, `NUTRITION_LEVEL_FAT`.
+pub const NUTRITION_STARVING: u32 = 150;
+pub const NUTRITION_FAT: u32 = 600;
+/// The `nutrition_modes` params.
+pub const STARVING: &str = "Starving";
+pub const OBESE: &str = "Obese";
+
+/// `ScannerGate` acts and their params.
+pub const SET_MODE: &str = "set_mode";
+pub const NEW_MODE: &str = "new_mode";
+pub const TOGGLE_REVERSE: &str = "toggle_reverse";
+pub const TOGGLE_LOCK: &str = "toggle_lock";
+pub const SET_THRESHOLD: &str = "set_disease_threshold";
+pub const NEW_THRESHOLD: &str = "new_threshold";
+pub const SET_SPECIES: &str = "set_target_species";
+pub const NEW_SPECIES_ID: &str = "new_species_id";
+pub const SET_NUTRITION: &str = "set_target_nutrition";
+pub const NEW_NUTRITION: &str = "new_nutrition";
+/// The thresholds offered, BandaStation's severity names (`DISEASE_SEVERITY_*`).
+pub const GATE_THRESHOLDS: [&str; 7] = [
+    "Положительная",
+    "Безопасная",
+    "Незначительная",
+    "Средняя",
+    "Вредоносная",
+    "Опасная",
+    "БИООПАСНОСТЬ",
+];
 
 /// `TurretControl` acts.
 pub const LOCK: &str = "lock";

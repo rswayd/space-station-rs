@@ -4,8 +4,8 @@
 
 use bevy::scene::EntityScene;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi};
-use ss13_ui_kit::UiColor;
 use ss13_ui_kit::prelude::*;
+use ss13_ui_kit::{ActParams, UiColor};
 
 use super::*;
 
@@ -14,7 +14,8 @@ pub struct DefensesClientPlugin;
 impl Plugin for DefensesClientPlugin {
     fn build(&self, app: &mut App) {
         app.register_ui_view::<TurretControlUi>()
-            .register_ui_view::<PortableTurretUi>();
+            .register_ui_view::<PortableTurretUi>()
+            .register_ui_view::<ScannerGateUi>();
     }
 }
 
@@ -215,6 +216,184 @@ impl ClientUi for PortableTurretUi {
                 --
                 @Section { @title: "Настройки целей" }
                 Children [ @Stack { @vertical: true } Children [ {targets} ] ]
+            ]
+        }
+    }
+}
+
+/// One `Button` with a param of the act.
+fn param_button(
+    text: String,
+    selected: bool,
+    act: &'static str,
+    key: &'static str,
+    value: String,
+) -> Box<dyn SceneList> {
+    let params = ActParams(vec![(key.to_owned(), value)]);
+    Box::new(EntityScene(bsn! {
+        Node { margin: UiRect::right(px(2)) }
+        Children [
+            @Button { @content: text }
+            Button { selected: selected }
+            Act(act)
+            params
+        ]
+    }))
+}
+
+/// `ScannerGateMode`: the direction of the check.
+fn gate_mode_row(reverse: bool) -> Box<dyn SceneList> {
+    let (text, icon, color) = if reverse {
+        ("Инвертирован", "random", UiColor::Bad)
+    } else {
+        ("Обычный", "long-arrow-alt-right", UiColor::Good)
+    };
+    Box::new(EntityScene(bsn! {
+        @LabeledList
+        Children [
+            @LabeledListItem { @label: "Режим сканирования" }
+            Children [
+                @Button { @icon: icon, @content: text }
+                Button { color: color }
+                Act(TOGGLE_REVERSE)
+            ]
+        ]
+    }))
+}
+
+/// The mode list of `ScannerGateOff` (the BandaStation labels of the routes).
+const GATE_MODE_LABELS: [(&str, &str); 6] = [
+    (MODE_WANTED, "Розыск"),
+    (MODE_GUNS, "Оружие"),
+    (MODE_MINDSHIELD, "Защита разума"),
+    (MODE_DISEASE, "Болезни"),
+    (MODE_SPECIES, "Вид"),
+    (MODE_NUTRITION, "Питание"),
+];
+
+/// The route's description and its controls (`SCANNER_GATE_ROUTES`).
+fn gate_controls(
+    statics: &ScannerGateStatic,
+    data: &ScannerGateData,
+) -> (String, Vec<Box<dyn SceneList>>) {
+    let verb = if data.reverse { "не " } else { "" };
+    let has = if data.reverse {
+        "не имеет"
+    } else {
+        "имеет"
+    };
+    let mut controls: Vec<Box<dyn SceneList>> = Vec::new();
+    let text = match data.scan_mode.as_str() {
+        MODE_WANTED => format!("Срабатывает, если сканируемый {has} ордеров на арест."),
+        MODE_GUNS => format!("Срабатывает, если сканируемый {has} оружие."),
+        MODE_MINDSHIELD => format!("Срабатывает, если сканируемый {has} защиту разума."),
+        MODE_DISEASE => {
+            for threshold in GATE_THRESHOLDS {
+                controls.push(param_button(
+                    threshold.to_owned(),
+                    threshold == data.disease_threshold,
+                    SET_THRESHOLD,
+                    NEW_THRESHOLD,
+                    threshold.to_owned(),
+                ));
+            }
+            format!(
+                "Срабатывает, если сканируемый {has} болезнь уровня «{}» или хуже.",
+                data.disease_threshold
+            )
+        }
+        MODE_SPECIES => {
+            for species in &statics.available_species {
+                controls.push(param_button(
+                    species.specie_name.clone(),
+                    species.specie_id == data.target_species_id,
+                    SET_SPECIES,
+                    NEW_SPECIES_ID,
+                    species.specie_id.clone(),
+                ));
+            }
+            let name = statics
+                .available_species
+                .iter()
+                .find(|s| s.specie_id == data.target_species_id)
+                .map_or("", |s| s.specie_name.as_str());
+            let zombie = if data.target_zombie {
+                " Распознаются все типы зомби, включая спящих."
+            } else {
+                ""
+            };
+            format!("Срабатывает, если сканируемый {verb}относится к виду «{name}».{zombie}")
+        }
+        MODE_NUTRITION => {
+            let levels = [
+                (NUTRITION_STARVING, STARVING, "Голодание"),
+                (NUTRITION_FAT, OBESE, "Ожирение"),
+            ];
+            for (level, param, label) in levels {
+                controls.push(param_button(
+                    label.to_owned(),
+                    level == data.target_nutrition,
+                    SET_NUTRITION,
+                    NEW_NUTRITION,
+                    param.to_owned(),
+                ));
+            }
+            let current = if data.target_nutrition == NUTRITION_FAT {
+                "ожирение"
+            } else {
+                "голодание"
+            };
+            format!("Срабатывает, если сканируемый {has} уровень питания «{current}».")
+        }
+        _ => "Выберите режим сканирования.".to_owned(),
+    };
+    (text, controls)
+}
+
+impl ClientUi for ScannerGateUi {
+    const WIDTH: f32 = 400.0;
+    const HEIGHT: f32 = 300.0;
+
+    fn content(statics: &ScannerGateStatic, data: &ScannerGateData) -> impl Scene {
+        let notice = vec![lock_notice(false, data.locked)];
+        let (text, controls) = gate_controls(statics, data);
+        let title = format!("Режим сканера: {}", data.scan_mode);
+        let off = data.scan_mode == MODE_OFF;
+        let modes: Vec<Box<dyn SceneList>> = if off {
+            GATE_MODE_LABELS
+                .iter()
+                .map(|&(mode, label)| {
+                    param_button(label.to_owned(), false, SET_MODE, NEW_MODE, mode.to_owned())
+                })
+                .collect()
+        } else {
+            vec![
+                param_button(
+                    "Назад".to_owned(),
+                    false,
+                    SET_MODE,
+                    NEW_MODE,
+                    MODE_OFF.to_owned(),
+                ),
+                gate_mode_row(data.reverse),
+            ]
+        };
+        bsn! {
+            @WindowContent
+            Children [
+                {notice}
+                --
+                @Section { @title: title }
+                Children [
+                    @Stack { @vertical: true }
+                    Children [
+                        @StackItem Children [ Text(text) ]
+                        --
+                        @StackItem Children [ {controls} ]
+                        --
+                        @StackItem Children [ {modes} ]
+                    ]
+                ]
             ]
         }
     }

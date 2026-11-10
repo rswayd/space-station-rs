@@ -73,6 +73,13 @@ const TYPES: &str = r##"{
         "used": 0 } },
     "/obj/item/restraints/handcuffs/fake": { "parent": "/obj/item/restraints/handcuffs",
         "declared_vars": { "name": "fake handcuffs", "breakouttime": 10 } },
+    "/obj/item/restraints/legcuffs": { "parent": "/obj/item/restraints", "declared_vars": {
+        "name": "leg cuffs", "icon_state": "handcuff", "slowdown": 7, "breakouttime": 10,
+        "armed": 0, "trap_damage": 0, "knockdown": 0 } },
+    "/obj/item/restraints/legcuffs/beartrap": { "parent": "/obj/item/restraints/legcuffs",
+        "declared_vars": { "name": "bear trap", "icon_state": "beartrap", "trap_damage": 20 } },
+    "/obj/item/restraints/legcuffs/beartrap/prearmed": {
+        "parent": "/obj/item/restraints/legcuffs/beartrap", "declared_vars": { "armed": 1 } },
     "/obj/item/assembly": { "parent": "/obj/item" },
     "/obj/item/assembly/flash": { "parent": "/obj/item/assembly", "declared_vars": {
         "name": "flash", "icon_state": "flash" } },
@@ -118,6 +125,7 @@ const PREFABS: &str = r##""w" = (/turf/closed/wall,/area/space)
 "k" = (/obj/item/restraints/handcuffs/fake,/turf/open/floor,/area/space)
 "l" = (/obj/item/assembly/flash/handheld,/turf/open/floor,/area/space)
 "g" = (/obj/item/clothing/glasses/sunglasses,/turf/open/floor,/area/space)
+"j" = (/obj/item/restraints/legcuffs/beartrap/prearmed,/turf/open/floor,/area/space)
 "##;
 
 /// Rows top-down, the last line is y = 1: A at (3,3), B at (3,4); a loaded stun baton (4,3),
@@ -145,7 +153,19 @@ wwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 10] = [
+/// A player at (3,3) next to an armed bear trap (4,3).
+const TRAP_MAP: &str = r##"
+(1,1,1) = {"
+wwwwwwww
+wffffffw
+wfsffffw
+wfsjfffw
+wffffffw
+wwwwwwww
+"}
+"##;
+
+const STATES: [(&str, &str); 14] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -156,6 +176,10 @@ const STATES: [(&str, &str); 10] = [
     ("i.dmi", "flash"),
     ("i.dmi", "sun"),
     ("icons/mob/simple/mob.dmi", "handcuff1"),
+    ("i.dmi", "beartrap"),
+    ("i.dmi", "beartrap0"),
+    ("i.dmi", "beartrap1"),
+    ("icons/mob/simple/mob.dmi", "legcuff"),
 ];
 
 fn fixture_assets(test: &str, map: &str) -> PathBuf {
@@ -167,6 +191,7 @@ fn fixture_assets(test: &str, map: &str) -> PathBuf {
         "/obj/item/melee/baton/security/loaded",
         "/obj/item/restraints/handcuffs",
         "/obj/item/restraints/handcuffs/fake",
+        "/obj/item/restraints/legcuffs/beartrap/prearmed",
         "/obj/item/assembly/flash/handheld",
         "/obj/item/clothing/glasses/sunglasses",
         "/turf/open/floor",
@@ -593,4 +618,33 @@ fn flash_and_shove() {
     s.run_until("C is pushed away", |s| s.pos_of(c) == TilePos::new(5, 5, 1));
     assert!(s.effects(c).staggered > 0.0);
     s.run_until("C reads the shove", |s| s.said(pc, "толкает вас"));
+}
+
+/// tg `spring_trap`, `ITEM_SLOT_LEGCUFFED`, resisting: stepping on an armed bear trap bites a
+/// leg and legcuffs; the slowdown holds until the victim resists out.
+#[test]
+fn bear_trap_bites_legcuffs_and_resists_out() {
+    let mut s = Station::start("bear_trap_bites_legcuffs_and_resists_out", TRAP_MAP, 2);
+    let a = s.players[0].mob;
+    assert_eq!(s.pos_of(a), TilePos::new(3, 3, 1));
+    let trap = s.item_at(TilePos::new(4, 3, 1));
+    assert!(s.get::<ss13_mapload::DmLegcuffs>(trap).armed);
+
+    s.step_once(0, Dir::East);
+    s.run_until("the trap snaps shut", |s| {
+        s.try_get::<ss13_game::legcuffs::Legcuffed>(a).is_some()
+    });
+    assert_eq!(s.get::<ss13_game::legcuffs::Legcuffed>(a).0, trap);
+    assert!(!s.get::<ss13_mapload::DmLegcuffs>(trap).armed);
+    assert_eq!(s.get::<ss13_game::health::Health>(a).brute, 20.0);
+    s.run_until("the slowdown applies", |s| {
+        s.try_get::<ss13_game::clothing::slowdown::EquipmentSlowdown>(a)
+            .is_some_and(|d| d.0 == 7.0)
+    });
+
+    s.send(0, ClientIntent::Resist);
+    s.run_until_for(5.0, "A is free", |s| {
+        s.try_get::<ss13_game::legcuffs::Legcuffed>(a).is_none()
+    });
+    assert_eq!(s.pos_of(trap), s.pos_of(a), "the trap falls at A's feet");
 }

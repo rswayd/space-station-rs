@@ -1452,12 +1452,26 @@ pub const BITRUNNING_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/toy/plush/hampter/ert",
 ];
 
+/// Security defenses (`ss13_game::legcuffs`, `ss13_game::defenses`): what an energy bola snares
+/// with, what a frame and a barrier grenade build, and a barricade's debris.
+pub const SECDEF_RUNTIME_TYPES: &[&str] = &[
+    "/obj/item/restraints/legcuffs/beartrap/energy/cyborg",
+    "/obj/machinery/porta_turret",
+    "/obj/machinery/porta_turret/lasertag/red",
+    "/obj/machinery/porta_turret/lasertag/blue",
+    "/obj/item/assembly/prox_sensor",
+    "/obj/structure/barricade/security",
+    "/obj/structure/barricade/wooden/crude",
+    "/obj/item/stack/sheet/mineral/wood",
+    "/obj/item/stack/sheet/iron",
+];
+
 /// Every DM type the game spawns by a constant path: the tables above and every
 /// `*_RUNTIME_TYPES` table of this crate. `ss13-mapload convert` emits all of them.
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 31] = [
+    let tables: [&[&'static str]; 32] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -1491,6 +1505,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         EXPLORATION_RUNTIME_TYPES,
         BITRUNNING_RUNTIME_TYPES,
         GIFT_TYPES,
+        SECDEF_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
     // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).

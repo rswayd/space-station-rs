@@ -74,12 +74,18 @@ fn refresh(
         Has<crate::spacemove::Weightless>,
         Option<&EquipmentSlowdown>,
         Option<&crate::jetpack::GasJetpack>,
+        Option<&crate::legcuffs::Legcuffed>,
     )>,
     items: Query<&DmItem>,
     mut commands: Commands,
 ) {
-    for (mob, inventory, floating, old, jetpack) in &mobs {
+    for (mob, inventory, floating, old, jetpack, legcuffed) in &mobs {
         let mut new = equipment_slowdown(inventory, |e| items.get(e).ok(), floating);
+        // `legcuffed` counts as worn (`get_equipped_speed_mod_items`); floating drops it like the
+        // rest of the non-immutable sum.
+        if !floating && let Some(cuffs) = legcuffed.and_then(|l| items.get(l.0).ok()) {
+            new += cuffs.slowdown;
+        }
         if floating {
             new += crate::jetpack::speed_modifier(jetpack);
         }

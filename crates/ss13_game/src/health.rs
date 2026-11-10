@@ -583,6 +583,7 @@ pub fn gib(world: &mut World, mob: Entity) {
     if let Some(cuffs) = world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0) {
         crate::inventory::put_down(world, cuffs, pos);
     }
+    crate::legcuffs::remove(world, mob, pos);
     let gibs = if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
         crate::effects::gibs::Gibspawner::Human
     } else {
@@ -615,6 +616,7 @@ pub fn dust(world: &mut World, mob: Entity) {
         .map(|inv| ALL_SLOTS.iter().filter_map(|&s| inv.slot(s)).collect())
         .unwrap_or_default();
     carried.extend(world.get::<crate::restraints::Handcuffed>(mob).map(|h| h.0));
+    carried.extend(world.get::<crate::legcuffs::Legcuffed>(mob).map(|l| l.0));
     let remains = if world.get::<crate::medical::wounds::Limbs>(mob).is_some() {
         "/obj/effect/decal/remains/human"
     } else {

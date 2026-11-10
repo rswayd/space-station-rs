@@ -209,6 +209,7 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         VENDING,
         crate::holosign::HOLOSIGN,
         crate::flora::FLORA,
+        crate::defenses::barricades::BARRICADE,
     ]
     .iter()
     .any(|root| is_under(&obj.path, root))
@@ -562,6 +563,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         || crate::tank_storage::deconstruct(world, target, &obj, pos)
         || crate::displaycase::deconstruct(world, target, &obj, pos, disassembled)
         || crate::flora::deconstruct(world, target, &obj)
+        || crate::defenses::barricades::deconstruct(world, &obj, pos)
     {
         // A chair's, bed's, bathroom fixture's, decor's or flora's debris is out.
     }

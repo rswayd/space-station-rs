@@ -278,6 +278,10 @@ pub fn drop_limb(world: &mut World, mob: Entity, zone: BodyZone) -> Option<Entit
     limb.missing = true;
     limb.surgery = state::SKIN_OPEN;
     world.entity_mut(mob).insert(limbs);
+    // `dropItemToGround(legcuffed, force = TRUE)` of a removed leg.
+    if matches!(zone, BodyZone::LLeg | BodyZone::RLeg) {
+        crate::legcuffs::remove(world, mob, pos);
+    }
     let mut damage = Limb::default();
     if let Some(mut health) = world.get::<Health>(mob).cloned() {
         let part = health.part(zone);

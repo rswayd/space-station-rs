@@ -52,6 +52,7 @@ const CONCUSSION: &str = "/obj/item/grenade/syndieminibomb/concussion";
 const FRAG: &str = "/obj/item/grenade/frag";
 const FRAG_MEGA: &str = "/obj/item/grenade/frag/mega";
 const CLUSTER: &str = "/obj/item/grenade/clusterbuster";
+const BARRIER: &str = "/obj/item/grenade/barrier";
 const CLUSTER_SEGMENT: &str = ss13_mapload::runtime::CLUSTERBUSTER_SEGMENT;
 const SHRAPNEL: &str = ss13_mapload::runtime::SHRAPNEL;
 const SHRAPNEL_MEGA: &str = ss13_mapload::runtime::SHRAPNEL_MEGA;
@@ -108,6 +109,8 @@ pub enum Kind {
     },
     /// The chemical grenade casing (`crate::assemblies::chem_grenade`): its beakers mix.
     Chem,
+    /// `/obj/item/grenade/barrier` (`crate::defenses::barricades`).
+    Barrier,
 }
 
 /// A grenade's state (tg vars of `/obj/item/grenade`).
@@ -198,6 +201,8 @@ pub fn kind_of(path: &str) -> Option<(Kind, &'static [f64])> {
         explosive([0, 1, 3, 4], 12, true)
     } else if is_under(path, FRAG) {
         explosive([0, 1, 3, 4], 4, false)
+    } else if is_under(path, BARRIER) {
+        Kind::Barrier
     } else if is_under(path, CLUSTER) {
         let segment = is_under(path, CLUSTER_SEGMENT);
         let payload = match path.strip_prefix(CLUSTER).unwrap_or("") {
@@ -393,6 +398,11 @@ pub fn detonate(world: &mut World, item: Entity) -> bool {
                 );
             }
         }
+        Kind::Barrier => {
+            if let Some(pos) = crate::explosions::turf_of(world, item) {
+                crate::defenses::barricades::deploy(world, item, pos);
+            }
+        }
         Kind::Cluster { payload, segment } => cluster(world, item, &payload, segment),
         // The casing stays (a screwdriver resets its trigger).
         Kind::Chem => {
@@ -413,6 +423,13 @@ pub fn on_destroyed(world: &mut World, item: Entity) {
         return;
     }
     detonate(world, item);
+}
+
+/// Whether `item` is a barrier grenade.
+pub fn is_barrier(world: &World, item: Entity) -> bool {
+    world
+        .get::<DmItem>(item)
+        .is_some_and(|i| is_under(&i.path, BARRIER))
 }
 
 /// tg `update_mob`: a grenade in a mob's hands falls to its feet.
@@ -875,6 +892,9 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
         "It is set for instant detonation.".to_owned()
     };
     lines.push((Span::Plain, line));
+    if is_barrier(world, target) {
+        lines.push((Span::Notice, "Alt-клик — переключить режим.".to_owned()));
+    }
     if world.get::<Grenade>(target).is_some_and(|g| g.used) {
         lines.push((
             Span::Warning,

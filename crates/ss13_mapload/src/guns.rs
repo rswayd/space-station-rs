@@ -575,6 +575,25 @@ pub struct DmTurret {
     pub team_color: String,
 }
 
+/// `/obj/item/gun/get_turret_properties` -> `setup(gun)`: the turret shoots what the gun shoots
+/// (an energy gun's first and second shots, a ballistic gun's casing). Lasertag guns are handled
+/// by the caller (their team presets).
+pub fn install_gun(t: &mut DmTurret, g: &DmGun) {
+    t.base_icon_state = "standard".to_owned();
+    let shots: Vec<CasingData> = if g.energy {
+        g.shots.clone()
+    } else if g.ballistic {
+        t.base_icon_state = "syndie".to_owned();
+        vec![g.magazine.ammo.clone()]
+    } else {
+        Vec::new()
+    };
+    let first = shots.first().cloned().unwrap_or_default();
+    let second = shots.get(1).cloned().unwrap_or_else(|| first.clone());
+    (t.stun, t.stun_sound) = (first.projectile, first.fire_sound);
+    (t.lethal, t.lethal_sound) = (second.projectile, second.fire_sound);
+}
+
 /// [`DmTurret`] of `path`.
 pub fn turret(types: &DmTypes, path: &str) -> DmTurret {
     let n = |var| num(types, path, var);
@@ -609,21 +628,8 @@ pub fn turret(types: &DmTypes, path: &str) -> DmTurret {
     if installation.is_empty() {
         return t;
     }
-    // `/obj/item/gun/get_turret_properties`.
-    t.base_icon_state = "standard".to_owned();
     let g = gun(types, &installation);
-    let shots: Vec<CasingData> = if g.energy {
-        g.shots.clone()
-    } else if g.ballistic {
-        t.base_icon_state = "syndie".to_owned();
-        vec![g.magazine.ammo.clone()]
-    } else {
-        Vec::new()
-    };
-    let first = shots.first().cloned().unwrap_or_default();
-    let second = shots.get(1).cloned().unwrap_or_else(|| first.clone());
-    (t.stun, t.stun_sound) = (first.projectile, first.fire_sound);
-    (t.lethal, t.lethal_sound) = (second.projectile, second.fire_sound);
+    install_gun(&mut t, &g);
     for (gun_path, team, beam) in [
         (
             LASERTAG_BLUE,

@@ -236,6 +236,7 @@ fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity) -> 
         || crate::mobs::lavaland::minebot::click_alt(world, mob, target)
         || crate::modpc::pda::alt_click(world, mob, target)
         || crate::icecream::click_alt(world, client, mob, target)
+        || crate::defenses::barricades::toggle_barrier(world, client, target)
         || crate::furniture::click_alt(world, client, mob, target)
         || crate::plumbing::click_alt(world, target)
         || crate::recycling::click_alt(world, client, mob, target)

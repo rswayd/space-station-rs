@@ -425,6 +425,8 @@ pub mod language_menu;
 pub mod language_menu_client;
 #[cfg(feature = "server")]
 pub mod lava;
+#[cfg(feature = "server")]
+pub mod legcuffs;
 pub mod lobby;
 #[cfg(feature = "client")]
 pub mod lobby_client;

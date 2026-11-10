@@ -83,6 +83,7 @@ pub enum MachineWires {
     WireBundle,
     /// A gizmo's cryptic wires (`crate::science::gizmo`).
     Gizmo,
+    ScannerGate,
 }
 
 impl MachineWires {
@@ -136,6 +137,16 @@ impl MachineWires {
                 crate::power::accumulator::TESLA_COIL_ROOT,
                 "Tesla Coil",
                 &[WIRE_ZAP],
+                0,
+            ),
+            Self::ScannerGate => (
+                crate::defenses::scanner_gate::SCANNER_GATE,
+                "Scanner Gate",
+                &[
+                    crate::defenses::scanner_gate::WIRE_ACCEPT,
+                    crate::defenses::scanner_gate::WIRE_DENY,
+                    wires::WIRE_DISABLE,
+                ],
                 0,
             ),
             _ => return crate::device_wires::set(self),
@@ -224,6 +235,7 @@ type NewMachines = (
         Added<ShieldWallGen>,
         Added<MassDriver>,
         Added<Accumulator>,
+        Added<crate::defenses::scanner_gate::ScannerGate>,
     )>,
 );
 
@@ -240,12 +252,13 @@ fn attach_wires(
             Has<ShieldWallGen>,
             Has<MassDriver>,
             Option<&Accumulator>,
+            Has<crate::defenses::scanner_gate::ScannerGate>,
         ),
         NewMachines,
     >,
     mut commands: Commands,
 ) {
-    for (e, air, fire, atmos_shield, emitter, wall, driver, accumulator) in &new {
+    for (e, air, fire, atmos_shield, emitter, wall, driver, accumulator, gate) in &new {
         let coil = accumulator.is_some_and(|a| matches!(a.kind, AccumulatorKind::TeslaCoil { .. }));
         let kind = if air {
             MachineWires::AirAlarm
@@ -261,6 +274,8 @@ fn attach_wires(
             MachineWires::MassDriver
         } else if coil {
             MachineWires::TeslaCoil
+        } else if gate {
+            MachineWires::ScannerGate
         } else {
             continue;
         };
@@ -311,6 +326,13 @@ fn held_on_target(world: &mut World, ctx: &ClickCtx) -> bool {
         return done;
     }
     if kind.own_panel() && tool_of(world, held).map(|t| t.0) == Some(ToolKind::Screwdriver) {
+        // `scanner_gate/screwdriver_act`: locked, the screwdriver does nothing.
+        if world
+            .get::<crate::defenses::scanner_gate::ScannerGate>(ctx.target)
+            .is_some_and(|g| g.locked)
+        {
+            return false;
+        }
         let open = !panel_open(world, ctx.target);
         world.entity_mut(ctx.target).insert(PanelOpen(open));
         let text = if open {
@@ -500,6 +522,15 @@ pub fn on_pulse(
         (MachineWires::TeslaCoil, WIRE_ZAP) => {
             tesla_coil_zap(world, e);
         }
+        (MachineWires::ScannerGate, crate::defenses::scanner_gate::WIRE_ACCEPT) => {
+            gate_wire(world, e, |g| g.light_pass = !g.light_pass);
+        }
+        (MachineWires::ScannerGate, crate::defenses::scanner_gate::WIRE_DENY) => {
+            gate_wire(world, e, |g| g.light_fail = !g.light_fail);
+        }
+        (MachineWires::ScannerGate, wires::WIRE_DISABLE) => {
+            gate_wire(world, e, |g| g.ignore_signals = !g.ignore_signals);
+        }
         (MachineWires::MassDriver, WIRE_SAFETIES) => {
             if let Some(mut d) = world.get_mut::<MassDriver>(e) {
                 d.power = DRIVER_OVERDRIVE;
@@ -507,6 +538,16 @@ pub fn on_pulse(
             announce(world, e, "Из массдрайвера доносится тревожное жужжание.");
         }
         _ => crate::device_wires::on_pulse(world, e, kind, wire, user),
+    }
+}
+
+fn gate_wire(
+    world: &mut World,
+    e: Entity,
+    f: impl FnOnce(&mut crate::defenses::scanner_gate::ScannerGate),
+) {
+    if let Some(mut g) = world.get_mut::<crate::defenses::scanner_gate::ScannerGate>(e) {
+        f(&mut g);
     }
 }
 
@@ -581,6 +622,16 @@ pub(crate) fn on_off(on: bool) -> &'static str {
 /// The kind's `get_status()`.
 pub fn status(world: &World, e: Entity, kind: MachineWires) -> Vec<String> {
     match kind {
+        MachineWires::ScannerGate => {
+            let Some(g) = world.get::<crate::defenses::scanner_gate::ScannerGate>(e) else {
+                return Vec::new();
+            };
+            vec![
+                format!("The Green light is {}.", on_off(g.light_pass)),
+                format!("The Red light is {}.", on_off(g.light_fail)),
+                format!("The Purple light is {}.", on_off(g.ignore_signals)),
+            ]
+        }
         MachineWires::AirAlarm => {
             let Some(a) = world.get::<AirAlarm>(e) else {
                 return Vec::new();
