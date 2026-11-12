@@ -28,8 +28,8 @@
 // construction (plasteel into runed metal only: no construct shells, constructs or soulstones
 // until basic mobs exist), EMP and summon dagger; no equipment, horror,
 // veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no TTS.
-// Structures: [`structures`]. A sacrifice destroys the
-// body (its items fall) without a soulstone. Nar'Sie is a sprite that does not move or consume:
+// Structures: [`structures`]; soulstones, shades and shells: [`soulstone`]. A sacrifice leaves
+// a soulstone (with the shade of a body with a mind) and gibs what is left. Nar'Sie is a sprite that does not move or consume:
 // no singularity component. No cinematic, sounds or shuttle lockdown.
 
 use bevy::ecs::message::MessageCursor;
