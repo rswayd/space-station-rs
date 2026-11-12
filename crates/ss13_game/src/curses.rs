@@ -373,6 +373,13 @@ pub fn apply_trance(world: &mut World, mob: Entity, secs: f32, stun: bool) -> bo
     true
 }
 
+/// tg `remove_status_effect(/datum/status_effect/trance)`.
+pub fn remove_trance(world: &mut World, mob: Entity) {
+    if world.get::<Trance>(mob).is_some() {
+        end_trance(world, mob);
+    }
+}
+
 fn end_trance(world: &mut World, mob: Entity) {
     world.entity_mut(mob).remove::<Trance>();
     crate::medical::traumas::refresh(world, mob);

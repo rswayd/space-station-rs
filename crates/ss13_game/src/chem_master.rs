@@ -450,7 +450,7 @@ fn analyzable(chem: &ss13_reagents::Chemistry, h: &Holder) -> Vec<AnalyzableReag
                 purity: r.purity,
                 meta_rate: r.metabolization_rate,
                 overdose: r.overdose_threshold,
-                addiction_types: Vec::new(),
+                addiction_types: crate::addictions::describe(def),
             }
         })
         .collect()

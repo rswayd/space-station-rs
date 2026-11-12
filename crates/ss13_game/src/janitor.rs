@@ -43,7 +43,7 @@ use bevy::prelude::*;
 use ss13_atmos::gas::{T0C, T20C};
 use ss13_mapload::{DmCleanable, DmItem, DmObj, DmTurf, IconIndex, Turf};
 use ss13_net::server::IntentReceived;
-use ss13_reagents::{Holder, Owner, flags};
+use ss13_reagents::{Holder, Owner, flags, round_to};
 use ss13_shared::chat::Span;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent};
 use ss13_shared::{Appearance, Overlay, TilePos};
@@ -52,7 +52,7 @@ use ss13_world::{Density, Moved, SpatialIndex, WorldSystems};
 use crate::chem::{Chem, Reagents, TransferAmount};
 use crate::combat::CombatRng;
 use crate::construction::{Job, turf_at};
-use crate::health::{BodyPosition, Health, HealthSystems, Stat};
+use crate::health::{BodyPosition, DamageType, Health, HealthSystems, Stat};
 use crate::obj_damage::is_under;
 use crate::server::{PlayerMob, Players};
 use crate::status_effects::Incap;
@@ -114,9 +114,13 @@ const SPRAY: &str = "/obj/item/reagent_containers/spray";
 const FUEL: &str = "/datum/reagent/fuel";
 const URANIUM: &str = "/datum/reagent/uranium";
 const CAPSAICIN: &str = "/datum/reagent/consumable/condensedcapsaicin";
+const ACID: &str = "/datum/reagent/toxin/acid";
 /// The exposure `methods`.
 pub const TOUCH: u32 = 1 << 0;
+pub const INGEST: u32 = 1 << 1;
 pub const VAPOR: u32 = 1 << 2;
+pub const PATCH: u32 = 1 << 3;
+pub const INJECT: u32 = 1 << 4;
 pub const INHALE: u32 = 1 << 6;
 pub const SMOKE_MACHINE: u32 = TOUCH | INHALE;
 const WATER: &str = "/datum/reagent/water";
@@ -513,6 +517,19 @@ pub fn expose_vapor(world: &mut World, target: Entity, holder: &Holder, modifier
     );
 }
 
+/// `reagents.expose(target, methods)` of a transfer into a mob (`trans_to(methods)`: INGEST,
+/// INJECT, PATCH).
+pub fn expose_methods(world: &mut World, target: Entity, holder: &Holder, methods: u32) {
+    expose_by(
+        world,
+        target,
+        holder,
+        1.0,
+        methods,
+        WATER_COOLING_TEMPERATURE,
+    );
+}
+
 /// [`expose`] with water's `cooling_temperature` (extinguishers set their own).
 pub fn expose_cooled(world: &mut World, target: Entity, holder: &Holder, modifier: f32, cool: f32) {
     expose_by(world, target, holder, modifier, TOUCH, cool);
@@ -520,7 +537,9 @@ pub fn expose_cooled(world: &mut World, target: Entity, holder: &Holder, modifie
 
 /// `reagents.expose(target, methods, volume_modifier)` for the reagents whose `expose_*` is
 /// ported here (water, firefighting foam, space cleaner, welding fuel, uranium, capsaicin,
-/// romerol), and `penetrates_skin` into the blood of a mob.
+/// romerol, acids swallowed or injected, the pyrotechnics in `crate::pyrotechnics`), and
+/// `penetrates_skin` into the blood of a mob.
+// shortcut: no `acid_act` (acid on skin, objects and turfs melts nothing).
 pub fn expose_by(
     world: &mut World,
     target: Entity,
@@ -587,7 +606,9 @@ pub fn expose_by(
                     |t| if t > T20C { (t / 2.0).max(T20C) } else { t },
                 );
             } else if living {
-                crate::fire::extinguish_mob(world, target);
+                if methods & (TOUCH | VAPOR) != 0 {
+                    crate::fire::extinguish_mob(world, target);
+                }
             } else {
                 crate::fireplace::extinguish(world, target);
                 crate::fire::extinguish_obj(world, target);
@@ -625,6 +646,29 @@ pub fn expose_by(
         } else if chem.is_type(r.id, CAPSAICIN) && living && methods & (VAPOR | TOUCH | INHALE) != 0
         {
             pepper_expose(world, target);
+        } else if chem.is_type(r.id, ACID) && living {
+            // `/datum/reagent/toxin/acid/expose_mob` (carbons): swallowed or breathed burns
+            // `min(6 * toxpwr, volume * toxpwr)` brute, injected 1.5 times that.
+            let toxpwr = chem.def(r.id).toxpwr;
+            let burn = (6.0 * toxpwr).min(round_to(volume, 0.1) * toxpwr);
+            let carbon = world.get::<crate::chem::MobReagents>(target).is_some();
+            if carbon && methods & (INGEST | INHALE) != 0 {
+                crate::mobs::defense::hurt(world, target, DamageType::Brute, burn, None);
+            } else if carbon && methods & INJECT != 0 {
+                crate::mobs::defense::hurt(world, target, DamageType::Brute, 1.5 * burn, None);
+            }
+        } else {
+            crate::pyrotechnics::expose(
+                world,
+                &chem,
+                target,
+                r.id,
+                volume,
+                methods,
+                touch_protection,
+                turf,
+                living,
+            );
         }
         // `/datum/reagent/expose_mob`: `penetrates_skin & methods`.
         if living && chem.def(r.id).penetrates_skin & methods != 0 {
@@ -1743,6 +1787,68 @@ pub fn do_sweep(world: &mut World, pos: TilePos, dir: ss13_shared::Dir) -> usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn acid() -> ss13_reagents::ReagentDef {
+        ss13_reagents::ReagentDef {
+            path: ACID.into(),
+            name: "Sulfuric Acid".into(),
+            description: String::new(),
+            color: "#00FF32".into(),
+            taste_description: String::new(),
+            taste_mult: 1.0,
+            metabolization_rate: 0.2,
+            overdose_threshold: 0.0,
+            ph: 2.75,
+            specific_heat: 200.0,
+            chemical_flags: 0,
+            purity: 1.0,
+            creation_purity: 1.0,
+            inverse_chem: None,
+            inverse_chem_val: 0.25,
+            purge_multiplier: 1.0,
+            toxpwr: 1.0,
+            health_required: 0.0,
+            liver_tolerance_multiplier: 1.0,
+            boozepwr: 0.0,
+            brute_heal: 0.0,
+            nutriment_factor: 0.0,
+            penetrates_skin: 0,
+            default_container: String::new(),
+            addiction_types: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn acid_burns_by_its_exposure_method() {
+        let chem = ss13_reagents::Chemistry::new(ss13_reagents::ChemData {
+            reagents: vec![acid()],
+            ..Default::default()
+        });
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        world.insert_resource(Chem(std::sync::Arc::new(chem.clone())));
+        let mut cup = Holder::new(50.0, flags::NO_REACT, Owner::default());
+        cup.add_reagent(&chem, 0, 10.0, 300.0, None, None, true, false);
+        let brute = |world: &mut World, methods: u32| {
+            let mob = world
+                .spawn((
+                    Health::default(),
+                    Stat::Conscious,
+                    crate::chem::MobReagents {
+                        blood: crate::chem::mob_holder(),
+                        stomach: crate::chem::mob_holder(),
+                        drunk: 0.0,
+                    },
+                ))
+                .id();
+            expose_methods(world, mob, &cup, methods);
+            world.get::<Health>(mob).unwrap().brute
+        };
+        // `min(6 * toxpwr, volume * toxpwr)`; injected 1.5 times; on the skin `acid_act`.
+        assert!((brute(&mut world, INGEST) - 6.0).abs() < 1e-3);
+        assert!((brute(&mut world, INJECT) - 9.0).abs() < 1e-3);
+        assert_eq!(brute(&mut world, PATCH), 0.0);
+    }
 
     #[test]
     fn add_wet_follows_do_add_wet() {

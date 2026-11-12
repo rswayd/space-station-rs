@@ -7,8 +7,9 @@
 //! over one `SSmobs` tick, so the per-second effects below are multiplied by it and by
 //! `seconds_per_tick`.
 // shortcut: reagents without an effect here only metabolize (their volume goes down at their
-// rate); no organ damage (liver, eyes, lungs), no blood, stamina, traits, addictions, mood or
-// inverse-reagent effects. Add per reagent with the systems they need.
+// rate); no organ damage (liver, eyes, lungs), no blood, stamina, traits, mood or
+// inverse-reagent effects. Add per reagent with the systems they need. What needs the game's
+// systems (addiction points, drugs, pyrotechnics, stacked effects) reads [`Body::metabolized`].
 
 use crate::{
     CHEMICAL_VOLUME_ROUNDING, Chemistry, Holder, REAGENTS_METABOLISM, Reagent, ReagentId, is_under,
@@ -85,6 +86,27 @@ pub trait Body {
     fn on_fire(&self) -> bool {
         false
     }
+    /// One reagent went through `metabolize_reagent` (tg `reagents_metabolized`): the game's
+    /// own `on_mob_life` effects, addiction points and stacked effects read these.
+    fn metabolized(&mut self, _reagent: Metabolized) {}
+}
+
+/// One reagent's `metabolize_reagent` this tick, as the effects outside this crate need it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Metabolized {
+    pub id: ReagentId,
+    /// `metabolized_volume`.
+    pub volume: f32,
+    /// `metabolization_ratio`.
+    pub ratio: f32,
+    pub overdosed: bool,
+    /// `overdose_start` ran this tick.
+    pub overdose_started: bool,
+    /// `current_cycle` as `on_mob_life` sees it (after the increment).
+    pub current_cycle: u32,
+    pub creation_purity: f32,
+    /// The volume left before this tick's metabolization (`volume` in `on_mob_life`).
+    pub held: f32,
 }
 
 /// tg `/datum/reagent/consumable/get_nutriment_factor`: nutrition per metabolized unit and
@@ -324,11 +346,13 @@ fn metabolize_reagent(
     let metabolized = metabolized.min(reagent.volume);
     reagent.metabolizing = true;
     let ratio = REM * metabolized;
+    let mut overdose_started = false;
     if reagent.overdose_threshold > 0.0
         && reagent.volume >= reagent.overdose_threshold
         && !reagent.overdosed
     {
         reagent.overdosed = true;
+        overdose_started = true;
         // `overdose_start`.
         body.tell(format!("Кажется, вы приняли слишком много {}!", def.name));
     }
@@ -338,6 +362,17 @@ fn metabolize_reagent(
         overdose_process(chem, holder, i, effect, body, seconds, ratio);
     }
     holder.reagents[i].current_cycle += 1;
+    let r = &holder.reagents[i];
+    body.metabolized(Metabolized {
+        id,
+        volume: metabolized,
+        ratio,
+        overdosed,
+        overdose_started,
+        current_cycle: r.current_cycle,
+        creation_purity: r.creation_purity,
+        held: r.volume,
+    });
     on_mob_life(
         chem,
         holder,

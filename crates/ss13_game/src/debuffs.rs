@@ -15,9 +15,8 @@
 //!   `crate::medical::bioware::bleed_mod`).
 //! - [`ToxVomit`]: a human over 45 toxin damage with more than 20 nutrition throws up about
 //!   every 150 s (a 30% a second count to 50 every 2 s), until the damage or the food drops.
-// shortcut: woozy, high blood pressure and the seizure come from drug withdrawal in tg
-// (`code/modules/reagents/withdrawal/generic_addictions.dm`), which is not ported: the API is
-// here for it. No `paranoid` personality (the jittery moodlet is always -2). The tox vomit
+// Woozy, high blood pressure and the seizure come from drug withdrawal (`crate::addictions`).
+// shortcut: no `paranoid` personality (the jittery moodlet is always -2). The tox vomit
 // starts on any change of a human's health above the threshold (tg: toxin damage taken), and
 // it does not count in stasis.
 
