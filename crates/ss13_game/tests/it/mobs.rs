@@ -526,6 +526,8 @@ fn carp_swarm_on_one_tile_and_cross_tables() {
         );
         assert!(swarm.offset.iter().all(|o| (-20..=20).contains(o)));
     }
+    let start = s.pos(a);
+    let east = |p: TilePos| p.step(ss13_shared::Dir::East);
     let step = |s: &mut Station, dir| {
         s.0.server
             .world_mut()
@@ -533,17 +535,13 @@ fn carp_swarm_on_one_tile_and_cross_tables() {
         s.run_for(0.5);
     };
     step(&mut s, ss13_shared::Dir::East);
-    assert_eq!(s.pos(a), TilePos::new(3, 2, 1));
+    assert_eq!(s.pos(a), east(start));
     for carp in [a, b] {
         assert!(!s.get::<Swarming>(carp).active, "alone again");
         assert_eq!(s.get::<ss13_shared::Appearance>(carp).pixel_offset, [0, 0]);
     }
     step(&mut s, ss13_shared::Dir::East);
-    assert_eq!(
-        s.pos(a),
-        TilePos::new(4, 2, 1),
-        "PASSTABLE crosses the table"
-    );
+    assert_eq!(s.pos(a), east(east(start)), "PASSTABLE crosses the table");
 }
 
 /// BandaStation hamster pup `on_entered`: a human stepping on it crushes it.
