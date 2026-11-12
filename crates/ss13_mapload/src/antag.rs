@@ -26,7 +26,7 @@ pub const CHANGELING_RUNTIME_TYPES: [&str; 4] = [
 /// What the blood cult makes at runtime (`ss13_game::antag::cult`): its runes, the ritual dagger
 /// and runed metal, the blood magic auras, the shadow shackles, the barrier, Nar'Sie, the
 /// structures' items and the pylon's floor.
-pub const CULT_RUNTIME_TYPES: [&str; 26] = [
+pub const CULT_RUNTIME_TYPES: [&str; 36] = [
     "/obj/effect/rune/convert",
     "/obj/effect/rune/empower",
     "/obj/effect/rune/teleport",
@@ -54,6 +54,17 @@ pub const CULT_RUNTIME_TYPES: [&str; 26] = [
     "/obj/item/shuttle_curse",
     "/obj/item/cult_shift",
     "/turf/open/floor/engine/cult",
+    // Soulstones' shades and the constructs of shells (`ss13_game::antag::cult::server::soulstone`).
+    "/mob/living/basic/shade",
+    "/mob/living/basic/construct/juggernaut",
+    "/mob/living/basic/construct/juggernaut/angelic",
+    "/mob/living/basic/construct/wraith",
+    "/mob/living/basic/construct/wraith/angelic",
+    "/mob/living/basic/construct/wraith/mystic",
+    "/mob/living/basic/construct/artificer",
+    "/mob/living/basic/construct/artificer/noncult",
+    "/mob/living/basic/construct/artificer/angelic",
+    "/mob/living/basic/construct/artificer/mystic",
 ];
 
 /// What the heretic makes at runtime (`ss13_game::antag::heretic`): influences, the rune, the
@@ -1059,3 +1070,54 @@ mod tests {
         assert_eq!(data.item_types().len(), 2);
     }
 }
+
+/// What the spiders make at runtime (`ss13_game::antag::spiders`): egg clusters, cocoons, webs,
+/// the hatchlings and what they grow into.
+pub const SPIDER_RUNTIME_TYPES: &[&str] = &[
+    "/obj/structure/spider/eggcluster",
+    "/obj/structure/spider/eggcluster/abnormal",
+    "/obj/structure/spider/eggcluster/enriched",
+    "/obj/structure/spider/eggcluster/midwife",
+    "/obj/structure/spider/eggcluster/bloody",
+    "/obj/structure/spider/cocoon",
+    "/obj/structure/spider/stickyweb",
+    "/obj/structure/spider/stickyweb/sealed",
+    "/obj/structure/spider/stickyweb/sealed/tough",
+    "/obj/structure/spider/stickyweb/very_sticky",
+    "/mob/living/basic/flesh_spider",
+    "/mob/living/basic/spider/growing/spiderling",
+    "/mob/living/basic/spider/growing/young",
+    "/mob/living/basic/spider/growing/spiderling/guard",
+    "/mob/living/basic/spider/growing/young/guard",
+    "/mob/living/basic/spider/giant/guard",
+    "/mob/living/basic/spider/growing/spiderling/ambush",
+    "/mob/living/basic/spider/growing/young/ambush",
+    "/mob/living/basic/spider/giant/ambush",
+    "/mob/living/basic/spider/growing/spiderling/scout",
+    "/mob/living/basic/spider/growing/young/scout",
+    "/mob/living/basic/spider/giant/scout",
+    "/mob/living/basic/spider/growing/spiderling/hunter",
+    "/mob/living/basic/spider/growing/young/hunter",
+    "/mob/living/basic/spider/giant/hunter",
+    "/mob/living/basic/spider/growing/spiderling/nurse",
+    "/mob/living/basic/spider/growing/young/nurse",
+    "/mob/living/basic/spider/giant/nurse",
+    "/mob/living/basic/spider/growing/spiderling/tangle",
+    "/mob/living/basic/spider/growing/young/tangle",
+    "/mob/living/basic/spider/giant/tangle",
+    "/mob/living/basic/spider/growing/spiderling/tank",
+    "/mob/living/basic/spider/growing/young/tank",
+    "/mob/living/basic/spider/giant/tank",
+    "/mob/living/basic/spider/growing/spiderling/breacher",
+    "/mob/living/basic/spider/growing/young/breacher",
+    "/mob/living/basic/spider/giant/breacher",
+    "/mob/living/basic/spider/growing/spiderling/midwife",
+    "/mob/living/basic/spider/growing/young/midwife",
+    "/mob/living/basic/spider/giant/midwife",
+    "/mob/living/basic/spider/growing/spiderling/viper",
+    "/mob/living/basic/spider/growing/young/viper",
+    "/mob/living/basic/spider/giant/viper",
+    "/mob/living/basic/spider/growing/spiderling/tarantula",
+    "/mob/living/basic/spider/growing/young/tarantula",
+    "/mob/living/basic/spider/giant/tarantula",
+];

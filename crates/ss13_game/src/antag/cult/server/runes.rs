@@ -59,8 +59,26 @@ pub fn can_invoke(world: &mut World, rune: Entity, user: Entity, kind: RuneKind)
         .map(|(e, ..)| e)
         .collect();
     others.sort();
+    others.retain(|&e| check_invoke_validity(world, e));
     invokers.extend(others);
     invokers
+}
+
+/// `cult/shade/check_invoke_validity`: not inside a soulstone, and a minute after leaving it.
+fn check_invoke_validity(world: &mut World, mob: Entity) -> bool {
+    let Some(CultForm::Shade { released_at }) = world.get::<Cultist>(mob).map(|c| c.form) else {
+        return true;
+    };
+    let text = match released_at {
+        None => "Вы не можете вызывать руны, находясь в камне душ!",
+        Some(at) if at + SHADE_INVOKE_DELAY_SECS > now(world) => {
+            "Вы не накопили достаточно сил для вызова рун. Вам нужно некоторое время с момента \
+             выхода из камня душ!"
+        }
+        Some(_) => return true,
+    };
+    chat_to(world, mob, Span::Warning, text);
+    false
 }
 
 /// The base `invoke`: every invoker says the words and takes `invoke_damage`.
@@ -274,7 +292,14 @@ pub(super) fn do_sacrifice(world: &mut World, target: Entity, invokers: &[Entity
         };
         chat_to(world, i, Span::CultLarge, text);
     }
-    gib(world, target);
+    if let Some(pos) = world.get::<TilePos>(target).copied()
+        && let Some(&invoker) = invokers.first()
+    {
+        sacrifice_soul(world, target, invoker, pos);
+    }
+    if world.get_entity(target).is_ok() {
+        gib(world, target);
+    }
     update_info(world);
     info!("{target} was sacrificed to Nar'Sie (target: {is_target})");
     true

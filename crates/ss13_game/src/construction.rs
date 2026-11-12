@@ -391,6 +391,8 @@ pub enum Job {
     Fauna(crate::mobs::farm::FarmJob),
     /// An alien's timed steps ([`crate::antag::xeno`]).
     Xeno(crate::antag::xeno::abilities::XenoJob),
+    /// A spider's web, eggs or cocoon ([`crate::antag::spiders`]).
+    Spider(crate::antag::spiders::SpiderJob),
     /// A morph eating a corpse or an item ([`crate::antag::morph`]).
     Morph {
         corpse: bool,
@@ -1627,6 +1629,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Fauna(job) => crate::mobs::farm::complete(world, mob, action, job),
         &Job::Xeno(job) => crate::antag::xeno::abilities::complete(world, mob, action, job),
         &Job::Morph { corpse } => crate::antag::morph::complete_eat(world, mob, action, corpse),
+        &Job::Spider(job) => crate::antag::spiders::complete(world, mob, action, job),
         &Job::SpaceDragon(job) => crate::antag::space_dragon::complete(world, mob, action, job),
         &Job::Wizard(job) => crate::antag::wizard::server::complete(world, mob, action, job),
         &Job::Raiders(job) => crate::antag::raiders::complete(world, mob, action, job),

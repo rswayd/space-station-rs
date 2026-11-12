@@ -343,6 +343,7 @@ fn attach(world: &mut World, entity: Entity) {
     bees::attach(world, entity, &def);
     swarming::attach(world, entity, &def);
     crate::antag::xeno::attach(world, entity, &def);
+    crate::antag::spiders::attach(world, entity, &def);
     set_look(world, entity, false);
 }
 
@@ -609,6 +610,8 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     if def.basic_mob_flags & DEL_ON_DEATH != 0 {
         // A bot blows apart first (`/mob/living/basic/bot/death` -> `explode`).
         crate::bots::explode(world, mob);
+        // `qdel` of a mob with a player: `ghostize(FALSE)` (shades, constructs).
+        crate::health::ghostize_gone(world, mob);
         world.despawn(mob);
         return;
     }

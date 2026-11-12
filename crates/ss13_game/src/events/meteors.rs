@@ -216,6 +216,19 @@ static MEATY: MeteorKind = MeteorKind {
     special: Special::Meaty,
     ..kind("/obj/effect/meteor/meaty", "meaty ore", "meateor")
 };
+/// `/obj/effect/meteor/meaty/changeling`: carries a space changeling ([`MeteorCargo`]); not in
+/// any wave.
+pub static CHANGELING: MeteorKind = MeteorKind {
+    hits: 1,
+    hitpwr: Severity::Light,
+    signature: "ксенобиологических форм жизни",
+    ..MeteorKind {
+        path: "/obj/effect/meteor/meaty/changeling",
+        name: "unsettlingly meaty meteor",
+        icon_state: "changeling",
+        ..MEATY
+    }
+};
 static MEATY_XENO: MeteorKind = MeteorKind {
     color: Some([0x5E, 0xFF, 0x00, 255]),
     drops: &[
@@ -854,6 +867,137 @@ pub fn spawn_meteor_at(
     Some(entity)
 }
 
+/// The mobs inside a changeling meteor (tg its `contents`) and its `landing_target`. They ride
+/// hidden ([`crate::closets::InCloset`]) on its tile; when it breaks they are dropped there,
+/// when it is gone otherwise ([`release_cargo`]) they are thrown at the landing target.
+#[derive(Component, Debug, Default)]
+pub struct MeteorCargo {
+    pub mobs: Vec<Entity>,
+    pub landing: Option<TilePos>,
+    /// `meteor_effect` ran: a plain drop, no throw.
+    landed: bool,
+}
+
+const SPLAT: &str = "sound/effects/splat.ogg";
+
+/// `meteor_effect` (broken) or `yeet_changeling` (missed, expired, mined away): the cargo leaves
+/// the despawning meteor.
+pub(super) fn release_cargo(
+    remove: On<Remove<MeteorCargo>>,
+    cargo: Query<(&MeteorCargo, Option<&TilePos>)>,
+    mut commands: Commands,
+) {
+    let Ok((cargo, pos)) = cargo.get(remove.entity) else {
+        return;
+    };
+    let (mobs, landing, landed, pos) = (
+        cargo.mobs.clone(),
+        cargo.landing,
+        cargo.landed,
+        pos.copied(),
+    );
+    commands.queue(move |world: &mut World| {
+        let Some(pos) = pos else {
+            return;
+        };
+        for mob in mobs {
+            if world.get_entity(mob).is_err() {
+                continue;
+            }
+            world.entity_mut(mob).insert(pos);
+            crate::closets::let_out(world, mob);
+            if landed {
+                continue;
+            }
+            // `yeet_changeling`: the observer start is the last resort.
+            let Some(target) = landing.or_else(|| {
+                world
+                    .get_resource::<crate::server::SpawnPoints>()
+                    .and_then(|s| s.observer)
+            }) else {
+                continue;
+            };
+            if crate::throw::throw_at(world, mob, target, 2, 2.0) {
+                world
+                    .entity_mut(mob)
+                    .insert(crate::throw::ThrownMob::default());
+            }
+            let who = crate::security::name_of(world, mob);
+            crate::chem::visible(
+                world,
+                mob,
+                "Почувствовав, что что-то не так, мы с силой выбрасываем себя из метеора!",
+                &format!(
+                    "{} вылетает из unsettlingly meaty meteor!",
+                    ss13_shared::capitalize(&who)
+                ),
+                ss13_shared::chat::Span::Warning,
+            );
+            let mut sound = crate::sound::PlaySound::new(pos, SPLAT, 50.0, true);
+            sound.pressure_affected = false;
+            crate::sound::playsound(world, sound);
+        }
+    });
+}
+
+/// `new /obj/effect/meteor/meaty/changeling(start, target)` with `mob` moved inside.
+pub fn launch_with(
+    world: &mut World,
+    mob: Entity,
+    start: TilePos,
+    landing: TilePos,
+) -> Option<Entity> {
+    let meteor = spawn_meteor_at(world, &CHANGELING, start, landing)?;
+    world.entity_mut(mob).insert(start);
+    crate::closets::put_mob_inside(world, mob, meteor);
+    world.entity_mut(meteor).insert(MeteorCargo {
+        mobs: vec![mob],
+        landing: Some(landing),
+        landed: false,
+    });
+    Some(meteor)
+}
+
+/// `generate_changeling_meteor`'s start: a carp spawn on a planetary map, else
+/// `spaceDebrisStartLoc` of a random side of a random station level.
+pub fn changeling_start(world: &mut World) -> Option<TilePos> {
+    if super::earthquake::is_planetary(world) {
+        let carp = world
+            .get_resource::<crate::server::SpawnPoints>()
+            .map(|s| s.carp.clone())
+            .unwrap_or_default();
+        return world.resource_mut::<EventRng>().pick(&carp).copied();
+    }
+    let levels: Vec<u16> = station_levels(world).collect();
+    let &z = world.resource_mut::<EventRng>().pick(&levels)?;
+    let size = world.resource::<SpatialIndex>().level_size(z)?;
+    let rng = &mut world.resource_mut::<EventRng>().0;
+    let side = rng.range(0, 3) as usize;
+    debris_start(side, z, size, rng)
+}
+
+/// `changeling/shield_defense`: a meteor shield shooting it down throws the cargo at itself.
+pub fn retarget_cargo(world: &mut World, meteor: Entity, at: TilePos) {
+    if let Some(mut cargo) = world.get_mut::<MeteorCargo>(meteor) {
+        cargo.landing = Some(at);
+    }
+}
+
+/// The cargo moves with its meteor.
+fn carry_cargo(world: &mut World, meteor: Entity, pos: TilePos) {
+    let Some(mobs) = world.get::<MeteorCargo>(meteor).map(|c| c.mobs.clone()) else {
+        return;
+    };
+    for mob in mobs {
+        if world
+            .get::<crate::closets::InCloset>(mob)
+            .is_some_and(|c| c.closet == meteor)
+        {
+            world.entity_mut(mob).insert(pos);
+        }
+    }
+}
+
 /// A flying dark matt-eor: the security level it found below red.
 #[derive(Component, Debug)]
 pub struct DarkMatteor {
@@ -931,6 +1075,7 @@ fn step(world: &mut World, e: Entity) {
         .towards
         .advance();
     world.entity_mut(e).insert(next);
+    carry_cargo(world, e, next);
     moved(world, e, next);
 }
 
@@ -1089,6 +1234,10 @@ fn get_hit(world: &mut World, e: Entity) {
     let Some(&pos) = world.get::<TilePos>(e) else {
         return;
     };
+    // The changeling meteor's `meteor_effect`: its contents drop on its tile.
+    if let Some(mut cargo) = world.get_mut::<MeteorCargo>(e) {
+        cargo.landed = true;
+    }
     world.despawn(e);
     make_debris(world, kind, pos);
     meteor_effect(world, kind, pos);

@@ -1707,6 +1707,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(crate::food::FOOD_MESS_TYPES);
     // Conjured things, the Grand Ritual, the runic scepter, the demon bottles (`ss13_game`).
     out.extend(antag::SPELL_RUNTIME_TYPES);
+    // Spider eggs, cocoons, webs and the spiders' life stages (`ss13_game::antag::spiders`).
+    out.extend(antag::SPIDER_RUNTIME_TYPES);
     // Completed golem shells and what they fall apart into (`ss13_game::golems`).
     out.extend(crate::mob_spawn::GOLEM_RUNTIME_TYPES);
     out.extend(crate::mob_spawn::GOLEM_STACK_FOOD);

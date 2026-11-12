@@ -73,6 +73,7 @@ mod absorb;
 mod gain;
 mod life;
 mod powers;
+mod space;
 mod stings;
 mod transform;
 mod utility;
@@ -81,6 +82,7 @@ pub use absorb::*;
 pub use gain::*;
 pub use life::*;
 pub use powers::*;
+pub use space::*;
 pub use stings::*;
 pub use transform::*;
 pub use utility::*;
@@ -199,6 +201,7 @@ pub enum Power {
     ResonantShriek,
     DissonantShriek,
     DigitalCamo,
+    VoidAdaption,
 }
 
 /// A power's vars.
@@ -248,7 +251,7 @@ const STING: PowerDef = PowerDef {
 };
 
 impl Power {
-    pub const ALL: [Self; 19] = [
+    pub const ALL: [Self; 20] = [
         Self::AbsorbDna,
         Self::Transform,
         Self::Fakedeath,
@@ -268,6 +271,7 @@ impl Power {
         Self::ResonantShriek,
         Self::DissonantShriek,
         Self::DigitalCamo,
+        Self::VoidAdaption,
     ];
 
     /// `/datum/action/changeling/sting`: pressed, it is chosen; a middle or alt click stings.
@@ -549,7 +553,27 @@ impl Power {
                 category: "stealth",
                 ..BASE
             },
+            Self::VoidAdaption => PowerDef {
+                id: "void_adaption",
+                path: "/datum/action/changeling/void_adaption",
+                name: "Void Adaption",
+                desc: "Мы готовим наши клетки к противостоянию враждебной среде за пределами \
+                       станции. Мы можем свободно перемещаться, куда пожелаем.",
+                helptext: "Эта способность пассивна и автоматически защищает вас в условиях \
+                           сильного холода или вакуума, а также избавляет вас от необходимости \
+                           дышать кислородом, хотя вы все равно будете подвергаться воздействию \
+                           опасных газов. В то время как он активно защищает вас от температуры \
+                           или давления, он снижает скорость химической регенерации.",
+                icon: "void_adaption",
+                dna_cost: Some(2),
+                ..BASE
+            },
         }
+    }
+
+    /// `owner_has_control = FALSE`: a passive power has no button.
+    pub fn passive(self) -> bool {
+        self == Self::VoidAdaption
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
@@ -715,6 +739,8 @@ pub struct Changeling {
     pub xray: bool,
     /// Digital camouflage's `active` (`/datum/element/digitalcamo`).
     pub digital_camo: bool,
+    /// Void adaption's `currently_active`: its chemical slowdown applies.
+    pub void_active: bool,
 }
 
 impl Default for Changeling {
@@ -744,6 +770,7 @@ impl Default for Changeling {
             sting_dna: None,
             xray: false,
             digital_camo: false,
+            void_active: false,
         }
     }
 }
@@ -843,6 +870,7 @@ impl Changeling {
         self.sting_dna = None;
         self.xray = false;
         self.digital_camo = false;
+        self.void_active = false;
         let gone = std::mem::take(&mut self.purchased);
         self.genetic_points = self.total_genetic_points;
         self.chem_charges = self.chem_charges.min(self.total_chem_storage);

@@ -610,6 +610,8 @@ pub struct BodyLife {
     /// `TRAIT_COLD_BLOODED`: no core stabilisation.
     pub cold_blooded: bool,
     pub no_crit_damage: bool,
+    /// `TRAIT_NO_BREATHLESS_DAMAGE`: too little of the breathed gas does not suffocate.
+    pub no_breathless_damage: bool,
     /// The lungs' `safe_oxygen_min`, `safe_plasma_min`, `safe_plasma_max` (0: that reaction is
     /// not added, as tg's `add_gas_reaction` guards).
     pub safe_oxygen_min: f64,
@@ -631,6 +633,7 @@ impl Default for BodyLife {
             resist_high_pressure: false,
             cold_blooded: false,
             no_crit_damage: false,
+            no_breathless_damage: false,
             safe_oxygen_min: SAFE_OXYGEN_MIN,
             safe_plasma_min: 0.0,
             safe_plasma_max: SAFE_PLASMA_MAX,
@@ -670,6 +673,7 @@ impl BodyLife {
             resist_high_pressure: has(Trait::ResistHighPressure),
             cold_blooded: has(Trait::ColdBlooded),
             no_crit_damage: has(Trait::NoCritDamage),
+            no_breathless_damage: crate::antag::changeling::server::void_adapted(world, mob),
             safe_oxygen_min,
             safe_plasma_min,
             safe_plasma_max,
@@ -1061,7 +1065,7 @@ impl Respiration {
     ) {
         let o2 = gas(GasId::O2);
         let safe_min = self.body.safe_oxygen_min;
-        if o2_pp < safe_min {
+        if o2_pp < safe_min && !self.body.no_breathless_damage {
             ctx.alerts
                 .throw(AlertCategory::NotEnoughOxygen, "not_enough_oxy", 0);
             let breathed = self.handle_suffocation(o2_pp, safe_min, breath.moles[o2], ctx);
@@ -1128,7 +1132,7 @@ impl Respiration {
     ) {
         let plasma = gas(GasId::PLASMA);
         let safe_min = self.body.safe_plasma_min;
-        if plasma_pp < safe_min {
+        if plasma_pp < safe_min && !self.body.no_breathless_damage {
             ctx.alerts
                 .throw(AlertCategory::NotEnoughPlasma, "not_enough_plas", 0);
             let breathed = self.handle_suffocation(plasma_pp, safe_min, breath.moles[plasma], ctx);
@@ -1734,6 +1738,20 @@ fn protection_of(flags: u32) -> f64 {
     byond_round(sum, 0.001).min(1.0)
 }
 
+/// The air `mob` on `pos` lives in (`loc.return_air()`): a sealed closet's, the tile's, or
+/// station air on levels without simulated air.
+pub fn environment_of(world: &World, mob: Entity, pos: TilePos) -> GasMixture {
+    if let Some(air) = crate::closets::air::holder(world, mob)
+        .and_then(|c| world.get::<crate::closets::air::ClosetAir>(c))
+    {
+        return air.air.clone();
+    }
+    match world.get_resource::<Atmos>() {
+        Some(atmos) if atmos.level(pos.z).is_some() => atmos.air(pos).cloned().unwrap_or_default(),
+        _ => station_air(),
+    }
+}
+
 /// Standard station air (`OPENTURF_DEFAULT_ATMOS`) for levels without simulated air.
 pub(crate) fn station_air() -> GasMixture {
     GasMixture::parse("o2=22;n2=82;TEMP=293.15").expect("valid gas string")
@@ -1882,15 +1900,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         .is_some_and(|a| a.level(pos.z).is_some());
     // A sealed closet's occupant breathes its own air (`crate::closets::air`).
     let sealed = crate::closets::air::holder(world, mob);
-    let environment =
-        if let Some(air) = sealed.and_then(|c| world.get::<crate::closets::air::ClosetAir>(c)) {
-            air.air.clone()
-        } else if simulated {
-            let atmos = world.resource::<Atmos>();
-            atmos.air(pos).cloned().unwrap_or_default()
-        } else {
-            station_air()
-        };
+    let environment = environment_of(world, mob, pos);
     // A cryo cell's occupant breathes its gas and takes its temperature
     // (`handle_internal_lifeform`, `assume_air`, `return_temperature`).
     let cryo = crate::medical::cryo::holder(world, mob);
@@ -2316,6 +2326,17 @@ mod tests {
         let mut body = Body::new();
         resp.check_breath(None, &mut body.ctx(Stat::HardCrit));
         assert!((body.health.oxy - 0.66).abs() < 1e-5);
+    }
+
+    #[test]
+    fn no_breathless_damage_spares_an_empty_breath() {
+        // Void adaption: vacuum neither suffocates nor alerts.
+        let mut body = Body::new();
+        let mut resp = Respiration::default();
+        resp.body.no_breathless_damage = true;
+        resp.check_breath(None, &mut body.ctx(Stat::Conscious));
+        assert_eq!(body.health.oxy, 0.0);
+        assert!(body.alerts.get(AlertCategory::NotEnoughOxygen).is_none());
     }
 
     #[test]

@@ -661,6 +661,11 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     let client = world.get::<PlayerMob>(ghost)?.client;
     let s = world.get::<GhostRoleSpawner>(spawner)?.clone();
     let &pos = world.get::<TilePos>(spawner)?;
+    // A spider egg cluster hatches its own spiderling (`spider/pre_ghost_take`).
+    if crate::antag::spiders::is_egg(world, spawner) {
+        crate::antag::spiders::take_egg(world, client, ghost, spawner);
+        return None;
+    }
     let def = s
         .def
         .as_deref()

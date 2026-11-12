@@ -284,3 +284,39 @@ fn a_dark_matteor_destroys_the_shield_that_shoots_it() {
     assert!(app.world().get::<Meteor>(dark).is_some(), "reflected");
     assert!(app.world().get_entity(sat).is_err(), "the shield is gone");
 }
+
+/// A changeling meteor carries its mob hidden along its flight; gone without breaking (missed,
+/// shot down) it throws the mob out towards the landing target.
+#[test]
+fn a_changeling_meteor_carries_and_ejects_its_passenger() {
+    use ss13_game::closets::InCloset;
+    let mut app = fixture("changeling_meteor");
+    let ling = app.world_mut().spawn(t(5, 15)).id();
+    let meteor = meteors::launch_with(app.world_mut(), ling, t(9, 15), t(20, 15)).unwrap();
+    assert_eq!(app.world().get::<TilePos>(ling), Some(&t(9, 15)));
+    assert_eq!(
+        app.world().get::<InCloset>(ling).map(|c| c.closet),
+        Some(meteor),
+        "inside"
+    );
+    // The flight: the passenger keeps to the meteor's tile.
+    let mut at = t(9, 15);
+    for _ in 0..3 {
+        app.update();
+        let Some(&now) = app.world().get::<TilePos>(meteor) else {
+            break;
+        };
+        at = now;
+        assert_eq!(app.world().get::<TilePos>(ling), Some(&at));
+    }
+    if app.world().get_entity(meteor).is_ok() {
+        app.world_mut().despawn(meteor);
+    }
+    app.world_mut().flush();
+    assert!(app.world().get::<InCloset>(ling).is_none(), "let out");
+    let pos = *app.world().get::<TilePos>(ling).unwrap();
+    assert!(
+        pos.x >= at.x && pos.x <= at.x + 2 && pos.y == at.y,
+        "{pos:?} from {at:?}"
+    );
+}

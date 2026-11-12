@@ -24,21 +24,29 @@ pub fn start_cult(world: &mut World, mobs: &[Entity]) {
 /// `add_antag_datum(/datum/antagonist/cult)` (admins: without equipment; the team and its
 /// objectives are created with the first cultist). `false` if it already is one or cannot be.
 pub fn add_cultist(world: &mut World, mob: Entity) -> bool {
-    join_cult(world, mob, false)
+    join_cult(world, mob, false, CultForm::Cultist)
 }
 
 /// [`add_cultist`] with the roundstart equipment (`give_equipment`: the dagger and runed metal).
 pub fn add_cultist_equipped(world: &mut World, mob: Entity) -> bool {
-    join_cult(world, mob, true)
+    join_cult(world, mob, true, CultForm::Cultist)
 }
 
-pub(super) fn join_cult(world: &mut World, mob: Entity, equipment: bool) -> bool {
+/// `add_antag_datum(/datum/antagonist/cult/shade)` or `/construct`.
+pub fn add_cult_minion(world: &mut World, mob: Entity, form: CultForm) -> bool {
+    join_cult(world, mob, false, form)
+}
+
+pub(super) fn join_cult(world: &mut World, mob: Entity, equipment: bool, form: CultForm) -> bool {
     let fresh = !world.contains_resource::<CultTeam>();
     if fresh {
         world.insert_resource(CultTeam::default());
     }
     if !gain(world, mob, equipment, false) {
         return false;
+    }
+    if let Some(mut cultist) = world.get_mut::<Cultist>(mob) {
+        cultist.form = form;
     }
     if fresh {
         setup_objectives(world);
@@ -88,7 +96,8 @@ pub(super) fn gain(world: &mut World, mob: Entity, equipment: bool, converted: b
     if risen {
         set_eyes(world, mob, true);
     }
-    if ascendent {
+    // `cult_team.rise`/`ascend` mark humans only.
+    if ascendent && world.get::<HumanLook>(mob).is_some() {
         set_halo(world, mob, true);
     }
     if let Some(client) = client {
@@ -121,10 +130,11 @@ pub(super) fn greet(world: &mut World, mob: Entity) {
 }
 
 pub(super) fn antag_name(world: &World, mob: Entity) -> &'static str {
-    if world.get::<Cultist>(mob).is_some_and(|c| c.converted) {
-        CONVERTED_NAME
-    } else {
-        CULTIST_NAME
+    match world.get::<Cultist>(mob) {
+        Some(c) if c.form == CultForm::Construct => CONSTRUCT_NAME,
+        Some(c) if matches!(c.form, CultForm::Shade { .. }) => SHADE_NAME,
+        Some(c) if c.converted => CONVERTED_NAME,
+        _ => CULTIST_NAME,
     }
 }
 
@@ -495,22 +505,23 @@ pub fn refresh(world: &mut World, mob: Entity) {
             0.0,
         )
     };
-    let mut buttons = vec![
-        button(
-            COMM_ID.into(),
-            "Communion",
-            icon(world, ACTIONS_DMI, "cult_comms"),
-            None,
-            false,
-        ),
-        button(
+    let mut buttons = vec![button(
+        COMM_ID.into(),
+        "Communion",
+        icon(world, ACTIONS_DMI, "cult_comms"),
+        None,
+        false,
+    )];
+    // `apply_innate_effects`: blood magic for humans only.
+    if world.get::<HumanLook>(mob).is_some() {
+        buttons.push(button(
             MAGIC_ID.into(),
             "Prepare Blood Magic",
             icon(world, ACTIONS_DMI, "carve"),
             None,
             cultist.carving.is_some(),
-        ),
-    ];
+        ));
+    }
     for spell in &cultist.spells {
         let def = spell.spell.def();
         buttons.push(button(

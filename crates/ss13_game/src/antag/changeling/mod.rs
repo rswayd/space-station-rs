@@ -22,6 +22,8 @@ pub mod server;
 
 /// tg `ROLE_CHANGELING`: the changeling's `be_special` key.
 pub const ROLE_CHANGELING: &str = "Changeling";
+/// tg `ROLE_CHANGELING_MIDROUND`: the space changeling's `be_special` key.
+pub const ROLE_CHANGELING_MIDROUND: &str = "Changeling (Midround)";
 
 /// `act('evolve', { path })`.
 pub const EVOLVE: &str = "evolve";
