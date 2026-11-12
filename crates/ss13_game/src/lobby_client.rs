@@ -625,6 +625,10 @@ impl ClientUi for JobPrefsUi {
             (crate::antag::ROLE_ALIEN, "Ксеноморф"),
             (crate::antag::ROLE_NINJA, "Космический ниндзя"),
             (crate::antag::ROLE_FUGITIVE, "Беглец"),
+            (
+                crate::antag::changeling::ROLE_CHANGELING_MIDROUND,
+                "Генокрад (мидраунд)",
+            ),
         ]
         .into_iter()
         .map(|(role, label)| {

@@ -440,6 +440,7 @@ fn shield_meteors(world: &mut World) {
             continue;
         }
         if !crate::events::meteors::is_dark_matteor(world, meteor) {
+            crate::events::meteors::retarget_cargo(world, meteor, in_reach[0].1);
             world.despawn(meteor);
             continue;
         }

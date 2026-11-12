@@ -1818,6 +1818,7 @@ fn preference_acts(
                     crate::antag::ROLE_ALIEN,
                     crate::antag::ROLE_NINJA,
                     crate::antag::ROLE_FUGITIVE,
+                    crate::antag::changeling::ROLE_CHANGELING_MIDROUND,
                 ]
                 .contains(&role.as_str()) =>
             {

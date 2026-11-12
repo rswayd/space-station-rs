@@ -678,6 +678,7 @@ impl Plugin for EventsServerPlugin {
             .init_resource::<holidays::HolidaysConfig>()
             .init_resource::<anomalies::CoresMade>()
             .init_resource::<grid_check::GridCheckCooldown>()
+            .add_observer(meteors::release_cargo)
             .add_systems(Startup, controller::init_events)
             .add_systems(
                 Update,

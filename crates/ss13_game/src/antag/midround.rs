@@ -27,7 +27,7 @@
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
 // (`super::revenant`), the slaughter demon (`super::slaughter`), the abductors
 // (`super::abductor`), the blob and blob infection (`super::blob`), the xenomorphs
-// (`super::xeno`), the space ninja, the fugitives and the light and heavy pirates
+// (`super::xeno`), the space and mass space changelings (`super::changeling`), the space ninja, the fugitives and the light and heavy pirates
 // (`super::raiders`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
@@ -150,6 +150,8 @@ pub const LIGHT_PIRATES: &str = "Light Pirates";
 pub const HEAVY_PIRATES: &str = "Heavy Pirates";
 pub const FUGITIVES: &str = "Fugitives";
 pub const SPACE_NINJA: &str = "Space Ninja";
+pub const MIDROUND_CHANGELING: &str = "Midround Changeling";
+pub const MASS_CHANGELINGS: &str = "Mass Changelings";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -231,7 +233,10 @@ pub const RULESETS: [Ruleset; 30] = {
             role: Some(super::ROLE_REVENANT),
             ..non_repeatable(other(REVENANT, Light, flat(5), 10))
         },
-        other("Midround Changeling", Light, flat(5), 15),
+        Ruleset {
+            role: Some(super::changeling::ROLE_CHANGELING_MIDROUND),
+            ..other(MIDROUND_CHANGELING, Light, flat(5), 15)
+        },
         Ruleset {
             role: Some(super::paradox_clone::ROLE_PARADOX_CLONE),
             ..other(PARADOX_CLONE, Light, flat(5), 10)
@@ -300,10 +305,14 @@ pub const RULESETS: [Ruleset; 30] = {
             role: Some(super::ROLE_NINJA),
             ..non_repeatable(other(SPACE_NINJA, Heavy, [0, 0, 1, 2], 30))
         },
-        child(
-            decrease(other("Mass Changelings", Heavy, [0, 3, 4, 5], 25), 4),
-            "Midround Changeling",
-        ),
+        Ruleset {
+            role: Some(super::changeling::ROLE_CHANGELING_MIDROUND),
+            caps: (Cap::Fixed(2), Cap::Fixed(3)),
+            ..child(
+                decrease(other(MASS_CHANGELINGS, Heavy, [0, 3, 4, 5], 25), 4),
+                MIDROUND_CHANGELING,
+            )
+        },
         Ruleset {
             role: Some(super::ROLE_SLAUGHTER_DEMON),
             ..other(SLAUGHTER_DEMON, Heavy, flat(0), 20)
@@ -897,6 +906,7 @@ fn poll_role_name(r: &Ruleset) -> &'static str {
         XENOMORPH => "Ксеноморф",
         SPACE_NINJA => "Космический ниндзя",
         FUGITIVES => "Беглец",
+        MIDROUND_CHANGELING | MASS_CHANGELINGS => "Генокрад",
         tag => tag,
     }
 }
@@ -1122,6 +1132,15 @@ fn select_and_run(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             if super::raiders::fugitive::spawn_fugitives(world, &clients).is_empty() {
+                return Vec::new();
+            }
+        }
+        MIDROUND_CHANGELING | MASS_CHANGELINGS => {
+            let clients: Vec<Entity> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
+                .collect();
+            if super::changeling::server::spawn_space_changelings(world, &clients).is_empty() {
                 return Vec::new();
             }
         }

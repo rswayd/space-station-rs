@@ -363,6 +363,15 @@ pub fn readapt(world: &mut World, mob: Entity) {
         "Мы избавились от нашего развития в этой форме и теперь готовы к повторной адаптации.",
     );
     remove_powers(world, mob);
+    // `void_adaption/Remove` while protecting.
+    if ling.void_active {
+        chat_to(
+            world,
+            mob,
+            Span::Changeling,
+            "Наши клетки расслабляются, несмотря на опасность!",
+        );
+    }
     if let Some(mut ling) = world.get_mut::<Changeling>(mob) {
         ling.remove_purchased();
         ling.can_respec -= 1;

@@ -42,6 +42,15 @@ pub(super) fn id_name(world: &World, mob: Entity) -> Option<String> {
 
 /// `add_antag_datum(/datum/antagonist/changeling)` on `mob`. `false` if it already is one.
 pub fn add_changeling(world: &mut World, mob: Entity) -> bool {
+    add_changeling_greeted(world, mob, None)
+}
+
+/// [`add_changeling`] with a subtype's `greet()` line in place of "Вы - Генокрад.".
+pub(super) fn add_changeling_greeted(
+    world: &mut World,
+    mob: Entity,
+    greeting: Option<&str>,
+) -> bool {
     if world.get::<Changeling>(mob).is_some() || world.get::<Health>(mob).is_none() {
         return false;
     }
@@ -101,7 +110,10 @@ pub fn add_changeling(world: &mut World, mob: Entity) -> bool {
         ChangelingHivemind,
     ));
     // `greet()`, the panel note and the panel.
-    chat_to(world, mob, Span::Bold, format!("Вы - {CHANGELING_NAME}."));
+    match greeting {
+        Some(text) => chat_to(world, mob, Span::Changeling, text),
+        None => chat_to(world, mob, Span::Bold, format!("Вы - {CHANGELING_NAME}.")),
+    }
     announce_objectives(world, mob);
     chat_to(
         world,
@@ -317,7 +329,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
         let powers = Power::ALL
             .into_iter()
             .filter(|p| p.innate())
-            .chain(ling.purchased.iter().copied());
+            .chain(ling.purchased.iter().copied())
+            .filter(|p| !p.passive());
         for power in powers {
             let def = power.def();
             let ready = matches!(ling.stasis, Stasis::Ready { .. });
@@ -467,6 +480,8 @@ pub(super) fn try_power(world: &mut World, client: Entity, mob: Entity, power: P
         Power::ResonantShriek => resonant_shriek(world, client, mob),
         Power::DissonantShriek => dissonant_shriek(world, client, mob),
         Power::DigitalCamo => digital_camo(world, mob),
+        // Passive: no button.
+        Power::VoidAdaption => false,
         // Handled above.
         Power::TransformationSting
         | Power::FalseArmbladeSting

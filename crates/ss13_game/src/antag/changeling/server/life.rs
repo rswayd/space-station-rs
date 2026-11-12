@@ -23,6 +23,7 @@ pub(super) fn changeling_life(world: &mut World, mut last_fired: Local<Option<u6
             .unwrap_or_default();
         let dead = world.get::<Stat>(mob) == Some(&Stat::Dead)
             && (world.get::<DeathComa>(mob).is_none() || stasis.died());
+        void_check_environment(world, mob);
         let on_fire = crate::fire::on_fire(world, mob);
         if let Some(mut ling) = world.get_mut::<Changeling>(mob) {
             ling.regenerate_chemicals(secs, dead, on_fire);
