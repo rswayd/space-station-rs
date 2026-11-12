@@ -57,6 +57,9 @@ pub use model::{
     LightMode, Smes,
 };
 
+/// tg `/obj/structure/cable/multilayer/multiz`: bridges powernets between stacked levels.
+const MULTIZ_HUB: &str = "/obj/structure/cable/multilayer/multiz";
+
 /// tg `SSmachines.wait`: machines and power process every 2 seconds.
 pub const MACHINE_TICK_SECS: f64 = 2.0;
 /// Machine ticks one frame may catch up after a stall; the rest is dropped, like tg's MC
@@ -427,6 +430,7 @@ pub(crate) fn init_power(world: &mut World) {
         Option<&Optics>,
     ), With<Mapped>>();
     let mut cables = Vec::new();
+    let mut hubs = Vec::new();
     let mut apcs = Vec::new();
     let mut apc_helpers = Vec::new();
     let mut lights_off = Vec::new();
@@ -438,7 +442,9 @@ pub(crate) fn init_power(world: &mut World) {
     for (e, dm, &pos, atom, light, optics) in query.iter(world) {
         let path = dm.path.as_str();
         let dir = atom.map_or(2, |a| a.dir);
-        if is_under(path, CABLE_ROOT) {
+        if is_under(path, MULTIZ_HUB) {
+            hubs.push((e, pos, layer(dm)));
+        } else if is_under(path, CABLE_ROOT) {
             cables.push((e, pos, layer(dm)));
         } else if is_under(path, APC_ROOT) {
             apcs.push((e, pos, dm.clone(), atom.cloned(), light.cloned()));
@@ -676,9 +682,15 @@ pub(crate) fn init_power(world: &mut World) {
             .push(e);
     }
 
-    // shortcut: power cables only (`/obj/structure/cable/multilayer/multiz` hubs do not link
-    // z-levels yet); add with multi-z maps.
     grid.build(cables);
+    if let Some(report) = world.get_resource::<ss13_mapload::MapLoadReport>() {
+        for (below, above) in report.stacked_levels() {
+            grid.link_levels(below, above);
+        }
+    }
+    for (e, pos, layer) in hubs {
+        grid.add_multiz_hub(e, pos, layer);
+    }
     report.cables = grid.cable_count();
     report.nets = grid.nets().count();
     for &(e, ..) in &new_apcs {

@@ -29,7 +29,7 @@
 Соединяет кабельные сети соседних уровней (multi-z).
 
 - **Код:** [`/obj/structure/cable/multilayer/multiz`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/multiz.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/power/mod.rs`: shortcut, multiz-хабы не связывают уровни
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/grid.rs` (`add_multiz_hub`, `link_levels`, `links`): хаб связывается с хабом прямо над и под ним на сложенных уровнях (`MapLoadReport::stacked_levels`), сеть делится при снятии хаба; `power/mod.rs` (`init_power`) кладёт хабы карты. Нет строк осмотра «hub UP/DOWN»; постройка хаба из мотка — см. «Моток кабеля» выше
 
 ### Терминалы
 Подключение SMES и APC к сети с обратной стороны: терминал стоит на кабеле и передаёт энергию «хозяину»; ставится мотком кабеля, снимается кусачками.
