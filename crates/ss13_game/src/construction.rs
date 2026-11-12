@@ -217,6 +217,8 @@ pub enum Job {
     TurretBuild(crate::defenses::turret_build::TurretBuildJob),
     /// Barricade welds, prying and plank nailing (`crate::defenses::barricades`).
     Barricade(crate::defenses::barricades::BarricadeJob),
+    /// Golem shells fed, broken and taken apart (`crate::golems`).
+    Golem(crate::golems::GolemJob),
     /// Pulling taser electrodes out of yourself (`crate::taser`).
     RemoveElectrodes,
     /// Breaking out of an ice cube (`crate::freon`).
@@ -1523,6 +1525,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Restraints(job) => crate::restraints::complete(world, mob, action, job),
         &Job::TurretBuild(job) => crate::defenses::turret_build::complete(world, action, job),
         &Job::Barricade(job) => crate::defenses::barricades::complete(world, action, job),
+        &Job::Golem(job) => crate::golems::complete(world, mob, action, job),
         Job::RemoveElectrodes => crate::taser::complete_removal(world, mob),
         Job::BreakIce => crate::freon::complete_break_out(world, mob),
         Job::GunSuicide => crate::guns::complete_suicide(world, mob, action),
