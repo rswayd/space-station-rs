@@ -94,7 +94,7 @@ pub fn adjust_slash(
         // `replace_wound`: the milder cut keeps the flow if it is higher than its own.
         Some(lesser) => apply_wound(limb, lesser),
         None => {
-            remove_wound(limb, i);
+            heal_wound(limb, i);
             effects.push(TickEffect::Tell(
                 Span::Notice,
                 format!(
@@ -134,7 +134,7 @@ pub fn adjust_pierce(limb: &mut Limb, i: usize, by: f32) -> bool {
     let wound = &mut limb.wounds[i];
     wound.blood_flow = (wound.blood_flow + by).clamp(0.0, WOUND_MAX_BLOODFLOW);
     if wound.blood_flow <= 0.0 {
-        remove_wound(limb, i);
+        heal_wound(limb, i);
         return false;
     }
     true
@@ -198,7 +198,7 @@ pub(super) fn process_bone(
         }
     }
     if wound.regen_ticks > wound.regen_ticks_needed {
-        remove_wound(limb, i);
+        heal_wound(limb, i);
         return false;
     }
     true
@@ -244,7 +244,7 @@ pub(super) fn process_burn(
         wound.flesh_healing += 0.2;
     }
     if wound.flesh_damage <= 0.0 && wound.infection <= WOUND_INFECTION_MODERATE {
-        remove_wound(limb, i);
+        heal_wound(limb, i);
         return false;
     }
     if wound.sanitization > 0.0 {

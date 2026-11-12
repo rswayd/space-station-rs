@@ -24,7 +24,7 @@
 //!   `WOUND_DISMEMBER_OUTRIGHT_THRESH` takes it off outright by the limb's damage share
 //!   (`super::bodyparts::apply_dismember`, tg `/datum/wound/loss`).
 // shortcut: no cranial fissure, no eye puncture, no
-// bruises, scars, brain traumas from skull fractures, wound status effects, actionspeed
+// bruises (scars: [`scars`]), brain traumas from skull fractures, wound status effects, actionspeed
 // penalties, grasping wounds, embedded objects, blood sprays or splatters; clothing has no
 // `wound` armor (the exposed bonus always applies off the head and chest); `determination` from
 // `second_wind` is not added; disinfecting reagents (`on_burn_wound_processing`) do nothing.
@@ -43,10 +43,12 @@ use ss13_chat::capitalize;
 mod data;
 mod process;
 mod roll;
+pub mod scars;
 mod treat;
 
 pub use process::*;
 pub use roll::*;
+pub use scars::heal_wound;
 pub use treat::*;
 
 /// `WOUND_DAMAGE_EXPONENT`, `WOUND_MAX_CONSIDERED_DAMAGE`, `WOUND_MINIMUM_DAMAGE`.
@@ -206,6 +208,8 @@ pub struct Wound {
     pub threshold_penalty: f32,
     /// tg `disabling` (live: splints and infection change it).
     pub disabling: bool,
+    /// The severity of the scar it leaves: a cut's `highest_scar` survives its demotions.
+    pub scar_severity: u8,
 }
 
 impl Wound {
@@ -228,6 +232,7 @@ impl Wound {
             strikes_to_lose_limb: 3,
             threshold_penalty: def.threshold_penalty,
             disabling: def.disabling,
+            scar_severity: def.severity,
         }
     }
 
@@ -287,6 +292,10 @@ pub struct Limb {
     // shortcut: robotic limbs get no wounds (tg has metal/wired wounds) and keep the body's
     // damage modifiers (tg `brute_modifier`/`burn_modifier` 0.8 per limb).
     pub robotic: bool,
+    /// tg `scars` of the bodypart ([`scars`]).
+    pub scars: Vec<scars::Scar>,
+    /// `applied_items[LIMB_ITEM_TOURNIQUET]` (`crate::medical::tourniquet`).
+    pub tourniquet: bool,
 }
 
 impl Limb {
@@ -375,6 +384,9 @@ impl Limb {
         if lying {
             rate *= 0.75;
         }
+        if self.tourniquet {
+            rate *= crate::medical::tourniquet::BLEED_FACTOR;
+        }
         rate
     }
 
@@ -450,6 +462,12 @@ impl Limbs {
             .count();
         let usable = 2 - disabled;
         let mut slowdown = (2 - usable) as f32 * 3.0;
+        // A tourniquet's `set_speed_modifier(speed_modifier + 0.5)` on a leg.
+        slowdown += legs
+            .iter()
+            .filter(|&&z| self.limb(z).tourniquet && !self.limb(z).missing)
+            .count() as f32
+            * crate::medical::tourniquet::LEG_SLOWDOWN;
         // The limp alternates legs: each step rolls one leg's chance.
         for leg in legs {
             let (limp, chance) = self.limb(leg).limp();

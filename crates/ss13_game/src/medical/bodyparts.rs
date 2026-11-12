@@ -275,10 +275,16 @@ pub fn drop_limb(world: &mut World, mob: Entity, zone: BodyZone) -> Option<Entit
     }
     let robotic = std::mem::take(&mut limb.robotic);
     limb.gauze = None;
+    // `limb_gone`: the scars leave with the limb; its tourniquet drops with it.
+    limb.scars.clear();
+    let tourniquet = std::mem::take(&mut limb.tourniquet);
     limb.missing = true;
     limb.surgery = state::SKIN_OPEN;
     world.entity_mut(mob).insert(limbs);
     crate::embedding::limb_removed(world, mob, zone);
+    if tourniquet {
+        crate::construction::spawn_obj(world, super::tourniquet::TOURNIQUET, pos);
+    }
     // `dropItemToGround(legcuffed, force = TRUE)` of a removed leg.
     if matches!(zone, BodyZone::LLeg | BodyZone::RLeg) {
         crate::legcuffs::remove(world, mob, pos);

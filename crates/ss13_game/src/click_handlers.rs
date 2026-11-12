@@ -68,6 +68,7 @@
 //! | 2000 | `grenades::attack_self` |
 //! | 2100 | `tables::attack_self` |
 //! | 2200 | `furniture::attack_self` |
+//! | 2205 | `furniture::roller_attack_self` (a roller bed unfolds onto the user's tile) |
 //! | 2300 | `atmos_machinery::rpd::attack_self` |
 //! | 2400 | `science::experi_scanner::attack_self` |
 //! | 2500 | `atmos_machinery::fitting::attack_self` |
@@ -322,6 +323,7 @@
 //! | 3565 | `recycling::conveyor::switch_hand` (the lever; right click: backwards) |
 //! | 3575 | `legcuffs::attack_hand` (an energy snare springs on the hand that touches it) |
 //! | 3585 | `cargo::black_market::ltsrbt_hand` (the LTSRBT opens and closes; right click: its window) |
+//! | 3595 | `furniture::fold_emergency_bed` (right click: an empty emergency bed folds into the hands) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -447,6 +449,7 @@
 //! | 2715 | `power::lighting::swing_bulb` (a bulb shatters on a mob; never handles) |
 //! | 2719 | `records::console::photo_interaction` (a photo on a security records console makes a new record) |
 //! | 2785 | `recycling::held_on_target` (belts, switches, flaps, recyclers, disposal constructs and welding, belt stacks on floors) |
+//! | 2795 | `furniture::roller_on_floor` (a roller bed unfolds onto an open floor) |
 //! | 2800 | `power::chargers::item_interaction` |
 //! | 2820 | `power::apc_ui::toggle_lock` (an ID or a PDA with one on an APC) |
 //! | 2830 | `power::emitter::toggle_lock` (an ID or a PDA with one on an emitter) |

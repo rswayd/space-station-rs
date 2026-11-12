@@ -235,7 +235,7 @@ pub fn finish_treatment(
             }
         }
         Treat::SetBone => {
-            remove_wound(limbs.limb_mut(zone), index);
+            heal_wound(limbs.limb_mut(zone), index);
             world.entity_mut(patient).insert(limbs);
             super::super::hurt_limb(
                 world,

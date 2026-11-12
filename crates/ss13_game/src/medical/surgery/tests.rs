@@ -266,7 +266,8 @@ fn requirements_read_like_tg() {
         blocked,
         [
             "кожа должна быть целой",
-            "рабочая область не должна быть закрыта одеждой"
+            "рабочая область не должна быть закрыта одеждой",
+            "конечность не должна быть кибернетической"
         ]
     );
     let [all, ..] = Op::Revival.requirements();
@@ -274,4 +275,67 @@ fn requirements_read_like_tg() {
     assert!(all.contains(&"требуется, чтобы кость была распилена".to_owned()));
     let [_, any, ..] = Op::TendWounds(Tend::Basic, Heal::Brute).requirements();
     assert_eq!(any, ["кожа должна быть разрезана или вскрыта"]);
+}
+
+#[test]
+fn a_moved_bed_takes_its_patient_along() {
+    use bevy::ecs::message::Messages;
+    use bevy::ecs::system::RunSystemOnce;
+    let mut world = World::new();
+    world.init_resource::<Messages<ss13_world::Moved>>();
+    let (from, to) = (TilePos::new(1, 1, 0), TilePos::new(2, 1, 0));
+    let bed = world.spawn(to).id();
+    let patient = world.spawn((from, Buckled(bed))).id();
+    let bystander = world.spawn(from).id();
+    world.write_message(ss13_world::Moved {
+        entity: bed,
+        from,
+        to,
+        dir: ss13_shared::Dir::East,
+    });
+    world.run_system_once(carry_buckled).unwrap();
+    assert_eq!(world.get::<TilePos>(patient), Some(&to));
+    assert_eq!(world.get::<TilePos>(bystander), Some(&from));
+}
+
+#[test]
+fn robotic_limbs_take_the_mechanical_operations() {
+    let mut world = World::new();
+    let mut limbs = Limbs::default();
+    for zone in [BodyZone::LArm, BodyZone::RArm] {
+        limbs.limb_mut(zone).prepped = true;
+    }
+    limbs.limb_mut(BodyZone::RArm).robotic = true;
+    let mob = world
+        .spawn((
+            Health::default(),
+            Stat::Conscious,
+            limbs,
+            BodyPosition::default(),
+        ))
+        .id();
+    let (flesh, metal) = (TargetZone::LArm, TargetZone::RArm);
+    assert!(is_available(&world, Op::InciseSkin, mob, flesh));
+    assert!(!is_available(&world, Op::MechanicalIncision, mob, flesh));
+    assert!(!is_available(&world, Op::InciseSkin, mob, metal));
+    assert!(is_available(&world, Op::MechanicalIncision, mob, metal));
+    // Unscrewed, then the hatch: skin open and vessels clamped at once.
+    with_limbs(&mut world, mob, |l| {
+        l.limb_mut(BodyZone::RArm).add_surgery(state::SKIN_CUT)
+    });
+    assert!(is_available(&world, Op::MechanicalOpen, mob, metal));
+    assert!(!is_available(&world, Op::PrepareElectronics, mob, metal));
+    with_limbs(&mut world, mob, |l| {
+        let limb = l.limb_mut(BodyZone::RArm);
+        limb.add_surgery(state::SKIN_OPEN | state::VESSELS_CLAMPED);
+        limb.remove_surgery(state::SKIN_CUT);
+    });
+    for op in [
+        Op::PrepareElectronics,
+        Op::MechanicUnwrench,
+        Op::MechanicalClose,
+    ] {
+        assert!(is_available(&world, op, mob, metal), "{op:?}");
+    }
+    assert!(!is_available(&world, Op::MechanicWrench, mob, metal));
 }

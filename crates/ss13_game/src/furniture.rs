@@ -17,11 +17,17 @@
 //! - Beds draw mobs on them `elevation` pixels up (`/datum/element/elevation`, through
 //!   `crate::tables::Elevating`).
 //! - The furniture's `buckle_sound` / `unbuckle_sound` (shuttle seats, medical beds).
+//! - Medical beds (`/obj/structure/bed/medical`): rolled with the patient on them (a moved bed
+//!   takes its buckled mob along, `crate::medical::surgery`), alt-click toggles the brakes
+//!   (anchoring; not by its own patient), a patient makes it dense and raises it (`med_up`).
+//!   The emergency bed folds into a roller bed in the hands with a right click when empty; the
+//!   roller bed unfolds onto the user's tile in hand or onto a clicked open floor.
 // shortcut: no armrest overlays (`[icon_state]_armrest` above the mob: overlays have no layer of
 // their own here; electric chairs are `crate::electric_chair`), no office chairs rolling under their mob, no
 // smashing item chairs on people, no greyscale material chairs (they leave no stack), no
 // spinning bronze chairs, no ghost rotation; alt+right click (clockwise) is not told apart from
-// alt-click.
+// alt-click. Medical beds: no brakes overlay (overlays have no emissive layer here), no
+// `noisy_movement` sound, no cyborg bed dock (`/obj/item/emergency_bed/silicon`).
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -51,6 +57,11 @@ const BAR_STOOL_UP: i16 = 7;
 /// `ABOVE_MOB_LAYER`.
 const ABOVE_MOB_LAYER: f32 = 4.1;
 const RATCHET: &str = "sound/items/tools/ratchet.ogg";
+pub const MEDICAL_BED: &str = "/obj/structure/bed/medical";
+pub const EMERGENCY_BED: &str = "/obj/structure/bed/medical/emergency";
+/// `foldable_type` of the emergency bed and the roller bed's deployed type.
+pub const ROLLER_BED: &str = "/obj/item/emergency_bed";
+const BED_DOCK: &str = "/obj/item/emergency_bed/silicon";
 
 /// On a mob buckled to a chair (tg `buckle_lying = 0`): it sits upright facing the chair's way,
 /// drawn `up` pixels higher.
@@ -69,6 +80,19 @@ impl Plugin for FurniturePlugin {
         // An item chair is set down.
         app.add_click_handler(ClickPhase::AttackSelf, 2200, |w, c| {
             crate::furniture::attack_self(w, c.client, c.mob, c.target)
+        });
+        // A roller bed unfolds onto the user's tile.
+        app.add_click_handler(ClickPhase::AttackSelf, 2205, |w, c| {
+            crate::furniture::roller_attack_self(w, c.mob, c.target)
+        });
+        // A roller bed unfolds onto a clicked open floor.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 2795, |w, c| {
+            c.held
+                .is_some_and(|h| crate::furniture::roller_on_floor(w, c.mob, h, c.target))
+        });
+        // Right click: an empty emergency bed folds into the hands.
+        app.add_click_handler(ClickPhase::EmptyHand, 3595, |w, c| {
+            c.modifiers.right && crate::furniture::fold_emergency_bed(w, c.mob, c.target)
         });
         app.add_observer(add_bed).add_systems(
             Update,
@@ -166,6 +190,9 @@ pub(crate) fn post_buckle(world: &mut World, actor: Actor, mob: Entity, furnitur
         crate::vehicles::post_buckle(world, actor, mob, furniture);
         return true;
     }
+    if is_under(&dm.path, MEDICAL_BED) {
+        refresh_medical_bed(world, furniture, true);
+    }
     if !is_chair(&dm.path) {
         return false;
     }
@@ -230,6 +257,9 @@ pub(crate) fn post_unbuckle(
     if crate::vehicles::is_ridable(&dm.path) {
         crate::vehicles::post_unbuckle(world, actor, mob, furniture);
         return true;
+    }
+    if is_under(&dm.path, MEDICAL_BED) {
+        refresh_medical_bed(world, furniture, false);
     }
     if !is_chair(&dm.path) {
         return false;
@@ -331,6 +361,9 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity)
     let Some(path) = obj(world, target).map(|o| o.path.clone()) else {
         return false;
     };
+    if is_under(&path, MEDICAL_BED) {
+        return brakes(world, mob, target);
+    }
     // The bronze chair spins on its own click_alt; not ported.
     if !is_chair(&path) || is_under(&path, BRONZE) {
         return false;
@@ -513,6 +546,151 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
     } else if is_under(&dm.path, BED) && dm.can_deconstruct {
         lines.push((Span::Notice, "Скреплено парой болтов.".to_owned()));
     }
+    // `/obj/structure/bed/medical/examine`; tg has it only in English.
+    if is_under(&dm.path, MEDICAL_BED) {
+        lines.push((
+            Span::Notice,
+            if crate::obj_damage::anchored(world, target) {
+                "Тормоза зажаты. Их можно отпустить Alt-кликом."
+            } else {
+                "Тормоза можно зажать Alt-кликом."
+            }
+            .to_owned(),
+        ));
+        if is_under(&dm.path, EMERGENCY_BED) {
+            lines.push((Span::Notice, "Её можно сложить правым кликом.".to_owned()));
+        }
+    }
+}
+
+/// `/obj/structure/bed/medical/click_alt`: the brakes on or off (anchoring), not by the patient
+/// lying on it.
+fn brakes(world: &mut World, mob: Entity, bed: Entity) -> bool {
+    if world.get::<Buckled>(mob).is_some_and(|b| b.0 == bed) {
+        return true;
+    }
+    let on = !crate::obj_damage::anchored(world, bed);
+    world
+        .entity_mut(bed)
+        .insert(crate::obj_damage::Anchored(on));
+    crate::balloon::balloon_alert(
+        world,
+        mob,
+        bed,
+        if on {
+            "тормоза зажаты"
+        } else {
+            "тормоза отпущены"
+        },
+    );
+    true
+}
+
+/// `post_buckle_mob`/`post_unbuckle_mob` and `update_icon_state` of a medical bed: dense and
+/// raised (`[base_icon_state]_up`) with a patient.
+fn refresh_medical_bed(world: &mut World, bed: Entity, occupied: bool) {
+    if world.get_entity(bed).is_err() {
+        return;
+    }
+    if occupied {
+        world.entity_mut(bed).insert(Density);
+    } else {
+        world.entity_mut(bed).remove::<Density>();
+    }
+    let Some(initial) = world.get::<DmAtom>(bed).map(|a| a.icon_state.clone()) else {
+        return;
+    };
+    let base = initial
+        .strip_suffix("_down")
+        .or_else(|| initial.strip_suffix("_up"))
+        .unwrap_or(&initial);
+    let state = format!("{base}_{}", if occupied { "up" } else { "down" });
+    crate::obj_damage::set_icon_state(world, bed, &state);
+}
+
+/// `/obj/structure/bed/medical/emergency/attack_hand_secondary`: an empty emergency bed folds
+/// into a roller bed in the hands of a human next to it. True when `bed` is one.
+pub fn fold_emergency_bed(world: &mut World, mob: Entity, bed: Entity) -> bool {
+    if !obj(world, bed).is_some_and(|o| is_under(&o.path, EMERGENCY_BED)) {
+        return false;
+    }
+    // `ishuman(user) && can_perform_action(src)`, no patient on it.
+    if world.get::<crate::human::HumanLook>(mob).is_none()
+        || world.get::<Stat>(mob) != Some(&Stat::Conscious)
+        || crate::status_effects::incapacitation(world, mob).incapacitated
+        || crate::medical::surgery::buckled_to(world, bed).is_some()
+    {
+        return true;
+    }
+    let Some(&pos) = world.get::<TilePos>(bed) else {
+        return true;
+    };
+    let Some(item) = crate::construction::spawn_detached(world, ROLLER_BED) else {
+        return true;
+    };
+    let (user, what) = (name_of(world, mob), name_of(world, bed));
+    visible(
+        world,
+        mob,
+        &format!("Вы складываете {what}."),
+        &format!("{user} складывает {what}."),
+        Span::Notice,
+    );
+    world.despawn(bed);
+    world.entity_mut(item).insert(ss13_net::server::Networked);
+    if let Some(inventory) = world.get::<Inventory>(mob).cloned() {
+        crate::storage::put_in_hands(world, mob, &inventory, item);
+    } else {
+        world.entity_mut(item).insert(pos);
+    }
+    true
+}
+
+fn is_roller(world: &World, item: Entity) -> bool {
+    world
+        .get::<DmItem>(item)
+        .is_some_and(|i| is_under(&i.path, ROLLER_BED) && !is_under(&i.path, BED_DOCK))
+}
+
+/// `/obj/item/emergency_bed/attack_self` -> `deploy_bed(user, user.loc)`.
+pub fn roller_attack_self(world: &mut World, mob: Entity, item: Entity) -> bool {
+    if !is_roller(world, item) {
+        return false;
+    }
+    if let Some(&pos) = world.get::<TilePos>(mob) {
+        deploy_roller(world, mob, item, pos);
+    }
+    true
+}
+
+/// `/obj/item/emergency_bed/interact_with_atom` on an open turf.
+pub fn roller_on_floor(world: &mut World, mob: Entity, item: Entity, target: Entity) -> bool {
+    if !is_roller(world, item) {
+        return false;
+    }
+    let Some(&pos) = world.get::<TilePos>(target) else {
+        return false;
+    };
+    let open =
+        world.get::<ss13_mapload::Turf>(target).is_some() && world.get::<Density>(target).is_none();
+    if !open {
+        return false;
+    }
+    deploy_roller(world, mob, item, pos);
+    true
+}
+
+/// `deploy_bed`: the emergency bed on `pos`; the roller bed is used up.
+fn deploy_roller(world: &mut World, mob: Entity, item: Entity, pos: TilePos) {
+    if crate::construction::spawn_obj(world, EMERGENCY_BED, pos).is_none() {
+        return;
+    }
+    if let Some(mut inventory) = world.get_mut::<Inventory>(mob)
+        && let Some(slot) = inventory.slot_of(item)
+    {
+        *inventory.slot_mut(slot) = None;
+    }
+    world.despawn(item);
 }
 
 #[cfg(test)]

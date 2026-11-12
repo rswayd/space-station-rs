@@ -491,6 +491,8 @@ pub(crate) fn transfer_to_mob(
         .and_then(|r| r.data.as_deref())
         .map(crate::chem_machines::pandemic::vaccine_ids)
         .unwrap_or_default();
+    let strange = chem.id(crate::medical::strange_reagent::STRANGE_REAGENT);
+    let strange_before = strange.map_or(0.0, |id| a.amount(id));
     // tg `expel_ingested`: without a stomach what is swallowed comes back out.
     // shortcut: it is lost (no vomit decal with the reagents).
     let expelled =
@@ -504,7 +506,12 @@ pub(crate) fn transfer_to_mob(
     }
     let injected = blood_before - blood.map_or(0.0, |id| a.amount(id));
     let vaccinated = vaccine_before - vaccine.map_or(0.0, |id| a.amount(id));
+    let strange_moved = strange.map_or(0.0, |id| strange_before - a.amount(id));
     put(world, from, a);
+    // `strange_reagent/expose_mob`: a carbon is revived by what it swallows.
+    if ingest && strange_moved > 0.0 {
+        crate::medical::strange_reagent::expose(world, mob, strange_moved);
+    }
     if !ingest {
         crate::medical::blood::expose_inject(world, mob, injected, blood_data);
     }

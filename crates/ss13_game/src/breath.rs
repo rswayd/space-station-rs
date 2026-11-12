@@ -184,6 +184,8 @@ pub enum AlertCategory {
     EmbeddedObject,
     /// BandaStation `ALERT_BODYCAM_VIEWED` (`crate::silicon::mob_cameras`).
     BodycamViewed,
+    /// `/datum/status_effect/freon`'s alert (`crate::freon`).
+    Frozen,
 }
 
 /// One thrown alert: its type's base `icon_state` and `severity` (0: none).
@@ -235,6 +237,14 @@ impl Alert {
                 return (
                     "К ЗВЁЗДАМ И ДАЛЬШЕ!",
                     "Я должен идти, мой народ нуждается во мне!",
+                );
+            }
+            // `/atom/movable/screen/alert/status_effect/freon`; tg has it only in English.
+            AlertCategory::Frozen => {
+                return (
+                    "Вморожен в лёд",
+                    "Вы вморожены в ледяной куб и не можете двигаться! Действовать (например, \
+                     стрелять) всё ещё можно. Сопротивляйтесь, чтобы выбраться из куба!",
                 );
             }
             AlertCategory::Discoordinated => {

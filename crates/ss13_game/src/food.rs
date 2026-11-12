@@ -13,7 +13,7 @@
 //! - A tool clicked on food with a matching `processable` (a knife on bread, a rolling pin on
 //!   dough) works on it for the element's time (`use_tool`) and replaces it with `amount`
 //!   results that split its reagents (`table_required`: on a table or a tray).
-// shortcut: no foodtypes, likes/dislikes, food buffs, decomposition, `check_liked`, golem
+// shortcut: no food buffs, decomposition, disgust, `TRAIT_FLESH_DESIRE`/`PECKISH`, golem
 // materials, eating sounds, voracious/glutton traits or hologram food; the radial menu between
 // several processing results picks the first.
 
@@ -559,11 +559,165 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
     }
 }
 
-/// `foodtypes` bits of a human tongue's tastes (`/obj/item/organ/tongue`): `JUNKFOOD | FRIED`,
+/// `foodtypes` bits (`code/__DEFINES/food.dm`).
+pub mod foodtype {
+    pub const MEAT: u32 = 1 << 0;
+    pub const VEGETABLES: u32 = 1 << 1;
+    pub const RAW: u32 = 1 << 2;
+    pub const JUNKFOOD: u32 = 1 << 3;
+    pub const GRAIN: u32 = 1 << 4;
+    pub const FRUIT: u32 = 1 << 5;
+    pub const DAIRY: u32 = 1 << 6;
+    pub const FRIED: u32 = 1 << 7;
+    pub const ALCOHOL: u32 = 1 << 8;
+    pub const SUGAR: u32 = 1 << 9;
+    pub const GROSS: u32 = 1 << 10;
+    pub const TOXIC: u32 = 1 << 11;
+    pub const CLOTH: u32 = 1 << 14;
+    pub const NUTS: u32 = 1 << 15;
+    pub const SEAFOOD: u32 = 1 << 16;
+    pub const ORANGES: u32 = 1 << 17;
+    pub const BUGS: u32 = 1 << 18;
+    pub const GORE: u32 = 1 << 19;
+    pub const STONE: u32 = 1 << 20;
+}
+
+/// A human tongue's tastes (`/obj/item/organ/tongue`): `JUNKFOOD | FRIED`,
 /// `GROSS | RAW | CLOTH | BUGS | GORE`, `TOXIC`.
-pub const LIKED_FOODTYPES: u32 = (1 << 3) | (1 << 7);
-pub const DISLIKED_FOODTYPES: u32 = (1 << 10) | (1 << 2) | (1 << 14) | (1 << 18) | (1 << 19);
-pub const TOXIC_FOODTYPES: u32 = 1 << 11;
+pub const LIKED_FOODTYPES: u32 = foodtype::JUNKFOOD | foodtype::FRIED;
+pub const DISLIKED_FOODTYPES: u32 =
+    foodtype::GROSS | foodtype::RAW | foodtype::CLOTH | foodtype::BUGS | foodtype::GORE;
+pub const TOXIC_FOODTYPES: u32 = foodtype::TOXIC;
+
+/// `liked_foodtypes`, `disliked_foodtypes`, `toxic_foodtypes` of the tongue types that change
+/// them (`organs/internal/tongue/_tongue.dm`, BandaStation `species/.../*_internal.dm`), with the
+/// inherited values written out.
+const TONGUE_TASTES: [(&str, u32, u32, u32); 17] = {
+    use foodtype::*;
+    [
+        (
+            "/obj/item/organ/tongue/lizard",
+            GORE | MEAT | SEAFOOD | NUTS | BUGS,
+            GRAIN | DAIRY | CLOTH | GROSS,
+            TOXIC,
+        ),
+        (
+            "/obj/item/organ/tongue/zombie",
+            GROSS | MEAT | RAW | GORE,
+            0,
+            TOXIC,
+        ),
+        (
+            "/obj/item/organ/tongue/bone/plasmaman",
+            VEGETABLES,
+            FRUIT | CLOTH,
+            TOXIC,
+        ),
+        (
+            "/obj/item/organ/tongue/bone",
+            GROSS | MEAT | RAW | GORE | DAIRY,
+            0,
+            TOXIC,
+        ),
+        ("/obj/item/organ/tongue/ethereal", 0, GROSS, 0),
+        (
+            "/obj/item/organ/tongue/cat",
+            SEAFOOD | ORANGES | BUGS | GORE,
+            GROSS | CLOTH | RAW,
+            TOXIC,
+        ),
+        ("/obj/item/organ/tongue/jelly", MEAT | BUGS, GROSS, 0),
+        (
+            "/obj/item/organ/tongue/monkey",
+            MEAT | FRUIT | BUGS,
+            CLOTH,
+            TOXIC,
+        ),
+        (
+            "/obj/item/organ/tongue/moth",
+            VEGETABLES | DAIRY | CLOTH,
+            FRUIT | GROSS | BUGS | GORE,
+            MEAT | RAW | SEAFOOD,
+        ),
+        (
+            "/obj/item/organ/tongue/pod",
+            VEGETABLES | FRUIT | GRAIN,
+            GORE | MEAT | DAIRY | SEAFOOD | BUGS,
+            TOXIC,
+        ),
+        ("/obj/item/organ/tongue/golem", STONE, 0, 0),
+        (
+            "/obj/item/organ/tongue/skrell",
+            VEGETABLES | FRUIT,
+            SEAFOOD,
+            ALCOHOL | MEAT,
+        ),
+        (
+            "/obj/item/organ/tongue/tajaran",
+            MEAT | SEAFOOD | DAIRY,
+            NUTS | GROSS | ORANGES,
+            SUGAR,
+        ),
+        (
+            "/obj/item/organ/tongue/vulpkanin",
+            RAW | MEAT | SEAFOOD,
+            FRUIT | NUTS | GROSS | GRAIN,
+            TOXIC,
+        ),
+        // The rest keep the human tastes.
+        (
+            "/obj/item/organ/tongue",
+            LIKED_FOODTYPES,
+            DISLIKED_FOODTYPES,
+            TOXIC_FOODTYPES,
+        ),
+        (
+            "/obj/item/organ/tongue/robot",
+            LIKED_FOODTYPES,
+            DISLIKED_FOODTYPES,
+            TOXIC_FOODTYPES,
+        ),
+        (
+            "/obj/item/organ/tongue/abductor",
+            LIKED_FOODTYPES,
+            DISLIKED_FOODTYPES,
+            TOXIC_FOODTYPES,
+        ),
+    ]
+};
+
+/// The `(liked, disliked, toxic)` foodtypes of a tongue of type `path` (its nearest listed
+/// ancestor).
+pub fn tongue_tastes(path: &str) -> (u32, u32, u32) {
+    TONGUE_TASTES
+        .iter()
+        .filter(|(p, ..)| is_under(path, p))
+        .max_by_key(|(p, ..)| p.len())
+        .map_or(
+            (LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES),
+            |&(_, l, d, t)| (l, d, t),
+        )
+}
+
+/// What an eater tastes food with: its tongue's foodtypes after the taste quirks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Palate {
+    pub liked: u32,
+    pub disliked: u32,
+    pub toxic: u32,
+    /// `TRAIT_AGEUSIA` (or no tongue): only toxic food counts.
+    pub ageusia: bool,
+}
+
+impl Palate {
+    pub const HUMAN: Self = Self {
+        liked: LIKED_FOODTYPES,
+        disliked: DISLIKED_FOODTYPES,
+        toxic: TOXIC_FOODTYPES,
+        ageusia: false,
+    };
+}
+
 /// `LIKED_FOOD_QUALITY_CHANGE`, `TOXIC_FOOD_QUALITY_THRESHOLD`, `FOOD_QUALITY_TOP`.
 const LIKED_CHANGE: i32 = 2;
 pub const TOXIC_QUALITY: i32 = -8;
@@ -613,36 +767,53 @@ pub struct Handmade;
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 struct LikedChecked(f64);
 
-/// tg `get_perceived_food_quality` for a human eater whose tongue has these tastes (`None`: no
-/// tongue, it tastes nothing).
-pub fn perceived_quality(dm: &DmFood, handmade: bool, tongue: Option<(u32, u32, u32)>) -> i32 {
+/// tg `get_perceived_food_quality` for a human eater with `palate` (`None`: not a human, no
+/// preferences).
+pub fn perceived_quality(dm: &DmFood, handmade: bool, palate: Option<Palate>) -> i32 {
     let mut quality = if handmade {
         dm.crafting_complexity as i32
     } else {
         0
     };
-    let Some((liked, disliked, toxic)) = tongue else {
-        // `TRAIT_AGEUSIA`.
-        return 0;
-    };
-    if dm.foodtypes & toxic != 0 {
-        return TOXIC_QUALITY;
+    if let Some(palate) = palate {
+        // Toxic food is the only category that ignores ageusia.
+        if dm.foodtypes & palate.toxic != 0 {
+            return TOXIC_QUALITY;
+        }
+        if palate.ageusia {
+            return 0;
+        }
+        quality -= LIKED_CHANGE * (dm.foodtypes & palate.disliked).count_ones() as i32;
+        quality += LIKED_CHANGE * (dm.foodtypes & palate.liked).count_ones() as i32;
     }
-    quality -= LIKED_CHANGE * (dm.foodtypes & disliked).count_ones() as i32;
-    quality += LIKED_CHANGE * (dm.foodtypes & liked).count_ones() as i32;
     quality.min(QUALITY_TOP)
 }
 
-fn tongue_of(world: &World, mob: Entity) -> Option<(u32, u32, u32)> {
-    (world.get::<crate::medical::wounds::Limbs>(mob).is_some()
-        && !crate::medical::organs::lacks(world, mob, crate::medical::organs::Slot::Tongue))
-    .then(|| {
-        // The taste quirks (`crate::quirks`): `get_liked_foodtypes` and its kin.
-        crate::quirks::food_tastes(
-            world,
-            mob,
-            (LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES),
-        )
+/// tg `get_liked_foodtypes`, `get_disliked_foodtypes`, `get_toxic_foodtypes` of a carbon: the
+/// tongue organ's tastes after the taste quirks (`crate::quirks`).
+fn palate_of(world: &World, mob: Entity) -> Option<Palate> {
+    use crate::medical::organs::{Slot, lacks, state};
+    world.get::<crate::medical::wounds::Limbs>(mob)?;
+    if lacks(world, mob, Slot::Tongue) {
+        // No tongue: `/mob/living/get_toxic_foodtypes`.
+        return Some(Palate {
+            liked: 0,
+            disliked: 0,
+            toxic: TOXIC_FOODTYPES,
+            ageusia: true,
+        });
+    }
+    // A mob without modelled organs tastes with a human tongue.
+    let tastes = state(world, mob, Slot::Tongue).map_or(
+        (LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES),
+        |t| tongue_tastes(&t.path),
+    );
+    let (liked, disliked, toxic) = crate::quirks::food_tastes(world, mob, tastes);
+    Some(Palate {
+        liked,
+        disliked,
+        toxic,
+        ageusia: crate::quirks::has(world, mob, crate::quirks::Quirk::Ageusia),
     })
 }
 
@@ -662,7 +833,7 @@ fn check_liked(world: &mut World, eater: Entity, food: Entity, dm: &DmFood) {
         return;
     }
     let handmade = world.get::<Handmade>(food).is_some();
-    let quality = perceived_quality(dm, handmade, tongue_of(world, eater));
+    let quality = perceived_quality(dm, handmade, palate_of(world, eater));
     // The moodlets of `checkLiked` (`crate::mood`).
     // shortcut: no disgust (`adjust_disgust`), breakfast or good food memories.
     use crate::mood::events::{DISGUSTING_FOOD, GROSS_FOOD};
@@ -708,7 +879,7 @@ pub fn examine_lines(world: &World, food: Entity, viewer: Entity, lines: &mut Ve
         ));
     }
     let handmade = world.get::<Handmade>(food).is_some();
-    let quality = perceived_quality(dm, handmade, tongue_of(world, viewer));
+    let quality = perceived_quality(dm, handmade, palate_of(world, viewer));
     lines.push(if quality > 0 {
         let label = QUALITY_LABELS[(quality.min(QUALITY_TOP) - 1) as usize];
         (Span::GreenText, format!("Это выглядит, как {label} пища."))
@@ -996,7 +1167,7 @@ mod tests {
 
     #[test]
     fn quality_follows_the_tongue() {
-        let human = Some((LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES));
+        let human = Some(Palate::HUMAN);
         let food = |foodtypes, crafting_complexity| DmFood {
             foodtypes,
             crafting_complexity,
@@ -1010,12 +1181,60 @@ mod tests {
         assert_eq!(perceived_quality(&food(8, 3), false, human), 2);
         // Capped at FOOD_QUALITY_TOP.
         assert_eq!(perceived_quality(&food(8 | 128, 5), true, human), 7);
-        // Toxic beats everything; no tongue tastes nothing.
+        // Toxic beats everything, ageusia too; ageusia tastes nothing else, not even the
+        // handmade complexity.
         assert_eq!(
             perceived_quality(&food(2048 | 8, 5), true, human),
             TOXIC_QUALITY
         );
+        let ageusia = Some(Palate {
+            ageusia: true,
+            ..Palate::HUMAN
+        });
+        assert_eq!(
+            perceived_quality(&food(2048, 0), false, ageusia),
+            TOXIC_QUALITY
+        );
+        assert_eq!(perceived_quality(&food(8, 3), true, ageusia), 0);
+        // Not a human: no preferences.
         assert_eq!(perceived_quality(&food(2048, 0), false, None), 0);
+    }
+
+    #[test]
+    fn species_tongues_have_their_tastes() {
+        use foodtype::*;
+        // A moth's tongue: meat is toxic.
+        let (_, _, toxic) = tongue_tastes("/obj/item/organ/tongue/moth");
+        assert_eq!(toxic, MEAT | RAW | SEAFOOD);
+        // A plasmaman's bone tongue is not the plain bone tongue.
+        assert_eq!(
+            tongue_tastes("/obj/item/organ/tongue/bone/plasmaman").0,
+            VEGETABLES
+        );
+        // Lustrous ethereal inherits the ethereal tongue: nothing toxic.
+        assert_eq!(
+            tongue_tastes("/obj/item/organ/tongue/ethereal/lustrous").2,
+            0
+        );
+        // BandaStation tajaran: sugar is toxic.
+        assert_eq!(tongue_tastes("/obj/item/organ/tongue/tajaran").2, SUGAR);
+        // Unlisted tongues taste like a human's.
+        assert_eq!(
+            tongue_tastes("/obj/item/organ/tongue/snail"),
+            (LIKED_FOODTYPES, DISLIKED_FOODTYPES, TOXIC_FOODTYPES)
+        );
+        // Moth meat: toxic.
+        let moth = Palate {
+            liked: VEGETABLES | DAIRY | CLOTH,
+            disliked: FRUIT | GROSS | BUGS | GORE,
+            toxic: MEAT | RAW | SEAFOOD,
+            ageusia: false,
+        };
+        let meat = DmFood {
+            foodtypes: MEAT,
+            ..default()
+        };
+        assert_eq!(perceived_quality(&meat, false, Some(moth)), TOXIC_QUALITY);
     }
 
     fn reagent(path: &str, taste: &str, mult: f32) -> ReagentDef {

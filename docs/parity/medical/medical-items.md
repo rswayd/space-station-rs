@@ -17,7 +17,7 @@
 Пережимает конечность: останавливает кровотечение ниже, но вредит конечности со временем.
 
 - **Код:** [`/obj/item/tourniquet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tourniquet.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/medical/tourniquet.rs`: жгут накладывается на выбранную руку, ногу или шею (не грудь) за `do_after` 5 с × множитель (×0,5 на другом, ×2 без кровотечения, ещё ×2 на шее) с сообщениями, 5 brute и 20 стамины от затяжки, прежний жгут слетает на пол; конечность кровоточит в 10 раз меньше (`Limb::bleed_rate`), нога замедляет на 0,5 дс (`Limbs::limits`); на шее каждый `Life()` +1 пропущенный вдох и 1 oxy в секунду, иногда стамина, размытие, головокружение и спутанность (не для `TRAIT_NOBREATH`); при осмотре — строка со ссылкой (в пределах 4 клеток), снятие — 4 с `do_after` вплотную, жгут в руки; отрубленная конечность роняет жгут. `// shortcut:` конечность хранит только факт жгута (при снятии создаётся новый предмет); нет ускорения по голо-сканированным ранам (`TRAIT_WOUND_SCANNED` не портирован), замедления действий рукой и самоубийства. Нужен `ss13-mapload convert` (runtime-тип `/obj/item/tourniquet`)
 
 ### Анализатор здоровья
 Клик по мобу выводит скан: состояние, урон по типам и частям тела, температуру, органы, кровь, раны, болезни, квирки; правый клик — химический скан; продвинутый и супер-анализатор показывают больше.
@@ -47,7 +47,7 @@
 Мешок для тел (складывается, хранит труп), медицинская кровать и экстренная каталка (пристёгивают, катятся).
 
 - **Код:** [`/obj/item/bodybag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/medical/bodybag.dm#L2), [`/obj/structure/closet/body_bag`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/crates_lockers/closets/bodybag.dm#L1), [`/obj/structure/bed/medical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/bed.dm#L116), [`/obj/item/emergency_bed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/beds_chairs/bed.dm#L251)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — мешки для тел: `crates/ss13_game/src/closets/kinds.rs` (разворачивание из руки, мешок-шкаф на 2 моба, блюспейс на 15, сворачивание правым кликом пустого); медицинская кровать: `crates/ss13_game/src/furniture.rs` (`brakes`, `refresh_medical_bed`) — пристёгивание (общее с кроватями), катится с пациентом (сдвинутая мебель тянет пристёгнутого моба — `crates/ss13_game/src/medical/surgery/buckle.rs` `carry_buckled`, tg `handle_buckled_mob_movement`), Alt-клик — тормоза (не самим пациентом), с пациентом плотная и поднята (`*_up`), осмотр про тормоза; экстренная кровать — складывается правым кликом пустой в руки человека (`fold_emergency_bed`), сложенная разворачивается в руке на свой тайл или на клик по открытому полу (`roller_attack_self`, `roller_on_floor`). `// shortcut:` нет оверлея тормозов, звука `noisy_movement`, док-станции кровати для киборгов. Нужен `ss13-mapload convert` (новые runtime-типы)
 
 ### Медицинский HUD и монитор экипажа
 Медицинские очки показывают полоски здоровья и статус; монитор экипажа (консоль и переносной) — данные сенсоров костюмов.

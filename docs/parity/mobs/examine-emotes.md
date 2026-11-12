@@ -7,7 +7,7 @@ _«Осмотр (examine)» описано в [../ui/examine.md](../ui/examine.m
 Повторный осмотр (или с модификатором) даёт расширенное описание: шрамы, особенности, подробности предметов.
 
 - **Код:** [`proc/examine_more()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/atom/atom_examine.dm#L158), [`carbon/examine_more()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/examine.dm#L303), [`human/examine_more()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/carbon/examine.dm#L560)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/examine.rs` (`RecentExamines`, `examine_more_lines`): повторный осмотр того же в течение 1 с (`EXAMINE_MORE_WINDOW`) показывает подробности вместо обычного осмотра: шрамы карбона (`crates/ss13_game/src/medical/wounds/scars.rs`), у человека — искрящие датчики незакрытого комбинезона, незакрытые одеждой кибернетические конечности, видимый возраст (по записи экипажа, лицо не скрыто); пусто — «Вы осматриваете … подробнее, но не находите ничего интересного...». `// shortcut:` нет настройки `remove_double_click`; описания материалов для исследовательского сканера. Чужое: собственные `examine_more` предметов (лор оружия, устройств и т.п.) — группы этих предметов
 
 ### Осмотр с медицинским и охранным HUD
 С медицинским или охранным HUD осмотр человека добавляет статус из записей экипажа и ссылки на изменение статуса/записей.
