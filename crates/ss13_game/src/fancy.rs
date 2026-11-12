@@ -8,8 +8,9 @@
 //!   examine counts what is left; closed, `base_icon_state`.
 //! - An empty box used in hand folds into its `foldable_result` (cardboard), which lands in
 //!   the same hands; so does a plain cardboard box (`/obj/item/storage/box/attack_self`).
-// shortcut: no content overlays (the donuts by flavour, the cigarettes and the lighter of a
-// pack, the coffee condiments), no pulling a cigarette out with a right click or into the
+// shortcut: no content overlays, so an open donut box, cigarette pack or cigar case looks
+// empty whatever it holds (tg draws each donut, cigarette and the lighter inside); the coffee
+// condiments display likewise. No pulling a cigarette out with a right click or into the
 // mouth; a box that is always open keeps its mapped sprite.
 
 use bevy::prelude::*;
@@ -51,10 +52,34 @@ fn refresh(world: &mut World, item: Entity) {
         return;
     }
     let open = world.get::<FancyOpen>(item).is_some_and(|o| o.0);
-    let state = if dm.has_open_closed_states && open {
-        format!("{}{}", dm.base_icon_state, count(world, item))
+    let path = world
+        .get::<ss13_mapload::DmItem>(item)
+        .map(|i| i.path.clone())
+        .unwrap_or_default();
+    let n = count(world, item);
+    let base = dm.base_icon_state;
+    let under = |root: &str| ss13_mapload::fidelity::is_under(&path, root);
+    // The types with their own `update_icon_state`.
+    let state = if under("/obj/item/storage/fancy/donut_box") {
+        if open { format!("{base}_inner") } else { base }
+    } else if under("/obj/item/storage/fancy/cigarettes/cigars") {
+        base
+    } else if under("/obj/item/storage/fancy/cigarettes") {
+        if n == 0 {
+            format!("{base}_empty")
+        } else {
+            base
+        }
+    } else if under("/obj/item/storage/fancy/pickles_jar") {
+        match n {
+            0 => format!("{base}_empty"),
+            1..=4 => format!("{base}_{n}"),
+            _ => base,
+        }
+    } else if dm.has_open_closed_states && open {
+        format!("{base}{n}")
     } else {
-        dm.base_icon_state
+        base
     };
     crate::obj_damage::set_icon_state(world, item, &state);
 }
