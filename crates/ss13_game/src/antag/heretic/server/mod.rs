@@ -26,9 +26,9 @@
 // Pull, Realignment and the Blade and Void ascensions are in [`super::paths`]. Their other
 // spells get a button that says it is not ported, recipes spawn their results when the
 // prototype exists, and passives do nothing. Side knowledge has no effects beyond its ritual's
-// results and what [`items`], [`paintings`] and [`summon`] give them; curses, the knowledge
-// ritual, the heretic aura, dreams, x-ray near influences, rust healing and spell recharge by
-// holy water/passive are not ported. Ash Passage (jaunt) is not ported. No shadow realm:
+// results and what [`items`], [`paintings`] and [`summon`] give them (curses: [`curses`]);
+// the knowledge ritual, the heretic aura, dreams, x-ray near influences, rust healing and spell
+// recharge by holy water/passive are not ported. Ash Passage (jaunt) is not ported. No shadow realm:
 // see [`begin_sacrifice`].
 // The radials are list windows; balloon alerts are chat warnings.
 
@@ -72,6 +72,7 @@ use crate::tools::{Actor, DoAfter, do_after, tell};
 
 mod buttons;
 mod clicks;
+mod curses;
 mod gain;
 mod items;
 mod paintings;
@@ -82,6 +83,8 @@ mod tick;
 mod windows;
 pub use buttons::*;
 pub use clicks::*;
+pub use curses::{CODEX_MORBUS, CorrosionCurse, CurseKind, ParalysisCurse, RaceSwap, curse};
+use curses::{curse_prompts, morbus_on_rune, tick_heretic_curses};
 pub use gain::*;
 pub use items::{
     CRUCIBLE, CRUCIBLE_MAX_MASS, Crucible, DuskAndDawn, FocusWorn, POTIONS, examine_lines,
@@ -529,6 +532,12 @@ impl Plugin for HereticPlugin {
                 crate::antag::heretic::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        // The Codex Morbus right-clicked on a rune casts a curse (before the codex's own clicks).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1393, |w, c| {
+            c.modifiers.right
+                && c.held
+                    .is_some_and(|h| morbus_on_rune(w, c.client, c.mob, h, c.target))
+        });
         items::build(app);
         paintings::build(app);
         app.register_ui::<AntagInfoHereticUi>()
@@ -563,6 +572,20 @@ impl Plugin for HereticPlugin {
             .add_systems(
                 Update,
                 fade_in_influences.run_if(any_with_component::<VisibleInfluence>),
+            )
+            .add_systems(
+                Update,
+                (
+                    curse_prompts
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
+                    tick_heretic_curses.run_if(
+                        |q: Query<
+                            (),
+                            Or<(With<ParalysisCurse>, With<CorrosionCurse>, With<RaceSwap>)>,
+                        >| !q.is_empty(),
+                    ),
+                ),
             );
     }
 }

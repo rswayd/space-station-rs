@@ -73,13 +73,17 @@ mod absorb;
 mod gain;
 mod life;
 mod powers;
+mod stings;
 mod transform;
+mod utility;
 mod windows;
 pub use absorb::*;
 pub use gain::*;
 pub use life::*;
 pub use powers::*;
+pub use stings::*;
 pub use transform::*;
+pub use utility::*;
 pub use windows::*;
 
 /// `name = "\proper Генокрад"`.
@@ -116,6 +120,9 @@ const ANTAG_HUD: (&str, &str) = ("icons/mob/huds/antag_hud.dmi", "changeling");
 const EMPORIUM_ICON: (&str, &str) = ("icons/obj/drinks/soda.dmi", "changelingsting");
 const EMPORIUM_ID: &str = "cellular_emporium";
 const ARM_BLADE: &str = "/obj/item/melee/arm_blade";
+/// `/obj/item/melee/arm_blade/false` (the false armblade sting's).
+const FALSE_ARM_BLADE: &str = "/obj/item/melee/arm_blade/false";
+const FROSTOIL: &str = "/datum/reagent/consumable/frostoil";
 const LING_ARMOR: &str = "/obj/item/clothing/suit/armor/changeling";
 const LING_HELMET: &str = "/obj/item/clothing/head/helmet/changeling";
 const ADRENALINE: &str = "/datum/reagent/medicine/changelingadrenaline";
@@ -181,6 +188,17 @@ pub enum Power {
     Fleshmend,
     ArmBlade,
     Armor,
+    TransformationSting,
+    FalseArmbladeSting,
+    ExtractDnaSting,
+    MuteSting,
+    BlindSting,
+    LsdSting,
+    CryoSting,
+    AugmentedEyesight,
+    ResonantShriek,
+    DissonantShriek,
+    DigitalCamo,
 }
 
 /// A power's vars.
@@ -223,8 +241,14 @@ const BASE: PowerDef = PowerDef {
     category: "utility",
 };
 
+/// `/datum/action/changeling/sting`'s `category`.
+const STING: PowerDef = PowerDef {
+    category: "stings",
+    ..BASE
+};
+
 impl Power {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 19] = [
         Self::AbsorbDna,
         Self::Transform,
         Self::Fakedeath,
@@ -233,7 +257,32 @@ impl Power {
         Self::Fleshmend,
         Self::ArmBlade,
         Self::Armor,
+        Self::TransformationSting,
+        Self::FalseArmbladeSting,
+        Self::ExtractDnaSting,
+        Self::MuteSting,
+        Self::BlindSting,
+        Self::LsdSting,
+        Self::CryoSting,
+        Self::AugmentedEyesight,
+        Self::ResonantShriek,
+        Self::DissonantShriek,
+        Self::DigitalCamo,
     ];
+
+    /// `/datum/action/changeling/sting`: pressed, it is chosen; a middle or alt click stings.
+    pub fn is_sting(self) -> bool {
+        matches!(
+            self,
+            Self::TransformationSting
+                | Self::FalseArmbladeSting
+                | Self::ExtractDnaSting
+                | Self::MuteSting
+                | Self::BlindSting
+                | Self::LsdSting
+                | Self::CryoSting
+        )
+    }
 
     pub fn def(self) -> PowerDef {
         match self {
@@ -345,6 +394,159 @@ impl Power {
                 dna_cost: Some(1),
                 req_human: true,
                 category: "combat",
+                ..BASE
+            },
+            Self::TransformationSting => PowerDef {
+                id: "transformation_sting",
+                path: "/datum/action/changeling/sting/transformation",
+                name: "Transformation Sting",
+                desc: "Мы тихо жалим организм, вводя в него ретровирус, который заставляет его \
+                       трансформироваться.",
+                helptext: "Жертва трансформируется так же, как генокрад. Для сложных гуманоидов \
+                           трансформация происходит на время, но ее таймер приостанавливается, \
+                           пока жертва мертва или находится в стазисе. У более простых \
+                           гуманоидов, таких как обезьяны, трансформация происходит навсегда. Не \
+                           предупреждает других. Мутации не передаются.",
+                icon: "transformation_sting",
+                chemical_cost: 33,
+                dna_cost: Some(2),
+                ..STING
+            },
+            Self::FalseArmbladeSting => PowerDef {
+                id: "false_armblade_sting",
+                path: "/datum/action/changeling/sting/false_armblade",
+                name: "False Armblade Sting",
+                desc: "Мы бесшумно жалим человека, впрыскивая ретровирус, который мутирует его \
+                       руку, временно превращая ее в армблейд. Стоит 20 химикатов.",
+                helptext: "Жертва формирует армблейд, подобно тому, как это делает генокрад, \
+                           только этот клинок тупой и бесполезный.",
+                icon: "false_armblade_sting",
+                chemical_cost: 20,
+                dna_cost: Some(1),
+                ..STING
+            },
+            Self::ExtractDnaSting => PowerDef {
+                id: "extract_dna_sting",
+                path: "/datum/action/changeling/sting/extract_dna",
+                name: "Extract DNA Sting",
+                desc: "Мы незаметно жалим цель и извлекаем ее ДНК. Стоит 25 химикатов.",
+                helptext: "Даст вам ДНК вашей цели, позволяя трансформироваться в нее. Это \
+                           сделает невозможным полное поглощение их тела в дальнейшем.",
+                icon: "extract_dna_sting",
+                chemical_cost: 25,
+                dna_cost: Some(0),
+                ..STING
+            },
+            Self::MuteSting => PowerDef {
+                id: "mute_sting",
+                path: "/datum/action/changeling/sting/mute",
+                name: "Mute Sting",
+                desc: "Мы беззвучно жалим человека, полностью заставляя его замолчать на короткое \
+                       время. Стоит 20 химикатов.",
+                helptext: "Не предупреждает жертву о том, что ее ужалили, пока она не попытается \
+                           заговорить и не сможет.",
+                icon: "mute_sting",
+                chemical_cost: 20,
+                dna_cost: Some(2),
+                ..STING
+            },
+            Self::BlindSting => PowerDef {
+                id: "blind_sting",
+                path: "/datum/action/changeling/sting/blind",
+                name: "Blind Sting",
+                desc: "Мы временно ослепляем нашу жертву. Стоит 25 химикатов.",
+                helptext: "Это жало полностью ослепляет цель на короткое время и оставляет ее с \
+                           затуманенным зрением на долгое время. Не действует, если у цели \
+                           роботизированные глаза или глаза отсутствуют.",
+                icon: "blind_sting",
+                chemical_cost: 25,
+                dna_cost: Some(1),
+                ..STING
+            },
+            Self::LsdSting => PowerDef {
+                id: "hallucination_sting",
+                path: "/datum/action/changeling/sting/lsd",
+                name: "Hallucination Sting",
+                desc: "Мы вызываем массовый ужас у нашей жертвы. Стоит 10 химикатов.",
+                helptext: "Мы развиваем способность жалить цель мощным галлюциногенным \
+                           химикатом. Объект не замечает, что его ужалили, и эффект проявляется \
+                           через 30-60 секунд.",
+                icon: "hallucination_sting",
+                chemical_cost: 10,
+                dna_cost: Some(1),
+                ..STING
+            },
+            Self::CryoSting => PowerDef {
+                id: "cryogenic_sting",
+                path: "/datum/action/changeling/sting/cryo",
+                name: "Cryogenic Sting",
+                desc: "Мы беззвучно жалим жертву коктейлем из химикатов, который замораживает ее \
+                       изнутри. Стоит 15 химикатов.",
+                helptext: "Не предупреждает жертву, хотя она, скорее всего, поймет, что внезапно \
+                           замерзла.",
+                icon: "cryogenic_sting",
+                chemical_cost: 15,
+                dna_cost: Some(2),
+                ..STING
+            },
+            Self::AugmentedEyesight => PowerDef {
+                id: "augmented_eyesight",
+                path: "/datum/action/changeling/augmented_eyesight",
+                name: "Augmented Eyesight",
+                desc: "Создает больше светочувствительных палочек в наших глазах, что позволяет \
+                       нашему зрению проникать сквозь большинство загораживающих предметов. \
+                       Защищает наше зрение от вспышек во время бездействия.",
+                helptext: "Дает нам рентгеновское зрение или защиту от вспышек. Пока \
+                           рентгеновское зрение активно, мы станем гораздо более уязвимыми для \
+                           устройств со вспышкой.",
+                icon: "augmented_eyesight",
+                dna_cost: Some(2),
+                ..BASE
+            },
+            Self::ResonantShriek => PowerDef {
+                id: "resonant_shriek",
+                path: "/datum/action/changeling/resonant_shriek",
+                name: "Resonant Shriek",
+                desc: "Наши легкие и голосовые связки смещаются, позволяя нам на короткое время \
+                       издать звук, который оглушает и сбивает с толку не-генокрадов. Идеально \
+                       для остановки побега жертвы. Плохо работает в вакууме. Стоит 20 \
+                       химикатов.",
+                helptext: "Излучает высокочастотный звук, который сбивает с толку и оглушает \
+                           людей, выбивает свет и перегружает сенсоры киборгов.",
+                icon: "resonant_shriek",
+                chemical_cost: 20,
+                dna_cost: Some(1),
+                req_human: true,
+                disabled_by_fire: false,
+                category: "combat",
+                ..BASE
+            },
+            Self::DissonantShriek => PowerDef {
+                id: "dissonant_shriek",
+                path: "/datum/action/changeling/dissonant_shriek",
+                name: "Technophagic Shriek",
+                desc: "Мы смещаем голосовые связки, чтобы выпустить высокочастотный звук, который \
+                       перегружает близлежащую электронику. Ломает наушники и камеры, а так же, \
+                       иногда ломает лазерное оружие, двери и модсьюты. Стоит 20 химикатов.",
+                icon: "technophagic_shriek",
+                chemical_cost: 20,
+                dna_cost: Some(1),
+                disabled_by_fire: false,
+                category: "combat",
+                ..BASE
+            },
+            Self::DigitalCamo => PowerDef {
+                id: "digital_camo",
+                path: "/datum/action/changeling/digitalcamo",
+                name: "Digital Camouflage",
+                desc: "Развивая способность искажать свою форму и пропорции, мы побеждаем обычные \
+                       алгоритмы, используемые для обнаружения форм жизни на камерах.",
+                helptext: "При использовании этого навыка нас нельзя отследить с помощью камеры \
+                           или увидеть с помощью ИИ. Однако люди, смотрящие на нас, будут \
+                           находить нас... странными.",
+                icon: "digital_camo",
+                dna_cost: Some(1),
+                category: "stealth",
                 ..BASE
             },
         }
@@ -505,6 +707,14 @@ pub struct Changeling {
     pub fleshmend_until: f64,
     /// Absorbed by another changeling (`/datum/antagonist/fallen_changeling`).
     pub fallen: bool,
+    /// `chosen_sting`.
+    pub chosen_sting: Option<Power>,
+    /// The transformation sting's `selected_dna`.
+    pub sting_dna: Option<Profile>,
+    /// Augmented eyesight's `active`: x-ray and flash weakness.
+    pub xray: bool,
+    /// Digital camouflage's `active` (`/datum/element/digitalcamo`).
+    pub digital_camo: bool,
 }
 
 impl Default for Changeling {
@@ -530,6 +740,10 @@ impl Default for Changeling {
             stasis: Stasis::None,
             fleshmend_until: 0.0,
             fallen: false,
+            chosen_sting: None,
+            sting_dna: None,
+            xray: false,
+            digital_camo: false,
         }
     }
 }
@@ -625,6 +839,10 @@ impl Changeling {
 
     /// `remove_changeling_powers()`: the bought powers go, every point comes back.
     pub fn remove_purchased(&mut self) -> Vec<Power> {
+        self.chosen_sting = None;
+        self.sting_dna = None;
+        self.xray = false;
+        self.digital_camo = false;
         let gone = std::mem::take(&mut self.purchased);
         self.genetic_points = self.total_genetic_points;
         self.chem_charges = self.chem_charges.min(self.total_chem_storage);
@@ -714,6 +932,7 @@ pub struct ChangelingPlugin;
 impl Plugin for ChangelingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ChangelingIds>()
+            .init_resource::<StingTimers>()
             .register_ui::<AntagInfoChangelingUi>()
             .register_ui::<CellularEmporiumUi>()
             .register_ui::<ChangelingHudUi>()
@@ -724,6 +943,18 @@ impl Plugin for ChangelingPlugin {
                     .in_set(UiSystems::Handle),
             )
             .add_systems(Update, hivemind_chat.after(SaySystems))
+            .add_systems(
+                Update,
+                (
+                    sting_clicks.after(crate::click::ResolveClicks),
+                    sting_dna_picked
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
+                    sting_timers.run_if(|t: Res<StingTimers>, q: Query<(), With<TransStung>>| {
+                        !t.0.is_empty() || !q.is_empty()
+                    }),
+                ),
+            )
             .add_systems(
                 Update,
                 (changeling_life, tick_changelings)

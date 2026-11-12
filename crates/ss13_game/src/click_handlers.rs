@@ -104,6 +104,7 @@
 //! | 3221 | `weapons::two_handed::attack_self` (wield, let go) |
 //! | 3245 | `mining::crusher::attack_self` (the kinetic crusher wields) |
 //! | 3227 | `misc_items::charter::attack_self` (the station name question) |
+//! | 3233 | `antag::cult::server::runed_metal_refused` (runed metal: non-cultists, a strong veil) |
 //! | 3239 | `stack_recipes::attack_self` (a stack's crafting menu) |
 //! | 3249 | `sheets::crush_attack_self` (a bluespace crystal crushed: blink) |
 //! | 3259 | `traps::attack_self` (a sturdy tripwire cable recoils) |
@@ -205,6 +206,7 @@
 //! | 100 | `silicon::interact::attack_robot` |
 //! | 200 | `silicon::cyborg::inventory_action` (`EmptyHandClick`) |
 //! | 300 | `antag::cult::server::interact` |
+//! | 303 | `antag::cult::server::dispenser_hand` (an altar, forge or archives lists its items to a cultist) |
 //! | 400 | `antag::heretic::server::interact` |
 //! | 401 | `antag::heretic::server::items::crucible_hand` (the mawed crucible's brews, a non-heretic's hand bitten) |
 //! | 500 | `kitchen::interact` |
@@ -370,6 +372,7 @@
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |
 //! | 1391 | `antag::heretic::server::items::held_on_target` (organs, flasks, codex and grasp on the mawed crucible; the phylactery's right click; wirecutters on an eldritch painting) |
+//! | 1393 | `antag::heretic::server::morbus_on_rune` (the Codex Morbus right-clicked on a rune: a curse) |
 //! | 1400 | `antag::heretic::server::item_interaction` |
 //! | 1410 | `antag::nightmare::item_interaction` (the light eater) |
 //! | 1420 | `silicon::aicard::interact_with_atom` |

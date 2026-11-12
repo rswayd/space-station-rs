@@ -192,3 +192,71 @@ fn profiles_dedupe_and_push_out_the_oldest() {
     assert_eq!(c.profiles[0].name, "crew 1");
     assert_eq!(c.absorbed_count, DNA_MAX as u32 + 2);
 }
+
+#[test]
+fn stings_are_bought_in_the_stings_category() {
+    let stings: Vec<Power> = Power::ALL.into_iter().filter(|p| p.is_sting()).collect();
+    assert_eq!(stings.len(), 7);
+    for power in stings {
+        assert_eq!(power.def().category, "stings");
+        assert!(!power.innate());
+    }
+    // Extract DNA is free to evolve.
+    assert_eq!(Power::ExtractDnaSting.def().dna_cost, Some(0));
+    let mut c = Changeling {
+        chosen_sting: Some(Power::MuteSting),
+        ..default()
+    };
+    c.remove_purchased();
+    assert_eq!(c.chosen_sting, None);
+}
+
+#[test]
+fn the_transformation_sting_wears_off_but_not_while_dead() {
+    let mut world = World::new();
+    world.init_resource::<Time>();
+    world.init_resource::<StingTimers>();
+    let stung = |name: &str| TransStung {
+        remaining: 1.0,
+        original: Profile {
+            name: name.to_owned(),
+            look: None,
+            protected: false,
+        },
+    };
+    let alive = world
+        .spawn((Name::new("Ling"), Stat::Conscious, stung("Alice")))
+        .id();
+    let dead = world
+        .spawn((Name::new("Ling"), Stat::Dead, stung("Bob")))
+        .id();
+    world
+        .resource_mut::<Time>()
+        .advance_by(std::time::Duration::from_secs(2));
+    sting_timers(&mut world);
+    assert_eq!(world.get::<Name>(alive).unwrap().as_str(), "Alice");
+    assert!(world.get::<TransStung>(alive).is_none());
+    assert_eq!(world.get::<Name>(dead).unwrap().as_str(), "Ling");
+    assert_eq!(world.get::<TransStung>(dead).unwrap().remaining, 1.0);
+}
+
+#[test]
+fn augmented_eyesight_trades_flash_protection_for_xray() {
+    let mut world = World::new();
+    let mut ling = Changeling::default();
+    let mob = world.spawn(ling.clone()).id();
+    assert_eq!(ling_flash_protect(&world, mob), 0);
+    ling.purchased.push(Power::AugmentedEyesight);
+    world.entity_mut(mob).insert(ling.clone());
+    assert_eq!(ling_flash_protect(&world, mob), 2);
+    assert!(!ling_xray(&world, mob));
+    ling.xray = true;
+    world.entity_mut(mob).insert(ling.clone());
+    assert_eq!(ling_flash_protect(&world, mob), -1);
+    assert!(ling_xray(&world, mob));
+    // Readapting takes it all back.
+    ling.remove_purchased();
+    world.entity_mut(mob).insert(ling);
+    assert_eq!(ling_flash_protect(&world, mob), 0);
+    assert!(!ling_xray(&world, mob));
+}

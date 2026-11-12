@@ -27,8 +27,8 @@
 // hallucinations (not ported). Blood magic is stun, teleport, shadow shackles, twisted
 // construction (plasteel into runed metal only: no construct shells, constructs or soulstones
 // until basic mobs exist), EMP and summon dagger; no equipment, horror,
-// veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no
-// structures, no TTS. A sacrifice destroys the
+// veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no TTS.
+// Structures: [`structures`]. A sacrifice destroys the
 // body (its items fall) without a soulstone. Nar'Sie is a sprite that does not move or consume:
 // no singularity component. No cinematic, sounds or shuttle lockdown.
 
@@ -75,6 +75,7 @@ mod membership;
 mod prompts;
 mod runes;
 mod scribe;
+mod structures;
 mod windows;
 pub use life::*;
 use magic::*;
@@ -82,6 +83,7 @@ pub use membership::*;
 pub use prompts::*;
 pub use runes::*;
 pub use scribe::*;
+pub use structures::*;
 pub use windows::*;
 
 /// `name = "Культист"`.
@@ -714,6 +716,15 @@ impl Plugin for CultPlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 300, |w, c| {
             crate::antag::cult::server::interact(w, c.client, c.mob, c.target)
         });
+        // An altar, forge or archives lists its items to a cultist.
+        app.add_click_handler(ClickPhase::EmptyHand, 303, |w, c| {
+            crate::antag::cult::server::dispenser_hand(w, c.client, c.mob, c.target)
+        });
+        // Runed metal refuses a non-cultist or a place where the veil is strong (before the
+        // stack's recipes).
+        app.add_click_handler(ClickPhase::AttackSelf, 3233, |w, c| {
+            crate::antag::cult::server::runed_metal_refused(w, c.client, c.mob, c.target)
+        });
         // The ritual dagger scrapes a rune away; a blood magic aura on an object.
         app.add_click_handler(ClickPhase::HeldOnTarget, 1300, |w, c| {
             c.held.is_some_and(|h| {
@@ -737,6 +748,17 @@ impl Plugin for CultPlugin {
                     text_acts.after(PromptSystems::Answer),
                 )
                     .in_set(UiSystems::Handle),
+            )
+            .add_systems(
+                Update,
+                (
+                    dispenser_picked
+                        .in_set(UiSystems::Handle)
+                        .after(PromptSystems::Answer),
+                    (tag_pylons, pylons.run_if(any_with_component::<Pylon>))
+                        .chain()
+                        .before(crate::health::HealthSystems),
+                ),
             )
             .add_systems(
                 Update,

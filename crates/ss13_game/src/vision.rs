@@ -196,9 +196,11 @@ pub fn worn_vision(world: &World, mob: Entity) -> WornVision {
     let average = (color[0] + color[1] + color[2]) / 3.0;
     let mut sight = 0;
     // Heretic amulets and the brew of dusk and dawn (`ADD_TRAIT` without clothing traits).
+    // A changeling's augmented eyesight (`ADD_TRAIT(user, TRAIT_XRAY_VISION, ...)`).
     let has_trait = |world: &World, mob: Entity, name: &str| {
         has_trait(world, mob, name)
             || crate::antag::heretic::server::has_heretic_vision(world, mob, name)
+            || (name == XRAY_VISION && crate::antag::changeling::server::ling_xray(world, mob))
     };
     if has_trait(world, mob, MESON_VISION) {
         sight |= NetSight::SEE_TURFS;
@@ -410,7 +412,8 @@ pub fn cure_eye_blur(world: &mut World, mob: Entity) {
 pub fn eye_protection(world: &World, mob: Entity, worn: i32) -> i32 {
     match sight(world, mob) {
         Some(s) if !s.eyes || s.blind_awake => EYE_PROTECTION_INFINITY,
-        _ => worn,
+        // The eyes' `flash_protect` a changeling's augmented eyesight sets.
+        _ => worn + crate::antag::changeling::server::ling_flash_protect(world, mob),
     }
 }
 

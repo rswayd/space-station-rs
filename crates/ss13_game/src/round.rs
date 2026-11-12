@@ -562,7 +562,7 @@ pub fn set_notice(world: &mut World, text: &str) {
     chat(world, clients, Span::BoldAnnounce, announce);
 }
 
-fn to_world(world: &mut World, span: Span, text: impl Into<String>) {
+pub fn to_world(world: &mut World, span: Span, text: impl Into<String>) {
     let clients = all_clients(world);
     chat(world, clients, span, text);
 }
