@@ -55,7 +55,7 @@ tgui-окно: заряд ячейки, включение главного ру
 Malf ИИ взламывает APC (рост вычислительной мощности), может переселиться в него и вернуться.
 
 - **Код:** [`proc/malfhack()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_malf.dm#L12), [`proc/malfoccupy()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_malf.dm#L28), [`proc/malfshunt()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_malf.dm#L41)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/malf.rs` (`start_hack`, `finish_hacks`, `occupy`, `shunt`, `vacate`, `deoccupy`, `apc_gone`, `malf_status`), окно `Apc`: «Override Programming» на невзломанном ЛКП (30 + 10 × взломанных с, по одному, «Вы уже взламываете ЛКП!»), взломанный ЛКП запирается и даёт процессорное время; shunt на взломанный станционный ЛКП с подтверждением (пустое ядро со связью, имя «Копия ЛКП …», глаз на ЛКП, кнопка возврата), возврат на тайл ядра, уничтоженный ЛКП убивает ИИ, перенос интеллКартой без связанного ядра (`crates/ss13_game/src/silicon/aicard.rs`); shunt гасит устройство судного дня (`malf_doomsday.rs`). Нет экранного алерта взлома (`hackingapc`), переключения пинпоинтеров на ИИ, запроса согласия ИИ и `do_after` при переносе картой из ЛКП
 
 ### Маппинг-хелперы APC
 Хелперы карты: ячейка 5k/10k, без заряда, полный заряд, разблокирован, синдикатский и away-доступ, перерезанный провод ИИ; варианты APC `auto_name`, `worn_out`.

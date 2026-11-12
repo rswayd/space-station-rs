@@ -203,8 +203,10 @@ fn stings_are_bought_in_the_stings_category() {
     }
     // Extract DNA is free to evolve.
     assert_eq!(Power::ExtractDnaSting.def().dna_cost, Some(0));
-    let mut c = Changeling::default();
-    c.chosen_sting = Some(Power::MuteSting);
+    let mut c = Changeling {
+        chosen_sting: Some(Power::MuteSting),
+        ..default()
+    };
     c.remove_purchased();
     assert_eq!(c.chosen_sting, None);
 }
