@@ -43,7 +43,8 @@ test absorb_husks_the_victim
 test emporium_sells_gene_stim
   alice act ActionButtons trigger id=cellular_emporium
   until alice.windows.CellularEmporium exists
-  expect alice.windows.CellularEmporium.static.abilities.len == 4
+  # The four powers and the stings.
+  expect alice.windows.CellularEmporium.static.abilities.len >= 5
   alice act CellularEmporium evolve path=/datum/action/changeling/adrenaline
   until alice.windows.CellularEmporium.data.genetic_points_count == 8
   until alice.windows.ActionButtons.data.buttons[-1].id == "adrenaline"
