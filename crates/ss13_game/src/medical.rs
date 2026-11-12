@@ -53,6 +53,7 @@ pub mod sleeper;
 pub mod special_traumas;
 pub mod split_personality;
 pub mod stasis;
+pub mod strange_reagent;
 pub mod surgery;
 pub mod symptoms;
 pub mod traumas;
@@ -260,6 +261,7 @@ impl Plugin for MedicalServerPlugin {
         kiosk::build(app);
         limbgrower::build(app);
         iv_drip::build(app);
+        strange_reagent::build(app);
     }
 }
 
