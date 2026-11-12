@@ -287,59 +287,6 @@ fn ghost_speaks_dead(add: On<Add<Ghost>>, mut commands: Commands) {
     commands.entity(add.entity).try_insert(SpeakerStat::Dead);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn bodies_get_their_emotes() {
-        let borg = emote_user(EmoteBody::Cyborg, None, false, false);
-        assert_eq!((borg.mob, borg.silicon_emotes), (EmoteMob::Cyborg, true));
-        assert_eq!(
-            emote_user(EmoteBody::AiEye, None, false, false).mob,
-            EmoteMob::Ai
-        );
-        let vulp = emote_user(EmoteBody::Human, Some(SpeciesId::Vulpkanin), true, false);
-        assert_eq!(
-            (vulp.species, vulp.female, vulp.silicon_emotes),
-            (EmoteSpecies::Vulpkanin, true, false)
-        );
-        assert_eq!(
-            emote_user(EmoteBody::Human, Some(SpeciesId::Stargazer), false, false).species,
-            EmoteSpecies::Jelly
-        );
-        assert_eq!(
-            emote_user(EmoteBody::Human, Some(SpeciesId::Ashwalker), false, false).species,
-            EmoteSpecies::Lizard
-        );
-        // A robotic voicebox gives silicon emotes.
-        assert!(emote_user(EmoteBody::Human, None, false, true).silicon_emotes);
-        let boxed = emote_user(EmoteBody::Brain { in_processor: true }, None, false, false);
-        assert!(boxed.in_processor && boxed.silicon_emotes);
-        let gorilla = emote_user(
-            EmoteBody::Basic("/mob/living/basic/gorilla/hostile"),
-            None,
-            false,
-            false,
-        );
-        assert_eq!(gorilla.mob, EmoteMob::Gorilla);
-        let drone = emote_user(
-            EmoteBody::Basic("/mob/living/basic/drone"),
-            None,
-            false,
-            false,
-        );
-        assert!(drone.silicon_emotes && drone.robotic);
-        let carp = emote_user(
-            EmoteBody::Basic("/mob/living/basic/carp"),
-            None,
-            true,
-            false,
-        );
-        assert_eq!((carp.mob, carp.female), (EmoteMob::Basic, false));
-    }
-}
-
 /// BandaStation's speech filter config, as the environment gives it: `SS13_SPEECH_FILTER=1`
 /// (`ENABLE_SPEECH_FILTER`, off by default as in BandaStation's config),
 /// `SS13_SPEECH_FILTER_BYPASS=key,...` (`SPEECH_FILTER_BYPASS`) and the `brainrot_filter`
@@ -411,5 +358,58 @@ fn speech_filtered(mut filtered: MessageReader<SpeechFiltered>, mut commands: Co
             crate::chem_machines::admin_notice(world, text);
             crate::medical::diseases::emote(world, speaker, "drool");
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bodies_get_their_emotes() {
+        let borg = emote_user(EmoteBody::Cyborg, None, false, false);
+        assert_eq!((borg.mob, borg.silicon_emotes), (EmoteMob::Cyborg, true));
+        assert_eq!(
+            emote_user(EmoteBody::AiEye, None, false, false).mob,
+            EmoteMob::Ai
+        );
+        let vulp = emote_user(EmoteBody::Human, Some(SpeciesId::Vulpkanin), true, false);
+        assert_eq!(
+            (vulp.species, vulp.female, vulp.silicon_emotes),
+            (EmoteSpecies::Vulpkanin, true, false)
+        );
+        assert_eq!(
+            emote_user(EmoteBody::Human, Some(SpeciesId::Stargazer), false, false).species,
+            EmoteSpecies::Jelly
+        );
+        assert_eq!(
+            emote_user(EmoteBody::Human, Some(SpeciesId::Ashwalker), false, false).species,
+            EmoteSpecies::Lizard
+        );
+        // A robotic voicebox gives silicon emotes.
+        assert!(emote_user(EmoteBody::Human, None, false, true).silicon_emotes);
+        let boxed = emote_user(EmoteBody::Brain { in_processor: true }, None, false, false);
+        assert!(boxed.in_processor && boxed.silicon_emotes);
+        let gorilla = emote_user(
+            EmoteBody::Basic("/mob/living/basic/gorilla/hostile"),
+            None,
+            false,
+            false,
+        );
+        assert_eq!(gorilla.mob, EmoteMob::Gorilla);
+        let drone = emote_user(
+            EmoteBody::Basic("/mob/living/basic/drone"),
+            None,
+            false,
+            false,
+        );
+        assert!(drone.silicon_emotes && drone.robotic);
+        let carp = emote_user(
+            EmoteBody::Basic("/mob/living/basic/carp"),
+            None,
+            true,
+            false,
+        );
+        assert_eq!((carp.mob, carp.female), (EmoteMob::Basic, false));
     }
 }

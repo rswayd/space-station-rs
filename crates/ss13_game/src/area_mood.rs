@@ -175,7 +175,9 @@ fn follow_beauty(
     )>,
 ) {
     let things: Vec<Entity> = {
-        let (changed, mut lost) = state.get_mut(world);
+        let Ok((changed, mut lost)) = state.get_mut(world) else {
+            return;
+        };
         changed.iter().chain(lost.read()).collect()
     };
     for thing in things {

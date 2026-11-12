@@ -89,7 +89,9 @@ fn follow_tiles(
     )>,
 ) {
     let mobs: Vec<Entity> = {
-        let (changed, mut lost) = state.get_mut(world);
+        let Ok((changed, mut lost)) = state.get_mut(world) else {
+            return;
+        };
         changed.iter().chain(lost.read()).collect()
     };
     let mut tiles = Vec::new();

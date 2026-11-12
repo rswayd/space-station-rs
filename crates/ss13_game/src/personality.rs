@@ -1020,7 +1020,6 @@ const LAZY_CATEGORY: &str = "moodlet_in_area_slacking_off_lazy";
 const DILIGENT_SLACK_CATEGORY: &str = "moodlet_in_area_slacking_off_diligent";
 const DILIGENT_WORK_CATEGORY: &str = "moodlet_in_area_working_diligent";
 const DEPARTMENT_CATEGORY: &str = "moodlet_in_area_enjoying_department_area";
-/// `check_area_mood`'s category.
 
 const fn event(id: &'static str, description: &'static str, mood_change: f32) -> MoodEvent {
     MoodEvent {
