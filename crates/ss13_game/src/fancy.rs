@@ -7,7 +7,7 @@
 //! - Open, its sprite is `[base_icon_state][contents.len]` (`update_icon_state`) and the
 //!   examine counts what is left; closed, `base_icon_state`.
 //! - An empty box used in hand folds into its `foldable_result` (cardboard), which lands in
-//!   the same hands.
+//!   the same hands; so does a plain cardboard box (`/obj/item/storage/box/attack_self`).
 // shortcut: no content overlays (the donuts by flavour, the cigarettes and the lighter of a
 // pack, the coffee condiments), no pulling a cigarette out with a right click or into the
 // mouth; a box that is always open keeps its mapped sprite.
@@ -92,7 +92,15 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         world.entity_mut(item).insert(FancyOpen(!open));
         refresh(world, item);
     }
-    if count(world, item) > 0 || dm.foldable_result.is_empty() {
+    // `/obj/item/storage/box/attack_self`: a plain box says why it does not fold.
+    let plain_box = dm.base_icon_state.is_empty() && dm.open_status == ALWAYS_OPEN;
+    if dm.foldable_result.is_empty() {
+        return !plain_box;
+    }
+    if count(world, item) > 0 {
+        if plain_box {
+            tell(world, client, Span::Warning, "внутри предметы!");
+        }
         return true;
     }
     // Empty: it folds, and the cardboard takes its place in the hands.
@@ -125,7 +133,7 @@ pub fn examine_lines(world: &World, item: Entity, lines: &mut Vec<(Span, String)
         || world
             .get::<FancyOpen>(item)
             .map_or(dm.open_status == 1, |o| o.0);
-    if !open {
+    if !open || dm.contents_tag.is_empty() {
         return;
     }
     let text = match count(world, item) {

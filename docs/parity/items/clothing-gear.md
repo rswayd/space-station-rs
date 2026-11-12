@@ -23,7 +23,7 @@
 Очки по рецепту (убирают близорукость), монокль, повязка на глаз, цветные очки, психоделические и т.п.
 
 - **Код:** [`/obj/item/clothing/glasses/regular`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/glasses/_glasses.dm#L322), [`/obj/item/clothing/glasses/eyepatch`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/glasses/_glasses.dm#L195), [`/obj/item/clothing/glasses/monocle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/glasses/_glasses.dm#L280)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: надеваются; нет близорукости и её коррекции
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/inventory.rs`: надеваются; `crates/ss13_game/src/vision.rs`: очки с `vision_correction` убирают близорукость (квирк Nearsighted, `tint` одежды); монокль, повязка и цветные очки — обычные предметы слота глаз
 
 ### Изолированные перчатки
 Жёлтые перчатки (`siemens_coefficient` 0) защищают от удара током; дешёвые подделки случайно, отрезанные пальцы — нет.

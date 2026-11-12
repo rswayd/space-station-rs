@@ -173,6 +173,23 @@ pub fn equip_outfit(
     inventory
 }
 
+/// The outfit's `back` item of type `path` on `mob`'s back: a storage (a backpack, a satchel).
+/// `None` without its prototype or when it is not one.
+pub fn spawn_back(world: &mut World, mob: Entity, path: &str) -> Option<Entity> {
+    let pack = world.resource_scope(|world, templates: Mut<OutfitTemplates>| {
+        Some(templates.0.get(path)?.spawn(world, None))
+    })?;
+    crate::storage::finish_item(world, pack, 0);
+    if world.get::<crate::storage::Storage>(pack).is_none() {
+        world.despawn(pack);
+        return None;
+    }
+    world
+        .entity_mut(pack)
+        .insert((Networked, crate::inventory::CarriedBy(mob)));
+    Some(pack)
+}
+
 /// tg `equip`: `box` first, then every `backpack_contents` entry (`count` times) into the
 /// backpack (`equip_to_storage(..., del_on_fail = TRUE)`: what does not fit is deleted).
 pub fn fill_backpack(world: &mut World, pack: Entity, outfit: &Outfit) {

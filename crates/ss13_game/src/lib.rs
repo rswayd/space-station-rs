@@ -408,6 +408,8 @@ pub mod icecream;
 #[cfg(feature = "server")]
 pub mod id_access;
 #[cfg(feature = "server")]
+pub mod id_show;
+#[cfg(feature = "server")]
 pub mod implants;
 #[cfg(feature = "server")]
 pub mod inducer;

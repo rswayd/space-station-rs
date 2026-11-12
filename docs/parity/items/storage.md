@@ -18,7 +18,7 @@
 
 - **Код:** [`/obj/item/storage/backpack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/backpack.dm#L12), [`/obj/item/storage/backpack/satchel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/backpack.dm#L300), [`/obj/item/storage/backpack/messenger`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/backpack.dm#L419)
 - **BandaStation:** [`backpack.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/storage/backpack.dm) — дополнительные рюкзаки форка
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/storage.rs` (`spawn_backpack`), `crates/ss13_game/src/jobs.rs`: всем выдаётся серый рюкзак с коробкой выживания (не отделовский — shortcut в `jobs.rs`)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/jobs.rs`, `outfit.rs` (`spawn_back`): профессия получает рюкзак своего отдела из аутфита (`back`/`backpack`, как `pre_equip` с DBACKPACK), без него — серый; внутри коробка выживания и `backpack_contents`; лимиты `/datum/storage/backpack`. `// shortcut:` предпочтение вида сумки (сэтчел, дафл, мессенджер) из настроек не читается
 
 ### Вещмешки
 Дафлбэги вмещают больше, но замедляют, пока открыты; проклятый дафлбэг кусается и прирастает; отделовские и синдикатовские наборы в дафлбэгах.
@@ -59,7 +59,7 @@
 
 - **Код:** [`/obj/item/storage/box`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/boxes/_boxes.dm#L2), [`/obj/item/storage/box/survival`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/boxes/job_boxes.dm#L4), [`code/game/objects/items/storage/boxes`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/boxes)
 - **BandaStation:** [`boxes.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/boxes/code/boxes.dm) — новые спрайты коробок; коробки форка в [`objects/code/items/storage`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/storage)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/storage.rs` (`spawn_contents`): коробки заполняются по `PopulateContents`, открываются и принимают предметы; нет складывания в картон
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/storage.rs` (`spawn_contents`): коробки заполняются по `PopulateContents`, открываются и принимают предметы; пустая коробка по Z складывается в картон в те же руки (`crates/ss13_game/src/fancy.rs`, `foldable_result`), с предметами — отказ; обратно собирается рецептом картона (`stack_recipes`)
 
 ### Наборы «fancy» (сигареты, пончики, яйца, свечи)
 Упаковки, чей спрайт показывает число оставшихся предметов и которые открываются/закрываются: пачки сигарет, коробки пончиков, яиц, свечей, наггетсов, банка огурцов.

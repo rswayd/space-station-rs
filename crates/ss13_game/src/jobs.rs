@@ -553,9 +553,17 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     // `pre_equip_species_outfit`: what the species needs to live (plasmamen).
     crate::species::equip_species_outfit(world, mob, &mut inventory);
     crate::cargo::economy::open_job_account(world, &def, &name, inventory.id);
-    // shortcut: every job gets storage's grey backpack, not the outfit's department `back`
-    // (`pre_equip` by backpack preference); spawn that once storage builds templates for it.
-    inventory.back = crate::storage::spawn_backpack(world, mob);
+    // The outfit's `back`: the department backpack (`pre_equip`, DBACKPACK); the grey one
+    // without it.
+    // shortcut: the backpack preference (satchel, duffel, messenger) is not read.
+    let outfit_back = def
+        .outfit
+        .as_ref()
+        .and_then(|o| o.item(ss13_mapload::jobs::OutfitSlot::Back))
+        .map(str::to_owned);
+    inventory.back = outfit_back
+        .and_then(|path| crate::outfit::spawn_back(world, mob, &path))
+        .or_else(|| crate::storage::spawn_backpack(world, mob));
     if let (Some(pack), Some(outfit)) = (inventory.back, &def.outfit) {
         crate::outfit::fill_backpack(world, pack, outfit);
     }

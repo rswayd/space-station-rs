@@ -121,6 +121,7 @@
 //! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
+//! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
 //!

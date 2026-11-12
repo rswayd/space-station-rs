@@ -377,8 +377,17 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             storage.max_total_storage.to_string(),
         ));
     }
-    if is_under(path, FANCY_ROOT) {
-        let f = fancy(types, path);
+    // A cardboard box only folds: it is a fancy box that is always open and has no count.
+    let is_box = is_under(path, "/obj/item/storage/box");
+    if is_under(path, FANCY_ROOT) || is_box {
+        let mut f = fancy(types, path);
+        if is_box {
+            f = DmFancy {
+                foldable_result: f.foldable_result,
+                open_status: 2,
+                ..Default::default()
+            };
+        }
         let s = |v: &str| ron::to_string(v).expect("strings always serialize");
         out.push(ext("dm_fancy", "base_icon_state", s(&f.base_icon_state)));
         out.push(ext("dm_fancy", "open_status", f.open_status.to_string()));
