@@ -75,6 +75,7 @@ mod life;
 mod powers;
 mod stings;
 mod transform;
+mod utility;
 mod windows;
 pub use absorb::*;
 pub use gain::*;
@@ -82,6 +83,7 @@ pub use life::*;
 pub use powers::*;
 pub use stings::*;
 pub use transform::*;
+pub use utility::*;
 pub use windows::*;
 
 /// `name = "\proper Генокрад"`.
@@ -193,6 +195,10 @@ pub enum Power {
     BlindSting,
     LsdSting,
     CryoSting,
+    AugmentedEyesight,
+    ResonantShriek,
+    DissonantShriek,
+    DigitalCamo,
 }
 
 /// A power's vars.
@@ -242,7 +248,7 @@ const STING: PowerDef = PowerDef {
 };
 
 impl Power {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 19] = [
         Self::AbsorbDna,
         Self::Transform,
         Self::Fakedeath,
@@ -258,6 +264,10 @@ impl Power {
         Self::BlindSting,
         Self::LsdSting,
         Self::CryoSting,
+        Self::AugmentedEyesight,
+        Self::ResonantShriek,
+        Self::DissonantShriek,
+        Self::DigitalCamo,
     ];
 
     /// `/datum/action/changeling/sting`: pressed, it is chosen; a middle or alt click stings.
@@ -479,6 +489,66 @@ impl Power {
                 dna_cost: Some(2),
                 ..STING
             },
+            Self::AugmentedEyesight => PowerDef {
+                id: "augmented_eyesight",
+                path: "/datum/action/changeling/augmented_eyesight",
+                name: "Augmented Eyesight",
+                desc: "Создает больше светочувствительных палочек в наших глазах, что позволяет \
+                       нашему зрению проникать сквозь большинство загораживающих предметов. \
+                       Защищает наше зрение от вспышек во время бездействия.",
+                helptext: "Дает нам рентгеновское зрение или защиту от вспышек. Пока \
+                           рентгеновское зрение активно, мы станем гораздо более уязвимыми для \
+                           устройств со вспышкой.",
+                icon: "augmented_eyesight",
+                dna_cost: Some(2),
+                ..BASE
+            },
+            Self::ResonantShriek => PowerDef {
+                id: "resonant_shriek",
+                path: "/datum/action/changeling/resonant_shriek",
+                name: "Resonant Shriek",
+                desc: "Наши легкие и голосовые связки смещаются, позволяя нам на короткое время \
+                       издать звук, который оглушает и сбивает с толку не-генокрадов. Идеально \
+                       для остановки побега жертвы. Плохо работает в вакууме. Стоит 20 \
+                       химикатов.",
+                helptext: "Излучает высокочастотный звук, который сбивает с толку и оглушает \
+                           людей, выбивает свет и перегружает сенсоры киборгов.",
+                icon: "resonant_shriek",
+                chemical_cost: 20,
+                dna_cost: Some(1),
+                req_human: true,
+                disabled_by_fire: false,
+                category: "combat",
+                ..BASE
+            },
+            Self::DissonantShriek => PowerDef {
+                id: "dissonant_shriek",
+                path: "/datum/action/changeling/dissonant_shriek",
+                name: "Technophagic Shriek",
+                desc: "Мы смещаем голосовые связки, чтобы выпустить высокочастотный звук, который \
+                       перегружает близлежащую электронику. Ломает наушники и камеры, а так же, \
+                       иногда ломает лазерное оружие, двери и модсьюты. Стоит 20 химикатов.",
+                icon: "technophagic_shriek",
+                chemical_cost: 20,
+                dna_cost: Some(1),
+                disabled_by_fire: false,
+                category: "combat",
+                ..BASE
+            },
+            Self::DigitalCamo => PowerDef {
+                id: "digital_camo",
+                path: "/datum/action/changeling/digitalcamo",
+                name: "Digital Camouflage",
+                desc: "Развивая способность искажать свою форму и пропорции, мы побеждаем обычные \
+                       алгоритмы, используемые для обнаружения форм жизни на камерах.",
+                helptext: "При использовании этого навыка нас нельзя отследить с помощью камеры \
+                           или увидеть с помощью ИИ. Однако люди, смотрящие на нас, будут \
+                           находить нас... странными.",
+                icon: "digital_camo",
+                dna_cost: Some(1),
+                category: "stealth",
+                ..BASE
+            },
         }
     }
 
@@ -641,6 +711,10 @@ pub struct Changeling {
     pub chosen_sting: Option<Power>,
     /// The transformation sting's `selected_dna`.
     pub sting_dna: Option<Profile>,
+    /// Augmented eyesight's `active`: x-ray and flash weakness.
+    pub xray: bool,
+    /// Digital camouflage's `active` (`/datum/element/digitalcamo`).
+    pub digital_camo: bool,
 }
 
 impl Default for Changeling {
@@ -668,6 +742,8 @@ impl Default for Changeling {
             fallen: false,
             chosen_sting: None,
             sting_dna: None,
+            xray: false,
+            digital_camo: false,
         }
     }
 }
@@ -765,6 +841,8 @@ impl Changeling {
     pub fn remove_purchased(&mut self) -> Vec<Power> {
         self.chosen_sting = None;
         self.sting_dna = None;
+        self.xray = false;
+        self.digital_camo = false;
         let gone = std::mem::take(&mut self.purchased);
         self.genetic_points = self.total_genetic_points;
         self.chem_charges = self.chem_charges.min(self.total_chem_storage);

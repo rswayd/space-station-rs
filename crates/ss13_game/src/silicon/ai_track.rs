@@ -102,8 +102,11 @@ pub fn can_track(world: &World, target: Entity, ai: Entity) -> bool {
             return false;
         }
     }
-    // `/mob/living/basic/morph/can_track`: never.
-    if world.get::<crate::antag::morph::Morph>(target).is_some() {
+    // `/mob/living/basic/morph/can_track`: never; a changeling's digital camouflage
+    // (`COMSIG_LIVING_CAN_TRACK` -> `COMPONENT_CANT_TRACK`).
+    if world.get::<crate::antag::morph::Morph>(target).is_some()
+        || crate::antag::changeling::server::ling_digital_camo(world, target)
+    {
         return false;
     }
     // `invisibility || alpha <= 50`: cloaked.

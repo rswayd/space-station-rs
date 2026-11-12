@@ -237,3 +237,24 @@ fn the_transformation_sting_wears_off_but_not_while_dead() {
     assert_eq!(world.get::<Name>(dead).unwrap().as_str(), "Ling");
     assert_eq!(world.get::<TransStung>(dead).unwrap().remaining, 1.0);
 }
+
+#[test]
+fn augmented_eyesight_trades_flash_protection_for_xray() {
+    let mut world = World::new();
+    let mut ling = Changeling::default();
+    let mob = world.spawn(ling.clone()).id();
+    assert_eq!(ling_flash_protect(&world, mob), 0);
+    ling.purchased.push(Power::AugmentedEyesight);
+    world.entity_mut(mob).insert(ling.clone());
+    assert_eq!(ling_flash_protect(&world, mob), 2);
+    assert!(!ling_xray(&world, mob));
+    ling.xray = true;
+    world.entity_mut(mob).insert(ling.clone());
+    assert_eq!(ling_flash_protect(&world, mob), -1);
+    assert!(ling_xray(&world, mob));
+    // Readapting takes it all back.
+    ling.remove_purchased();
+    world.entity_mut(mob).insert(ling);
+    assert_eq!(ling_flash_protect(&world, mob), 0);
+    assert!(!ling_xray(&world, mob));
+}

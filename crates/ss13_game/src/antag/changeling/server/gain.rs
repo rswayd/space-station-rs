@@ -463,6 +463,10 @@ pub(super) fn try_power(world: &mut World, client: Entity, mob: Entity, power: P
         Power::Fleshmend => fleshmend(world, client, mob),
         Power::ArmBlade => form_blade(world, client, mob),
         Power::Armor => form_armor(world, client, mob),
+        Power::AugmentedEyesight => augmented_eyesight(world, client, mob),
+        Power::ResonantShriek => resonant_shriek(world, client, mob),
+        Power::DissonantShriek => dissonant_shriek(world, client, mob),
+        Power::DigitalCamo => digital_camo(world, mob),
         // Handled above.
         Power::TransformationSting
         | Power::FalseArmbladeSting
