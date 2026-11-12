@@ -83,6 +83,47 @@ pub struct Round {
 
 /// `/obj/item/ammo_box/magazine/internal/cylinder`: keeps a slot for every chamber.
 pub const CYLINDER: &str = "/obj/item/ammo_box/magazine/internal/cylinder";
+/// `/obj/item/gun/ballistic/rifle`: the bolt is opened and closed by hand (`rack`), and
+/// nothing fires while it is open (`can_shoot`).
+pub const RIFLE: &str = "/obj/item/gun/ballistic/rifle";
+const BOLT_ACTION: &str = "/obj/item/gun/ballistic/rifle/boltaction";
+/// `can_jam`.
+const SURPLUS_RIFLE: &str = "/obj/item/gun/ballistic/rifle/boltaction/surplus";
+const DONK_RIFLE: &str = "/obj/item/gun/ballistic/rifle/boltaction/donkrifle";
+/// The string is drawn with a `do_after` and loosens after every shot.
+const REBAR_XBOW: &str = "/obj/item/gun/ballistic/rifle/rebarxbow";
+/// `draw_time`, deciseconds.
+const XBOW_DRAW_DS: f32 = 15.0;
+const JAMMED_SOUND: &str = "sound/items/weapons/jammed.ogg";
+
+/// `jammed`, `jamming_chance` and `unjam_chance` of a rifle that `can_jam`.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct RifleJam {
+    pub jammed: bool,
+    pub jamming_chance: f32,
+    pub unjam_chance: f32,
+}
+
+impl Default for RifleJam {
+    fn default() -> Self {
+        Self {
+            jammed: false,
+            jamming_chance: 20.0,
+            unjam_chance: 10.0,
+        }
+    }
+}
+
+/// `spread` as `do_sawoff` leaves it: an Obrez 36, a cut Jezail 50.
+fn own_spread(dm: &DmGun, gun: &Gun) -> f32 {
+    if gun.sawn_off && is_under(&dm.path, DONK_RIFLE) {
+        50.0
+    } else if gun.sawn_off && is_under(&dm.path, BOLT_ACTION) {
+        36.0
+    } else {
+        dm.spread
+    }
+}
 
 impl Round {
     /// An empty chamber of a cylinder.
@@ -384,6 +425,9 @@ fn ready_round(dm: &DmGun, gun: &Gun) -> Option<CasingData> {
     if dm.energy {
         let shot = dm.shots.get(gun.select)?;
         return (gun.charge >= shot.e_cost).then(|| shot.clone());
+    }
+    if gun.bolt_locked && is_under(&dm.path, RIFLE) {
+        return None;
     }
     let round = if is_revolver(dm) {
         gun.magazine.as_ref()?.rounds.last()
@@ -783,6 +827,14 @@ fn try_fire(
     }
     let combat = world.get::<CombatMode>(mob).is_some_and(|c| c.0);
     if ready_round(&dm, &gun).is_none() {
+        // `rebarxbow/shoot_with_empty_chamber`: a loose string with a rod to put on it is
+        // drawn instead.
+        if is_under(&dm.path, REBAR_XBOW)
+            && gun.bolt_locked
+            && gun.magazine.as_ref().is_some_and(|m| !m.rounds.is_empty())
+        {
+            return attack_self(world, client, mob, gun_entity);
+        }
         empty_click(world, client, &dm, gun_entity);
         return !combat;
     }
@@ -946,6 +998,18 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
     if misfires(world, mob, gun_entity, &dm, &gun, aim) {
         return true;
     }
+    // `/obj/item/gun/ballistic/rifle/boltaction/process_fire`: the shot may jam the bolt.
+    if is_under(&dm.path, SURPLUS_RIFLE) && gun.chambered.as_ref().is_some_and(|r| r.live) {
+        let mut jam = world
+            .get::<RifleJam>(gun_entity)
+            .copied()
+            .unwrap_or_default();
+        if world.resource_mut::<CombatRng>().chance(jam.jamming_chance) {
+            jam.jammed = true;
+        }
+        jam.jamming_chance = (jam.jamming_chance + 5.0).clamp(0.0, 100.0);
+        world.entity_mut(gun_entity).insert(jam);
+    }
     let (burst_size, fire_delay) = burst_and_delay(&dm, &gun);
     // `SAWN_OFF_ACC_PENALTY`.
     let bonus = bonus
@@ -957,8 +1021,9 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
     let (total, spread_mult) = {
         let rng = &mut world.resource_mut::<CombatRng>();
         let bonus = rng.range(0, bonus.max(0.0) as u32) as f32;
-        let own = if dm.spread > 0.0 {
-            rng.range(0, dm.spread as u32) as f32
+        let spread = own_spread(&dm, &gun);
+        let own = if spread > 0.0 {
+            rng.range(0, spread as u32) as f32
         } else {
             0.0
         };
@@ -1305,7 +1370,11 @@ fn shoot(
         shot_message(world, mob, gun_entity, target, from, target_pos);
     }
     fire_sounds(world, &dm, &gun, gun_entity, &casing);
-    if !dm.energy && !is_revolver(&dm) {
+    if is_under(&dm.path, REBAR_XBOW) {
+        // `shoot_live_shot` -> `rack`: the string is loose again.
+        gun.chambered = None;
+        gun.bolt_locked = true;
+    } else if !dm.energy && !is_revolver(&dm) {
         handle_chamber(world, &dm, &mut gun, from, true);
         if gun.chambered.is_none()
             && gun.magazine.as_ref().is_none_or(|m| m.rounds.is_empty())
@@ -1572,6 +1641,41 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         }
         return true;
     }
+    // `/obj/item/gun/ballistic/rifle/boltaction/attack_self`: a jammed bolt does not move.
+    if let Some(mut jam) = world.get::<RifleJam>(item).copied()
+        && jam.jammed
+    {
+        if world.resource_mut::<CombatRng>().chance(jam.unjam_chance) {
+            jam = RifleJam {
+                jamming_chance: jam.jamming_chance,
+                ..default()
+            };
+            world.entity_mut(item).insert(jam);
+        } else {
+            jam.unjam_chance += 10.0;
+            world.entity_mut(item).insert(jam);
+            tell(world, client, Span::Warning, "заклинило!");
+            gun_sound(world, mob, JAMMED_SOUND, 75.0, true);
+            return true;
+        }
+    }
+    // `/obj/item/gun/ballistic/rifle/rebarxbow/drop_bolt`: drawing the string takes time.
+    if is_under(&dm.path, REBAR_XBOW) && gun.bolt_locked {
+        let actor = crate::tools::Actor {
+            client,
+            mob,
+            item: Some(item),
+        };
+        crate::tools::do_after(
+            world,
+            actor,
+            mob,
+            XBOW_DRAW_DS,
+            0,
+            crate::construction::Job::DrawCrossbow,
+        );
+        return true;
+    }
     // `/obj/item/gun/ballistic/shotgun/automatic/dual_tube/attack_self`.
     if gun.alt_magazine.is_some() {
         let ammo = gun.magazine.as_ref().map_or(0, |m| m.ammo_count(true));
@@ -1649,6 +1753,33 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     true
 }
 
+/// The end of the crossbow's draw (`drop_bolt`): the rod is on the string.
+pub fn complete_draw(world: &mut World, action: &crate::tools::DoAfter) {
+    let Some(item) = action.item else {
+        return;
+    };
+    let (Some(dm), Some(mut gun)) = (
+        world.get::<DmGun>(item).cloned(),
+        world.get::<Gun>(item).cloned(),
+    ) else {
+        return;
+    };
+    if !gun.bolt_locked {
+        return;
+    }
+    chamber_round(&dm, &mut gun);
+    gun.bolt_locked = false;
+    tell(world, action.client, Span::Notice, "тетива натянута");
+    gun_sound(
+        world,
+        item,
+        &dm.sounds.bolt_drop_sound,
+        dm.sounds.bolt_drop_sound_volume,
+        false,
+    );
+    world.entity_mut(item).insert(gun);
+}
+
 /// `/obj/item/gun/energy/pulse/destroyer`.
 const PULSE_DESTROYER: &str = "/obj/item/gun/energy/pulse/destroyer";
 
@@ -1667,6 +1798,45 @@ pub fn rack(world: &mut World, client: Entity, item: Entity) {
     let Some(at) = crate::modpc::pda::turf_of(world, item) else {
         return;
     };
+    // `/obj/item/gun/ballistic/rifle/rack`: the bolt opens (what is chambered falls out) and
+    // stays open until it is pushed back (`drop_bolt`, `attack_self`).
+    if is_under(&dm.path, RIFLE) {
+        if gun.bolt_locked {
+            return;
+        }
+        let xbow = is_under(&dm.path, REBAR_XBOW);
+        tell(
+            world,
+            client,
+            Span::Notice,
+            if xbow {
+                "тетива ослаблена"
+            } else {
+                "открытие затвора"
+            },
+        );
+        if let Some(round) = gun.chambered.take() {
+            if xbow {
+                // The rod goes back (`chamber_next_round = FALSE` keeps it out of the string).
+                if let Some(mag) = gun.magazine.as_mut() {
+                    mag.rounds.push(round);
+                }
+            } else {
+                drop_casing(world, &round, at);
+            }
+        }
+        gun.bolt_locked = true;
+        let s = &dm.sounds;
+        gun_sound(
+            world,
+            item,
+            &s.rack_sound,
+            s.rack_sound_volume,
+            s.rack_sound_vary,
+        );
+        world.entity_mut(item).insert(gun);
+        return;
+    }
     if dm.bolt_type == BOLT_TYPE_OPEN {
         if !gun.bolt_locked {
             tell(
@@ -1802,6 +1972,17 @@ pub fn item_interaction(
     ) else {
         return false;
     };
+    // `/obj/item/gun/ballistic/rifle/item_interaction`: nothing but a bayonet goes on while
+    // the bolt is closed.
+    if dm.need_bolt_lock_to_interact
+        && !gun.bolt_locked
+        && !world
+            .get::<ss13_mapload::DmItem>(held)
+            .is_some_and(|i| is_under(&i.path, "/obj/item/knife"))
+    {
+        tell(world, client, Span::Warning, "затвор закрыт!");
+        return true;
+    }
     // A loose casing into an internal magazine (tg `ammo_box/attackby` -> `give_round`).
     if let Some(casing) = world
         .get::<ss13_mapload::DmCasing>(held)
@@ -2061,6 +2242,36 @@ mod tests {
         assert!(gun.chambered.is_some());
         assert_eq!(gun.magazine.as_ref().unwrap().rounds.len(), 2);
         assert!(ready_round(&dm, &gun).is_some());
+    }
+
+    #[test]
+    fn a_rifle_with_an_open_bolt_does_not_fire() {
+        let dm = DmGun {
+            path: "/obj/item/gun/ballistic/rifle/boltaction".into(),
+            semi_auto: false,
+            internal_magazine: true,
+            ..pistol()
+        };
+        let mut gun = Gun {
+            magazine: Some(Magazine::new(&dm.magazine)),
+            ..default()
+        };
+        chamber_round(&dm, &mut gun);
+        assert!(ready_round(&dm, &gun).is_some());
+        gun.bolt_locked = true;
+        assert!(ready_round(&dm, &gun).is_none());
+        // A pistol's locked-back slide is not what stops it (it is empty then anyway).
+        assert!(ready_round(&pistol(), &gun).is_some());
+        // `do_sawoff`: an Obrez spreads 36, a cut Jezail 50.
+        gun.sawn_off = true;
+        assert_eq!(own_spread(&dm, &gun), 36.0);
+        let donk = DmGun {
+            path: DONK_RIFLE.into(),
+            ..dm.clone()
+        };
+        assert_eq!(own_spread(&donk, &gun), 50.0);
+        gun.sawn_off = false;
+        assert_eq!(own_spread(&donk, &gun), 0.0);
     }
 
     #[test]
