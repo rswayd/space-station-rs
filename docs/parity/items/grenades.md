@@ -41,7 +41,7 @@
 Праздничные петарды и хлопушки.
 
 - **Код:** [`/obj/item/grenade/firecracker`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/grenades/festive.dm#L62)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/grenades.rs` (`Kind::Firecracker`, `firecracker_interaction`, `fire_act`): поджигается горячим предметом (строка `ignition_effect`, звук фитиля, 3 с), не взводится рукой, кусачки укорачивают фитиль на 1 с (спрайты `firecracker_20`..), огонь подрывает сразу, взрыв `explosion(-1, -1, 2)`; бенгальские огни (`/obj/item/sparkler`) не портированы
 
 ### Клапан переноса (TTV)
 Два баллона соединяются клапаном; открытие (вручную или сборкой) смешивает газы — классическая плазменная бомба. tgui-окно клапана.

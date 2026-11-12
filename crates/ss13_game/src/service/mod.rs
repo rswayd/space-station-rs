@@ -38,6 +38,8 @@ mod festival;
 #[cfg(feature = "server")]
 mod games;
 #[cfg(feature = "server")]
+pub mod id_stickers;
+#[cfg(feature = "server")]
 mod library;
 #[cfg(feature = "server")]
 mod library_console;
@@ -61,6 +63,8 @@ mod sparring;
 mod stationery;
 #[cfg(feature = "server")]
 mod statues;
+#[cfg(feature = "server")]
+pub mod tickets;
 
 #[cfg(feature = "server")]
 pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
@@ -73,7 +77,7 @@ pub use barcode::{BarcodeScanner, Ledger, Loan, ScanMode};
 #[cfg(feature = "server")]
 pub use burden::{Burdened, Psyker};
 #[cfg(feature = "server")]
-pub use clown::MimeVow;
+pub use clown::{MimeVow, is_balloon_mallet, laughter, mallet_effects, mallet_hit};
 #[cfg(feature = "server")]
 pub use dream_sect::{DreamProtection, SlumberParty, dream_pool, dream_started};
 #[cfg(feature = "server")]

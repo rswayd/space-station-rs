@@ -216,6 +216,8 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::gibber::examine_lines(world, target, &mut lines);
     crate::food::examine_lines(world, target, examiner, &mut lines);
     crate::service::cards::examine_lines(world, examiner, target, &mut lines);
+    crate::service::tickets::examine_lines(world, target, &mut lines);
+    crate::service::id_stickers::examine_lines(world, target, &mut lines);
     crate::decay::examine_lines(world, target, &mut lines);
     crate::coffee::examine_lines(world, target, &mut lines);
     crate::cargo::examine_lines(world, target, &mut lines);

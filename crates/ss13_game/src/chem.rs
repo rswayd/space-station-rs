@@ -2403,6 +2403,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     crate::hallucination::reagents(world, mob, seconds);
     crate::radiation::reagents(world, mob, seconds);
     crate::buffs::reagents(world, mob, seconds);
+    crate::service::laughter(world, mob);
     crate::quirks::allergic_reagents(world, mob, seconds);
     let entity = world.entity(mob);
     let (Some(health), Some(&stat), Some(reagents)) = (

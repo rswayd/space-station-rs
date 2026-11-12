@@ -122,6 +122,12 @@ pub enum ArtJob {
     Rescind { bust: Entity },
     /// Carving the block (the target) with a chisel.
     Sculpt,
+    /// A hand labeler refill roll into a ticket machine (the target).
+    TicketRefill,
+    /// The held ID sticker onto `card`.
+    ApplySticker { card: Entity },
+    /// A sticker peeled off `card`.
+    PeelSticker { card: Entity },
 }
 
 pub(super) fn add_obj_parts(world: &mut World, e: Entity, path: &str) {
@@ -378,6 +384,13 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: ArtJob) {
             }
             tell(world, client, Span::Notice, "Статуя готова.");
         }
+        ArtJob::TicketRefill => {
+            super::tickets::refilled(world, client, action.target, action.item);
+        }
+        ArtJob::ApplySticker { card } => {
+            super::id_stickers::apply(world, client, mob, card, action.item);
+        }
+        ArtJob::PeelSticker { card } => super::id_stickers::peeled(world, client, mob, card),
     }
 }
 
@@ -402,7 +415,10 @@ pub fn interrupted(world: &mut World, mob: Entity, action: &DoAfter, job: ArtJob
                 b.ready_at = 0.0;
             }
         }
-        ArtJob::Rescind { .. } => {}
+        ArtJob::Rescind { .. }
+        | ArtJob::TicketRefill
+        | ArtJob::ApplySticker { .. }
+        | ArtJob::PeelSticker { .. } => {}
         ArtJob::Sculpt => {
             let now = super::server::now(world);
             let left = ((action.ends_at - now).max(0.0) * 10.0) as f32;

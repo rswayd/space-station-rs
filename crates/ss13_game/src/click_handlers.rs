@@ -118,6 +118,7 @@
 //! | 3309 | `kitchen_ware::attack_self` (pizza boxes open and close, tongs drop or clack) |
 //! | 3319 | `toys::toggle_sword` (a toy sword flicks out and in) |
 //! | 3325 | `cargo::black_market::attack_self` (the market uplink's window) |
+//! | 3327 | `talking_toys::attack_self` (action figures, pull-string toys, the big red button, the toy nuke) |
 //! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
@@ -150,6 +151,7 @@
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
 //! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 489 | `smoking::item_on_item` (lighting smokables, packing pipes, rolling paper, striking matches, vape tools, dipping) |
+//! | 497 | `talking_toys` emag on a toy nuke in the other hand |
 //! | 499 | `kitchen_ware::other_hand` (food onto plates, pizza boxes, tongs; empty hand: food off a plate, pizza or the top box) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
@@ -478,6 +480,7 @@
 //! | 3500 | `janitor::item_interaction` |
 //! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |
+//! | 3647 | `talking_toys` emag on a toy nuke |
 //! | 3649 | `toys::held_on_target` (caps, toy swords, balloons, the Mini-Meteor; water balloons never hit mobs) |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |

@@ -17,7 +17,7 @@
 Банка «смеха» (напиток, вызывающий смех), надувной молот без урона с забавными звуками.
 
 - **Код:** [`/obj/item/reagent_containers/cup/soda_cans/canned_laughter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/clown_items.dm#L296), [`/obj/item/balloon_mallet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/clown_items.dm#L304)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/service/clown.rs` (`laughter`, `mallet_hit`, `mallet_effects`), `crates/ss13_game/src/combat.rs`: реагент смеха один раз заставляет выпившего смеяться и даёт moodlet `chemical_laughter`; молот хихикает при каждом взмахе по живому, сила по рассудку цели (8 / 4 / 1), унижение (`mallet_humiliation`), бьёт только в боевом режиме; нет текста осмотра для `TRAIT_BALLOON_SUTRA` (трейт не портирован, см. toys.md)
 
 ### Клоунская печать
 Печать клоуна «HONK» для бумаг (механика печатей — paperwork.md).
@@ -41,6 +41,6 @@
 Способности мима (пока соблюдён обет): невидимый ящик-предмет, невидимый стул; книги «Guide to Advanced Mimery» дают невидимую стену и «пальцевые пистолеты».
 
 - **Код:** [`/datum/action/cooldown/spell/forcewall/mime`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/self/forcewall.dm#L45), [`/datum/action/cooldown/spell/conjure_item/invisible_box`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/conjure_item/invisible_box.dm#L3), [`/datum/action/cooldown/spell/conjure/invisible_chair`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/spells/spell_types/conjure/invisible_chair.dm#L1), [`/obj/item/book/granter/action/spell/mime`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/granters/magic/mime.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/service/clown.rs` (`mimery_attack_self`, `mimery_answer`), `crates/ss13_game/src/spells/mod.rs` (`SPELL_REQUIRES_MIME_VOW`): книга «Guide to Dank Mimery» даёт радиал из ещё не изученных невидимой стены, стула и ящика, выбранное изучается, книга исчезает; три заклинания требуют обета (`MimeVow`, «You must dedicate yourself to silence first!»); сами заклинания — `crates/ss13_game/src/spells/conjure.rs`; нет книг Advanced Mimery (Invisible Blockade, Finger Guns), нет действия обета для не-мима, прочитавшего книгу
 
 > Из `antagonists/spells.md`: заклинания мима (`InvisibleWall`, `InvisibleChair`, `InvisibleBox`) реализованы в `crates/ss13_game/src/spells/conjure.rs`, нужна их выдача мимам и обет (`SPELL_REQUIRES_MIME_VOW`).

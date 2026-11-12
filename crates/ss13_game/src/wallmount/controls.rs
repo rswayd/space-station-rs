@@ -21,7 +21,7 @@
 //! that sees it within `flash_range`: the bulb's targeted `flash_mob` (from the flasher, no
 //! user; `strength * 1.5` confusion) and `strength` of paralysis on success.
 // Elevator and tram call buttons hand over to `crate::transport`.
-// shortcut: curtain, crematorium, photobooth and ticket buttons do nothing; no panel (devices and boards in and
+// shortcut: curtain, crematorium and photobooth buttons do nothing; no panel (devices and boards in and
 // out, renaming, skins), no shuttle id prefixes (`connect_to_shuttle`), the airlock controller's
 // shock bit sets the intended toggle (tg's `secondsElectrified` check is inverted). Flashers:
 // no flick or flash light, a frame's channel id is not shown on examine.
@@ -70,6 +70,8 @@ const AIRLOCK_CONTROL: &str = "/obj/item/assembly/control/airlock";
 /// `elev_controller.dm`, `tram_machinery.dm` (`crate::transport`).
 const ELEVATOR_CONTROL: &str = "/obj/item/assembly/control/elevator";
 const TRAM_CALL: &str = "/obj/item/assembly/control/transport/call_button";
+/// `ticketmachine.dm` (`crate::service::tickets`).
+const TICKET_CONTROL: &str = "/obj/item/assembly/control/ticket_machine";
 /// `/obj/machinery/flasher`: `flash_cooldown_duration`, `flash_recharge(30)`, `use_energy`.
 const FLASH_COOLDOWN: f64 = 15.0;
 const FLASH_RECHARGE: f64 = 30.0;
@@ -99,6 +101,8 @@ pub enum Device {
     Elevator,
     /// Tram call button: sends the tram to the platform its `id` names.
     TramCall,
+    /// Ticket machine controller: the machine serves its next ticket.
+    TicketMachine,
     /// A controller this server does not run (curtain, crematorium, ...).
     Other,
 }
@@ -113,6 +117,7 @@ impl Device {
             Self::Igniter => 3.0,
             Self::Flasher => 5.0,
             Self::Elevator | Self::TramCall => 2.0,
+            Self::TicketMachine => 1.0,
             Self::Other => 0.0,
         }
     }
@@ -246,6 +251,8 @@ pub(super) fn add_button(world: &mut World, e: Entity, dm: &DmWallMount) {
         Some(Device::Elevator)
     } else if is_under(&dm.device_type, TRAM_CALL) {
         Some(Device::TramCall)
+    } else if is_under(&dm.device_type, TICKET_CONTROL) {
+        Some(Device::TicketMachine)
     } else {
         Some(Device::Other)
     };
@@ -360,6 +367,10 @@ fn activate(world: &mut World, mob: Entity, button: Entity, device: Device, id: 
             crate::transport::elevator::call_elevator(world, mob, button, id);
         }
         Device::TramCall => crate::transport::tram::call_button(world, button, id),
+        Device::TicketMachine => {
+            let client = crate::tools::client_of(world, mob);
+            crate::service::tickets::serve_next(world, client);
+        }
         Device::BlastDoor { sync } => blast_doors(world, id, sync),
         Device::Airlock { functions } => airlocks(world, id, functions),
         Device::MassDriver => {

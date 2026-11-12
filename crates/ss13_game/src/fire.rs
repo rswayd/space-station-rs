@@ -332,6 +332,8 @@ pub fn fire_act(world: &mut World, thing: Entity, temperature: f64) {
         // Matches and cigarettes light.
     } else if crate::toys::fire_act(world, thing) {
         // Snap pops pop.
+    } else if crate::grenades::fire_act(world, thing) {
+        // Firecrackers go off.
     } else if world.get::<DmObj>(thing).is_some() {
         obj_fire_act(world, thing, temperature);
     }

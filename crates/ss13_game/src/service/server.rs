@@ -129,6 +129,7 @@ impl Plugin for ServiceServerPlugin {
                         .run_if(any_with_component::<super::statues::Radioactive>),
                     super::cards::drop_unheld_wield
                         .run_if(any_with_component::<super::cards::DeckWielded>),
+                    super::id_stickers::ctrl_shift_clicks.after(crate::click::ResolveClicks),
                 ),
             )
             .add_observer(add_item_parts)
@@ -171,6 +172,8 @@ pub(super) enum PendingAsk {
     Cards(super::cards::CardsAsk),
     /// Cameras and photos.
     Photo(super::photo::PhotoAsk),
+    /// The mime's book: which routine.
+    Mimery(super::clown::MimeryAsk),
 }
 
 /// `Initialize` of the ported items, once all their prototype components are in.
@@ -230,6 +233,7 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::stationery::add_obj_parts(world, e, &path);
         super::slots::add_obj_parts(world, e, &path);
         super::photo::add_obj_parts(world, e, &path);
+        super::tickets::add_obj_parts(world, e, &path);
     });
 }
 
@@ -248,6 +252,7 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         || super::games::attack_self(world, client, mob, item)
         || super::cards::attack_self(world, client, mob, item)
         || super::clown::attack_self(world, mob, item)
+        || super::clown::mimery_attack_self(world, client, mob, item)
 }
 
 /// tg `attack_hand` of paper bins, bookcases, desk bells, office and library machines. True
@@ -259,6 +264,7 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         || super::office::interact(world, client, mob, target)
         || super::archive::interact(world, client, mob, target)
         || super::stationery::interact(world, client, mob, target)
+        || super::tickets::take_ticket(world, client, mob, target)
 }
 
 /// tg `click_alt` of papers (folded into a plane; a carbon sheet tears its copy off first) and
@@ -293,6 +299,8 @@ pub fn item_interaction(
         || super::archive::item_interaction(world, client, mob, held, target)
         || super::art::item_interaction(world, client, mob, held, target)
         || super::statues::item_interaction(world, client, mob, held, target)
+        || super::tickets::item_interaction(world, client, mob, held, target)
+        || super::id_stickers::item_interaction(world, client, mob, held, target)
 }
 
 fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswered>>) {
@@ -348,6 +356,9 @@ fn prompt_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
             }
             (PendingAsk::Photo(ask), answer) => {
                 super::photo::answer(world, actor, ask, answer);
+            }
+            (PendingAsk::Mimery(ask), Some(PromptAnswer::Item(i))) => {
+                super::clown::mimery_answer(world, actor, ask, i);
             }
             _ => {}
         }
