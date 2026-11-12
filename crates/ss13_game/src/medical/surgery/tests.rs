@@ -275,3 +275,24 @@ fn requirements_read_like_tg() {
     let [_, any, ..] = Op::TendWounds(Tend::Basic, Heal::Brute).requirements();
     assert_eq!(any, ["кожа должна быть разрезана или вскрыта"]);
 }
+
+#[test]
+fn a_moved_bed_takes_its_patient_along() {
+    use bevy::ecs::message::Messages;
+    use bevy::ecs::system::RunSystemOnce;
+    let mut world = World::new();
+    world.init_resource::<Messages<ss13_world::Moved>>();
+    let (from, to) = (TilePos::new(1, 1, 0), TilePos::new(2, 1, 0));
+    let bed = world.spawn(to).id();
+    let patient = world.spawn((from, Buckled(bed))).id();
+    let bystander = world.spawn(from).id();
+    world.write_message(ss13_world::Moved {
+        entity: bed,
+        from,
+        to,
+        dir: ss13_shared::Dir::East,
+    });
+    world.run_system_once(carry_buckled).unwrap();
+    assert_eq!(world.get::<TilePos>(patient), Some(&to));
+    assert_eq!(world.get::<TilePos>(bystander), Some(&from));
+}

@@ -214,6 +214,33 @@ pub fn buckled_to(world: &mut World, furniture: Entity) -> Option<Entity> {
         .map(|(e, _)| e)
 }
 
+/// tg `/atom/movable/Moved` -> `handle_buckled_mob_movement`: furniture that was pulled or
+/// pushed (a medical bed, an office chair) takes its buckled mob along; a vehicle's rider is
+/// `crate::vehicles`', a carried mob `crate::pull::carry`'s.
+// Cost: per tick, the buckled mobs (a handful) against the moves of the tick.
+pub(super) fn carry_buckled(
+    mut moved: MessageReader<ss13_world::Moved>,
+    mut mobs: Query<
+        (&Buckled, &mut TilePos),
+        (
+            Without<crate::vehicles::Rider>,
+            Without<crate::pull::carry::Carried>,
+        ),
+    >,
+) {
+    let moved: Vec<(Entity, TilePos)> = moved.read().map(|m| (m.entity, m.to)).collect();
+    if moved.is_empty() {
+        return;
+    }
+    for (Buckled(to), mut pos) in &mut mobs {
+        if let Some(&(_, dest)) = moved.iter().rev().find(|(e, _)| e == to)
+            && *pos != dest
+        {
+            *pos = dest;
+        }
+    }
+}
+
 /// A buckled mob that left the furniture's tile (teleported, the furniture gone) is free; a
 /// vehicle's rider is `crate::vehicles`' (it moves with the vehicle), a carried mob
 /// `crate::pull::carry`'s.

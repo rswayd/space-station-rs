@@ -385,7 +385,11 @@ pub(super) fn build(app: &mut App) {
         (
             pick_operation.in_set(UiSystems::Handle),
             close_stale_lists.in_set(UiSystems::StatusHook),
-            (drapes_fall_off, check_buckles, resist_buckle)
+            (
+                drapes_fall_off,
+                (carry_buckled, check_buckles).chain(),
+                resist_buckle,
+            )
                 .after(ss13_world::WorldSystems::Movement),
         ),
     );

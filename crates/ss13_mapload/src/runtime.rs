@@ -1140,6 +1140,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/bikehorn/airhorn",
     "/obj/item/bodybag",
     "/obj/item/bodybag/bluespace",
+    // The roller bed and the emergency bed it unfolds into (`ss13_game::furniture`).
+    "/obj/item/emergency_bed",
+    "/obj/structure/bed/medical/emergency",
     "/obj/item/borg/upgrade/modkit/cooldown/aoe/mobs",
     "/obj/item/cigarette/rollie",
     "/obj/item/clothing/gloves/boxing/evil",
