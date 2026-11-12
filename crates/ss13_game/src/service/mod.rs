@@ -114,8 +114,8 @@ pub use stationery::{Biscuit, CabinetKind, CarbonPaper, FilingCabinet, PaperCutt
 #[cfg(feature = "server")]
 pub use statues::{
     ArtJob, CarvingBlock, Chisel, CombustibleFlooder, HippocraticBust, HippocraticOath,
-    Radioactive, complete as art_complete, fire_act as flooder_fire_act,
-    interrupted as art_interrupted, sworn as hippocratic_sworn,
+    complete as art_complete, fire_act as flooder_fire_act, interrupted as art_interrupted,
+    sworn as hippocratic_sworn,
 };
 
 /// tgui `PaperSheet` (`/obj/item/paper/ui_interact`), read-only here: writing goes through a

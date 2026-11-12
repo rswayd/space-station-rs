@@ -18,7 +18,7 @@
 Элемент `radioactive` (раз в 3 с импульс) и компонент `radioactive_emitter` (настраиваемый период и радиус) делают объект постоянным источником: уран, облучённые предметы, протекающие машины.
 
 - **Код:** [`/datum/element/radioactive`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/radioactive.dm#L4), [`/datum/component/radioactive_emitter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/radioactive_emitter.dm#L10)
-- **Статус в ss13-rs:** ❌ нет — элемента `radioactive` и `radioactive_emitter` нет (уран как материал — ../engineering/stacks-materials.md; урановые стены — ../engineering/walls.md)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/radiation.rs`: `Radioactive` (элемент: импульс раз в 3 с с момента появления, по умолчанию радиус 3, `RAD_LIGHT_INSULATION`, 3 с экспозиции) — на урановых статуях, платформах, стенах и полах (свойство радиоактивности материала, шанс урана) и на лозах с мутацией Radioactive (`DEFAULT_RADIATION_CHANCE / 3`, `crates/ss13_game/src/events/space_vines.rs`); `RadioactiveEmitter` (компонент: свой период не меньше 0,5 с, радиус, порог, строка осмотра) — у радиоактивной слизи и утечки радиации; тест `crates/ss13_game/tests/it/radiation.rs`. `// shortcut:` урановые атомы находятся по типу, а не по `custom_materials` (у не-предметов в порту нет материалов). Мутация генов «радиоактивность» — у генетики
 
 ### Защита от радиации
 Радиационный костюм и капюшон, скафандры, MOD-модули дают `TRAIT_RADIMMUNE`/защиту через элемент `radiation_protected_clothing`; статус-эффект временного иммунитета (препараты, туманность).

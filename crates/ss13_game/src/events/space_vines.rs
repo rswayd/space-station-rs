@@ -502,6 +502,7 @@ pub fn spawn_vine(
         vine.blocks_light = false;
         vine.can_tangle = false;
     }
+    let radioactive = vine.mutations.has(Mutation::Radioactive);
     let color = vine.color;
     let icon_state = icon(world, "Light1");
     let e = world
@@ -527,6 +528,16 @@ pub fn spawn_vine(
             vine,
         ))
         .id();
+    if radioactive {
+        // `/datum/element/radioactive(chance = DEFAULT_RADIATION_CHANCE / 3)`.
+        let now = crate::tools::now(world);
+        world
+            .entity_mut(e)
+            .insert(crate::radiation::Radioactive::new(
+                crate::radiation::DEFAULT_RADIATION_CHANCE / 3.0,
+                now,
+            ));
+    }
     if let Some(mut c) = world.get_mut::<VineController>(controller) {
         c.vines.push(e);
         c.queue.push_back(e);
@@ -992,24 +1003,11 @@ pub fn process_controller(world: &mut World, controller: Entity, seconds_per_tic
     c.queue = order;
 }
 
-/// `process_mutation`: the gas eaters take `3 × growth_stage` moles; Radioactive pulses with
-/// its emitter.
+/// `process_mutation`: the gas eaters take `3 × growth_stage` moles.
 fn process_mutations(world: &mut World, e: Entity, vine: &Vine) {
     let Some(&pos) = world.get::<TilePos>(e) else {
         return;
     };
-    if vine.mutations.has(Mutation::Radioactive) {
-        // `/datum/element/radioactive(chance = DEFAULT_RADIATION_CHANCE / 3)`.
-        // shortcut: pulses when the vine is processed, not on the element's own timer.
-        crate::radiation::radiation_pulse(
-            world,
-            e,
-            3.0,
-            crate::radiation::RAD_LIGHT_INSULATION,
-            crate::radiation::DEFAULT_RADIATION_CHANCE / 3.0,
-            crate::radiation::URANIUM_RADIATION_MINIMUM_EXPOSURE_TIME,
-        );
-    }
     let amount = GAS_REMOVAL * f64::from(vine.growth_stage);
     for m in vine.mutations.iter() {
         let Some(gas) = m.eats() else {

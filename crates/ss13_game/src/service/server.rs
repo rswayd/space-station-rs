@@ -126,8 +126,6 @@ impl Plugin for ServiceServerPlugin {
                     super::office::load_starting_toner
                         .run_if(any_with_component::<super::office::StartingToner>),
                     super::clown::squeak_on_moves.after(ss13_world::WorldSystems::Movement),
-                    super::statues::pulse_radioactive
-                        .run_if(any_with_component::<super::statues::Radioactive>),
                     super::cards::drop_unheld_wield
                         .run_if(any_with_component::<super::cards::DeckWielded>),
                     super::id_stickers::ctrl_shift_clicks.after(crate::click::ResolveClicks),

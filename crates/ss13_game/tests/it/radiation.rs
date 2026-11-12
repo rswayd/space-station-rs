@@ -2,7 +2,8 @@
 //! a sure pulse irradiates a bare human in the open (10 toxin, the alert, the Geiger counter in
 //! his hand reads the extreme level), not one behind a full insulator, not one in a radiation
 //! suit and hood; a pulse with a minimum exposure time only warms a human up, a pulse 3 s later
-//! irradiates him; healing the toxin damage ends the irradiation.
+//! irradiates him; healing the toxin damage ends the irradiation. A uranium statue (the
+//! `radioactive` element) pulses every 3 s.
 
 use bevy::prelude::*;
 use ss13_game::breath::{AlertCategory, Alerts};
@@ -146,4 +147,38 @@ fn minimum_exposure_time_warms_up_first() {
     radiation::radiation_pulse(app.world_mut(), source, 3.0, 0.5, 100.0, 3.0);
     run(&mut app, 0.6);
     assert!(app.world().get::<Irradiated>(mob).is_some(), "stayed 3 s");
+}
+
+/// The `radioactive` element on a uranium statue (by its type): it pulses every 3 s from when it
+/// appeared, so the human beside it is first warmed up (3 s exposure) and then irradiated.
+#[test]
+fn uranium_statue_pulses_every_three_seconds() {
+    let mut app = server("radioactive");
+    let world = app.world_mut();
+    let statue = world
+        .spawn((
+            at(8),
+            ss13_mapload::DmObj {
+                path: "/obj/structure/statue/uranium/nuke".into(),
+                ..default()
+            },
+        ))
+        .id();
+    let mob = human(world, at(9));
+    app.update();
+    app.world_mut()
+        .get_mut::<radiation::Radioactive>(statue)
+        .expect("the uranium material makes it radioactive")
+        .chance = 100.0;
+    run(&mut app, 2.0);
+    assert!(
+        app.world().get::<RadiationCountdown>(mob).is_none(),
+        "no pulse before 3 s"
+    );
+    run(&mut app, 2.0);
+    assert!(app.world().get::<RadiationCountdown>(mob).is_some());
+    assert!(app.world().get::<Irradiated>(mob).is_none());
+    // The next pulses come 3 s apart; one of them lands past the exposure time.
+    run(&mut app, 6.5);
+    assert!(app.world().get::<Irradiated>(mob).is_some());
 }
