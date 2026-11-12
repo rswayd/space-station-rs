@@ -66,7 +66,7 @@ ID привязана к счёту: наличные, голочипы и мо�
 Консоль в хранилище: показывает бюджет станции; её можно взломать, чтобы откачивать деньги из карго-бюджета наличными с объявлением тревоги.
 
 - **Код:** [`/obj/machinery/computer/bank_machine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/bank_machine.dm#L1), [`ui_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/bank_machine.dm#L109); tgui: [`BankMachine.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/BankMachine.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::cargo::bank_machine` (окно `BankMachine`, `cargo::bank_ui`): деньги (купюры, голочипы, монеты, фишки) вносятся в бюджет снабжения; откачка 100 кр/с с проверкой доступа `vault` (без него — «Unauthorized»), только на уровне станции; предупреждения в общий канал (15% за тик, не чаще 40 с); остановка без питания или при пустом бюджете; откачанное выпадает купюрами (`credits_to_spacecash`); нет GPS «Forbidden Cash Signal» у пересобранной консоли и остановки при смене z-уровня
 
 ### NT Pay
 Программа ПДА для переводов по платёжному токену и просмотра истории операций счёта.

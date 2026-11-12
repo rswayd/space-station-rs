@@ -24,6 +24,7 @@ pub const ORE_ROOT: &str = "/obj/item/stack/ore";
 pub const ORM_ROOT: &str = "/obj/machinery/mineral/ore_redemption";
 pub const ORDER_CONSOLE_ROOT: &str = "/obj/machinery/computer/order_console";
 pub const MINING_CONSOLE: &str = "/obj/machinery/computer/order_console/mining";
+pub const BITRUNNING_CONSOLE: &str = "/obj/machinery/computer/order_console/bitrunning";
 const ORDERABLE_ROOT: &str = "/datum/orderable_item";
 pub const GIBTONITE_ITEM: &str = "/obj/item/gibtonite";
 pub const MODKIT_ROOT: &str = "/obj/item/borg/upgrade/modkit";
@@ -133,6 +134,8 @@ pub struct DmOrderConsole {
     pub forced_express: bool,
     pub express_tooltip: String,
     pub purchase_tooltip: String,
+    /// `announcement_line`: said on the supply channel after a shuttle order (empty: none).
+    pub announcement_line: String,
 }
 
 /// `/obj/item/borg/upgrade/modkit` vars.
@@ -405,6 +408,7 @@ pub fn order_console(types: &DmTypes, path: &str) -> Option<DmOrderConsole> {
         forced_express: truthy(types.resolved(path, "forced_express")),
         express_tooltip: string(types.resolved(path, "express_tooltip")),
         purchase_tooltip: string(types.resolved(path, "purchase_tooltip")),
+        announcement_line: string(types.resolved(path, "announcement_line")),
     })
 }
 
@@ -434,8 +438,9 @@ pub fn mining_closure<'a>(
         if is_under(path, ORE_ROOT) {
             ores.push(path.to_owned());
         }
-        // Only the mining console sells here (`ss13_game::mining::console`).
-        if is_under(path, MINING_CONSOLE)
+        // What the order consoles sell (`ss13_game::mining::console`; the bitrunning vendor has no
+        // server half).
+        if !is_under(path, BITRUNNING_CONSOLE)
             && let Some(console) = order_console(types, path)
         {
             out.extend(console.items.into_iter().map(|i| i.purchase_path));
@@ -526,6 +531,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             ext(c, "forced_express", ron(&o.forced_express)),
             ext(c, "express_tooltip", ron(&o.express_tooltip)),
             ext(c, "purchase_tooltip", ron(&o.purchase_tooltip)),
+            ext(c, "announcement_line", ron(&o.announcement_line)),
         ]);
     }
     out

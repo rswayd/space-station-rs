@@ -13,6 +13,9 @@ use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::vending::ProductIcon;
 
 #[cfg(feature = "server")]
+pub mod bank_machine;
+pub mod bank_ui;
+#[cfg(feature = "server")]
 pub mod black_market;
 #[cfg(feature = "client")]
 pub mod black_market_client;
@@ -84,6 +87,7 @@ impl bevy::prelude::Plugin for CargoServerPlugin {
             materials_market::MaterialsMarketPlugin,
             money::MoneyPlugin,
             black_market::BlackMarketPlugin,
+            bank_machine::BankMachinePlugin,
         ));
     }
 }
