@@ -386,11 +386,7 @@ pub struct AidMode(pub usize);
 
 /// The next `current_mode` after `mode`: past the last it turns off.
 pub fn next_aid_mode(mode: usize) -> usize {
-    if mode < AID_MODES.len() {
-        mode + 1
-    } else {
-        1
-    }
+    if mode < AID_MODES.len() { mode + 1 } else { 1 }
 }
 
 /// `/obj/item/toy/captainsaid/attack_self`: the next heading on its display.

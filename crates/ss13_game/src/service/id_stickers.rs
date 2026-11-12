@@ -201,14 +201,13 @@ fn refresh_holder(world: &mut World, card: Entity) {
 fn remove(world: &mut World, card: Entity) -> Option<AppliedSticker> {
     let applied = world.get::<AppliedSticker>(card).cloned()?;
     world.entity_mut(card).remove::<AppliedSticker>();
-    if let Some(mut look) = world.get_mut::<Appearance>(card) {
-        if let Some(i) = look
+    if let Some(mut look) = world.get_mut::<Appearance>(card)
+        && let Some(i) = look
             .overlays
             .iter()
             .rposition(|o| o.icon_state == applied.icon_state)
-        {
-            look.overlays.remove(i);
-        }
+    {
+        look.overlays.remove(i);
     }
     refresh_holder(world, card);
     Some(applied)

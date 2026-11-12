@@ -700,6 +700,8 @@ fn metastation_families() {
                 e.contains::<ss13_game::science::server_control::ServerControl>()
             }
             Family::Pacman => e.contains::<ss13_game::power::pacman::Pacman>(),
+            Family::PowerMonitor => e.contains::<ss13_game::power::monitor::PowerMonitor>(),
+            Family::SmesBank => e.contains::<ss13_game::power::smes_portable::SmesBank>(),
             Family::Smes => e.contains::<ss13_game::power::Smes>(),
             Family::ShieldWallGen => e.contains::<ss13_game::power::shields::ShieldWallGen>(),
             Family::Orm => e.contains::<ss13_game::mining::orm::OreRedemption>(),
