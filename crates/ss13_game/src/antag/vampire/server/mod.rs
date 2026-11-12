@@ -22,7 +22,8 @@
 //!   nullification decays by 2.
 //! - [`roundend_report`]: the vampires, their objectives and the blood they drank.
 // shortcut: implemented spells are rejuvenate, glare, the lair, the umbrae cloak, the gargantua
-// blood rush and the dantalion subspace swap; the other specialization powers (thralls, blood
+// blood rush, the dantalion subspace swap and the hemomancer's tendrils, predator senses and
+// blood eruption ([`hemomancer`]); the other specialization powers (thralls, blood
 // magic, shadow snares, stomp, ...) are listed in the info panel but not granted, until their
 // systems (projectiles, beams, illusions, physiology multipliers) exist. Vision passives are
 // granted without the client's lighting cutoff or thermal/x-ray sight; no coffin regeneration
