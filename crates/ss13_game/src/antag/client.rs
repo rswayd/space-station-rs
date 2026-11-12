@@ -570,11 +570,11 @@ impl ClientUi for AntagInfoTraitorUi {
                 ]
             })
         });
-        let codewords = if info.has_codewords {
+        let codewords: Box<dyn SceneList> = if info.has_codewords {
             let (phrases, responses) = (info.phrases.clone(), info.responses.clone());
             let blue = Color::hsl(224.1, 1.0, 0.565);
             let red = Color::hsl(0.0, 1.0, 0.5);
-            EntityScene(bsn! {
+            Box::new(EntityScene(bsn! {
                 Node { column_gap: px(8) }
                 Children [
                     Node { flex_grow: 1.0, flex_basis: px(0), flex_direction: FlexDirection::Column }
@@ -605,11 +605,11 @@ impl ClientUi for AntagInfoTraitorUi {
                         Children [ Text(responses) ]
                     ]
                 ]
-            })
+            }))
         } else {
-            EntityScene(bsn! {
+            Box::new(EntityScene(bsn! {
                 Node Children [ Text("Вам не были предоставлены кодовые слова. Вы должны использовать альтернативные способы поиска потенциальных союзников. Но будьте осторожны, так как каждый может быть потенциальным противником.") ]
-            })
+            }))
         };
         bsn! {
             @WindowContent
