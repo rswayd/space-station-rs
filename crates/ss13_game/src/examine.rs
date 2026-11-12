@@ -5,9 +5,13 @@
 //! A shift-click (`crate::click::ExamineClick`, from any client that sees the target, also in crit
 //! or as a ghost) sends the examiner's client the title line ("Это <name>.") and one chat line per
 //! examine entry. The examiner's living mob turns to face the target (tg `face_atom`).
-// shortcut: no darkness rule (tg refuses to examine unlit tiles farther than one), no
-// double-examine (`examine_more`), no pronouns but the male ones (player mobs have no gender
-// yet), no species, wounds, blood or scars; add with lighting on the server and characters.
+//!
+//! Examining the same thing again within a second (tg `EXAMINE_MORE_WINDOW`) is the closer look
+//! (`examine_more`, [`examine_more_lines`]): a carbon's scars, a human's sparking suit sensors,
+//! uncovered cybernetic limbs and apparent age.
+// shortcut: no darkness rule (tg refuses to examine unlit tiles farther than one), no pronouns
+// but the male ones (player mobs have no gender yet), no species, wounds or blood; add with
+// lighting on the server and characters. The items' own `examine_more` lore is their groups'.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -402,6 +406,80 @@ pub fn examine_messages(name: &str, lines: Vec<Line>) -> Vec<ChatMessage> {
     out
 }
 
+/// `EXAMINE_MORE_WINDOW`, seconds.
+const EXAMINE_MORE_WINDOW: f64 = 1.0;
+
+/// tg `client.recent_examines`: when the client last examined each thing (game seconds).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct RecentExamines(std::collections::HashMap<Entity, f64>);
+
+/// tg `examine_more` for what this server models.
+pub fn examine_more_lines(world: &World, examiner: Entity, target: Entity) -> Vec<Line> {
+    let mut lines = Vec::new();
+    // `carbon/examine_more`.
+    crate::medical::wounds::scars::examine_more_lines(world, examiner, target, &mut lines);
+    if world.get::<crate::human::HumanLook>(target).is_some() {
+        human_more_lines(world, target, &mut lines);
+    }
+    lines
+}
+
+/// `human/examine_more`: broken suit sensors, `get_mismatched_limb_text`, `get_age_text`.
+fn human_more_lines(world: &World, mob: Entity, lines: &mut Vec<Line>) {
+    use ss13_shared::protocol::InventorySlot;
+    let he = "Он";
+    let hidden = crate::clothing::cover::obscured(world, mob);
+    if let Some(uniform) = world.get::<Inventory>(mob).and_then(|i| i.uniform)
+        && !crate::clothing::cover::slot_hidden(hidden, InventorySlot::Uniform)
+        && world
+            .get::<crate::clothing::sensors::SuitSensor>(uniform)
+            .is_some_and(|s| s.has == crate::clothing::sensors::BROKEN_SENSORS)
+    {
+        let name = name_of(world, uniform);
+        lines.push((Span::Notice, format!("Медицинские датчики {name} искрят.")));
+    }
+    // Cybernetic limbs keep the human shape: clothing hides them.
+    if let Some(limbs) = world.get::<crate::medical::wounds::Limbs>(mob) {
+        use crate::zone::BodyZone;
+        for (zone, part) in [
+            (BodyZone::Head, "кибернетическая голова"),
+            (BodyZone::Chest, "кибернетический торс"),
+            (BodyZone::LArm, "кибернетическая левая рука"),
+            (BodyZone::RArm, "кибернетическая правая рука"),
+            (BodyZone::LLeg, "кибернетическая левая нога"),
+            (BodyZone::RLeg, "кибернетическая правая нога"),
+        ] {
+            let limb = limbs.limb(zone);
+            if limb.robotic
+                && !limb.missing
+                && crate::medical::wounds::scars::clothing_on_part(world, mob, zone) == 0
+            {
+                lines.push((Span::Notice, format!("У него есть {part}.")));
+            }
+        }
+    }
+    if hidden & crate::clothing::cover::HIDEFACE == 0
+        && let Some(age) = world
+            .get::<Name>(mob)
+            .and_then(|n| {
+                world
+                    .get_resource::<crate::records::manifest::Manifest>()?
+                    .find(n.as_str())
+            })
+            .map(|r| r.age)
+    {
+        let text = match age {
+            0..=25 => "очень молодо",
+            26..=35 => "взросло",
+            36..=55 => "среднего возраста",
+            56..=75 => "довольно старо",
+            76..=100 => "очень старо",
+            _ => "увядающе",
+        };
+        lines.push((Span::Notice, format!("{he} выглядит {text}.")));
+    }
+}
+
 /// tg `run_examinate`, checked at the moment of effect: the target still exists on the map within
 /// the examiner's view.
 fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
@@ -427,6 +505,42 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
             && let Some(mut facing) = world.get_mut::<Facing>(click.examiner)
         {
             facing.set_if_neq(Facing(dir));
+        }
+        // `recent_examines`: a second look within the window is the closer one.
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        let again = world
+            .get::<RecentExamines>(click.client)
+            .and_then(|r| r.0.get(&click.target))
+            .is_some_and(|&t| now - t < EXAMINE_MORE_WINDOW);
+        if again {
+            let mut lines = examine_more_lines(world, click.examiner, click.target);
+            if lines.is_empty() {
+                let name = name_of(world, click.target);
+                lines.push((
+                    Span::Notice,
+                    format!(
+                        "Вы осматриваете {name} подробнее, но не находите ничего интересного..."
+                    ),
+                ));
+            }
+            for (span, text) in lines {
+                world.write_message(SendChat {
+                    clients: vec![click.client],
+                    message: ChatMessage::simple(ChatChannel::Info, span, text),
+                });
+            }
+            continue;
+        }
+        if let Ok(mut client) = world.get_entity_mut(click.client) {
+            if let Some(mut recent) = client.get_mut::<RecentExamines>() {
+                recent.0.retain(|_, t| now - *t < EXAMINE_MORE_WINDOW);
+                recent.0.insert(click.target, now);
+            } else {
+                client.insert(RecentExamines(std::collections::HashMap::from([(
+                    click.target,
+                    now,
+                )])));
+            }
         }
         let (name, lines) = examine_lines(world, click.examiner, click.target);
         for message in examine_messages(&name, lines) {
@@ -497,6 +611,35 @@ mod tests {
         assert_eq!(clicked.len(), 1);
         assert_eq!(clicked[0].client, a);
         assert_eq!(clicked[0].topic, "sechud:view:1");
+    }
+
+    #[test]
+    fn a_closer_look_shows_scars_within_their_range() {
+        use crate::medical::wounds::{Limbs, scars::Scar};
+        use crate::zone::BodyZone;
+        let mut world = World::new();
+        let mut limbs = Limbs::default();
+        limbs.limb_mut(BodyZone::LArm).scars.push(Scar {
+            keyword: "slashmoderate",
+            severity: 1,
+            description: "светлые выцветшие линии".into(),
+            location: "на левом локте".into(),
+        });
+        let mob = world
+            .spawn((Name::new("B"), limbs, TilePos::new(0, 0, 0)))
+            .id();
+        let near = world.spawn(TilePos::new(2, 0, 0)).id();
+        let far = world.spawn(TilePos::new(3, 0, 0)).id();
+        let lines = examine_more_lines(&world, near, mob);
+        assert_eq!(
+            lines,
+            [(
+                Span::Notice,
+                "У него светлые выцветшие линии на левом локте.".to_owned()
+            )]
+        );
+        // A moderate scar is seen from 2 tiles, not 3.
+        assert!(examine_more_lines(&world, far, mob).is_empty());
     }
 
     #[test]

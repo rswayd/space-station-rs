@@ -106,7 +106,7 @@ pub fn heal_all(world: &mut World, mob: Entity) {
     if let Some(mut limbs) = world.get_mut::<wounds::Limbs>(mob) {
         for limb in &mut limbs.parts {
             while !limb.wounds.is_empty() {
-                wounds::remove_wound(limb, 0);
+                wounds::heal_wound(limb, 0);
             }
         }
     }
@@ -1206,6 +1206,7 @@ fn life_tick(world: &mut World, mob: Entity, secs: f32, now: f64) {
         for effect in wounds::process(&mut rng, limbs.limb_mut(zone), zone, ctx) {
             effects.push((zone, effect));
         }
+        wounds::scars::roll_pending(&mut rng, limbs.limb_mut(zone), zone);
     }
     // `surgery_prepped/tick`: lying settles the drapes.
     if lying && limbs.prep_moves > 0 {

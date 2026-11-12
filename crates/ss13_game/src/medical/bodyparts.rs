@@ -275,6 +275,8 @@ pub fn drop_limb(world: &mut World, mob: Entity, zone: BodyZone) -> Option<Entit
     }
     let robotic = std::mem::take(&mut limb.robotic);
     limb.gauze = None;
+    // `limb_gone`: the scars leave with the limb.
+    limb.scars.clear();
     limb.missing = true;
     limb.surgery = state::SKIN_OPEN;
     world.entity_mut(mob).insert(limbs);

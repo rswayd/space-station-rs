@@ -24,7 +24,7 @@
 //!   `WOUND_DISMEMBER_OUTRIGHT_THRESH` takes it off outright by the limb's damage share
 //!   (`super::bodyparts::apply_dismember`, tg `/datum/wound/loss`).
 // shortcut: no cranial fissure, no eye puncture, no
-// bruises, scars, brain traumas from skull fractures, wound status effects, actionspeed
+// bruises (scars: [`scars`]), brain traumas from skull fractures, wound status effects, actionspeed
 // penalties, grasping wounds, embedded objects, blood sprays or splatters; clothing has no
 // `wound` armor (the exposed bonus always applies off the head and chest); `determination` from
 // `second_wind` is not added; disinfecting reagents (`on_burn_wound_processing`) do nothing.
@@ -43,10 +43,12 @@ use ss13_chat::capitalize;
 mod data;
 mod process;
 mod roll;
+pub mod scars;
 mod treat;
 
 pub use process::*;
 pub use roll::*;
+pub use scars::heal_wound;
 pub use treat::*;
 
 /// `WOUND_DAMAGE_EXPONENT`, `WOUND_MAX_CONSIDERED_DAMAGE`, `WOUND_MINIMUM_DAMAGE`.
@@ -206,6 +208,8 @@ pub struct Wound {
     pub threshold_penalty: f32,
     /// tg `disabling` (live: splints and infection change it).
     pub disabling: bool,
+    /// The severity of the scar it leaves: a cut's `highest_scar` survives its demotions.
+    pub scar_severity: u8,
 }
 
 impl Wound {
@@ -228,6 +232,7 @@ impl Wound {
             strikes_to_lose_limb: 3,
             threshold_penalty: def.threshold_penalty,
             disabling: def.disabling,
+            scar_severity: def.severity,
         }
     }
 
@@ -287,6 +292,8 @@ pub struct Limb {
     // shortcut: robotic limbs get no wounds (tg has metal/wired wounds) and keep the body's
     // damage modifiers (tg `brute_modifier`/`burn_modifier` 0.8 per limb).
     pub robotic: bool,
+    /// tg `scars` of the bodypart ([`scars`]).
+    pub scars: Vec<scars::Scar>,
 }
 
 impl Limb {

@@ -301,6 +301,10 @@ pub fn apply_wound(limb: &mut Limb, kind: WoundKind) {
             wound.blood_flow = old
                 .as_ref()
                 .map_or(def.initial_flow, |o| o.blood_flow.max(def.initial_flow));
+            // `set_highest_scar` of the cut it demoted from.
+            if let Some(o) = &old {
+                wound.scar_severity = wound.scar_severity.max(o.scar_severity);
+            }
         }
         Series::Pierce => wound.blood_flow = def.initial_flow,
         _ => {}

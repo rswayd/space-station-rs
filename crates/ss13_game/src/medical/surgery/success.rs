@@ -339,7 +339,7 @@ pub(super) fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone
                     .iter()
                     .position(|w| w.def().series == Series::Bone)
                 {
-                    super::super::wounds::remove_wound(limb, i);
+                    super::super::wounds::heal_wound(limb, i);
                 }
             })
         }
