@@ -59,6 +59,8 @@ pub mod slaughter;
 #[cfg(feature = "server")]
 pub mod space_dragon;
 #[cfg(feature = "server")]
+pub mod spiders;
+#[cfg(feature = "server")]
 pub mod survivalist;
 #[cfg(feature = "server")]
 pub mod syndie_items;
@@ -106,6 +108,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             space_dragon::SpaceDragonPlugin,
             revenant::RevenantPlugin,
             slaughter::SlaughterPlugin,
+            spiders::SpidersPlugin,
         ))
         .add_plugins((zombie::ZombiePlugin, ert::ErtPlugin, raiders::RaidersPlugin))
         .add_systems(Startup, dynamic::init)

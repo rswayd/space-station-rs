@@ -27,7 +27,7 @@
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
 // (`super::revenant`), the slaughter demon (`super::slaughter`), the abductors
 // (`super::abductor`), the blob and blob infection (`super::blob`), the xenomorphs
-// (`super::xeno`), the space and mass space changelings (`super::changeling`), the space ninja, the fugitives and the light and heavy pirates
+// (`super::xeno`), the spiders' egg clusters (`super::spiders`), the space and mass space changelings (`super::changeling`), the space ninja, the fugitives and the light and heavy pirates
 // (`super::raiders`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
@@ -152,6 +152,7 @@ pub const FUGITIVES: &str = "Fugitives";
 pub const SPACE_NINJA: &str = "Space Ninja";
 pub const MIDROUND_CHANGELING: &str = "Midround Changeling";
 pub const MASS_CHANGELINGS: &str = "Mass Changelings";
+pub const SPIDERS: &str = "Spiders";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -262,7 +263,10 @@ pub const RULESETS: [Ruleset; 30] = {
         },
         other("Midround Obsessed", Light, [5, 5, 3, 1], 5),
         // Heavy midrounds.
-        other("Spiders", Heavy, [0, 0, 1, 2], 30),
+        Ruleset {
+            candidates: Candidates::Nobody,
+            ..other(SPIDERS, Heavy, [0, 0, 1, 2], 30)
+        },
         Ruleset {
             candidates: Candidates::Nobody,
             ..child(other(HEAVY_PIRATES, Heavy, flat(3), 25), LIGHT_PIRATES)
@@ -625,6 +629,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         FUGITIVES => super::raiders::fugitive::can_spawn(world),
         LIGHT_PIRATES => super::raiders::pirate::can_spawn(world, false),
         HEAVY_PIRATES => super::raiders::pirate::can_spawn(world, true),
+        // A dark maintenance spawn.
+        SPIDERS => super::spiders::can_spawn(world),
         _ => true,
     }
 }
@@ -785,6 +791,7 @@ fn run_without_candidates(world: &mut World, r: &'static Ruleset) -> bool {
     let ran = match r.config_tag {
         LIGHT_PIRATES => super::raiders::pirate::send_threat(world, false),
         HEAVY_PIRATES => super::raiders::pirate::send_threat(world, true),
+        SPIDERS => super::spiders::start_infestation(world),
         _ => false,
     };
     if ran {

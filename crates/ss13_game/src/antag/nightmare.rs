@@ -265,7 +265,7 @@ fn name_of(world: &World, e: Entity) -> String {
 // Selection and the body
 
 /// `find_maintenance_spawn(require_darkness = TRUE)`'s candidates.
-fn dark_spawns(world: &World) -> Vec<TilePos> {
+pub(crate) fn dark_spawns(world: &World) -> Vec<TilePos> {
     world
         .get_resource::<SpawnPoints>()
         .map(|s| s.maintenance.clone())

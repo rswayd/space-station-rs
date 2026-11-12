@@ -29,7 +29,7 @@
 Кладки яиц гигантских пауков разных видов, бутон венериной мухоловки, капсулы охотников за беглецами; дроны техобслуживания.
 
 - **Код:** [`spider_roles.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob_spawn/ghost_roles/spider_roles.dm#L1), [`venus_human_trap.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob_spawn/ghost_roles/venus_human_trap.dm#L1), [`fugitive_hunter_roles.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob_spawn/ghost_roles/fugitive_hunter_roles.dm#L1), [`drone_roles.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob_spawn/ghost_roles/drone_roles.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — яйца пауков: `crates/ss13_game/src/antag/spiders.rs` (кладки всех пяти видов как спавнеры меню призраков, рост, оповещение, выбор паучка, вылупление; подробно — `docs/parity/antagonists/xenomorphs-spiders.md`), перехват взятия в `ghost_verbs::take_role`. Нет: бутона венериной мухоловки, капсул охотников за беглецами, дронов техобслуживания
 
 ### Трупы
 Маппинговые трупы: по профессиям, NT, видам, нечеловеческие, шахтёрские, мобов.

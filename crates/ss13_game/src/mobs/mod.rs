@@ -343,6 +343,7 @@ fn attach(world: &mut World, entity: Entity) {
     bees::attach(world, entity, &def);
     swarming::attach(world, entity, &def);
     crate::antag::xeno::attach(world, entity, &def);
+    crate::antag::spiders::attach(world, entity, &def);
     set_look(world, entity, false);
 }
 
