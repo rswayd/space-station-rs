@@ -619,7 +619,7 @@ fn gib_moodlets(world: &mut World, mob: Entity, pos: TilePos) {
 }
 
 /// `ghostize()` for good: the ghost has no body to return to.
-fn ghostize_gone(world: &mut World, mob: Entity) {
+pub(crate) fn ghostize_gone(world: &mut World, mob: Entity) {
     if let Some(client) = world.get::<PlayerMob>(mob).map(|p| p.client)
         && let Some(ghost) = crate::ghost::ghostize_client(world, client)
         && let Some(mut g) = world.get_mut::<crate::ghost::Ghost>(ghost)

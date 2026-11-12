@@ -124,6 +124,7 @@ mod shuttle;
 mod silicon;
 mod singularity;
 mod smoking;
+mod soulstones;
 mod sound;
 mod space_events;
 mod spacemove;

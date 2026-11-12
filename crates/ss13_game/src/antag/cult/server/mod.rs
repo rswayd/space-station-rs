@@ -75,6 +75,7 @@ mod membership;
 mod prompts;
 mod runes;
 mod scribe;
+mod soulstone;
 mod structures;
 mod windows;
 pub use life::*;
@@ -83,6 +84,7 @@ pub use membership::*;
 pub use prompts::*;
 pub use runes::*;
 pub use scribe::*;
+pub use soulstone::*;
 pub use structures::*;
 pub use windows::*;
 
@@ -90,6 +92,9 @@ pub use windows::*;
 pub const CULTIST_NAME: &str = "Культист";
 /// `/datum/antagonist/cult/converted` `name` (BandaStation).
 pub const CONVERTED_NAME: &str = "Обращенный культист";
+/// `/datum/antagonist/cult/shade` and `/construct` `name`.
+pub const SHADE_NAME: &str = "Тень культа";
+pub const CONSTRUCT_NAME: &str = "Конструкт культа";
 pub const ROUNDEND_CATEGORY: &str = "Культисты";
 const OBJECTIVE_NAME: &str = "Задача";
 
@@ -485,6 +490,20 @@ pub struct Cultist {
     pub holy_secs: f32,
     /// The eye color under the cult's red.
     pub own_eyes: Option<[u8; 3]>,
+    /// `/datum/antagonist/cult/shade`, `/datum/antagonist/cult/construct`.
+    pub form: CultForm,
+}
+
+/// Which cult datum: the cultist, a shade or a construct.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum CultForm {
+    #[default]
+    Cultist,
+    /// `release_time`: when it last left a soulstone (`None` inside one).
+    Shade {
+        released_at: Option<f64>,
+    },
+    Construct,
 }
 
 impl Cultist {
@@ -731,6 +750,17 @@ impl Plugin for CultPlugin {
                 crate::antag::cult::server::item_interaction(w, c.client, c.mob, h, c.target)
             })
         });
+        // A soulstone used in hand releases its shade.
+        app.add_click_handler(ClickPhase::AttackSelf, 509, |w, c| {
+            crate::antag::cult::server::soulstone_attack_self(w, c.mob, c.target)
+        });
+        // A soulstone on a human, a shade or a construct shell.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1309, |w, c| {
+            c.held.is_some_and(|h| {
+                crate::antag::cult::server::soulstone_interaction(w, c.mob, h, c.target)
+            })
+        });
+        app.add_observer(stone_destroyed);
         app.register_ui::<AntagInfoGenericUi>()
             .register_ui::<CultListWindow>()
             .add_systems(
@@ -755,6 +785,10 @@ impl Plugin for CultPlugin {
                     dispenser_picked
                         .in_set(UiSystems::Handle)
                         .after(PromptSystems::Answer),
+                    construct_picked
+                        .in_set(UiSystems::Handle)
+                        .after(PromptSystems::Answer),
+                    follow_stones.run_if(any_with_component::<Soulstone>),
                     (tag_pylons, pylons.run_if(any_with_component::<Pylon>))
                         .chain()
                         .before(crate::health::HealthSystems),

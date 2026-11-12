@@ -27,6 +27,7 @@
 //! | 300 | `holosign::attack_self` |
 //! | 400 | `forensics::server::attack_self` (scanner window, evidence bag, forensics spoofer window) |
 //! | 500 | `antag::cult::server::attack_self` |
+//! | 509 | `antag::cult::server::soulstone_attack_self` (a soulstone releases its shade) |
 //! | 600 | `antag::heretic::server::attack_self` |
 //! | 601 | `antag::heretic::server::items::attack_self` (the crimson medallion squeezed, a crucible brew or the ether drunk) |
 //! | 700 | `antag::wizard::server::attack_self` |
@@ -381,6 +382,7 @@
 //! | 1100 | `explosions::sources::c4_interact` |
 //! | 1200 | `explosions::sources::fueltank_welder_act` |
 //! | 1300 | `antag::cult::server::item_interaction` |
+//! | 1309 | `antag::cult::server::soulstone_interaction` (a soulstone on a human, a shade or a construct shell) |
 //! | 1391 | `antag::heretic::server::items::held_on_target` (organs, flasks, codex and grasp on the mawed crucible; the phylactery's right click; wirecutters on an eldritch painting) |
 //! | 1393 | `antag::heretic::server::morbus_on_rune` (the Codex Morbus right-clicked on a rune: a curse) |
 //! | 1400 | `antag::heretic::server::item_interaction` |

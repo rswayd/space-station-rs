@@ -26,7 +26,7 @@ pub const CHANGELING_RUNTIME_TYPES: [&str; 4] = [
 /// What the blood cult makes at runtime (`ss13_game::antag::cult`): its runes, the ritual dagger
 /// and runed metal, the blood magic auras, the shadow shackles, the barrier, Nar'Sie, the
 /// structures' items and the pylon's floor.
-pub const CULT_RUNTIME_TYPES: [&str; 26] = [
+pub const CULT_RUNTIME_TYPES: [&str; 36] = [
     "/obj/effect/rune/convert",
     "/obj/effect/rune/empower",
     "/obj/effect/rune/teleport",
@@ -54,6 +54,17 @@ pub const CULT_RUNTIME_TYPES: [&str; 26] = [
     "/obj/item/shuttle_curse",
     "/obj/item/cult_shift",
     "/turf/open/floor/engine/cult",
+    // Soulstones' shades and the constructs of shells (`ss13_game::antag::cult::server::soulstone`).
+    "/mob/living/basic/shade",
+    "/mob/living/basic/construct/juggernaut",
+    "/mob/living/basic/construct/juggernaut/angelic",
+    "/mob/living/basic/construct/wraith",
+    "/mob/living/basic/construct/wraith/angelic",
+    "/mob/living/basic/construct/wraith/mystic",
+    "/mob/living/basic/construct/artificer",
+    "/mob/living/basic/construct/artificer/noncult",
+    "/mob/living/basic/construct/artificer/angelic",
+    "/mob/living/basic/construct/artificer/mystic",
 ];
 
 /// What the heretic makes at runtime (`ss13_game::antag::heretic`): influences, the rune, the
