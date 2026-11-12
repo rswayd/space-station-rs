@@ -69,6 +69,12 @@ pub enum FoodJob {
     Feed,
     /// The `n`th `processable` of the target food with the held tool.
     Process(u8),
+    /// The held item slipped into this food (`crate::food_storage`).
+    Hide(Entity),
+    /// The hidden item pulled out of this food.
+    Unhide(Entity),
+    /// The food cart packed or unpacked (`crate::food_cart`).
+    FoodCart,
 }
 
 /// tg `TRAIT_DRIED` (`/datum/element/dryable/apply_dried_status`).
@@ -406,6 +412,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: FoodJob) 
             take_bite(world, eater, mob, food);
         }
         FoodJob::Process(index) => finish_process(world, actor, action.target, index as usize),
+        FoodJob::Hide(food) => crate::food_storage::complete_insert(world, mob, action, food),
+        FoodJob::Unhide(food) => crate::food_storage::complete_remove(world, mob, action, food),
+        FoodJob::FoodCart => crate::food_cart::complete(world, mob, action),
     }
 }
 
@@ -551,6 +560,7 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
     }
     // `COMSIG_FOOD_EATEN`.
     crate::botany::produce::on_eaten(world, eater, food);
+    crate::food_storage::on_eaten(world, eater, feeder, food);
     let text = taste_message(&chem, &bite, &dm.tastes, TASTE_SENSITIVITY);
     taste(world, eater, text);
     check_liked(world, eater, food, &dm);
@@ -1023,6 +1033,7 @@ fn on_consume(world: &mut World, eater: Entity, feeder: Entity, food: Entity, dm
     let pos = crate::chem::map_pos(world, food).or_else(|| world.get::<TilePos>(eater).copied());
     // Grown trash (a banana peel) gets the plant's seed (`generate_trash`).
     let seed = world.get::<crate::botany::Seed>(food).cloned();
+    crate::food_storage::release(world, food);
     world.despawn(food);
     if dm.trash_type.is_empty() {
         return;
@@ -1145,6 +1156,7 @@ fn finish_process(world: &mut World, actor: Actor, food: Entity, index: usize) {
             world.entity_mut(made).insert(Reagents(holder));
         }
     }
+    crate::food_storage::release(world, food);
     world.despawn(food);
     crate::construction::tile_changed(world, pos);
     let plural = if amount > 1 && !name.ends_with('s') {

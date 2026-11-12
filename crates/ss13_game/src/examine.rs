@@ -217,6 +217,8 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::chem_machines::examine_lines(world, target, &mut lines);
     crate::teapot::examine_lines(world, target, &mut lines);
     crate::cooking::examine_lines(world, target, &mut lines);
+    crate::grill::examine_lines(world, target, &mut lines);
+    crate::food_cart::examine_lines(world, target, &mut lines);
     crate::gibber::examine_lines(world, target, &mut lines);
     crate::food::examine_lines(world, target, examiner, &mut lines);
     crate::service::cards::examine_lines(world, examiner, target, &mut lines);

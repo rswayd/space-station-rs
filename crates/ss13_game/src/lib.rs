@@ -339,6 +339,10 @@ pub mod flora;
 #[cfg(feature = "server")]
 pub mod food;
 #[cfg(feature = "server")]
+pub mod food_cart;
+#[cfg(feature = "server")]
+pub mod food_storage;
+#[cfg(feature = "server")]
 pub mod footsteps;
 pub mod forensics;
 #[cfg(feature = "server")]
@@ -372,6 +376,8 @@ pub mod golems;
 pub mod gravity;
 #[cfg(feature = "server")]
 pub mod grenades;
+#[cfg(feature = "server")]
+pub mod grill;
 #[cfg(feature = "server")]
 pub mod gun_attachments;
 #[cfg(feature = "server")]

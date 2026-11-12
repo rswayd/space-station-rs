@@ -320,7 +320,7 @@ pub(crate) fn give_to(world: &mut World, mob: Entity, machine: Entity, item: Ent
     }
 }
 
-fn from_hand(world: &mut World, item: Entity, into: Entity) {
+pub(crate) fn from_hand(world: &mut World, item: Entity, into: Entity) {
     world.entity_mut(item).remove::<CarriedBy>();
     put_inside(world, item, into);
 }
@@ -505,12 +505,12 @@ fn process_oven(world: &mut World, e: Entity, dt: f32) {
     refresh_look(world, e);
 }
 
-fn cook_times(world: &World, item: Entity) -> CookTimes {
+pub(crate) fn cook_times(world: &World, item: Entity) -> CookTimes {
     world.get::<CookTimes>(item).copied().unwrap_or_default()
 }
 
 /// `rand(low, high)` deciseconds.
-fn roll(world: &mut World, [low, high]: [f32; 2]) -> f32 {
+pub(crate) fn roll(world: &mut World, [low, high]: [f32; 2]) -> f32 {
     let (low, high) = (low.max(0.0) as u32, high.max(low).max(0.0) as u32);
     world.resource_mut::<CombatRng>().range(low, high) as f32
 }
@@ -762,7 +762,7 @@ const ASH: &str = "/obj/effect/decal/cleanable/ash";
 const ASH_LARGE: &str = "/obj/effect/decal/cleanable/ash/large";
 
 /// `SPT_PROB(percent, seconds)`: the chance over `seconds` of a per-second `percent`.
-fn spt_percent(percent: f32, seconds: f32) -> f32 {
+pub(crate) fn spt_percent(percent: f32, seconds: f32) -> f32 {
     100.0 * (1.0 - (1.0 - percent / 100.0).powf(seconds))
 }
 

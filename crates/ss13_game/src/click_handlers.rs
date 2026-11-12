@@ -157,6 +157,7 @@
 //! | 483 | `gifts::wrap_parcel` (wrapping paper onto a parcel, before it takes the paper) |
 //! | 487 | `misc_items::documents::forge_seal` (a red or blue crayon on a photocopy) |
 //! | 489 | `smoking::item_on_item` (lighting smokables, packing pipes, rolling paper, striking matches, vape tools, dipping) |
+//! | 491 | `food_storage::try_insert` (right click on a food in the other hand) |
 //! | 497 | `talking_toys` emag on a toy nuke in the other hand |
 //! | 499 | `kitchen_ware::other_hand` (food onto plates, pizza boxes, tongs; empty hand: food off a plate, pizza or the top box) |
 //! | 500 | core: a storage opens or takes the held item |
@@ -217,6 +218,8 @@
 //! | 401 | `antag::heretic::server::items::crucible_hand` (the mawed crucible's brews, a non-heretic's hand bitten) |
 //! | 500 | `kitchen::interact` |
 //! | 550 | `restaurant::attack_hand` |
+//! | 561 | `food_cart::attack_hand` (pack or unpack the food cart) |
+//! | 591 | `grill::attack_hand` (the food off the grill) |
 //! | 600 | `cooking::interact` |
 //! | 700 | `smartfridge::interact` |
 //! | 800 | `gibber::interact` |
@@ -437,6 +440,7 @@
 //! | 1809 | `kitchen_ware::held_on_target` (tank taps, tongs, plates, pizza boxes) |
 //! | 1813 | `antag::abductor::server::gear` (science tool, silencer, mental interface device on a mob; far clicks: `RangedClick`) |
 //! | 1850 | `restaurant::item_interaction` |
+//! | 1891 | `grill::item_interaction` (fuel, food, wrench and crowbar on the charcoal grill) |
 //! | 1893 | `food::crack_egg` (a right click with an egg on a griddle) |
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |
@@ -485,6 +489,7 @@
 //! | 3110 | `science::exodrone::server::item_interaction` (the drone launcher) |
 //! | 3200 | `botany::item_interaction` |
 //! | 3260 | `mobs::farm::feed_egg_layer` |
+//! | 3291 | `food_storage::try_insert` (right click: an item hidden in bread, cake, cheese, cutlets) |
 //! | 3300 | `food::item_interaction` |
 //! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |

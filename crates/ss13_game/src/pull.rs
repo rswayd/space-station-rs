@@ -598,6 +598,8 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
             || entity.get::<NextMove>().is_none_or(|n| now < n.0)
             || world.get::<TilePos>(target) != Some(&click.target_pos)
             || !can_be_pulled(world, mob, target)
+            // A food hiding items takes the ctrl-click (`crate::food_storage`).
+            || crate::food_storage::takes_ctrl_click(world, target)
         {
             continue;
         }
