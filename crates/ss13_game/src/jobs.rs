@@ -583,6 +583,12 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     }
     // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
     crate::service::chaplain_spawned(world, client, mob);
+    // `/datum/outfit/job/curator/post_equip`: `grant_all_languages(source = LANGUAGE_CURATOR)`.
+    if def.path == "/datum/job/curator"
+        && let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob)
+    {
+        holder.grant_all(ss13_chat::language::LanguageSource::Mind);
+    }
     crate::records::manifest::inject_joiner(world, mob, job);
     // `/datum/job/prisoner/handle_prisoner_joining`.
     if def.title == security::PRISONER {
