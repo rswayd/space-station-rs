@@ -407,8 +407,8 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     true
 }
 
-/// tg mouse `on_entered` ("Сквик!" to a human walking over a conscious mouse) and the
-/// cockroach's `squashable` (a 50% chance to be stepped on, 1 brute; it is gibbed).
+/// tg mouse `on_entered` ("Сквик!" to a human walking over a conscious mouse; BandaStation's
+/// hamster pup is crushed instead) and the cockroach's `squashable` (a 50% chance to be stepped on, 1 brute; it is gibbed).
 pub(super) fn squeak_on_cross(
     world: &mut World,
     mut cursor: Local<bevy::ecs::message::MessageCursor<Moved>>,
@@ -436,7 +436,22 @@ pub(super) fn squeak_on_cross(
                 continue;
             };
             let alive = world.get::<Stat>(critter) == Some(&Stat::Conscious);
-            if ss13_mapload::fidelity::is_under(&path, "/mob/living/basic/mouse") && alive {
+            // BandaStation hamster pup `on_entered`: a human crushes it (`death`, `splat`).
+            if ss13_mapload::fidelity::is_under(&path, super::HAMSTER_PUP) && alive {
+                let name = crate::security::name_of(world, critter);
+                world.write_message(SendChat {
+                    clients: vec![client],
+                    message: ChatMessage::simple(
+                        ChatChannel::Info,
+                        Span::Notice,
+                        format!("{name} раздавлен!"),
+                    ),
+                });
+                let max = world
+                    .get::<BasicMob>(critter)
+                    .map_or(0.0, |b| b.def.max_health);
+                hurt(world, critter, DamageType::Brute, max, None);
+            } else if ss13_mapload::fidelity::is_under(&path, "/mob/living/basic/mouse") && alive {
                 world.write_message(SendChat {
                     clients: vec![client],
                     message: ChatMessage::simple(ChatChannel::Info, Span::Notice, "Сквик!"),

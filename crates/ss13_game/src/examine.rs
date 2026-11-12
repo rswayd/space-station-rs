@@ -245,6 +245,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::vehicles::examine_lines(world, target, &mut lines);
     crate::mecha::panel::examine_lines(world, target, &mut lines);
     crate::devices::examine_lines(world, target, &mut lines);
+    crate::medical::surgery::examine_lines(world, target, &mut lines);
     crate::defenses::cameras::examine_lines(world, target, &mut lines);
     crate::silicon::cameras::examine_lines(world, target, &mut lines);
     crate::airlock_cycle::examine_lines(world, target, &mut lines);

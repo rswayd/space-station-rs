@@ -13,7 +13,7 @@
 
 - **Код:** [`/mob/living/basic/mouse`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/vermin/mouse.dm#L1)
 - **BandaStation:** [`modular_bandastation/mobs/code/simple_animal/friendly/hamster.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/mobs/code/simple_animal/friendly/hamster.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — хомяк, хомячок и «представитель Алексей» — мыши (`/mob/living/basic/mouse/hamster`, спрайты и держание из `mobs.ron`); `crates/ss13_game/src/mobs/defense.rs`: человек, наступивший на хомячка в сознании, давит его («хомячок раздавлен!», труп-предмет); `crates/ss13_game/src/pull.rs`: хомячок не может тащить («Вы слишком малы чтобы что-то тащить.»); осмотр — пол после описания (`update_desc`, тг-ветка `MALE ?` всегда истинна — берётся пол самого хомяка); роятся как мыши (`mobs::swarming`). Проверено: `tests/it/mobs.rs` `a_hamster_pup_is_crushed_underfoot`. Нет: размножения (в оригинале мёртвый код: у мышиного ИИ нет поддерева `make_babies`, у мобов с игроком компонент отказывает), уменьшенного спрайта хомячка (`transform` 0.7 — у `Appearance` нет масштаба), лежачего старта представителя
 
 ### Крупные ящеры и крокодилы
 Враждебные игуана, аллигатор и крокодил (`lizard/big`) со своим ИИ; отдельный крокодил, на котором можно ездить (`riding/creature/crocodile`), ест мясо.

@@ -85,10 +85,22 @@ impl DmTurfAtmos {
     }
 }
 
-/// An area's `outdoors` (tg `/area`): weather reaches it, barometers work in it.
-#[derive(Component, Reflect, Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// An area's vars (tg `/area`): `outdoors` (weather reaches it, barometers work in it, no room
+/// beauty) and the mood bonus of being there (`mood_bonus`, `mood_message`, `mood_trait`: the
+/// trait it needs, empty for anyone).
+#[derive(Component, Reflect, Clone, Debug, Default, PartialEq)]
 pub struct DmArea {
     pub outdoors: bool,
+    pub mood_bonus: f32,
+    pub mood_message: String,
+    pub mood_trait: String,
+}
+
+/// `beauty` of a cleanable decal type (`/datum/element/beauty` in its `Initialize`): dirt and
+/// messes make a room uglier.
+#[derive(Component, Reflect, Clone, Copy, Debug, Default, PartialEq)]
+pub struct DmBeauty {
+    pub beauty: f32,
 }
 
 /// On object types that declare `can_atmos_pass`.
@@ -212,7 +224,22 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             let on = num(Some(v)).is_some_and(|n| n != 0.0);
             out.push(ext("dm_area", "outdoors", on.to_string()));
         }
+        if let Some(n) = num(ty.declared_vars.get("mood_bonus")) {
+            out.push(ext("dm_area", "mood_bonus", format!("{:?}", n as f32)));
+        }
+        for var in ["mood_message", "mood_trait"] {
+            if let Some(v) = ty.declared_vars.get(var) {
+                let text = v.as_str().unwrap_or_default();
+                let ron = ron::to_string(text).expect("strings always serialize");
+                out.push(ext("dm_area", var, ron));
+            }
+        }
     } else if is_under(path, "/obj") {
+        if is_under(path, crate::CLEANABLE_ROOT)
+            && let Some(n) = num(ty.declared_vars.get("beauty"))
+        {
+            out.push(ext("dm_beauty", "beauty", format!("{:?}", n as f32)));
+        }
         if let Some(v) = ty.declared_vars.get("can_atmos_pass")
             && let Some(n) = num(Some(v))
         {

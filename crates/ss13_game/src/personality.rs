@@ -14,15 +14,15 @@
 //! - Every `SSpersonalities` fire (3 s) the processing ones act ([`personality_life`]): Paranoid
 //!   counts the people around, Loyalist and Disillusioned look for corporate signs, and the area
 //!   moodlets (`/datum/status_effect/moodlet_in_area`) of Lazy, Diligent, Analytical and Impulsive
-//!   follow the mob's area, as do the bar and library bonuses of Extrovert and Introvert
-//!   (`check_area_mood`'s `mood_trait`).
+//!   follow the mob's area (the area bonuses that need Extrovert, Introvert or Spiritual,
+//!   `check_area_mood`'s `mood_trait`, are `crate::area_mood`'s).
 // shortcut: the area moodlets follow the 3 s fire instead of `COMSIG_ENTER_AREA` (no area-enter
 // signal here); upgrade when areas announce entries. Paranoid ignores invisibility (no
 // `see_invisible` here). Aloof shows no `annoyed` visual. The reactions whose events are not
 // ported wait for their mechanics: gaming (Gambler, Industrious: arcades, cards, slots), exercise
 // (Athletic, Lazy), petting and pet deaths (the animal personalities), art and music (Creative,
 // Unimaginative), the empathy mutations (Empathetic, Misanthropic), help-ups (Compassionate,
-// Callous), room beauty (Snob), whimsical slips and creampies (Whimsical), the revolution's end
+// Callous), whimsical slips and creampies (Whimsical), the revolution's end
 // moodlets (Loyalist, Disillusioned), `drunk_after` (Bibulous) and dirty food (Ascetic, Gourmand).
 
 use bevy::prelude::*;
@@ -1021,7 +1021,6 @@ const DILIGENT_SLACK_CATEGORY: &str = "moodlet_in_area_slacking_off_diligent";
 const DILIGENT_WORK_CATEGORY: &str = "moodlet_in_area_working_diligent";
 const DEPARTMENT_CATEGORY: &str = "moodlet_in_area_enjoying_department_area";
 /// `check_area_mood`'s category.
-const AREA_CATEGORY: &str = "area";
 
 const fn event(id: &'static str, description: &'static str, mood_change: f32) -> MoodEvent {
     MoodEvent {
@@ -1080,10 +1079,6 @@ pub const WORKING_DILIGENT: MoodEvent = event(
 );
 pub const ENJOYING_DEPARTMENT_AREA: MoodEvent =
     event("enjoying_department_area", "Я люблю свою работу.", 1.0);
-/// `/datum/mood_event/area` of the bar and the lounge (`TRAIT_EXTROVERT`) and of the library
-/// (`TRAIT_INTROVERT`): `mood_bonus` 5, `mood_message`.
-pub const AREA_BAR: MoodEvent = event("area", "I love being in the bar!", 5.0);
-pub const AREA_LIBRARY: MoodEvent = event("area", "I love being in the library!", 5.0);
 
 /// `/datum/personality/slacking` `slacker_areas`.
 const SLACKER_AREAS: [&str; 7] = [
@@ -1215,19 +1210,6 @@ pub fn tick(mood: &mut Mood, now: f64, conscious: bool, around: &Surroundings) {
                 &ENJOYING_DEPARTMENT_AREA,
             );
         }
-    }
-    // `check_area_mood`: the trait areas' bonus.
-    let bar = in_any(
-        area,
-        &["/area/station/service/bar", "/area/station/commons/lounge"],
-    );
-    let library = is_under(area, "/area/station/service/library");
-    if has(P::Extrovert) && bar {
-        mood.add_event(now, AREA_CATEGORY, &AREA_BAR);
-    } else if has(P::Introvert) && library {
-        mood.add_event(now, AREA_CATEGORY, &AREA_LIBRARY);
-    } else if mood.get(AREA_CATEGORY).is_some() {
-        mood.clear_event(AREA_CATEGORY);
     }
 }
 
@@ -1552,19 +1534,6 @@ mod tests {
             tick(&mut paranoid, 0.0, true, &around);
             assert_eq!(paranoid.get(PARANOIA_CATEGORY).unwrap().mood_change, change);
         }
-        // Introvert in the library, extrovert in the bar.
-        let library = Surroundings {
-            area: Some("/area/station/service/library".into()),
-            ..default()
-        };
-        let mut introvert = with(&[P::Introvert]);
-        tick(&mut introvert, 0.0, false, &library);
-        assert_eq!(introvert.get(AREA_CATEGORY).unwrap().mood_change, 5.0);
-        tick(&mut introvert, 3.0, false, &Surroundings::default());
-        assert!(introvert.get(AREA_CATEGORY).is_none());
-        let mut extrovert = with(&[P::Extrovert]);
-        tick(&mut extrovert, 0.0, false, &library);
-        assert!(extrovert.get(AREA_CATEGORY).is_none());
         // Hugs: the aloof dislike them, the callous do not care.
         let mut aloof = with(&[P::Aloof]);
         aloof.add_event(0.0, "hug", &events::HUG);

@@ -109,6 +109,10 @@ pub(super) fn failure(
             severe_lobotomy_trauma(world, mob);
             return;
         }
+        Op::Dissection => {
+            dissection_done(world, actor, mob, false);
+            return;
+        }
         Op::FilterBlood => {
             say(
                 world,

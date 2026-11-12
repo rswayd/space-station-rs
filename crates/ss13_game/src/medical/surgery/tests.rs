@@ -339,3 +339,73 @@ fn robotic_limbs_take_the_mechanical_operations() {
     }
     assert!(!is_available(&world, Op::MechanicWrench, mob, metal));
 }
+
+/// `autopsy/state_check` and `dissection/state_check`: a corpse's opened chest, once each; the
+/// dissection is locked and its worth follows the species.
+#[test]
+fn autopsy_and_dissection_need_a_corpse_once() {
+    let mut world = World::new();
+    world.init_resource::<Time>();
+    let mob = world
+        .spawn((
+            Health::default(),
+            Stat::Conscious,
+            organs::OrganHost,
+            Limbs::default(),
+            BodyPosition::default(),
+        ))
+        .id();
+    with_limbs(&mut world, mob, |l| {
+        let chest = l.limb_mut(BodyZone::Chest);
+        chest.prepped = true;
+        chest.add_surgery(state::SKIN_OPEN);
+    });
+    assert!(!is_available(&world, Op::Autopsy, mob, TargetZone::Chest));
+    assert!(!is_available(
+        &world,
+        Op::Dissection,
+        mob,
+        TargetZone::Chest
+    ));
+    world.entity_mut(mob).insert(Stat::Dead);
+    assert!(is_available(&world, Op::Autopsy, mob, TargetZone::Chest));
+    assert!(!is_available(
+        &world,
+        Op::AutopsyMechanic,
+        mob,
+        TargetZone::Chest
+    ));
+    assert!(is_available(&world, Op::Dissection, mob, TargetZone::Chest));
+    assert!(!is_available(&world, Op::Autopsy, mob, TargetZone::Head));
+    world.entity_mut(mob).insert(Autopsied);
+    assert!(!is_available(&world, Op::Autopsy, mob, TargetZone::Chest));
+    assert!(
+        is_available(&world, Op::Dissection, mob, TargetZone::Chest),
+        "an autopsy does not stop a dissection"
+    );
+    world.entity_mut(mob).insert(Dissected);
+    assert!(!is_available(
+        &world,
+        Op::Dissection,
+        mob,
+        TargetZone::Chest
+    ));
+    assert!(!operation_pool(&[]).contains(&Op::Dissection));
+    assert!(operation_pool(&[]).contains(&Op::Autopsy));
+    world
+        .entity_mut(mob)
+        .insert(crate::species::Species(crate::species::SpeciesId::Human));
+    assert_eq!(dissection_value(&world, mob), 10.0);
+    world
+        .entity_mut(mob)
+        .insert(crate::species::Species(crate::species::SpeciesId::Abductor));
+    assert_eq!(dissection_value(&world, mob), 40.0);
+    world
+        .entity_mut(mob)
+        .insert(crate::species::Species(crate::species::SpeciesId::Slime));
+    assert_eq!(dissection_value(&world, mob), 20.0);
+    world
+        .entity_mut(mob)
+        .insert(crate::species::Species(crate::species::SpeciesId::Monkey));
+    assert_eq!(dissection_value(&world, mob), 2.0);
+}

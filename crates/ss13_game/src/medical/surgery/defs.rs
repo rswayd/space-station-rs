@@ -59,6 +59,12 @@ pub(super) const SENSE_REPAIR: &[(Implement, f32)] = &[
     (Tool("screwdriver"), 2.25),
     (Path("/obj/item/pen"), 4.0),
 ];
+/// `autopsy/all_required_strings` around the limb's own.
+const AUTOPSY_REQUIRED: &[&str] = &[
+    "операция на груди",
+    "пациент должен быть мёртвым",
+    "пациент ранее не должен подвергаться вскрытию",
+];
 pub(super) const SENSE_REPAIR_BLOCKED: &[&str] = &[
     "орган не должен быть кибернетическим",
     "если в конечности есть кости, они должны быть целы",
@@ -126,6 +132,9 @@ impl Op {
             Self::RepairPuncture,
             Self::SealVeins,
             Self::FilterBlood,
+            Self::Autopsy,
+            Self::AutopsyMechanic,
+            Self::Dissection,
         ]);
         ops.extend(Bioware::ALL.map(Self::Bioware));
         ops
@@ -143,7 +152,8 @@ impl Op {
             | Self::PrepareElectronics
             | Self::MechanicUnwrench
             | Self::MechanicWrench
-            | Self::AmputateMechanic => Some(true),
+            | Self::AmputateMechanic
+            | Self::AutopsyMechanic => Some(true),
             Self::InciseSkin
             | Self::RetractSkin
             | Self::CloseSkin
@@ -153,7 +163,9 @@ impl Op {
             | Self::FixBones
             | Self::DrillBones
             | Self::InciseOrgans
-            | Self::Amputate => Some(false),
+            | Self::Amputate
+            | Self::Autopsy
+            | Self::Dissection => Some(false),
             _ => None,
         }
     }
@@ -856,6 +868,51 @@ impl Op {
                 implements: &[(Path("/obj/item/blood_filter"), 1.0)],
                 tool_rec: "blood filter",
                 required: &["операция на груди", "пациент не должен быть хаском"],
+                ..base
+            },
+            Self::Autopsy => OpDef {
+                path: "/datum/surgery_operation/limb/autopsy",
+                name: "Аутопсия",
+                catalog_name: "Андротомия (Вскрытие и аутопсия)",
+                desc: "Проведение детального анализа тела умершего пациента.",
+                time: 100.0,
+                flags: flags::IGNORE_CLOTHES,
+                all_required: SKIN_OPEN,
+                implements: &[(Path(AUTOPSY_SCANNER), 1.0)],
+                tool_rec: "autopsy scanner",
+                required: AUTOPSY_REQUIRED,
+                ..base
+            },
+            Self::AutopsyMechanic => OpDef {
+                path: "/datum/surgery_operation/limb/autopsy/mechanic",
+                name: "Анализ системных сбоев",
+                catalog_name: "Анализ системных сбоев (Вскрытие и аутопсия)",
+                desc: "Выполнение детального анализа деактивированных систем роботизированного \
+                       пациента.",
+                ..Self::Autopsy.def()
+            },
+            Self::Dissection => OpDef {
+                path: "/datum/surgery_operation/basic/dissection",
+                name: "Экспериментальное вскрытие",
+                catalog_name: "Экспериментальная андротомия (Экспериментальное вскрытие и \
+                               аутопсия)",
+                desc: "Проведение экспериментального вскрытия пациента, чтобы получить \
+                       исследовательские очки.",
+                time: 120.0,
+                flags: flags::LOCKED | flags::IGNORE_CLOTHES,
+                target: Target::Basic(TargetZone::Chest),
+                any_required: ALL_SKIN,
+                implements: &[
+                    (Path(AUTOPSY_SCANNER), 1.0),
+                    (Tool("scalpel"), 1.66),
+                    (Tool("knife"), 5.0),
+                    (Path("/obj/item/shard"), 10.0),
+                ],
+                tool_rec: "autopsy scanner",
+                required: &[
+                    "пациент должен быть мёртвым",
+                    "пациент ранее не должен подвергаться вскрытию",
+                ],
                 ..base
             },
             Self::Bioware(kind) => bioware_def(kind, base),

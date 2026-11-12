@@ -839,6 +839,8 @@ pub fn living_bundle() -> impl Bundle {
         HealthHudData::default(),
         Incapacitation::default(),
         ZoneSelected::default(),
+        // `/mob` `pass_flags_self`: movers with `PASSMOB` walk through it.
+        ss13_world::PassFlagsSelf(crate::mobs::PASSMOB),
     )
 }
 

@@ -248,7 +248,7 @@ fn atom_pos(world: &World, e: Entity) -> Option<TilePos> {
 }
 
 /// tg `say()` of the handler's parent, held or not.
-fn handler_say(world: &mut World, handler: Entity, text: &str) {
+pub(crate) fn handler_say(world: &mut World, handler: Entity, text: &str) {
     let Some(pos) = atom_pos(world, handler) else {
         return;
     };
@@ -366,7 +366,7 @@ fn final_checks(world: &mut World, handler: Entity, kind: &ExperimentKind, targe
             }
             true
         }
-        ExperimentKind::Unsupported => false,
+        ExperimentKind::Unsupported | ExperimentKind::Autopsy { .. } => false,
     }
 }
 
@@ -415,11 +415,18 @@ fn finish_experiment(world: &mut World, handler: Entity, id: &str) {
     if let Some(mut h) = world.get_mut::<ExperimentHandler>(handler) {
         h.selected = None;
     }
+    complete_and_announce(world, id);
+}
+
+/// tg `finish_experiment` + `announce_message_to_all`: completes `id` on the station web and
+/// every linked handler that takes it (or announces everything) says so. Returns the
+/// announcement.
+pub(crate) fn complete_and_announce(world: &mut World, id: &str) -> String {
     let text = world.resource_scope(|world, mut web: Mut<Techweb>| {
         web.complete_experiment(world.resource::<ResearchDb>(), id)
     });
     let Some(&def) = world.resource::<ResearchDb>().experiment_index.get(id) else {
-        return;
+        return text;
     };
     let mut query = world.query::<(Entity, &ExperimentHandler)>();
     let speakers: Vec<Entity> = {
@@ -436,6 +443,7 @@ fn finish_experiment(world: &mut World, handler: Entity, id: &str) {
     for speaker in speakers {
         handler_say(world, speaker, &text);
     }
+    text
 }
 
 fn not_related(world: &mut World, client: Entity, target: Entity) {

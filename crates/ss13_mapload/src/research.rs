@@ -159,8 +159,12 @@ pub enum ExperimentKind {
         reagent_name: String,
         min_purity: f64,
     },
+    /// `/datum/experiment/autopsy`: completed by an autopsy at a linked operating computer;
+    /// `subject` is the subtype's last path part (`human`, `nonhuman`, `xenomorph`; empty for
+    /// the root, any corpse).
+    Autopsy { subject: String },
     /// Experiments whose checks need systems the port does not model here (people, plants,
-    /// materials, mechs, cytology, fish, autopsies, ordnance, physical events, exploration).
+    /// materials, mechs, cytology, fish, ordnance, physical events, exploration).
     Unsupported,
 }
 
@@ -515,7 +519,7 @@ const EXPERIMENT_KINDS: [(&str, Option<&str>); 16] = [
     ("/datum/experiment/scanning/people", None),
     ("/datum/experiment/scanning/fish", None),
     ("/datum/experiment/scanning", Some("scanning")),
-    ("/datum/experiment/autopsy", None),
+    ("/datum/experiment/autopsy", Some("autopsy")),
     ("/datum/experiment/ordnance", None),
     ("/datum/experiment/physical", None),
 ];
@@ -538,6 +542,12 @@ fn experiment(types: &DmTypes, p: &str) -> ExperimentDef {
             }
         }
         Some("points") => ExperimentKind::Points,
+        Some("autopsy") => ExperimentKind::Autopsy {
+            subject: p
+                .strip_prefix("/datum/experiment/autopsy/")
+                .unwrap_or_default()
+                .to_owned(),
+        },
         Some("reagent") => {
             let reagent = path(types.resolved(p, "required_reagent")).unwrap_or_default();
             ExperimentKind::Reagent {

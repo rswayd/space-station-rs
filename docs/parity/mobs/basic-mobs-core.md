@@ -56,7 +56,7 @@
 
 - **Код:** [`/datum/component/swarming`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/swarming.dm#L1)
 - **BandaStation:** [`carp.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/space_fauna/carp/carp.dm#L23) — карпы роятся, проходят через столы и мобов
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mobs/swarming.rs`: роящиеся мобы (карпы BandaStation 20×20, мыши и хомяки 16×16, пчёлы, гномы, змеи, спайдерлинги, выводки, молодые лобстросити 16×11 и др. по `Initialize`) на одной клетке смещаются на свой случайный пиксельный сдвиг и возвращаются, оставшись одни; `pass_flags` типа (`MobDef::pass_flags`, нужен `ss13-mapload convert`) — мобы с `PASSMOB` проходят сквозь мобов (`pass_flags_self = PASSMOB` у всех живых), с `PASSTABLE`/`PASSGRILLE` — сквозь столы и решётки (`pass_flags_self` объектов, `crates/ss13_game/src/bump.rs`; перевёрнутый стол снимает `PASSTABLE`, `tables.rs`). Проверено: `tests/it/mobs.rs` `carp_swarm_on_one_tile_and_cross_tables`. Нет: анимации сдвига (2 ds) — сдвиг мгновенный; клиентское предсказание шага не знает `pass_flags` (сервер поправляет)
 
 ### Конструктор питомца
 Окно выбора и настройки личного питомца (собака, кошка, лиса, мелкие паразиты, попугай): тип, имя, окрас — для квирка владельца питомца.

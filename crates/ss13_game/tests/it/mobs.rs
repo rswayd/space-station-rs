@@ -69,7 +69,7 @@ const TYPES: &str = r##"{
         "melee_damage_lower": 20, "melee_damage_upper": 20, "melee_attack_cooldown": 15,
         "attack_verb_continuous": "bites", "attack_verb_simple": "bite",
         "faction": { "expr": "list(FACTION_CARP)" }, "minimum_survivable_temperature": 0,
-        "maximum_survivable_temperature": 1500,
+        "maximum_survivable_temperature": 1500, "pass_flags": 17,
         "ai_controller": { "path": "/datum/ai_controller/basic_controller/carp" },
         "icon_state": "base", "icon_living": "base", "icon_dead": "base_dead" } },
     "/mob/living/basic/carp/mega": { "parent": "/mob/living/basic/carp" },
@@ -92,6 +92,15 @@ const TYPES: &str = r##"{
         "ai_controller": { "path": "/datum/ai_controller/basic_controller/mouse" },
         "death_sound": { "resource": "rat_death.ogg" },
         "icon_state": "mouse_gray", "body_icon_state": "mouse", "body_color": "gray" } },
+    "/mob/living/basic/mouse/hamster": { "parent": "/mob/living/basic/mouse", "declared_vars": {
+        "name": "хомяк", "icon_state": "mouse_gray", "body_icon_state": null, "body_color": "",
+        "icon_living": "mouse_gray", "icon_dead": "mouse_gray_dead", "gender": "male" } },
+    "/mob/living/basic/mouse/hamster/baby": { "parent": "/mob/living/basic/mouse/hamster",
+        "declared_vars": { "name": "хомячок", "maxHealth": 3, "health": 3 } },
+    "/obj/structure": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
+    "/obj/structure/fixture_table": { "parent": "/obj/structure", "declared_vars": {
+        "name": "table", "icon": { "resource": "i.dmi" }, "icon_state": "toy", "density": 1,
+        "pass_flags_self": 65 } },
     "/mob/living/basic/cockroach": { "parent": "/mob/living/basic", "declared_vars": {
         "name": "cockroach", "maxHealth": 1, "health": 1, "density": 0, "basic_mob_flags": 1,
         "ai_controller": { "path": "/datum/ai_controller/basic_controller/cockroach" },
@@ -182,6 +191,31 @@ wwwwwwwwww
 "}
 "##;
 
+/// Two carp on one tile (2,2), a free tile, then a table (4,2).
+const SWARM_MAP: &str = r##""w" = (/turf/closed/wall,/area/station/mobs_test)
+"f" = (/turf/open/floor,/area/station/mobs_test)
+"D" = (/mob/living/basic/carp,/mob/living/basic/carp,/turf/open/floor,/area/station/mobs_test)
+"T" = (/obj/structure/fixture_table,/turf/open/floor,/area/station/mobs_test)
+
+(1,1,1) = {"
+wwwwww
+wDfTfw
+wwwwww
+"}
+"##;
+
+/// `s` the player (2,2) next to `H`, a hamster pup walled in (3,2).
+const PUP_MAP: &str = r##""w" = (/turf/closed/wall,/area/station/mobs_test)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station/mobs_test)
+"H" = (/mob/living/basic/mouse/hamster/baby,/turf/open/floor,/area/station/mobs_test)
+
+(1,1,1) = {"
+wwwwww
+wsHwww
+wwwwww
+"}
+"##;
+
 const STATES: [(&str, &str); 14] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
@@ -212,6 +246,8 @@ fn fixture(test: &str, map: &str) -> PathBuf {
         "/mob/living/basic/pet/dog/corgi/ian",
         "/mob/living/basic/pet/cat",
         "/mob/living/basic/cockroach",
+        "/mob/living/basic/mouse/hamster/baby",
+        "/obj/structure/fixture_table",
         "/obj/item/food/deadmouse",
         "/turf/open/floor",
         "/turf/closed/wall",
@@ -453,4 +489,80 @@ fn metastation_mobs() {
         Stat::Conscious,
         "Ian survives a minute"
     );
+}
+
+/// tg `/datum/component/swarming` and BandaStation's carp `pass_flags`: two carp sharing a tile
+/// spread by their offsets and gather back once apart; a carp swims over a table.
+#[test]
+fn carp_swarm_on_one_tile_and_cross_tables() {
+    use ss13_game::mobs::swarming::Swarming;
+    let mut s = Station::start("swarm", SWARM_MAP);
+    let carps: Vec<Entity> = {
+        let world = s.0.server.world_mut();
+        world
+            .query::<(Entity, &DmMob)>()
+            .iter(world)
+            .filter(|(_, m)| m.path == "/mob/living/basic/carp")
+            .map(|(e, _)| e)
+            .collect()
+    };
+    let [a, b] = carps[..] else {
+        panic!("two carp: {carps:?}");
+    };
+    for carp in [a, b] {
+        s.0.server
+            .world_mut()
+            .entity_mut(carp)
+            .remove::<ss13_game::mobs::ai::AiController>();
+    }
+    s.run_for(0.2);
+    assert_eq!(s.pos(a), s.pos(b), "still together");
+    for carp in [a, b] {
+        let swarm = *s.get::<Swarming>(carp);
+        assert!(swarm.active, "two on one tile swarm");
+        assert_eq!(
+            s.get::<ss13_shared::Appearance>(carp).pixel_offset,
+            swarm.offset
+        );
+        assert!(swarm.offset.iter().all(|o| (-20..=20).contains(o)));
+    }
+    let start = s.pos(a);
+    let east = |p: TilePos| p.step(ss13_shared::Dir::East);
+    let step = |s: &mut Station, dir| {
+        s.0.server
+            .world_mut()
+            .write_message(ss13_world::MoveRequest { entity: a, dir });
+        s.run_for(0.5);
+    };
+    step(&mut s, ss13_shared::Dir::East);
+    assert_eq!(s.pos(a), east(start));
+    for carp in [a, b] {
+        assert!(!s.get::<Swarming>(carp).active, "alone again");
+        assert_eq!(s.get::<ss13_shared::Appearance>(carp).pixel_offset, [0, 0]);
+    }
+    step(&mut s, ss13_shared::Dir::East);
+    assert_eq!(s.pos(a), east(east(start)), "PASSTABLE crosses the table");
+}
+
+/// BandaStation hamster pup `on_entered`: a human stepping on it crushes it.
+#[test]
+fn a_hamster_pup_is_crushed_underfoot() {
+    let mut s = Station::start("pup", PUP_MAP);
+    let pup = s
+        .mob_of("/mob/living/basic/mouse/hamster/baby")
+        .expect("pup");
+    let at = s.pos(pup);
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    s.run_until("the pup is crushed", |s| {
+        s.try_step(p, ss13_shared::Dir::East);
+        s.0.server.world().get_entity(pup).is_err()
+    });
+    assert_eq!(s.pos(me), at, "stepped onto it");
+    let world = s.0.server.world_mut();
+    let corpse = world
+        .query::<(&ss13_mapload::DmItem, &TilePos)>()
+        .iter(world)
+        .any(|(i, p)| i.path == "/obj/item/food/deadmouse" && *p == at);
+    assert!(corpse, "it leaves its corpse");
 }

@@ -67,6 +67,7 @@ use crate::tools::{Actor, DoAfter, Welder, do_after, stack_amount, tell, use_sta
 use crate::zone::{BodyZone, TargetZone};
 use ss13_chat::capitalize;
 
+mod autopsy;
 mod buckle;
 mod checks;
 mod defs;
@@ -74,6 +75,7 @@ mod failure;
 mod perform;
 mod success;
 
+pub use autopsy::*;
 pub use buckle::*;
 pub use checks::*;
 pub use defs::*;
@@ -355,6 +357,12 @@ pub enum Op {
     RepairPuncture,
     SealVeins,
     FilterBlood,
+    /// `limb/autopsy`: the report and the operating computer's autopsy experiments.
+    Autopsy,
+    /// `limb/autopsy/mechanic` on a robotic chest.
+    AutopsyMechanic,
+    /// `basic/dissection`: research notes from a corpse.
+    Dissection,
 }
 
 /// The static part of an operation.
@@ -388,6 +396,7 @@ pub struct OpDef {
 
 pub(super) fn build(app: &mut App) {
     use ss13_tgui::server::{AppTguiExt, UiSystems};
+    app.add_observer(add_notes);
     app.register_ui::<SurgeryListWindow>().add_systems(
         Update,
         (

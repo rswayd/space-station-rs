@@ -30,7 +30,7 @@
 Эксперименты по событиям (взрыв мясной стены, победа в аркаде) и вскрытие людей/нелюдей хирургией.
 
 - **Код:** [`/datum/experiment/physical`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/experisci/experiment/types/physical_experiment.dm#L1), [`physical_experiments.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/experisci/experiment/physical_experiments.dm#L1), [`/datum/experiment/autopsy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/experisci/experiment/types/autopsy_experiment.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — вскрытия ✅: `crates/ss13_game/src/medical/surgery/autopsy.rs` (`run_autopsy_experiments`): аутопсия на операционном столе у операционного компьютера выполняет все доступные эксперименты вскрытия, подходящие телу (человек — ровно `/datum/species/human`, нечеловек — любой другой вид), компьютер объявляет завершение и «Новое уникальное вскрытие успешно записано.»; вид `ExperimentKind::Autopsy` в `ss13_mapload::research` (нужен `ss13-mapload convert`). Нет: ксеноморфа (ксеноморфы — базовые мобы без конечностей), физических экспериментов (`meat_wall_explosion` — нет материальных мясных стен; `arcade_winner` — нет аркадных автоматов)
 
 ### Эксперименты исследования космоса
 Сканирование мест эксплоратор-дронами (пояс астероидов, чёрная дыра и т. п.).

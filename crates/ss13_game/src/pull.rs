@@ -601,6 +601,16 @@ fn ctrl_clicks(world: &mut World, mut clicks: Local<MessageCursor<CtrlClick>>) {
         {
             continue;
         }
+        // BandaStation hamster pup `start_pulling`: too small to pull anything.
+        if crate::mobs::is_hamster_pup(world, mob) {
+            crate::tools::tell(
+                world,
+                click.client,
+                Span::Warning,
+                "Вы слишком малы чтобы что-то тащить.",
+            );
+            continue;
+        }
         let living = world.get::<Health>(target).is_some();
         // tg `grab`: the puller's martial art (`COMSIG_LIVING_GRAB`), then the target's
         // `check_block` (`crate::martial`); either ends the click with `CLICK_CD_MELEE`.

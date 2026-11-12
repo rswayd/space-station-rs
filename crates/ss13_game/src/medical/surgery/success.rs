@@ -553,6 +553,12 @@ pub(super) fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone
             others = did;
             pain(world, mob, &hurt);
         }
+        // `autopsy/on_success` then the parent's "you succeed".
+        Op::Autopsy | Op::AutopsyMechanic => autopsy_success(world, actor, mob),
+        Op::Dissection => {
+            dissection_done(world, actor, mob, true);
+            return;
+        }
         Op::FilterBlood => {
             filter_blood(world, mob);
             let tool = capitalize(&tool);

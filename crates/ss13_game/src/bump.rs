@@ -75,7 +75,26 @@ pub struct BumpPlugin;
 
 impl Plugin for BumpPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, mob_bumps.after(WorldSystems::Movement));
+        app.add_observer(add_pass_flags_self)
+            .add_systems(Update, mob_bumps.after(WorldSystems::Movement));
+    }
+}
+
+/// The `pass_flags_self` bits that let movers through (`LETPASSTHROW` and `LETPASSCLICKS` are
+/// for throws and clicks, `crate::inventory`).
+const PASS_SELF_MASK: u32 = !(crate::inventory::LETPASSTHROW | crate::inventory::LETPASSCLICKS);
+
+/// tg `pass_flags_self` of an object: a mover whose `pass_flags` share a bit steps through it
+/// (`/atom/movable/CanAllowThrough`), as carp and mice pass tables and grilles.
+fn add_pass_flags_self(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
+    let Ok(obj) = objs.get(add.entity) else {
+        return;
+    };
+    let flags = obj.pass_flags_self & PASS_SELF_MASK;
+    if flags != 0 {
+        commands
+            .entity(add.entity)
+            .insert(ss13_world::PassFlagsSelf(flags));
     }
 }
 
