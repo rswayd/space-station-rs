@@ -5,7 +5,7 @@
 Каждая часть хранит свой brute/burn до `max_damage`, модификаторы урона, раны и встрявшие предметы; урон переливается в общее здоровье; лечение идёт по частям.
 
 - **Код:** [`/obj/item/bodypart`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/_bodyparts.dm#L1), [`proc/receive_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/_bodyparts.dm#L704), [`proc/heal_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/bodyparts/_bodyparts.dm#L888)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/medical/wounds.rs`: brute/burn по шести частям с `max_damage` tg, раны по частям; ампутированная рука или нога — предмет со своим уроном (`crates/ss13_game/src/medical/bodyparts.rs`), урон по отсутствующей части идёт в грудь; нет модификаторов урона частей, встрявших предметов
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/health.rs`, `crates/ss13_game/src/medical/wounds/`: brute/burn по шести частям с `max_damage` tg, модификаторы урона (`BodyMods` вида, множитель ран части `damage_multiplier`), раны по частям, встрявшие предметы (`crates/ss13_game/src/embedding.rs`); ампутированная рука или нога — предмет со своим уроном (`medical/bodyparts.rs`), урон по отсутствующей части идёт в грудь; лечение по частям
 
 ### Отключение конечностей
 Конечность с уроном на максимуме или с тяжёлой раной отключается: рука не держит, нога не ходит (ползание, падение).

@@ -514,8 +514,6 @@ fn hide_closeted(
 
 /// tg `/obj/structure/closet/relaymove` -> `container_resist_act`: a step opens the closet
 /// unless it is welded or locked.
-// shortcut: no breaking out of a locked or welded closet (tg's 2 minute resist); someone has to
-// open it from outside.
 fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove>>) {
     let mobs: Vec<(Entity, ss13_shared::Dir)> = moves
         .read(world.resource::<Messages<ClosetRelayMove>>())
@@ -532,6 +530,87 @@ fn relay_moves(world: &mut World, mut moves: Local<MessageCursor<ClosetRelayMove
             open_if_allowed(world, c.closet, Some(mob));
         }
     }
+}
+
+/// `breakout_time`, deciseconds.
+const BREAKOUT_DS: f32 = 1200.0;
+
+/// tg `container_resist_act` of the mob inside (the resist key): an unlocked closet opens; a
+/// locked or welded one is pushed at for two minutes, then bursts open.
+pub fn container_resist(world: &mut World, client: Entity, mob: Entity) {
+    let Some(closet) = world.get::<InCloset>(mob).map(|c| c.closet) else {
+        return;
+    };
+    let Some(state) = world.get::<Closet>(closet) else {
+        return;
+    };
+    if state.opened {
+        return;
+    }
+    if !state.welded && !state.locked {
+        open_if_allowed(world, closet, Some(mob));
+        return;
+    }
+    if world.get::<crate::tools::DoAfter>(mob).is_some() {
+        return;
+    }
+    let what = crate::security::name_of(world, closet);
+    crate::chem::visible(
+        world,
+        mob,
+        &format!(
+            "Вы упираетесь в стенку {what} и начинаете выталкивать дверцу... (это займёт около \
+             2 минут.)"
+        ),
+        &format!("{} начинает сильно трястись!", ss13_chat::capitalize(&what)),
+        Span::Warning,
+    );
+    let actor = crate::tools::Actor {
+        client,
+        mob,
+        item: world
+            .get::<crate::inventory::Inventory>(mob)
+            .and_then(crate::inventory::Inventory::active_item),
+    };
+    crate::tools::do_after(
+        world,
+        actor,
+        closet,
+        BREAKOUT_DS,
+        0,
+        crate::construction::Job::ClosetBreakout,
+    );
+}
+
+/// The end of the two minutes: `bust_open`.
+pub fn complete_breakout(world: &mut World, mob: Entity, action: &crate::tools::DoAfter) {
+    let closet = action.target;
+    if world.get::<InCloset>(mob).map(|c| c.closet) != Some(closet) {
+        return;
+    }
+    let Some(mut state) = world.get_mut::<Closet>(closet) else {
+        return;
+    };
+    if state.opened || !(state.locked || state.welded) {
+        return;
+    }
+    state.welded = false;
+    state.locked = false;
+    if state.secure {
+        state.broken = true;
+    }
+    let (who, what) = (
+        crate::security::name_of(world, mob),
+        crate::security::name_of(world, closet),
+    );
+    crate::chem::visible(
+        world,
+        mob,
+        &format!("Вы вырываетесь из {what}!"),
+        &format!("{who} вырывается из {what}!"),
+        Span::Danger,
+    );
+    open(world, closet);
 }
 
 /// `closet/mouse_drop_receive` (from `crate::drag`): `dropped` lies on the floor next to `user`

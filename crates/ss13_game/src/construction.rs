@@ -309,6 +309,8 @@ pub enum Job {
     Gym(crate::gym::GymJob),
     /// Taking a gun's firing pin out with a tool ([`crate::gun_pins`]).
     RemovePin(Entity),
+    /// Breaking out of a locked or welded closet ([`crate::closets`]).
+    ClosetBreakout,
     /// Drawing the rebar crossbow's string ([`crate::guns`]).
     DrawCrossbow,
     /// Pulling an embedded item out ([`crate::embedding`]).
@@ -1524,6 +1526,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Kneecap(zone) => crate::weapons::kneecap::complete(world, mob, action, zone),
         &Job::Embed(job) => crate::embedding::complete(world, mob, action, job),
         Job::DrawCrossbow => crate::guns::complete_draw(world, action),
+        Job::ClosetBreakout => crate::closets::complete_breakout(world, mob, action),
         &Job::RemovePin(gun) => crate::gun_pins::complete_removal(world, mob, gun),
         &Job::Safe(job) => crate::safes::complete(world, action, job),
         &Job::SecureSafe(job) => crate::secure_safes::complete(world, action, job),

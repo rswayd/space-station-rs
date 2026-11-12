@@ -12,13 +12,13 @@
 Ниже порогов — «голоден»/«истощён»: моодлеты, вялый метаболизм (эффективность 0.8); хорошо сытый с высоким `satiety` метаболизирует быстрее; отрицательный `satiety` вызывает дрожь.
 
 - **Код:** [`proc/handle_hunger()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/stomach/_stomach.dm#L137), [`/datum/mood_event/hungry`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mood_events/needs_events.dm#L18)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/hunger.rs`: пороги и эффективность метаболизма; нет моодлетов и дрожи
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/hunger.rs`: пороги и эффективность метаболизма, дрожь при отрицательном `satiety` (`set_jitter_if_lower`); моодлеты сытости и голода — `crates/ss13_game/src/mood.rs` (`nutrition`)
 
 ### Переедание и ожирение
 Выше `NUTRITION_LEVEL_FULL` копится `overeatduration`; после лимита моб толстеет (`TRAIT_FAT`, замедление 1.5, моодлет), со временем худеет; `TRAIT_NOFAT` защищает. Сильное переполнение желудка может вызвать рвоту.
 
 - **Код:** [`/datum/movespeed_modifier/obesity`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/movespeed/modifiers/mobs.dm#L1), [`/datum/mood_event/fat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mood_events/needs_events.dm#L2)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/hunger.rs`: ожирение и замедление; нет моодлета и рвоты от переедания
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/hunger.rs`: ожирение и замедление, моодлет (`mood.rs`, `events::FAT`), отказ от укуса при переполнении; нет рвоты от переполненного желудка
 
 ### Индикатор голода в HUD
 Значок голода справа от оповещений показывает голод, сытость и переваривание.

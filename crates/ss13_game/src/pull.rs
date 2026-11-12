@@ -962,6 +962,19 @@ fn resist_intents(world: &mut World, mut intents: Local<MessageCursor<IntentRece
             .insert(NextMove(now + CLICK_CD_RESIST));
         if !traits.restrained && world.get::<PulledBy>(mob).is_some() {
             resist_grab(world, mob, false, now);
+        } else if !traits.restrained && world.get::<crate::medical::surgery::Buckled>(mob).is_some()
+        {
+            // `resist_buckle` -> `user_unbuckle_mob(src, src)`.
+            // shortcut: a cuffed carbon cannot unbuckle itself at all (tg takes `buckle_cd`).
+            let actor = crate::tools::Actor {
+                client,
+                mob,
+                item: None,
+            };
+            crate::medical::surgery::unbuckle(world, actor, mob);
+        } else if world.get::<crate::closets::InCloset>(mob).is_some() {
+            // `loc.container_resist_act(src)`.
+            crate::closets::container_resist(world, client, mob);
         } else if !traits.immobilized && crate::fire::on_fire(world, mob) {
             // tg `execute_resist`: able to move and on fire -> stop, drop and roll.
             crate::fire::resist_fire(world, mob);

@@ -35,7 +35,7 @@
 Любимая/отвратительная еда, качество блюд, опьянение, кайф и ломка от наркотиков.
 
 - **Код:** [`food_events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mood_events/food_events.dm#L1), [`drink_events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mood_events/drink_events.dm#L1), [`drug_events.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/mood_events/drug_events.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/mood.rs`: опьянение (`drunk`, сила по степени опьянения); нет любимой/мерзкой еды, качества блюд, наркотиков и ломки
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/mood.rs`: любимая, нелюбимая и токсичная еда и качество блюд (`add_food_event` из `crates/ss13_game/src/food.rs`), сытость и голод, опьянение (`drunk`, сила по степени), кайф (`buffs.rs`), ломка трёх стадий с названием наркотика (`addictions.rs`)
 
 ### Муд-события смерти и морбидные
 Увидеть смерть (с учётом питомцев, гиба, пыли), мрачные события для морбидных персонажей (расчленение, вскрытие).

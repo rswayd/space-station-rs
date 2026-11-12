@@ -23,7 +23,7 @@
 Проколы от пуль и острых предметов: внутреннее кровотечение, лечение швами/операцией; отдельная рана для глаза.
 
 - **Код:** [`/datum/wound/pierce/bleed`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wounds/pierce.dm#L30), [`/datum/wound/pierce/bleed/moderate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wounds/pierce.dm#L200), [`/datum/wound/pierce/bleed/severe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/wounds/pierce.dm#L270)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/wounds.rs`: три тяжести, внутреннее кровотечение при ударах, марля, прижигание, свёртывание на холоде; нет пулевых вариантов (нет снарядов), прокола глаза
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/wounds/`: три тяжести, проколы от острых (`SHARP_POINTY`) ударов и пуль (`projectile.rs`, `wound_bonus` снаряда), внутреннее кровотечение при ударах, марля, прижигание, свёртывание на холоде; нет прокола глаза
 
 ### Ожоги
 Ожоги 2–4 степени: инфекция растёт без дезинфекции (мазь, сетка, стерилизин), омертвевшие ткани удаляются санацией; святые и проклятые клейма.
