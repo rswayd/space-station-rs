@@ -4,7 +4,8 @@
 //!
 //! - An empty hand (a cyborg's too) on the crystal dusts the mob; aiming at the mouth gives the
 //!   bite, lick and forehead lines.
-//! - An item on it is dropped and turns to dust; an item that cannot leave the hand takes the
+//! - An item on it (not a wrench: `tool_hit` gives that to the crystal) is dropped and turns to
+//!   dust; an item that cannot leave the hand takes the
 //!   holder with it. The roasting stick and the spray can are spared; a cigarette is lit
 //!   (outside combat mode) or ashed.
 //! - A living mob or an object walking or pushed into it is consumed.
@@ -183,6 +184,12 @@ pub fn attackby_hit(world: &mut World, mob: Entity, item: Entity, crystal: Entit
         return false;
     };
     if world.get::<Health>(mob).is_none() || WHITELIST.iter().any(|w| is_under(&path, w)) {
+        return false;
+    }
+    // `tool_hit`: a wrench goes to the crystal's own `wrench_act_callback` (unfastening a
+    // movable shard), never into `attackby_hit`.
+    if crate::tools::tool_of(world, item).is_some_and(|(k, _)| k == crate::tools::ToolKind::Wrench)
+    {
         return false;
     }
     let (who, what, sm) = (name(world, mob), name(world, item), name(world, crystal));
