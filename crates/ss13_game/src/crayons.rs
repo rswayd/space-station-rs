@@ -490,7 +490,7 @@ pub fn is_dark(color: [u8; 4]) -> bool {
 }
 
 /// `#rrggbb` to RGBA.
-fn parse_hex(hex: &str) -> Option<[u8; 4]> {
+pub(crate) fn parse_hex(hex: &str) -> Option<[u8; 4]> {
     let hex = hex.strip_prefix('#')?;
     if hex.len() != 6 {
         return None;

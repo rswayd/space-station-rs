@@ -19,6 +19,8 @@ pub fn cut(world: &mut World, holder: Entity, wire: &str, source: Option<Entity>
         WireHolder::Autolathe => autolathe_on_cut(world, holder, wire, mend, source),
         WireHolder::Mulebot => crate::bots::mule::on_cut(world, holder, wire, source),
         WireHolder::ChemGrenade => crate::assemblies::chem_grenade::wire_explode(world, holder),
+        // `/datum/wires/collar_bomb` has no `on_cut`.
+        WireHolder::CollarBomb => {}
         WireHolder::Machine(m) => {
             crate::machine_wires::on_cut(world, holder, m, wire, mend, source)
         }
@@ -48,6 +50,7 @@ pub(super) fn on_pulse(world: &mut World, holder: Entity, wire: &str, user: Opti
         WireHolder::Autolathe => autolathe_on_pulse(world, holder, wire),
         WireHolder::Mulebot => crate::bots::mule::on_pulse(world, holder, wire),
         WireHolder::ChemGrenade => crate::assemblies::chem_grenade::wire_explode(world, holder),
+        WireHolder::CollarBomb => crate::clothing::collar_bomb::wire_pulse(world, holder),
         WireHolder::Machine(m) => crate::machine_wires::on_pulse(world, holder, m, wire, user),
     }
 }
@@ -55,8 +58,10 @@ pub(super) fn on_pulse(world: &mut World, holder: Entity, wire: &str, user: Opti
 /// tg `emp_pulse()`: in a shuffled order each wire is pulsed at 33%, at most
 /// `MAXIMUM_EMP_WIRES` (3) of them.
 pub fn emp_pulse(world: &mut World, holder: Entity) {
+    // `/datum/wires/collar_bomb/emp_pulse`: nothing ("I'd rather not get people killed by EMP").
     let Some(mut wires) = world
         .get::<Wires>(holder)
+        .filter(|w| w.holder != WireHolder::CollarBomb)
         .map(|w| w.colors.iter().map(|(_, w)| w.clone()).collect::<Vec<_>>())
     else {
         return;

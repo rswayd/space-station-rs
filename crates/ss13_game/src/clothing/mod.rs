@@ -20,6 +20,8 @@ pub mod chameleon;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod collar_bomb;
+#[cfg(feature = "server")]
 pub mod cover;
 #[cfg(feature = "server")]
 pub mod damage;
@@ -174,6 +176,7 @@ mod server {
             muzzle::build(app);
             reactive::build(app);
             envirosuit::build(app);
+            super::collar_bomb::build(app);
             sensors::build(app);
             slowdown::build(app);
             chameleon::build(app);
@@ -239,6 +242,7 @@ mod server {
         }
         accessories::examine_lines(world, item, lines);
         envirosuit::examine_lines(world, item, lines);
+        super::collar_bomb::examine_lines(world, item, lines);
     }
 
     /// What the worn look needs from the clothing (`crate::inventory`'s `refresh_mobs`).

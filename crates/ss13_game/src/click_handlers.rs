@@ -124,6 +124,7 @@
 //! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
+//! | 3357 | `clothing::collar_bomb::press` (the collar bomb's button) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -158,6 +159,7 @@
 //! | 499 | `kitchen_ware::other_hand` (food onto plates, pizza boxes, tongs; empty hand: food off a plate, pizza or the top box) |
 //! | 500 | core: a storage opens or takes the held item |
 //! | 600 | `implants::item_interaction` |
+//! | 697 | `clothing::collar_bomb::open_wires` (a wire tool or assembly on the collar bomb in the other hand) |
 //! | 700 | `assemblies::server::item_interaction` |
 //! | 760 | `wiremod::server::item_interaction` |
 //! | 800 | `grenades::item_interaction` |
@@ -358,6 +360,7 @@
 //! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |
 //! | 355 | `transport::elevator` (an emag on an elevator panel) |
 //! | 400 | `modsuit::server::item_interaction` |
+//! | 497 | `clothing::collar_bomb::open_wires` (a wire tool or assembly on a collar bomb) |
 //! | 500 | `assemblies::server::item_interaction` |
 //! | 555 | `wiremod::devices::cable_interaction` (USB cables on shells and machines) |
 //! | 560 | `wiremod::server::item_interaction` |

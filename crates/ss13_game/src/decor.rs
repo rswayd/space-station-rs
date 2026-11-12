@@ -370,6 +370,10 @@ pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) 
         tear_poster(world, client, mob, target);
         return true;
     }
+    // A framed painting's patronage (`crate::service::art`).
+    if crate::service::art::frame_hand(world, client, mob, target) {
+        return true;
+    }
     if path(world, target).is_some_and(is_sign) {
         // `user.examinate(src)`.
         let (name, lines) = crate::examine::examine_lines(world, mob, target);
@@ -1141,8 +1145,9 @@ pub(crate) fn deconstruct(
         return true;
     }
     if is_under(path, SIGN) {
-        // `sign/atom_deconstruct`, wrenched or destroyed: the sign item (posters, paintings and
-        // the rest of `FIXED_SIGNS` leave nothing here).
+        // `sign/atom_deconstruct`, wrenched or destroyed: the sign item (posters and the rest of
+        // `FIXED_SIGNS` leave nothing here); a painting frame drops its canvas and frame item.
+        crate::service::art::frame_deconstructed(world, target, pos);
         if buildable_sign(path) {
             sign_item(world, target, path, pos);
         }

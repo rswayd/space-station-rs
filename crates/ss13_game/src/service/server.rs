@@ -107,6 +107,7 @@ impl Plugin for ServiceServerPlugin {
             .init_resource::<super::religion::Religion>()
             .init_resource::<super::archive::LibraryArchive>()
             .init_resource::<super::stationery::RapsheetCount>()
+            .add_systems(Startup, super::blanks::load_blanks)
             .add_systems(ss13_world::MapInit, super::library::shelve_mapped_books)
             .add_systems(ss13_world::MapInit, super::stationery::file_mapped_items)
             .add_systems(ss13_world::MapInit, super::stationery::arm_mapped_cutters)
@@ -227,6 +228,7 @@ fn add_obj_parts(add: On<Add<DmObj>>, mut commands: Commands) {
         super::clown::add_obj_parts(world, e, &path);
         super::library::add_obj_parts(world, e, &path);
         super::office::add_obj_parts(world, e, &path);
+        super::art::add_obj_parts(world, e, &path);
         super::archive::add_obj_parts(world, e, &path);
         super::barcode::add_obj_parts(world, e, &path);
         super::statues::add_obj_parts(world, e, &path);
@@ -275,6 +277,7 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity)
         || super::stationery::click_alt(world, client, mob, target)
         || super::office::fold_plane(world, client, mob, target)
         || super::barber::click_alt(world, client, mob, target)
+        || super::art::frame_click_alt(world, client, mob, target)
 }
 
 /// tg `item_interaction` / `attack` of the service items in hand (and of what they are used

@@ -866,6 +866,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/photo",
     "/obj/item/wallframe/picture",
     "/obj/structure/sign/picture_frame",
+    // Painting frames hung from their wall frame (`ss13_game::service` art).
+    "/obj/item/wallframe/painting",
+    "/obj/structure/sign/painting",
     // The captain's charter and its variants (`ss13_game::misc_items::charter`).
     "/obj/item/station_charter",
     "/obj/item/station_charter/admin",

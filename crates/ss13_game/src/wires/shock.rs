@@ -48,6 +48,9 @@ pub fn interactable(world: &World, holder: Entity, user: Entity) -> bool {
         WireHolder::ChemGrenade => {
             crate::assemblies::chem_grenade::wires_interactable(world, holder, user)
         }
+        WireHolder::CollarBomb => {
+            crate::clothing::collar_bomb::wires_interactable(world, holder, user)
+        }
         WireHolder::Machine(kind) => crate::machine_wires::interactable(world, holder, kind),
         WireHolder::Vending => {
             if electrified && should_electrocute(world, holder, user) {
@@ -95,7 +98,7 @@ pub fn shock(world: &mut World, holder: Entity, mob: Entity, chance: f32) -> boo
             (area_power_source(world, holder), VENDING_SIEMENS)
         }
         // MULEbots and grenades never shock (no `shock` override, no electrified state).
-        WireHolder::Mulebot | WireHolder::ChemGrenade => return false,
+        WireHolder::Mulebot | WireHolder::ChemGrenade | WireHolder::CollarBomb => return false,
         // `/obj/machinery/shock`: not without power, the area's power.
         WireHolder::Machine(_) => {
             if !crate::machine_wires::can_shock(world, holder) {
@@ -412,6 +415,7 @@ pub(super) fn touches(
             | WireHolder::Autolathe
             | WireHolder::Mulebot
             | WireHolder::ChemGrenade
+            | WireHolder::CollarBomb
             | WireHolder::Machine(_) => {}
         }
     }

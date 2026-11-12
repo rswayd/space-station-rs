@@ -44,8 +44,9 @@ pub struct FrameKind {
 /// `fireaxe.dm`, `detectiveboard.dm`, the trophy fish mount (`crate::fishing::mount`), the photo frame
 /// (`photos/frame.dm`, its photo moves along: [`crate::service::picture_frame_moved`]) and the
 /// heretic's eldritch paintings (`eldritch_painting.dm`,
-/// `crate::antag::heretic::server::EldritchPainting`). Subtypes come before their parents.
-pub static FRAMES: [FrameKind; 15] = [
+/// `crate::antag::heretic::server::EldritchPainting`), the painting frame (`paintings.dm`,
+/// `crate::service::PaintingFrame`). Subtypes come before their parents.
+pub static FRAMES: [FrameKind; 16] = [
     FrameKind {
         frame: "/obj/item/wallframe/button",
         result: "/obj/machinery/button",
@@ -131,6 +132,12 @@ pub static FRAMES: [FrameKind; 15] = [
         materials: &[(WOOD, 1)],
     },
     FrameKind {
+        frame: "/obj/item/wallframe/painting",
+        result: "/obj/structure/sign/painting",
+        pixel_shift: 30,
+        materials: &[(WOOD, 1)],
+    },
+    FrameKind {
         frame: "/obj/item/wallframe/fireaxecabinet",
         result: "/obj/structure/fireaxecabinet/empty",
         pixel_shift: 32,
@@ -141,6 +148,11 @@ pub static FRAMES: [FrameKind; 15] = [
 /// The frame and result types the game spawns (`ss13_mapload::GAME_RUNTIME_TYPES` lists them).
 pub fn kind_of(world: &World, item: Entity) -> Option<&'static FrameKind> {
     let path = &world.get::<DmItem>(item)?.path;
+    // shortcut: the large painting frame needs a second wall beside the first
+    // (`wallframe/painting/large/try_build`) and its own size; it is not hung here.
+    if is_under(path, "/obj/item/wallframe/painting/large") {
+        return None;
+    }
     FRAMES.iter().find(|k| is_under(path, k.frame))
 }
 

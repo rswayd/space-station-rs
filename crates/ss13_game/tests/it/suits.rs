@@ -1,12 +1,13 @@
 //! Suits with their own mechanics, over a loopback server with two humans: reactive armor
 //! blocks a hit and goes on cooldown, a straight jacket restrains until it comes off, laser tag
 //! vests make teams for pins and beams, the ablative coat reflects reflectable shots, the EVA
-//! plasma envirosuit puts its burning wearer out.
+//! plasma envirosuit puts its burning wearer out, a collar bomb sticks to the neck and goes off
+//! five seconds after its button (a dud off the neck).
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
-use ss13_game::clothing::{ablative, envirosuit, lasertag, reactive};
+use ss13_game::clothing::{ablative, collar_bomb, envirosuit, lasertag, reactive};
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::status_effects::Incapacitation;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -56,6 +57,9 @@ const TYPES: &str = r##"{
     "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
     "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
     "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
+    "/obj/item/clothing/neck": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2048 } },
+    "/obj/item/clothing/neck/collar_bomb": { "parent": "/obj/item/clothing/neck" },
+    "/obj/item/collar_bomb_button": { "parent": "/obj/item" },
     "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
     "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
@@ -101,6 +105,8 @@ const JACKET: &str = "/obj/item/clothing/suit/jacket/straight_jacket";
 const BLUE_VEST: &str = "/obj/item/clothing/suit/bluetag";
 const COAT: &str = "/obj/item/clothing/suit/hooded/ablative";
 const EVA: &str = "/obj/item/clothing/suit/space/eva/plasmaman";
+const COLLAR: &str = "/obj/item/clothing/neck/collar_bomb";
+const BUTTON: &str = "/obj/item/collar_bomb_button";
 
 fn fixture_assets(test: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
@@ -113,6 +119,8 @@ fn fixture_assets(test: &str) -> PathBuf {
         BLUE_VEST,
         COAT,
         EVA,
+        COLLAR,
+        BUTTON,
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -311,4 +319,53 @@ fn plasma_envirosuit_puts_the_wearer_out() {
         s.get::<envirosuit::Envirosuit>(suit).left == 9
     });
     assert!(!ss13_game::fire::on_fire(s.server.world(), b));
+}
+
+#[test]
+fn collar_bomb_sticks_and_goes_off() {
+    let mut s = Station::start("collar_bomb_sticks_and_goes_off");
+    let b = s.players[1].mob;
+    let world = s.server.world_mut();
+    let pos = *world.get::<TilePos>(b).unwrap();
+    let collar = ss13_game::construction::spawn_obj(world, COLLAR, pos).unwrap();
+    let spare = ss13_game::construction::spawn_obj(world, COLLAR, pos).unwrap();
+    let button = ss13_game::construction::spawn_obj(world, BUTTON, pos).unwrap();
+    s.run_for(0.2);
+    let world = s.server.world_mut();
+    collar_bomb::link(world, button, collar);
+    world
+        .entity_mut(collar)
+        .remove::<TilePos>()
+        .insert(CarriedBy(b));
+    world.get_mut::<Inventory>(b).unwrap().neck = Some(collar);
+    s.run_until("the collar grips the neck", |s| {
+        s.try_get::<ss13_game::inventory::NoDrop>(collar).is_some()
+    });
+    assert_eq!(
+        s.get::<collar_bomb::CollarButton>(button).collar,
+        Some(collar)
+    );
+
+    // Off the neck it is a dud and can go again.
+    let world = s.server.world_mut();
+    assert!(collar_bomb::trigger(world, spare));
+    assert!(!collar_bomb::trigger(world, spare), "already counting down");
+    s.run_until_for(10.0, "the spare collar fizzles", |s| {
+        !s.get::<collar_bomb::CollarBomb>(spare).active
+    });
+    assert!(s.server.world().get_entity(spare).is_ok());
+
+    // On the neck: five seconds, then the head.
+    let start = s.now();
+    assert!(collar_bomb::trigger(s.server.world_mut(), collar));
+    s.run_until_for(10.0, "the collar goes off", |s| {
+        s.server.world().get_entity(collar).is_err()
+    });
+    assert!(s.now() - start >= 5.0, "the countdown takes five seconds");
+    assert_eq!(s.get::<Inventory>(b).neck, None);
+    assert_eq!(
+        s.get::<ss13_game::health::Stat>(b),
+        &ss13_game::health::Stat::Dead
+    );
+    assert_eq!(s.get::<collar_bomb::CollarButton>(button).collar, None);
 }

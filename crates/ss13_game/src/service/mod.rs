@@ -20,11 +20,13 @@ pub mod server;
 #[cfg(feature = "server")]
 mod archive;
 #[cfg(feature = "server")]
-mod art;
+pub mod art;
 #[cfg(feature = "server")]
 pub mod barber;
 #[cfg(feature = "server")]
 mod barcode;
+#[cfg(feature = "server")]
+pub mod blanks;
 #[cfg(feature = "server")]
 mod burden;
 #[cfg(feature = "server")]
@@ -69,7 +71,7 @@ pub mod tickets;
 #[cfg(feature = "server")]
 pub use archive::{ArchivedBook, BookBinder, BookScanner, LibraryArchive};
 #[cfg(feature = "server")]
-pub use art::Canvas;
+pub use art::{Canvas, PaintingFrame, Palette};
 #[cfg(feature = "server")]
 pub use barber::{BarberJob, complete as barber_complete};
 #[cfg(feature = "server")]

@@ -648,6 +648,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 && crate::forensics::spoofer::toggle_mode(world, mob, item)
             {
                 // The forensics spoofer scans or applies.
+            } else if slot == active
+                && let Some(item) = inventory.slot(slot)
+                && crate::service::art::palette_menu(world, client, mob, item)
+            {
+                // A paint palette's or spray can's colours (`/datum/component/palette`).
             } else if let Some(item) = inventory.slot(slot) {
                 // A jumpsuit's sensors (`attack_self_secondary`, `attack_hand_secondary`).
                 crate::clothing::right_click_slot(world, client, mob, item);
