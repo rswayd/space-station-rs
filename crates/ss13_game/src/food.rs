@@ -1317,6 +1317,67 @@ pub fn thrown(world: &mut World, item: Entity, hit: Option<Entity>) -> bool {
     true
 }
 
+const MONKEY_CUBE: &str = "/obj/item/food/monkeycube";
+/// `CONFIG_GET(number/monkeycap)` default.
+const MONKEY_CAP: usize = 64;
+
+/// `/obj/item/food/monkeycube/Expand` on water: the cube becomes a monkey where it is (not past
+/// the station's cap of cube monkeys). True when `cube` was one and is gone.
+// shortcut: only the monkey cube (the gorilla, chicken, bee and other cubes spawn other
+// mobs); a cube eaten whole does not burst out of the eater; no grow-in animation.
+pub fn expand_cube(world: &mut World, cube: Entity) -> bool {
+    use crate::science::xenobio_console::ConsoleMonkey;
+    let path = item_path(world, cube);
+    if path != MONKEY_CUBE && !is_under(&path, "/obj/item/food/monkeycube/syndicate") {
+        return false;
+    }
+    let Some(pos) = crate::explosions::turf_of(world, cube) else {
+        return false;
+    };
+    let name = name_of(world, cube);
+    let alive = world
+        .query_filtered::<(), With<ConsoleMonkey>>()
+        .iter(world)
+        .count();
+    let clients = crate::chem::clients_near(world, pos, None);
+    let text = if alive >= MONKEY_CAP {
+        format!("{name} не может расшириться!")
+    } else {
+        let kind = if path == MONKEY_CUBE {
+            crate::mobs::ai::monkey::MONKEY
+        } else {
+            "/datum/ai_controller/monkey/angry"
+        };
+        let monkey = crate::mobs::ai::monkey::spawn(world, pos, kind);
+        world.entity_mut(monkey).insert(ConsoleMonkey);
+        format!("{name} расширяется!")
+    };
+    if !clients.is_empty() {
+        world.write_message(ss13_net::chat::server::SendChat {
+            clients,
+            message: ss13_shared::chat::ChatMessage::simple(
+                ss13_shared::chat::ChatChannel::Info,
+                Span::Notice,
+                ss13_chat::capitalize(&text),
+            ),
+        });
+    }
+    if alive >= MONKEY_CAP {
+        return false;
+    }
+    if let Some(holder) = world.get::<CarriedBy>(cube).map(|c| c.0)
+        && let Some(mut inventory) = world.get_mut::<Inventory>(holder)
+    {
+        for hand in &mut inventory.hands {
+            if *hand == Some(cube) {
+                *hand = None;
+            }
+        }
+    }
+    world.entity_mut(cube).despawn();
+    true
+}
+
 #[cfg(test)]
 mod kitchen_tests {
     use super::*;

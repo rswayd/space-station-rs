@@ -58,6 +58,8 @@ use crate::tools::{Actor, DoAfter, do_after, tell};
 use crate::zone::BodyZone;
 
 pub const CONTAINER_ROOT: &str = "/obj/item/reagent_containers";
+/// What makes a monkey cube expand (`crate::food::expand_cube`).
+const WATER_PATH: &str = "/datum/reagent/water";
 const CUP_ROOT: &str = "/obj/item/reagent_containers/cup";
 const SYRINGE_ROOT: &str = "/obj/item/reagent_containers/syringe";
 const PILL_ROOT: &str = "/obj/item/reagent_containers/applicator/pill";
@@ -1876,6 +1878,14 @@ pub(crate) fn refresh_container(world: &mut World, chem: &Chemistry, e: Entity) 
             .any(|&(i, _)| chem.reactions[i as usize].def.path == EMP_REACTION)
         {
             reagent_emps(world, chem, e, &reacted);
+        }
+        // Water put into a monkey cube (a syringe, a dropper) expands it.
+        if world
+            .get::<Reagents>(e)
+            .is_some_and(|r| r.0.reagents.iter().any(|x| chem.is_type(x.id, WATER_PATH)))
+            && crate::food::expand_cube(world, e)
+        {
+            return;
         }
         // `/datum/chemical_reaction/food/on_reaction`: `created_volume` of the reaction's
         // food where the container is (dough, cheese, tofu, chocolate...).

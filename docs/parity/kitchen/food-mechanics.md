@@ -31,7 +31,7 @@ _«Вкус» описано в [../mobs/hunger-taste.md](../mobs/hunger-taste.m
 Еда в микроволновке становится своим `microwaved_type` (яйцо — варёное, донк-покет — тёплый), остальное — «неудачным блюдом» (`badrecipe`); результат может получить доп. реагенты.
 
 - **Код:** [`/datum/element/microwavable`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/food/microwavable.dm#L2), [`proc/make_microwaveable()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/_food.dm#L207), [`/obj/item/food/badrecipe`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/misc.dm#L196)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/kitchen.rs`, `crates/ss13_mapload/src/food.rs`: нет добавочных реагентов результата (омнизин тёплого донк-покета)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/kitchen.rs` (`microwave_act`), `crates/ss13_mapload/src/food.rs`: результат `microwaved_type` с реагентами исходника, остальное — в неудачное блюдо; добавочные реагенты результата (омнизин тёплого донк-покета) — `food.rs` (`warm_bonus`)
 
 ### Типы пищи, любимая и нелюбимая еда
 У еды есть `foodtypes` (мясо, овощи, жареное, токсичное...), у языка вида — списки любимого, нелюбимого и токсичного; от этого зависят мудлеты, рвота от токсичной еды и качество.
@@ -79,10 +79,10 @@ _«Вкус» описано в [../mobs/hunger-taste.md](../mobs/hunger-taste.m
 Кубик, политый водой или съеденный, раскрывается в живую обезьяну (у едока — из груди); есть варианты других видов.
 
 - **Код:** [`/obj/item/food/monkeycube`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/monkeycube.dm#L1), [`proc/Expand()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/monkeycube.dm#L25)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs`: съедается как обычная еда, раскрытия в обезьяну нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs` (`expand_cube`): кубик, облитый водой (выплеск, душ, вода внутрь шприцем), превращается в мартышку с ИИ на месте (потолок 64 обезьян из кубиков); кубики в консоль ксенобиологии — `science/xenobio_console.rs`. Нет: съеденный кубик не вырывается из едока, прочие кубики (горилла, курица, пчела и др.) не раскрываются
 
 ### Наживка для рыбалки
 Червяки и наживка (`bait.dm`) — еда, используемая как приманка на удочке; сама рыбалка — см. ../service/.
 
 - **Код:** [`/obj/item/food/bait`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/bait.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_mapload/src/food.rs`: существует как еда, использования как наживки нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/fishing/server.rs`: любая еда — наживка (`TRAIT_FISHING_BAIT`), у подтипов `/obj/item/food/bait` своё качество (`bait_quality`), наживка тратится при поклёвке; сама рыбалка — ../service/

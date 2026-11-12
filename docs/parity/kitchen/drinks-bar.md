@@ -5,7 +5,7 @@
 Общий тип посуды для напитков (стаканы, рюмки, кружки, кофейные стаканчики, бумажные стаканчики, бутылка воды, коробки сока, стакан со льдом): пьётся, переливается, бьётся при броске.
 
 - **Код:** [`/obj/item/reagent_containers/cup/glass`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/drinks.dm#L4), [`/obj/item/reagent_containers/cup/glass/drinkingglass`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/drinkingglass.dm#L1), [`/obj/item/reagent_containers/cup/glass/drinkingglass/shotglass`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/drinkingglass.dm#L76), [`/obj/item/reagent_containers/cup/glass/coffee`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/drinks.dm#L116), [`/obj/item/reagent_containers/cup/glass/sillycup`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/drinks.dm#L349), [`/obj/item/reagent_containers/cup/glass/waterbottle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/drinks.dm#L231), [`/obj/item/storage/box/drinkingglasses`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/boxes/service_boxes.dm#L4)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: питьё, переливание, наполнение, расплёскивание есть; нет разбивания при броске (`smash`), крышек, звуков
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: питьё, переливание, наполнение, расплёскивание; брошенный стакан разбивается (`crates/ss13_game/src/bar.rs`); нет крышек, звуков
 
 ### Внешний вид напитка по содержимому
 Стакан или рюмка с напитком принимает имя, описание и спрайт главного реагента (`glass_style` каждого коктейля); бутылки и чашки — по своим стилям.
@@ -24,7 +24,7 @@
 ~50 видов бутылок (пиво, вино, водка, ром, виски, абсент, ...) и пакеты соков/сливок; бутылки с элитным алкоголем, пена при открытии шампанского. Коктейль Молотова из бутылки — см. боевые предметы.
 
 - **Код:** [`/obj/item/reagent_containers/cup/glass/bottle`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/glassbottle.dm#L7), [`/obj/item/reagent_containers/cup/glass/bottle/beer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/glassbottle.dm#L260), [`/obj/item/reagent_containers/cup/glass/bottle/wine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/glassbottle.dm#L427), [`/obj/item/reagent_containers/cup/glass/bottle/juice`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_containers/cups/glassbottle.dm#L1032)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: бутылки с `list_reagents`, питьё и переливание есть; нет разбивания, пробок/открывания, пены
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/chem.rs`: бутылки с `list_reagents`, питьё и переливание; брошенная бутылка разбивается (`bar.rs`); нет пробок/открывания, пены, удара бутылкой по голове
 
 ### Банки газировки
 ~20 видов банок; банку нужно открыть (встряхнутая или брошенная может взорваться брызгами при открытии), пустую можно смять; самодельная бомба из банки с фитилём.
@@ -51,7 +51,7 @@
 
 - **Код:** [`/obj/structure/reagent_dispensers/keg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/reagents/reagent_dispenser.dm#L588)
 - **BandaStation:** [`modular_bandastation/objects/code/items/consumables/drinks.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/consumables/drinks.dm#L33) — бочка кваса (`kvasstank`), заказ через карго и экспорт
-- **Статус в ss13-rs:** ❌ нет — кеги и бочка кваса — подтипы `reagent_dispensers`, механизм которых (баки) у группы химии: см. «Баки и канистры» в `../chemistry/containers.md`
+- **Статус в ss13-rs:** ✅ реализовано — кеги и бочка кваса — подтипы `reagent_dispensers`: реагенты типа, наливание в посуду кликом (`crates/ss13_game/src/chem.rs`), кран гаечным ключом и утечка 10 ед. на пол (`crates/ss13_game/src/kitchen_ware.rs`, `openable`); остальное о баках — `../chemistry/containers.md`
 
 ### Напитки форка
 ~30 новых реагентов-напитков BandaStation: квас, самбука, ягермейстер, блю кюрасао, фраппучино, макиато, чифир, тематические коктейли; у части есть свои эффекты.

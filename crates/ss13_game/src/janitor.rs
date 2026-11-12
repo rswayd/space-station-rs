@@ -546,6 +546,10 @@ pub fn expose_by(
     for r in &holder.reagents {
         let volume = r.volume * modifier;
         if chem.is_type(r.id, WATER) {
+            // `/datum/reagent/water/expose_obj`: a monkey cube expands.
+            if crate::food::expand_cube(world, target) {
+                return;
+            }
             if let Some(pos) = turf {
                 // `/datum/reagent/water/expose_turf`.
                 douse_hotspot(world, pos, |t| {
