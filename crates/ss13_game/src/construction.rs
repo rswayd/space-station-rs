@@ -335,6 +335,10 @@ pub enum Job {
     ClosetBreakout,
     /// Drawing the rebar crossbow's string ([`crate::guns`]).
     DrawCrossbow,
+    /// Cranking an energy gun ([`crate::gun_crank`]); `moving`: `IGNORE_USER_LOC_CHANGE`.
+    Crank {
+        moving: bool,
+    },
     /// Pulling an embedded item out ([`crate::embedding`]).
     Embed(crate::embedding::EmbedJob),
     /// Aiming a bat at a leg ([`crate::weapons::kneecap`]).
@@ -1601,6 +1605,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Kneecap(zone) => crate::weapons::kneecap::complete(world, mob, action, zone),
         &Job::Embed(job) => crate::embedding::complete(world, mob, action, job),
         Job::DrawCrossbow => crate::guns::complete_draw(world, action),
+        Job::Crank { .. } => crate::gun_crank::complete(world, mob, action),
         Job::ClosetBreakout => crate::closets::complete_breakout(world, mob, action),
         &Job::RemovePin(gun) => crate::gun_pins::complete_removal(world, mob, gun),
         &Job::Safe(job) => crate::safes::complete(world, action, job),

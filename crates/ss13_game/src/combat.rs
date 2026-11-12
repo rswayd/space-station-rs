@@ -657,6 +657,14 @@ fn melee(
                     Some(damage) => {
                         let before = health.part(hit).damage();
                         let armor = armor_check(hit, None, None);
+                        // `COMSIG_HUMAN_PUNCHED` (Kaza Ruk's follow-up); a lying target is
+                        // kicked (`attacking_limb`).
+                        let raw = damage as f32;
+                        commands.queue(move |world: &mut World| {
+                            crate::martial::kaza_ruk::on_punched(
+                                world, attacker, target, hit, raw, armor, lying,
+                            );
+                        });
                         let damage =
                             crate::armor::blocked_damage(damage as f32 * multiplier(hit), armor);
                         apply_damage_zone(

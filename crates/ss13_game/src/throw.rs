@@ -255,6 +255,17 @@ fn throw_clicks(world: &mut World, mut clicks: Local<MessageCursor<ThrowClick>>)
             continue;
         };
         let held = entity.get::<Inventory>().and_then(Inventory::active_item);
+        // `COMSIG_MOB_CLICKON` of a tackler: a right click leaps instead.
+        if crate::tackle::try_tackle(
+            world,
+            click.client,
+            mob,
+            click.target,
+            click.target_pos,
+            click.right,
+        ) {
+            continue;
+        }
         if let (Some(mut facing), Some(dir)) = (
             world.get_mut::<Facing>(mob),
             dir_between(from, click.target_pos),

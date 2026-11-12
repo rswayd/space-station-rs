@@ -438,6 +438,12 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             {
                 true
             }
+            // The power-fist's and the supermatter sword's own hits (`crate::weapons::special`).
+            Some(item)
+                if crate::weapons::special::attack(world, click.client, mob, item, target) =>
+            {
+                true
+            }
             // tg `check_block` of the defender against a melee hit (`crate::martial`).
             Some(item) if target != mob && blocks_melee(world, mob, item, target) => {
                 let speed = world.get::<DmItem>(item).map_or(8.0, |i| i.attack_speed);

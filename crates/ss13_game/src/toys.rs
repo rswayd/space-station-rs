@@ -520,6 +520,7 @@ fn ranged_clicks(world: &mut World, mut cursor: Local<MessageCursor<RangedClick>
                 mob: click.mob,
                 target: click.target,
                 target_pos: click.target_pos,
+                right: false,
             });
         }
     }

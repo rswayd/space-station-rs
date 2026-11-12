@@ -1,7 +1,8 @@
 //! Martial arts (server), after tg `code/datums/martial/_martial.dm` (`/datum/martial_art`),
 //! `_action.dm` (`swap_arts`), `code/datums/components/martial_art_giver.dm`,
 //! `code/game/objects/items/granters/` (`/obj/item/book/granter/martial`) and the styles in
-//! [`cqc`], [`carp`], [`boxing`], [`wrestling`] and [`judo`] (BandaStation's corporate judo).
+//! [`cqc`], [`carp`], [`boxing`], [`wrestling`], [`judo`] (BandaStation's corporate judo),
+//! [`kaza_ruk`] and [`plasma_fist`].
 //!
 //! - A mob knows styles in [`MartialArts`], the active one first (tg `martial_arts`,
 //!   `GET_ACTIVE_MARTIAL_ART`). A style is taught by a manual or scroll read in hand
@@ -30,6 +31,8 @@ pub mod boxing;
 pub mod carp;
 pub mod cqc;
 pub mod judo;
+pub mod kaza_ruk;
+pub mod plasma_fist;
 pub mod wrestling;
 
 use bevy::ecs::message::MessageCursor;
@@ -73,6 +76,12 @@ pub enum Style {
     Wrestling,
     /// BandaStation `/datum/martial_art/judo`.
     Judo,
+    /// `/datum/martial_art/kaza_ruk`.
+    KazaRuk,
+    /// `/datum/martial_art/plasma_fist`.
+    PlasmaFist,
+    /// `/datum/martial_art/plasma_fist/nobomb`: no apotheosis.
+    NovicePlasmaFist,
 }
 
 impl Style {
@@ -86,6 +95,9 @@ impl Style {
             Self::HunterBoxing => "Охотничий бокс",
             Self::Wrestling => "Рестлинг",
             Self::Judo => "Корпоративное дзюдо",
+            Self::KazaRuk => "Каза Рук",
+            Self::PlasmaFist => "Плазменный кулак",
+            Self::NovicePlasmaFist => "Плазменный кулак новичка",
         }
     }
 
@@ -99,6 +111,9 @@ impl Style {
             Self::HunterBoxing => "Сосредоточиться на охоте",
             Self::Wrestling => "SNAP INTO A THIN TIM",
             Self::Judo => "Вспомнить основы",
+            // Kaza Ruk has no `help_verb`: no button.
+            Self::KazaRuk => "",
+            Self::PlasmaFist | Self::NovicePlasmaFist => "Вспомнить учения",
         }
     }
 
@@ -113,7 +128,7 @@ impl Style {
     /// tg `combo_timer` of the styles with `display_combos`, seconds.
     fn combo_timer(self) -> Option<f64> {
         match self {
-            Self::Cqc | Self::SleepingCarp => Some(6.0),
+            Self::Cqc | Self::SleepingCarp | Self::PlasmaFist | Self::NovicePlasmaFist => Some(6.0),
             Self::Judo => Some(15.0),
             _ => None,
         }
@@ -148,6 +163,9 @@ impl Style {
             Self::Boxing | Self::EvilBoxing | Self::HunterBoxing => boxing::HELP,
             Self::Wrestling => wrestling::HELP,
             Self::Judo => judo::HELP,
+            Self::KazaRuk => &[],
+            Self::PlasmaFist => plasma_fist::HELP,
+            Self::NovicePlasmaFist => plasma_fist::HELP_NOVICE,
         }
     }
 }
@@ -177,6 +195,8 @@ pub struct Art {
     pub streak_resets_at: f64,
     /// CQC `restraining_mob` and when it lets go (tg's 5 s `VARSET_CALLBACK`).
     pub restraining: Option<(Entity, f64)>,
+    /// The plasma fist's `plasma_power`: the apotheosis explosion's size.
+    pub plasma_power: u32,
 }
 
 impl Art {
@@ -188,6 +208,7 @@ impl Art {
             target: None,
             streak_resets_at: 0.0,
             restraining: None,
+            plasma_power: 1,
         }
     }
 
@@ -285,7 +306,7 @@ const PAGE_TURN_SOUNDS: [&str; 3] = [
 ];
 
 /// Granters: (type, style, `martial_name`).
-static GRANTERS: [(&str, Style, &str); 2] = [
+static GRANTERS: [(&str, Style, &str); 4] = [
     (
         "/obj/item/book/granter/martial/cqc",
         Style::Cqc,
@@ -296,11 +317,21 @@ static GRANTERS: [(&str, Style, &str); 2] = [
         Style::SleepingCarp,
         "основы Спящего карпа",
     ),
+    (
+        "/obj/item/book/granter/martial/plasma_fist/nobomb",
+        Style::NovicePlasmaFist,
+        "плазменный кулак",
+    ),
+    (
+        "/obj/item/book/granter/martial/plasma_fist",
+        Style::PlasmaFist,
+        "плазменный кулак",
+    ),
 ];
 
 /// Worn items that give a style (tg `martial_art_giver`), most specific first, with the slot
 /// their `slot_flags` allow.
-static GIVERS: [(&str, Style, InventorySlot); 6] = [
+static GIVERS: [(&str, Style, InventorySlot); 7] = [
     (
         "/obj/item/clothing/gloves/boxing/evil",
         Style::EvilBoxing,
@@ -331,6 +362,7 @@ static GIVERS: [(&str, Style, InventorySlot); 6] = [
         Style::Judo,
         InventorySlot::Belt,
     ),
+    (kaza_ruk::GLOVES, Style::KazaRuk, InventorySlot::Gloves),
 ];
 
 /// `/obj/item/clothing/gloves/gauntlets` (Lavaland) also gives hunter boxing.
@@ -365,7 +397,12 @@ impl Plugin for MartialPlugin {
         });
         app.add_systems(
             Update,
-            (sync_worn_styles, trigger_buttons)
+            (
+                sync_worn_styles,
+                trigger_buttons,
+                kaza_ruk::run_followups,
+                plasma_fist::end_apotheosis,
+            )
                 .chain()
                 .after(crate::click::ResolveClicks)
                 .before(StatusSystems)
@@ -452,6 +489,7 @@ fn activate(world: &mut World, mob: Entity, style: Style) {
             );
             judo::drop_batons(world, mob);
         }
+        Style::KazaRuk => kaza_ruk::greet(world, mob, true),
         // `grant_language(/datum/language/carptongue, ALL, type)`.
         Style::SleepingCarp => ss13_chat::language::edit_holder(world, mob, |h| {
             h.grant(
@@ -479,6 +517,7 @@ fn deactivate(world: &mut World, mob: Entity, style: Style) {
             Span::BoldWarning,
             "Вы забываете мастерство корпоративного дзюдо...",
         ),
+        Style::KazaRuk => kaza_ruk::greet(world, mob, false),
         Style::SleepingCarp => {
             if let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob) {
                 holder.remove(
@@ -705,6 +744,7 @@ pub fn complete_reading(
     if job.page < PAGES_TO_MASTERY {
         let remarks = match job.style {
             Style::Cqc => cqc::REMARKS,
+            Style::PlasmaFist | Style::NovicePlasmaFist => plasma_fist::REMARKS,
             _ => carp::REMARKS,
         };
         let remark = {
@@ -746,6 +786,12 @@ pub fn complete_reading(
                     Span::Warning,
                     format!("{} зловеще пищит...", capitalize(&name)),
                 );
+            }
+        }
+        Style::PlasmaFist | Style::NovicePlasmaFist => {
+            tell(world, client, Span::BoldWarning, plasma_fist::GREET);
+            if uses - 1 == 0 {
+                carp::blank_scroll(world, item);
             }
         }
         _ => {
@@ -869,7 +915,11 @@ pub(crate) fn check_block(
         Style::Boxing | Style::EvilBoxing | Style::HunterBoxing => {
             boxing::block(world, style, defender, attacker, kind, damage, attack_text)
         }
-        Style::Wrestling | Style::Judo => false,
+        Style::Wrestling
+        | Style::Judo
+        | Style::KazaRuk
+        | Style::PlasmaFist
+        | Style::NovicePlasmaFist => false,
     }
 }
 
@@ -921,6 +971,9 @@ fn harm_act(world: &mut World, style: Style, a: Entity, d: Entity) -> Outcome {
         Style::Boxing | Style::EvilBoxing | Style::HunterBoxing => boxing::harm(world, style, a, d),
         Style::Wrestling => wrestling::act(world, a, d),
         Style::Judo => judo::harm(world, a, d),
+        Style::KazaRuk => kaza_ruk::harm(world, a, d),
+        Style::PlasmaFist => plasma_fist::harm(world, a, d, false),
+        Style::NovicePlasmaFist => plasma_fist::harm(world, a, d, true),
     }
 }
 
@@ -933,6 +986,9 @@ fn disarm_act(world: &mut World, style: Style, a: Entity, d: Entity) -> Outcome 
         }
         Style::Wrestling => wrestling::act(world, a, d),
         Style::Judo => judo::disarm(world, a, d),
+        Style::KazaRuk => kaza_ruk::disarm(world, a, d),
+        Style::PlasmaFist => plasma_fist::disarm(world, a, d, false),
+        Style::NovicePlasmaFist => plasma_fist::disarm(world, a, d, true),
     }
 }
 
@@ -943,6 +999,9 @@ fn grab_act(world: &mut World, style: Style, a: Entity, d: Entity) -> Outcome {
         Style::Boxing | Style::EvilBoxing | Style::HunterBoxing => boxing::grab(world, style, a),
         Style::Wrestling => wrestling::grab(world, a, d),
         Style::Judo => judo::grab(world, a, d),
+        Style::KazaRuk => Outcome::Invalid,
+        Style::PlasmaFist => plasma_fist::grab(world, a, d, false),
+        Style::NovicePlasmaFist => plasma_fist::grab(world, a, d, true),
     }
 }
 
@@ -995,13 +1054,15 @@ fn refresh_buttons(world: &mut World, mob: Entity) {
         .get::<MartialArts>(mob)
         .map_or((None, 0), |m| (m.active(), m.0.len()));
     if let Some(style) = active {
-        buttons.push(button(
-            world,
-            HELP_BUTTON,
-            style.help_verb(),
-            "icons/hud/actions.dmi",
-            "martial",
-        ));
+        if !style.help().is_empty() {
+            buttons.push(button(
+                world,
+                HELP_BUTTON,
+                style.help_verb(),
+                "icons/hud/actions.dmi",
+                "martial",
+            ));
+        }
         if count >= 2 {
             buttons.push(button(
                 world,
@@ -1024,6 +1085,17 @@ fn refresh_buttons(world: &mut World, mob: Entity) {
                 "modular_bandastation/martial_arts/icons/actions.dmi",
                 "discombobulate",
             )),
+            Style::KazaRuk => {
+                for (id, name, state, _) in kaza_ruk::MOVES {
+                    buttons.push(button(
+                        world,
+                        id,
+                        name,
+                        "icons/mob/actions/actions_items.dmi",
+                        state,
+                    ));
+                }
+            }
             _ => {}
         }
     }
@@ -1057,6 +1129,7 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
             SWAP_BUTTON => cycle_style(world, actor),
             _ if style == Style::Wrestling => wrestling::trigger(world, actor, &id),
             judo::DISCOMBOBULATE_BUTTON if style == Style::Judo => judo::trigger(world, actor),
+            _ if style == Style::KazaRuk => kaza_ruk::trigger(world, actor, &id),
             _ => {}
         }
     }

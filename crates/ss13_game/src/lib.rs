@@ -217,6 +217,8 @@ pub mod blackbox;
 pub mod botany;
 pub mod bots;
 #[cfg(feature = "server")]
+pub mod bows;
+#[cfg(feature = "server")]
 pub mod breath;
 #[cfg(feature = "client")]
 pub mod breath_client;
@@ -382,6 +384,8 @@ pub mod grenades;
 pub mod grill;
 #[cfg(feature = "server")]
 pub mod gun_attachments;
+#[cfg(feature = "server")]
+pub mod gun_crank;
 #[cfg(feature = "server")]
 pub mod gun_modes;
 #[cfg(feature = "server")]
@@ -550,6 +554,8 @@ pub mod prediction;
 #[cfg(feature = "server")]
 pub mod projectile;
 #[cfg(feature = "server")]
+pub mod projectile_special;
+#[cfg(feature = "server")]
 pub mod pull;
 #[cfg(feature = "server")]
 pub mod pyrotechnics;
@@ -683,6 +689,8 @@ pub mod syndie_spraycan;
 pub mod t_scanner;
 #[cfg(feature = "server")]
 pub mod tables;
+#[cfg(feature = "server")]
+pub mod tackle;
 #[cfg(feature = "server")]
 pub mod talking_toys;
 #[cfg(feature = "server")]
