@@ -663,6 +663,7 @@ fn a_painting_is_framed_cut_out_and_the_palette_keeps_colours() {
     s.run_until("the canvas and frame are set up", |s| {
         s.try_get::<Canvas>(canvas).is_some() && s.try_get::<PaintingFrame>(frame).is_some()
     });
+    let empty_name = s.get::<ss13_mapload::DmName>(frame).name.clone();
     s.put_in_hand(crayon);
     s.click(0, canvas);
     s.run_until("the canvas is painted", |s| s.get::<Canvas>(canvas).used);
@@ -692,7 +693,7 @@ fn a_painting_is_framed_cut_out_and_the_palette_keeps_colours() {
         s.try_get::<TilePos>(canvas) == Some(&TilePos::new(7, 4, 1))
     });
     assert_eq!(s.get::<PaintingFrame>(frame).canvas, None);
-    assert_eq!(s.get::<ss13_mapload::DmName>(frame).name, "Painting");
+    assert_eq!(s.get::<ss13_mapload::DmName>(frame).name, empty_name);
 
     // The palette picks a colour in hand and saves it from its list.
     let palette = s.item(PALETTE);

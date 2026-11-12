@@ -285,6 +285,10 @@ pub fn apply_area(mood: &mut Mood, now: f64, area: Option<&DmArea>, beauty: f32)
                 .get(AREA_CATEGORY)
                 .is_some_and(|e| e.mood_change == a.mood_bonus && e.description == a.mood_message);
             if !same {
+                // Another area's moodlet has the same id: `add_instance` would only refresh it.
+                if mood.get(AREA_CATEGORY).is_some() {
+                    mood.clear_event(AREA_CATEGORY);
+                }
                 let mut event = ActiveMood::new(AREA_CATEGORY, &room("area", "", 0.0));
                 event.mood_change = a.mood_bonus;
                 event.description.clone_from(&a.mood_message);

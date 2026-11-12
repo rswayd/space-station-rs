@@ -321,7 +321,8 @@ fn tongues_and_the_speech_filter_change_speech() {
 
     // Common: the forked tongue hisses.
     s.send(0, ClientIntent::Say("сосиска".into()));
-    s.run_until("B hears the hiss", |s| s.heard(1, "Сссосссиссска"));
+    // A capital С hisses as ССС (tg `lizard_hiSS`).
+    s.run_until("B hears the hiss", |s| s.heard(1, "СССосссиссска"));
     // Draconic is native to it: no hiss.
     s.send(0, ClientIntent::Say(",o сосиска".into()));
     s.run_until("A hears itself", |s| s.heard(0, "Сосиска"));
