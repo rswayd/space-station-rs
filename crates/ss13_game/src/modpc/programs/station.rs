@@ -15,15 +15,12 @@
 //!   their program once (`PROGRAM_UNIQUE_COPY`); Physical Scanner (`tap`: a health scan of the
 //!   mob the PDA is used on) and Spectre-Meter (ghosts within 5 tiles, manual or 1 s automatic
 //!   scans).
-// shortcut: no circuit components; NT Pay history holds only its own transfers (the economy
-// keeps no transaction log); the radar has no overlay icon states or `setDir`; SiliConnect
+// shortcut: no circuit components; the radar has no overlay icon states or `setDir`; SiliConnect
 // shows no model, upgrades or integrity; BotKeeper only toggles power (no summon/patrol orders,
 // no per-bot window); Revelation has no obfuscation (filedesc is per kind), no 25 brute or
 // battery explosion (no computer integrity or cells) and no silicon purge; Spectre-Meter
 // counts only observers (no spirit mobs, hauntium), no geiger loop; disks are used directly
 // on the computer (no disk slot or file manager).
-
-use std::collections::HashMap;
 
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
@@ -89,10 +86,6 @@ pub struct StationApps {
     pub frontier: crate::science::scipaper::Frontier,
 }
 
-/// `transaction_history` of the accounts, by account id, newest last.
-#[derive(Resource, Default, Debug)]
-pub struct PayHistory(pub HashMap<u32, Vec<PayRecord>>);
-
 /// On a maintenance disk whose program was copied (`PROGRAM_UNIQUE_COPY`).
 #[derive(Component, Clone, Copy, Debug)]
 pub struct DiskEmpty;
@@ -115,7 +108,7 @@ pub fn build(app: &mut App) {
             .is_some_and(|h| phys_scan(w, c.client, c.mob, h, c.target))
     });
     app.init_resource::<StationRequests>();
-    app.init_resource::<PayHistory>().add_systems(
+    app.add_systems(
         Update,
         refresh
             .after(ss13_tgui::server::UiSystems::Handle)
@@ -407,11 +400,15 @@ fn pay_data(world: &World, pc: Entity, state: &StationApps) -> PayData {
     let Some(account) = world.get_resource::<Economy>().and_then(|e| e.account(id)) else {
         return PayData::default();
     };
-    let transactions = world
-        .get_resource::<PayHistory>()
-        .and_then(|h| h.0.get(&id))
-        .map(|h| h.iter().rev().cloned().collect())
-        .unwrap_or_default();
+    let transactions = account
+        .history
+        .iter()
+        .rev()
+        .map(|(adjusted_money, reason)| PayRecord {
+            adjusted_money: *adjusted_money,
+            reason: reason.clone(),
+        })
+        .collect();
     PayData {
         name: Some(account.holder.clone()),
         owner_token: pay_token(id, &account.holder),
@@ -962,26 +959,18 @@ fn pay(
         bank_card_talk(world, from, "You cannot afford it.");
         return Err("cannot afford");
     }
+    // `recipient.transfer_money(current_user, amount)` with its reasons.
     let mut economy = world.resource_mut::<Economy>();
     let withdrawn = economy
         .account_mut(from)
-        .is_some_and(|a| a.adjust_money(-amount));
+        .is_some_and(|a| a.adjust_money_for(-amount, &format!("Перевод: {recipient}")));
     if !withdrawn {
         return Err("cannot afford");
     }
     if let Some(a) = economy.account_mut(to) {
-        a.adjust_money(amount);
+        a.adjust_money_for(amount, &format!("Перевод: От {}", sender.holder));
     }
     let balance = economy.account(from).map_or(0, |a| a.balance);
-    let mut history = world.resource_mut::<PayHistory>();
-    history.0.entry(to).or_default().push(PayRecord {
-        adjusted_money: amount,
-        reason: format!("Transfer from {}", sender.holder),
-    });
-    history.0.entry(from).or_default().push(PayRecord {
-        adjusted_money: -amount,
-        reason: format!("Transfer to {recipient}"),
-    });
     let money = crate::cargo::MONEY_SYMBOL;
     bank_card_talk(
         world,
@@ -1334,28 +1323,20 @@ fn pay_applicant(
     else {
         return Err("no such applicant");
     };
+    const REASON: &str = "Bounties: Request Completed";
     let mut economy = world.resource_mut::<Economy>();
     let paid = r.owner_account == account
         && economy.account(applicant).is_some()
         && economy
             .account_mut(account)
-            .is_some_and(|a| a.adjust_money(-r.value));
+            .is_some_and(|a| a.adjust_money_for(-r.value, REASON));
     if !paid {
         sound(world, pc, BUZZ, 30.0);
         return Err("cannot pay");
     }
     if let Some(a) = economy.account_mut(applicant) {
-        a.adjust_money(r.value);
+        a.adjust_money_for(r.value, REASON);
     }
-    let mut history = world.resource_mut::<PayHistory>();
-    history.0.entry(applicant).or_default().push(PayRecord {
-        adjusted_money: r.value,
-        reason: "Bounties: Request Completed".to_owned(),
-    });
-    history.0.entry(account).or_default().push(PayRecord {
-        adjusted_money: -r.value,
-        reason: "Bounties: Request Completed".to_owned(),
-    });
     world
         .resource_mut::<StationRequests>()
         .0
@@ -1540,7 +1521,6 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(Time::<()>::default());
         world.insert_resource(Economy::new(1));
-        world.init_resource::<PayHistory>();
         let mut computer = ModularComputer::pda("/obj/item/modular_computer/pda/crew", "PDA");
         computer.enabled = true;
         computer.programs.push(ProgramKind::Station(program));
@@ -1582,6 +1562,9 @@ mod tests {
         let data = pay_data(&world, pc, &StationApps::default());
         assert_eq!(data.name.as_deref(), Some("Alice Smith"));
         assert_eq!(data.transactions[0].adjusted_money, -40);
+        assert_eq!(data.transactions[0].reason, "Перевод: Bob Jones");
+        let received = &world.resource::<Economy>().account(to).unwrap().history;
+        assert_eq!(received, &vec![(40, "Перевод: От Alice Smith".to_owned())]);
     }
 
     #[test]

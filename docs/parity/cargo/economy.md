@@ -72,7 +72,7 @@ ID привязана к счёту: наличные, голочипы и мо�
 Программа ПДА для переводов по платёжному токену и просмотра истории операций счёта.
 
 - **Код:** [`/datum/computer_file/program/nt_pay`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/file_system/programs/nt_pay.dm#L8), [`make_payment()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/file_system/programs/nt_pay.dm#L58); tgui: [`NtosPay.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/NtosPay.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `ss13_game::modpc::programs::station` (окно NT Pay): счёт ID в ПДА, платёжный токен, перевод по токену (самому себе, неверный токен, нехватка денег — отказ с сообщениями tg; сообщения карт получателю и отправителю), поиск токена по имени владельца; история операций счёта `transaction_history` (`ss13_game::cargo::economy::BankAccount::history`, последние 20: переводы «Перевод: …», зарплаты, оплата запросов доски заданий); токен — `<первая><последняя буква>-<id счёта>` вместо случайного (уникальность); нет схемного компонента (../science/ wiremod), проверки виртуальной зоны битрана и записей истории о покупках в вендорах/консолях
 
 ### RETA — временный экстренный доступ
 При экстренном вызове отдела с консоли запросов ID-картам сотрудников вызванного отдела на 5 минут выдаётся доступ отдела-источника (медицина, СБ, инженерия, наука, сервис, карго, шахта); перезарядка 15 с между вызовами, индикация на шлюзах.
