@@ -41,6 +41,7 @@ pub mod pets;
 pub mod ranged;
 pub mod space_fauna;
 pub mod spawn;
+pub mod swarming;
 pub mod trader;
 pub mod troopers;
 pub mod wisdoms;
@@ -54,7 +55,7 @@ use ss13_mapload::mobs::{MOBS_FILE, MobDef, MobSpeech, MobsData};
 use ss13_mapload::{DmMob, DmName, IconIndex, MapLoadPlugin};
 use ss13_net::chat::server::SendChat;
 use ss13_shared::{Appearance, TilePos};
-use ss13_world::{Density, Mover};
+use ss13_world::{Density, Mover, PassFlags, PassFlagsSelf};
 
 use crate::breath::SSMOBS_WAIT_SECS;
 use crate::combat::{CombatRng, NextMove};
@@ -70,6 +71,8 @@ const BODYTEMP_COOLING_MAX: f64 = -30.0;
 const BODYTEMP_HEATING_MAX: f64 = 30.0;
 /// `PLUOXIUM_PROPORTION`.
 const PLUOXIUM_PROPORTION: f64 = 8.0;
+/// `PASSMOB`: what passes a mob, and a mover that passes mobs.
+pub const PASSMOB: u32 = 1 << 4;
 const MOUSE_ROOT: &str = "/mob/living/basic/mouse";
 const DEAD_MOUSE: &str = "/obj/item/food/deadmouse";
 
@@ -175,6 +178,7 @@ impl Plugin for MobsServerPlugin {
         megafauna::build(app);
         space_fauna::build(app);
         bees::build(app);
+        swarming::build(app);
     }
 }
 
@@ -315,6 +319,11 @@ fn attach(world: &mut World, entity: Entity) {
     if ss13_mapload::fidelity::is_under(&path, "/mob/living/basic/carp") {
         e.remove::<Density>();
     }
+    // `/mob` `pass_flags_self = PASSMOB`; the type's own `pass_flags`.
+    e.insert(PassFlagsSelf(PASSMOB));
+    if def.pass_flags != 0 {
+        e.insert(PassFlags(def.pass_flags));
+    }
     if let (Some([r, g, b]), Some(mut appearance)) = (tint, world.get_mut::<Appearance>(entity)) {
         appearance.color = Some([r, g, b, 255]);
     }
@@ -332,6 +341,7 @@ fn attach(world: &mut World, entity: Entity) {
     space_fauna::attach(world, entity, &def);
     gorilla::attach(world, entity, &def);
     bees::attach(world, entity, &def);
+    swarming::attach(world, entity, &def);
     crate::antag::xeno::attach(world, entity, &def);
     set_look(world, entity, false);
 }
@@ -608,14 +618,38 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     }
 }
 
+/// BandaStation hamsters (`modular_bandastation/mobs`): mice of their own.
+pub const HAMSTER: &str = "/mob/living/basic/mouse/hamster";
+/// The hamster pup: grows no further (its growth is commented out), squashed underfoot.
+pub const HAMSTER_PUP: &str = "/mob/living/basic/mouse/hamster/baby";
+
+/// A hamster pup (`/mob/living/basic/mouse/hamster/baby`).
+pub fn is_hamster_pup(world: &World, mob: Entity) -> bool {
+    world
+        .get::<BasicMob>(mob)
+        .is_some_and(|b| ss13_mapload::fidelity::is_under(&b.def.path, HAMSTER_PUP))
+}
+
 /// `/mob/living/basic/examine`: the description, and that it is dead.
 pub fn examine_lines(world: &World, mob: Entity, lines: &mut Vec<crate::examine::Line>) {
     use ss13_shared::chat::Span;
-    if let Some(desc) = world
+    if let Some(mut desc) = world
         .get::<DmName>(mob)
         .map(|n| n.desc.clone())
         .filter(|d| !d.is_empty())
     {
+        // BandaStation hamster `update_desc`: its sex after the description (tg's `MALE ?`
+        // always took the first branch; the hamster's own gender is meant).
+        if world
+            .get::<BasicMob>(mob)
+            .is_some_and(|b| ss13_mapload::fidelity::is_under(&b.def.path, HAMSTER))
+        {
+            desc.push_str(if pets::gender_of(world, mob) == pets::Gender::Female {
+                " Самочка! Ох... Нет... "
+            } else {
+                " Самец!"
+            });
+        }
         lines.push((Span::Italics, desc));
     }
     crate::bots::examine_lines(world, mob, lines);

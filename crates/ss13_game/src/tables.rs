@@ -535,6 +535,8 @@ fn toggle_flip(world: &mut World, mob: Entity, table: Entity) {
                 }
             }
             entity.get_mut::<TableState>().expect("checked").flipped = Some((dir, smooth));
+            // `pass_flags_self &= ~PASSTABLE`.
+            set_passtable(&mut entity, false);
         }
         Some((_, smooth)) => {
             sound(world, pos, sounds::UNFLIP, 100.0);
@@ -550,10 +552,26 @@ fn toggle_flip(world: &mut World, mob: Entity, table: Entity) {
                 look.layer = Layer(layer);
             }
             entity.get_mut::<TableState>().expect("checked").flipped = None;
+            set_passtable(&mut entity, true);
         }
     }
     tile_changed(world, pos);
     reelevate(world, pos);
+}
+
+/// A table's `PASSTABLE` bit of `pass_flags_self` (movers with `PASSTABLE` cross it standing).
+fn set_passtable(table: &mut EntityWorldMut, on: bool) {
+    let flags = table.get::<ss13_world::PassFlagsSelf>().map_or(0, |f| f.0);
+    let flags = if on {
+        flags | crate::projectile::PASSTABLE
+    } else {
+        flags & !crate::projectile::PASSTABLE
+    };
+    if flags == 0 {
+        table.remove::<ss13_world::PassFlagsSelf>();
+    } else {
+        table.insert(ss13_world::PassFlagsSelf(flags));
+    }
 }
 
 /// tg `is_able_to_throw`: not anchored, an obj or a mob.

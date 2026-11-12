@@ -233,6 +233,9 @@ pub struct MobDef {
     /// `move_resist` when not `MOVE_RESIST_DEFAULT` (1000).
     #[serde(default)]
     pub move_resist: Option<f32>,
+    /// `pass_flags` (`PASSTABLE`, `PASSMOB`, ...): what it walks through.
+    #[serde(default)]
+    pub pass_flags: u32,
 }
 
 /// What a mob says at random: a `/datum/bt_node/ai_behavior/random_speech` type's vars, or a
@@ -662,6 +665,7 @@ fn mob_def(
         unpushable: num("status_flags", CANPUSH as f32) as u32 & CANPUSH == 0,
         move_resist: Some(num("move_resist", MOVE_RESIST_DEFAULT))
             .filter(|&r| r != MOVE_RESIST_DEFAULT),
+        pass_flags: num("pass_flags", 0.0) as u32,
     }
 }
 
