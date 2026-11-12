@@ -220,23 +220,24 @@ pub fn buckled_to(world: &mut World, furniture: Entity) -> Option<Entity> {
 // Cost: per tick, the buckled mobs (a handful) against the moves of the tick.
 pub(super) fn carry_buckled(
     mut moved: MessageReader<ss13_world::Moved>,
-    mut mobs: Query<
-        (&Buckled, &mut TilePos),
+    mobs: Query<
+        (Entity, &Buckled, &TilePos),
         (
             Without<crate::vehicles::Rider>,
             Without<crate::pull::carry::Carried>,
         ),
     >,
+    mut commands: Commands,
 ) {
     let moved: Vec<(Entity, TilePos)> = moved.read().map(|m| (m.entity, m.to)).collect();
     if moved.is_empty() {
         return;
     }
-    for (Buckled(to), mut pos) in &mut mobs {
+    for (mob, Buckled(to), pos) in &mobs {
         if let Some(&(_, dest)) = moved.iter().rev().find(|(e, _)| e == to)
             && *pos != dest
         {
-            *pos = dest;
+            commands.entity(mob).insert(dest);
         }
     }
 }
