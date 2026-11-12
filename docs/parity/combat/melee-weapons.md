@@ -5,7 +5,7 @@
 Кухонный, мясницкий, охотничий, боевой, выживальщика, заточки (шив), ритуальный, кровопускатель; острые: режут еду, разделывают, вызывают кровотечение, встраиваются при броске.
 
 - **Код:** [`/obj/item/knife`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/melee/knives.dm#L8), [`/obj/item/knife/combat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/melee/knives.dm#L184), [`/obj/item/knife/shiv`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/melee/knives.dm#L273), [`/obj/item/knife/butcher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/melee/knives.dm#L146)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/combat.rs`: удар по `force`; нет остроты (ран, кровотечения), встраивания, разделки; нарезка еды — `crates/ss13_game/src/food.rs`
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/combat.rs`: удар по `force` с остротой (раны и кровотечение — `medical/wounds`, `DmWounding`), застревание при броске (`embedding.rs`), нарезка еды — `crates/ss13_game/src/food.rs`, заточка — `weapons/sharpener.rs`; нет разделки туш (`/datum/component/butchering`), кровопускателя и ритуального ножа со своими механиками
 
 ### Мечи и сабли
 Клеймор (и гладиус, абордажная сабля), катана, сабля капитана (парирование, ножны), высокочастотный клинок, его варианты; в форке — виброклинок, катана ТСФ «Дыхание Ночи», рапиры и катаны ЦК, легендарные сабли ЦК с зачарованиями.

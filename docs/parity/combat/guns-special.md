@@ -35,4 +35,4 @@
 Пневмопушка стреляет любыми предметами сжатым газом (пироги у клоуна); огнемёт поджигает линию тайлов из плазменного баллона; метательные звёзды встраиваются в тело.
 
 - **Код:** [`/obj/item/pneumatic_cannon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/ranged/pneumatic_cannon.dm#L14), [`/obj/item/flamethrower`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/ranged/flamethrower.dm#L1), [`/obj/item/throwing_star`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/weaponry/ranged/throwing_star.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — метательные звёзды застревают при броске (`crates/ss13_game/src/embedding.rs`, данные `/datum/embedding/throwing_star`); нет пневмопушки, огнемёта, энергосюрикенов ниндзя (эффект стамины)

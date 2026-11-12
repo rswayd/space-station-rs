@@ -178,6 +178,7 @@
 //! | 1495 | `clothing::secgear::tool_act` (a screwdriver or wirecutters on a security mask's restrictor) |
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
 //! | 1489 | `service::burden` refuses manual reloads of the chaplain's revolver |
+//! | 1487 | `gun_pins` (a firing pin into a gun, the DNA pin keyed on a carbon; in the other hand also the tools that take a pin out) |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |

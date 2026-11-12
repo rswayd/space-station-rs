@@ -12,7 +12,7 @@
 Разброс (`spread`) растёт при стрельбе с двух рук и без обеих рук на двуручном оружии; отдача трясёт камеру; оружие в обеих руках стреляет по очереди (akimbo).
 
 - **Код:** [`proc/process_fire()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L565), [`proc/fire_sounds()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/gun.dm#L242)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/guns.rs`: `spread` оружия, `variance`/`randomspread` гильзы, разброс очереди (умный и случайный), стрельба с двух рук (лёгкие стволы во второй руке стреляют через децисекунду, `dual_wield_spread` с `AKIMBO_PENALTY_SCALING`); отдача `recoil`/`min_recoil` толкает камеру (`crates/ss13_game/src/recoil.rs`, `recoil_camera`); нет звуков выстрела (в проекте нет звука), настройки `min_recoil_multiplier`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/guns.rs`: `spread` оружия (у обреза болтовки 36, Jezail 50), `variance`/`randomspread` гильзы, разброс очереди (умный и случайный), стрельба с двух рук (лёгкие стволы во второй руке стреляют через децисекунду, `dual_wield_spread` с `AKIMBO_PENALTY_SCALING`), звуки выстрела (`fire_sounds`, глушитель); отдача `recoil`/`min_recoil` толкает камеру (`crates/ss13_game/src/recoil.rs`). Настройка `min_recoil_multiplier` — в настройках игрока (ui)
 
 ### Очереди и автоматический огонь
 `burst_size` даёт очередь из нескольких выстрелов; компонент `automatic_fire` — стрельба при зажатой кнопке; переключение режимов огня.

@@ -438,12 +438,22 @@ fn ready_round(dm: &DmGun, gun: &Gun) -> Option<CasingData> {
 }
 
 /// tg `handle_pins` -> `pin_auth`.
-fn pin_auth(world: &World, dm: &DmGun, gun: &Gun, user: Entity) -> Result<(), String> {
+fn pin_auth(
+    world: &World,
+    entity: Entity,
+    dm: &DmGun,
+    gun: &Gun,
+    user: Entity,
+) -> Result<(), String> {
     if dm.pinless {
         return Ok(());
     }
     if gun.pin.is_empty() {
         return Err("спуск не работает, нужен ударник!".to_owned());
+    }
+    // The pins with their own checks, and any emagged pin (`crate::gun_pins`).
+    if let Some(check) = crate::gun_pins::special_auth(world, entity, &gun.pin, user) {
+        return check;
     }
     // Laser tag pins: the wearer's vest team (`crate::clothing::lasertag`).
     if let Some(check) = crate::clothing::lasertag::pin_check(world, &gun.pin, user) {
@@ -461,8 +471,8 @@ fn pin_auth(world: &World, dm: &DmGun, gun: &Gun, user: Entity) -> Result<(), St
                 .iter()
                 .any(|i| i.kind == crate::implants::ImplantKind::WeaponsAuth)
     } else {
-        // shortcut: other special pins (test range, DNA, clown, explorer, paywall) answer with
-        // their `default_pin_auth` (a standard pin: anyone).
+        // shortcut: the paywall pin answers with its `default_pin_auth` (a standard pin:
+        // anyone).
         dm.pin_default_auth
     };
     if ok {
@@ -803,7 +813,15 @@ fn try_fire(
     if crate::genetics::effects::chunky_fingers(world, mob) {
         return true;
     }
-    if let Err(fail) = pin_auth(world, &dm, &gun, mob) {
+    let auth = pin_auth(world, gun_entity, &dm, &gun, mob);
+    // The pin's honk or screech, a DNA pin keying itself, a self-destructing one.
+    if !dm.pinless
+        && !gun.pin.is_empty()
+        && crate::gun_pins::after_auth(world, client, mob, gun_entity, auth.is_ok())
+    {
+        return true;
+    }
+    if let Err(fail) = auth {
         if gun.pin.is_empty() {
             let name = name_of(world, gun_entity);
             tell(
@@ -882,7 +900,14 @@ fn try_fire(
                     .get::<DmGun>(g)
                     .is_some_and(|d| d.weapon_weight < WEAPON_MEDIUM)
                     && world.get::<Gun>(g).is_some_and(|state| {
-                        pin_auth(world, world.get::<DmGun>(g).expect("checked"), state, mob).is_ok()
+                        pin_auth(
+                            world,
+                            g,
+                            world.get::<DmGun>(g).expect("checked"),
+                            state,
+                            mob,
+                        )
+                        .is_ok()
                     })
             })
             .collect();
@@ -931,7 +956,12 @@ pub struct BotchZone(pub crate::zone::BodyZone);
 /// the gun. True when botched.
 fn check_botched(world: &mut World, client: Entity, mob: Entity, gun: Entity, dm: &DmGun) -> bool {
     use crate::zone::BodyZone;
+    let pin = world
+        .get::<Gun>(gun)
+        .map(|g| g.pin.clone())
+        .unwrap_or_default();
     if NO_CLUMSY_CHECK.iter().any(|p| is_under(&dm.path, p))
+        || crate::gun_pins::no_clumsy_check(&pin)
         || !crate::genetics::is_clumsy(world, mob)
         || !world.resource_mut::<CombatRng>().chance(40.0)
     {
@@ -1572,7 +1602,7 @@ fn run_bursts(world: &mut World) {
                 .get::<DmGun>(b.gun)
                 .zip(world.get::<Gun>(b.gun))
                 .is_some_and(|(dm, gun)| {
-                    pin_auth(world, dm, gun, b.mob).is_ok() && ready_round(dm, gun).is_some()
+                    pin_auth(world, b.gun, dm, gun, b.mob).is_ok() && ready_round(dm, gun).is_some()
                 });
             if ready {
                 process_fire(world, b.mob, b.gun, aim, bonus);

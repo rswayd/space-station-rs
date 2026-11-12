@@ -819,6 +819,28 @@ fn hit_living(world: &mut World, item: Entity, thrown: &Thrown, mob: Entity) {
     {
         return;
     }
+    // `/obj/item/throw_impact`: the hit sounds by `get_volume_by_throwforce_and_or_w_class`,
+    // the item's `hitsound` when it hurts, else a tap.
+    let w_class = f32::from(
+        world
+            .get::<ss13_mapload::contents::DmWeight>(item)
+            .copied()
+            .unwrap_or_default()
+            .w_class,
+    );
+    let volume = if dm.throwforce > 0.0 && w_class > 0.0 {
+        ((dm.throwforce + w_class) * 5.0).clamp(30.0, 100.0)
+    } else {
+        (w_class * 8.0).clamp(20.0, 100.0)
+    };
+    if w_class > 0.0 {
+        let file = if dm.throwforce > 0.0 && !dm.hitsound.is_empty() {
+            dm.hitsound.as_str()
+        } else {
+            "sound/items/weapons/throwtap.ogg"
+        };
+        crate::sound::playsound(world, crate::sound::PlaySound::new(at, file, volume, true));
+    }
     let chat = visible_message(
         world,
         at,
@@ -841,7 +863,26 @@ fn hit_living(world: &mut World, item: Entity, thrown: &Thrown, mob: Entity) {
         let multiplier = world
             .get::<crate::medical::wounds::Limbs>(mob)
             .map_or(1.0, |l| l.limb(zone).damage_multiplier());
-        let damage = dm.throwforce * multiplier;
+        // tg `hitby` -> `run_armor_check(zone, MELEE, armour_penetration, weak_against_armour)`.
+        // shortcut: only items with an `embed_type` carry their `armour_penetration`
+        // (`DmEmbed`); the rest hit as if they had none, until `DmItem` has the var.
+        let (penetration, weak) = world
+            .get::<ss13_mapload::DmEmbed>(item)
+            .map_or((0.0, false), |e| {
+                (e.armour_penetration, e.weak_against_armour)
+            });
+        let part = zone.ru().1;
+        let (armor, line) = crate::armor::run_armor_check(
+            crate::armor::getarmor(world, mob, zone, "melee"),
+            penetration,
+            weak,
+            Some(format!("Ваша броня защищает вашу {part}.")),
+            Some(format!("Ваша броня смягчает удар в вашу {part}.")),
+        );
+        if let Some((span, text)) = line {
+            crate::tools::tell_mob(world, mob, span, text);
+        }
+        let damage = crate::armor::blocked_damage(dm.throwforce, armor) * multiplier;
         apply_damage_zone(&mut health, &mut new_stat, zone, kind, damage);
         world.entity_mut(mob).insert(health);
         if new_stat != stat {

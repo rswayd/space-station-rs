@@ -258,6 +258,9 @@ pub fn can_emag(world: &mut World, mob: Entity, card: Entity, target: Entity) ->
 /// tg `target.emag_act(user, card)` of the ported families. True when it took.
 pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -> bool {
     let (client, mob) = (actor.client, actor.mob);
+    if crate::gun_pins::emag_act(world, client, target) {
+        return true;
+    }
     if world.get::<crate::recycling::Recycler>(target).is_some() {
         return crate::recycling::recycler::emag(world, client, target);
     }
