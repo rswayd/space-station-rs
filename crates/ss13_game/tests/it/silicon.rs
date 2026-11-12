@@ -1424,8 +1424,30 @@ fn ai_hud_alerts_and_announcement() {
             "announcement",
             "call_shuttle",
             "core_display",
+            "sensors",
             "deploy_shell"
         ]
+    );
+    // `toggle_sensors`: off, then on again.
+    s.act::<ActionButtonsUi>("trigger", &[("id", "sensors")]);
+    s.run_until("sensors off", |s| {
+        s.heard(0, None, "Сенсорный оверлей отключён.")
+    });
+    assert!(
+        s.server
+            .world()
+            .get::<ss13_game::records::hud::SensorsOff>(core)
+            .is_some()
+    );
+    s.act::<ActionButtonsUi>("trigger", &[("id", "sensors")]);
+    s.run_until("sensors on", |s| {
+        s.heard(0, None, "Сенсорный оверлей активирован.")
+    });
+    assert!(
+        s.server
+            .world()
+            .get::<ss13_game::records::hud::SensorsOff>(core)
+            .is_none()
     );
     s.act::<ActionButtonsUi>("trigger", &[("id", "alerts")]);
     s.run_until("the alerts window opens", |s| {

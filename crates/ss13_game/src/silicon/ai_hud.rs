@@ -14,11 +14,13 @@
 //! - Call Emergency Shuttle (`ai_call_shuttle`): a reason prompt, then `SSshuttle.requestEvac`.
 //! - Change core display (the `ai_core_display_picker` verb): tg's display names; the core
 //!   shows `ai-<name>` (dead: `<state>_dead`, else `ai_dead`).
+//! - Sensor Augmentation (`toggle_sensors`; a cyborg's alert panel has it as Toggle Sensors):
+//!   the silicon's data HUDs (`crate::records::hud`) on or off.
 //!
 //! The buttons do nothing while the AI is incapacitated (dead or depowered); the AI core
 //! button works anyway, as tg's does not call the parent click.
 // shortcut: no camera tracking, camera light, crew monitor, manifest, laws stating,
-// photos, sensors, multicam or z-level buttons; the display picker is a list without previews;
+// photos, multicam or z-level buttons; the display picker is a list without previews;
 // no `Announcement Help` word list and no BandaStation VOX voices (HL, BMS and military: Valve
 // and Crowbar Collective assets, not freely licensed), no per-player VOX volume.
 
@@ -62,6 +64,8 @@ const ALERTS: &str = "alerts";
 const ANNOUNCEMENT: &str = "announcement";
 const CALL_SHUTTLE: &str = "call_shuttle";
 const CORE_DISPLAY: &str = "core_display";
+/// `/atom/movable/screen/ai/sensors`; RoboTact's `toggleSensors` for cyborgs.
+const SENSORS: &str = "sensors";
 /// `/atom/movable/screen/ai/modpc`, `/atom/movable/screen/robot/modpc` (`crate::modpc::silicon`).
 const MODPC: &str = "modpc";
 const SCREEN_CYBORG: &str = "icons/hud/screen_cyborg.dmi";
@@ -199,6 +203,7 @@ pub(crate) fn give_ai_buttons(world: &mut World, eye: Entity) {
             "call_shuttle",
         ),
         button(world, CORE_DISPLAY, "Change Core Display", AI_DMI, "ai"),
+        button(world, SENSORS, "Sensor Augmentation", SCREEN_AI, "ai_sensor"),
     ];
     world.entity_mut(eye).insert(LastAnnouncement::default());
     set_buttons(world, eye, buttons);
@@ -209,6 +214,8 @@ pub(crate) fn give_borg_buttons(world: &mut World, borg: Entity) {
     let buttons = vec![
         button(world, MODPC, "Modular Interface", SCREEN_CYBORG, "template"),
         button(world, ALERTS, "Alert Panel", SCREEN_AI, "alerts"),
+        // shortcut: a button until RoboTact (`robotact`, its `toggleSensors`) is ported.
+        button(world, SENSORS, "Toggle Sensors", SCREEN_AI, "ai_sensor"),
     ];
     set_buttons(world, borg, buttons);
 }
@@ -231,6 +238,8 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
                 super::alarms::open(world, client, actor, actor);
             } else if id == MODPC {
                 crate::modpc::silicon::interact(world, client, actor);
+            } else if id == SENSORS {
+                toggle_sensors(world, client, actor);
             }
             continue;
         }
@@ -274,6 +283,7 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
                 crate::modpc::silicon::interact(world, client, actor);
             }
             ANNOUNCEMENT => ask_announcement(world, client, actor),
+            SENSORS => toggle_sensors(world, client, core),
             CALL_SHUTTLE => ask_shuttle(world, client, actor, core),
             CORE_DISPLAY => {
                 let prompt = ss13_tgui::prompt::ask_world(
@@ -296,6 +306,27 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
             _ => {}
         }
     }
+}
+
+/// tg `toggle_sensors` of an AI core or a cyborg: its sensor HUDs on or off
+/// (`crate::records::hud::SensorsOff`); nothing while incapacitated.
+pub fn toggle_sensors(world: &mut World, client: Entity, silicon: Entity) {
+    use crate::records::hud::SensorsOff;
+    let incapacitated = world.get::<Stat>(silicon) != Some(&Stat::Conscious)
+        || world
+            .get::<crate::status_effects::StatusEffects>(silicon)
+            .is_some_and(|s| s.incapacitated());
+    if incapacitated {
+        return;
+    }
+    let text = if world.get::<SensorsOff>(silicon).is_some() {
+        world.entity_mut(silicon).remove::<SensorsOff>();
+        "Сенсорный оверлей активирован."
+    } else {
+        world.entity_mut(silicon).insert(SensorsOff);
+        "Сенсорный оверлей отключён."
+    };
+    notice(world, client, Span::Notice, text);
 }
 
 /// tg `DisplayTimeText` for whole seconds.

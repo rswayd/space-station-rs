@@ -18,7 +18,7 @@
 Переключение медицинского/охранного/диагностического HUD.
 
 - **Код:** [`proc/toggle_sensors()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/silicon.dm#L291)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/records/hud.rs` (`SensorsOff`, `ai_sensors`, `basic_health_visible`): сенсоры включены с рождения; у киборга полные медицинский и охранный HUD (и осмотр с записями), у ИИ через глаз — меньшие: только значок должности и здоровье лишь у людей с датчиками костюма в режиме слежения (`TRAIT_BASIC_HEALTH_HUD_VISIBLE`); переключение `toggle_sensors` — кнопка «Sensor Augmentation» ИИ и «Toggle Sensors» в панели киборга вместо RoboTact (`crates/ss13_game/src/silicon/ai_hud.rs`), не работает без сознания. Диагностический HUD и путь ботов — нет самих HUD (items/clothing-gear.md «HUD-очки»); у пИИ HUD покупаются (pai.md)
 
 ### Урон, EMP и флеш у синтетиков
 Синтетики не получают токсинов и удушья; EMP наносит урон и оглушает, флеш ослепляет киборгов, электрошок.
