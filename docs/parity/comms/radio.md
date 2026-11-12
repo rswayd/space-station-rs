@@ -56,4 +56,4 @@ EMP временно выключает радио; глушилка радио�
 Ошейник-шокер на спину, срабатывает по сигналу сигнализатора на своей частоте.
 
 - **Код:** [`/obj/item/electropack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/electropack.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/electric_chair.rs` (`Electropack`, `electropack_signal` из `post_signal`): частота 144.9, код 2, включён; надетый или в руке — шаг в случайную сторону, искры, паралич 10 с, откат 10 с; в электрошоковом наборе — импульс набора. Нет: окна `Electropack` (питание, частота, код), «нужна помощь, чтобы снять» со спины, суицида

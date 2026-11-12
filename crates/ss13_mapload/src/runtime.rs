@@ -922,6 +922,13 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/foamedmetal",
     "/obj/structure/foamedmetal/iron",
     "/obj/structure/foamedmetal/resin",
+    // Electric chairs and shock kits (`ss13_game::electric_chair`).
+    "/obj/structure/chair",
+    "/obj/item/assembly/shock_kit",
+    "/obj/item/clothing/head/helmet",
+    "/obj/item/electropack",
+    // `rust_turf` of a rusty reinforced wall (`ss13_game::wall_damage`).
+    "/turf/closed/wall/rust",
     "/obj/effect/decal/cleanable/plasma",
     LOOT_TABLE_MAKER,
     UNIVERSAL_SCANNER,

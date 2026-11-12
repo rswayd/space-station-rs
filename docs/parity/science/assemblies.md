@@ -20,7 +20,7 @@
 Радиосигналер: частота и код, отправка сигнала всем сигналерам с теми же настройками (импульс), приём; варианты для киборга, внутренний, малого радиуса.
 
 - **Код:** [`/obj/item/assembly/signaler`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/signaler.dm#L1), [`signal()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/signaler.dm#L151), [`receive_signal()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/signaler.dm#L164); tgui: [`Signaler.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Signaler.tsx)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/assemblies/server.rs` (`signal`, `receive_signal`, `signaler_acts`), окно `Signaler` (`crates/ss13_game/src/assemblies/client.rs`): частота (свободный диапазон, `sanitize_frequency`) и код (1–100) кнопками-шагами, сброс, отправка с откатом 1 с; сигнал — всем другим сигналерам на частоте (range 0: везде, малого радиуса: 9 клеток на уровне), совпавший код — импульс и писк (слышно в 1 клетке); два закреплённых сигналера синхронизируются; киборговый и внутренний не трогаются инструментами. Нет: суицида, логов сигналов (`investigate_log`), сигнала правым кликом в руке, сигнала при вскрытии предательской почты, электропаков и прочих приёмников
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/assemblies/server.rs` (`signal`, `receive_signal`, `signaler_acts`), окно `Signaler` (`crates/ss13_game/src/assemblies/client.rs`): частота (свободный диапазон, `sanitize_frequency`) и код (1–100) кнопками-шагами, сброс, отправка с откатом 1 с; сигнал — всем другим сигналерам на частоте (range 0: везде, малого радиуса: 9 клеток на уровне), совпавший код — импульс и писк (слышно в 1 клетке); два закреплённых сигналера синхронизируются; киборговый и внутренний не трогаются инструментами. Нет: суицида, логов сигналов (`investigate_log`), сигнала правым кликом в руке, сигнала при вскрытии предательской почты, прочих приёмников (электропак — `comms/radio.md`)
 
 ### Таймер
 Отсчитывает заданное время и даёт импульс; режим повтора.
@@ -68,7 +68,7 @@
 Сборка на электрический стул: импульс бьёт током сидящего.
 
 - **Код:** [`/obj/item/assembly/shock_kit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/assembly/shock_kit.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/electric_chair.rs` (`ShockKit`): шлем на электропак (с пола или во второй руке) собирает «электрошлем» с обеими частями в руки, картовый набор создаёт свои части, гаечный ключ разбирает; набор на стуле — см. «Электрический стул» (`engineering/structures-furniture.md`); сигнал на частоте электропака набора переключает цепь стула. Окна набора (`attack_self` открывает окно электропака) нет — оно у электропака (`comms/radio.md`)
 
 ### Контроллеры кнопок (door control)
 Сборки внутри настенных кнопок: открыть шлюзы/бласт-двери/шторы по id, управлять болтами/аварийным доступом, запустить масс-драйвер.

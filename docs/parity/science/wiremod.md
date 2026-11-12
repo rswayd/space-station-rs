@@ -49,7 +49,7 @@
 Чтение доступа и информации с ID, проверка доступа (с отдельным окном настройки).
 
 - **Код:** [`id/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/wiremod/components/id); tgui: [`CircuitAccessChecker.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/CircuitAccessChecker.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wiremod/circuit.rs` (`Kind::IdGetter`, `IdAccessReader`, `IdInfoReader`, `AccessChecker`), мир — `crates/ss13_game/src/wiremod/server.rs` (`id_of`, `id_info`): «Get ID» (моб в 1 клетке: руки, затем слот ID и пояс, или наоборот), «Read ID Access» (список доступа карты в 1 клетке), «Read ID Info» (имя, должность, возраст), «Access Checker» (все или любой из требуемых; пустой список требований — истина; провод на `Required Access` учитывается, в отличие от tg). Нет окна `CircuitAccessChecker` (требуемый доступ задаётся только портом)
 
 ### Сетевые компоненты (NTNet, wirenet)
 Передача данных между схемами по NTNet (зашифрованные ключом) и по проводной сети.

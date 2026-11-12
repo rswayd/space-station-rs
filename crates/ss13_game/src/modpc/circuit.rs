@@ -181,6 +181,8 @@ mod tests {
             has_shell: true,
             rng: &mut rng,
             name_of: &names,
+            id_of: &crate::wiremod::circuit::no_id,
+            id_card: &crate::wiremod::circuit::no_card,
             effects: Vec::new(),
         };
         c.attach_shell(&[Kind::Modpc], &mut ctx);

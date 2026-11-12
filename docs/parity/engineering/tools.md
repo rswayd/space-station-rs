@@ -53,7 +53,7 @@
 Счищает ржавчину со стен и полов.
 
 - **Код:** [`/obj/item/wirebrush`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/wirebrush.dm#L5)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/wall_damage.rs`: щётка (`TOOL_RUSTSCRAPER`, ПКМ, 2 с) или сварка с 1 топлива (ПКМ, 5 с) снимает ржавчину (`Rusty`) с проржавевших стен и полов; см. «Повреждение стен» в `walls.md`
 
 ### Краскопульты декалей и труб
 Краскопульт декалей рисует разметку на полу (tgui с выбором цвета и направления), краскопульт труб перекрашивает трубы.

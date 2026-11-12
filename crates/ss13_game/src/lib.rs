@@ -296,6 +296,8 @@ pub mod dreams;
 #[cfg(feature = "server")]
 pub mod effects;
 #[cfg(feature = "server")]
+pub mod electric_chair;
+#[cfg(feature = "server")]
 pub mod emag;
 #[cfg(feature = "server")]
 pub mod embedding;
@@ -554,6 +556,8 @@ pub mod recycling;
 #[cfg(feature = "server")]
 pub mod reinforced;
 #[cfg(feature = "server")]
+pub mod reinforced_floor;
+#[cfg(feature = "server")]
 pub mod rest;
 #[cfg(feature = "server")]
 pub mod restaurant;
@@ -710,6 +714,8 @@ pub mod vision;
 pub mod votes;
 #[cfg(feature = "client")]
 pub mod votes_client;
+#[cfg(feature = "server")]
+pub mod wall_damage;
 #[cfg(feature = "server")]
 pub mod wallmount;
 #[cfg(feature = "server")]

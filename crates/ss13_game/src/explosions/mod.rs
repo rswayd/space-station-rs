@@ -753,7 +753,7 @@ pub fn fire(world: &mut World) {
     for severity in [Severity::Light, Severity::Heavy, Severity::Devastate] {
         for &pos in &turfs[slot(severity)] {
             // `EX_ACT(turf)`: `contents_explosion` queues what is on it, then `ex_act`.
-            let things = ex_act::tile_contents(world, pos);
+            let things = ex_act::blasted_contents(world, pos, severity);
             world.resource_mut::<ExplosionQueue>().movables[slot(severity)].extend(things);
             ex_act::ex_act_turf(world, pos, severity);
             blasted += 1;

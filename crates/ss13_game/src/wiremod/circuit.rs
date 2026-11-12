@@ -287,6 +287,11 @@ pub enum Kind {
     QuantumPad,
     Launchpad,
     LaunchpadConsole,
+    // `wiremod/components/id/`.
+    IdGetter,
+    IdAccessReader,
+    IdInfoReader,
+    AccessChecker,
 }
 
 pub struct KindDef {
@@ -314,7 +319,7 @@ const fn def(
     }
 }
 
-pub static KINDS: [KindDef; 32] = [
+pub static KINDS: [KindDef; 36] = [
     def(
         Kind::Arithmetic,
         "/obj/item/circuit_component/arithmetic",
@@ -538,6 +543,34 @@ pub static KINDS: [KindDef; 32] = [
         "Bluespace Launchpad Console",
         "Unassigned",
         "Teleports anything to and from any location on the station. Doesn't use actual GPS coordinates, but rather offsets from the launchpad itself. Can only go as far as the launchpad can go, which depends on its parts.",
+    ),
+    def(
+        Kind::IdGetter,
+        "/obj/item/circuit_component/id_getter",
+        "Get ID",
+        "ID",
+        "A component that returns the first available ID card on an organism.",
+    ),
+    def(
+        Kind::IdAccessReader,
+        "/obj/item/circuit_component/id_access_reader",
+        "Read ID Access",
+        "ID",
+        "A component that reads the access on an ID.",
+    ),
+    def(
+        Kind::IdInfoReader,
+        "/obj/item/circuit_component/id_info_reader",
+        "Read ID Info",
+        "ID",
+        "A component that reads the name, job, and age on an ID.",
+    ),
+    def(
+        Kind::AccessChecker,
+        "/obj/item/circuit_component/compare/access",
+        "Access Checker",
+        "ID",
+        "Performs a basic comparison between two lists of strings, with additional functions that help in using it to check access on IDs.",
     ),
 ];
 
@@ -888,6 +921,38 @@ impl Node {
                     0,
                 )
             }
+            Kind::IdGetter => (
+                vec![
+                    inp("Target", Ty::Entity, Input),
+                    inp("Prioritize Hands", Ty::Boolean, Input),
+                ],
+                vec![out("ID", Ty::Entity)],
+                both,
+            ),
+            Kind::IdAccessReader => (
+                vec![inp("Target", Ty::Entity, Input)],
+                vec![out("Access", Ty::List(Box::new(Ty::String)))],
+                both,
+            ),
+            Kind::IdInfoReader => (
+                vec![inp("Target", Ty::Entity, Input)],
+                vec![
+                    out("Name", Ty::String),
+                    out("Rank", Ty::String),
+                    out("Age", Ty::Number),
+                ],
+                both,
+            ),
+            Kind::AccessChecker => (
+                vec![
+                    inp("Access To Check", Ty::List(Box::new(Ty::String)), Input),
+                    inp("Required Access", Ty::List(Box::new(Ty::String)), Input),
+                    inp("Check Any", Ty::Boolean, Input),
+                    sig("Compare"),
+                ],
+                compare_outs(),
+                0,
+            ),
             // Its ports come with the shell's wires ([`Circuit::set_bundle_ports`]).
             Kind::WireBundle => (Vec::new(), Vec::new(), 0),
             Kind::Controller => (
@@ -995,7 +1060,30 @@ pub struct Ctx<'a> {
     pub rng: &'a mut CombatRng,
     /// An entity's name when it is in range of the circuit (`tostring`'s `max_range`).
     pub name_of: &'a dyn Fn(Entity) -> Option<String>,
+    /// `get_idcard(prioritize_hands)` of a mob within 1 tile of the circuit.
+    pub id_of: &'a dyn Fn(Entity, bool) -> Option<Entity>,
+    /// What the ID components read off an ID card within 1 tile of the circuit.
+    pub id_card: &'a dyn Fn(Entity) -> Option<IdInfo>,
     pub effects: Vec<Effect>,
+}
+
+/// An ID card as the ID components see it: `GetAccess()`, `registered_name`, `assignment`,
+/// `registered_age`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct IdInfo {
+    pub access: Vec<String>,
+    pub name: String,
+    pub assignment: String,
+    pub age: f64,
+}
+
+/// No world (tests): nobody has an ID.
+pub fn no_id(_: Entity, _: bool) -> Option<Entity> {
+    None
+}
+
+pub fn no_card(_: Entity) -> Option<IdInfo> {
+    None
 }
 
 #[derive(Default)]
@@ -1543,6 +1631,39 @@ impl Circuit {
                 }
                 outs.push((2, result));
             }
+            Kind::IdGetter => {
+                let card = match n.value(0) {
+                    Value::Entity(mob) => (ctx.id_of)(*mob, n.value(1).truthy()),
+                    _ => None,
+                };
+                outs.push((0, card.map_or(Value::Null, Value::Entity)));
+            }
+            Kind::IdAccessReader | Kind::IdInfoReader => {
+                let info = match n.value(0) {
+                    Value::Entity(card) => (ctx.id_card)(*card),
+                    _ => None,
+                };
+                if kind == Kind::IdAccessReader {
+                    let access = info.map_or(Value::Null, |i| {
+                        Value::List(i.access.into_iter().map(Value::Str).collect())
+                    });
+                    outs.push((0, access));
+                } else if let Some(i) = info {
+                    outs.push((0, Value::Str(i.name)));
+                    outs.push((1, Value::Str(i.assignment)));
+                    outs.push((2, Value::Num(i.age)));
+                } else {
+                    outs.extend([(0, Value::Null), (1, Value::Null), (2, Value::Null)]);
+                }
+            }
+            Kind::AccessChecker => {
+                let result = check_access_list(n.value(0), n.value(1), n.value(2).truthy());
+                let compare_port = n.compare_port();
+                if port == Some(compare_port) && n.value(compare_port).truthy() {
+                    outs.push((if result { 0 } else { 1 }, signal(ctx.now)));
+                }
+                outs.push((2, boolean(result)));
+            }
             Kind::Airlock if ctx.has_shell && port.is_some() => {
                 ctx.effects.push(Effect::Device {
                     node: id,
@@ -1905,6 +2026,32 @@ impl Circuit {
 }
 
 /// The arithmetic component: null ports are skipped; a division by zero gives null.
+/// `check_access_list` with the access checker's `Required Access` as `req_access` (or, with
+/// `Check Any`, `req_one_access`).
+// tg copies the required list into `req_access` only from its window or a loaded save, so a
+// wired `Required Access` is ignored there; here the port's current value counts.
+fn check_access_list(subject: &Value, required: &Value, any: bool) -> bool {
+    let strings = |v: &Value| -> Vec<String> {
+        match v {
+            Value::List(l) => l.iter().map(Value::text).collect(),
+            _ => Vec::new(),
+        }
+    };
+    let required = strings(required);
+    if required.is_empty() {
+        return true;
+    }
+    let subject = strings(subject);
+    if subject.is_empty() {
+        return false;
+    }
+    if any {
+        required.iter().any(|r| subject.contains(r))
+    } else {
+        required.iter().all(|r| subject.contains(r))
+    }
+}
+
 fn arithmetic(op: &str, ports: &[Value]) -> Value {
     let Some((first, rest)) = ports.split_first() else {
         return Value::Null;
@@ -2034,6 +2181,8 @@ mod tests {
                 has_shell: true,
                 rng: &mut self.rng,
                 name_of: &no_names,
+                id_of: &no_id,
+                id_card: &no_card,
                 effects: Vec::new(),
             };
             let r = f(&mut self.circuit, &mut ctx);
@@ -2063,6 +2212,30 @@ mod tests {
         fn out(&self, c: usize, p: usize) -> &Value {
             &self.circuit.nodes[c].outputs[p].value
         }
+    }
+
+    /// `check_access_list`: nothing required passes, else all (or, with `Check Any`, one) of
+    /// the required accesses must be on the list.
+    #[test]
+    fn access_checker_lists() {
+        let list = |l: &[&str]| Value::List(l.iter().map(|s| Value::Str((*s).into())).collect());
+        assert!(check_access_list(&Value::Null, &list(&[]), false));
+        assert!(!check_access_list(&list(&[]), &list(&["sec"]), true));
+        assert!(check_access_list(
+            &list(&["sec", "eng"]),
+            &list(&["eng", "sec"]),
+            false
+        ));
+        assert!(!check_access_list(
+            &list(&["sec"]),
+            &list(&["eng", "sec"]),
+            false
+        ));
+        assert!(check_access_list(
+            &list(&["sec"]),
+            &list(&["eng", "sec"]),
+            true
+        ));
     }
 
     #[test]

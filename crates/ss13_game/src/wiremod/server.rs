@@ -68,6 +68,8 @@ const SHELL_SOUND_VOLUME: f32 = 25.0;
 const SAY_RANGE: u32 = 7;
 const WHISPER_RANGE: u32 = 1;
 const TOSTRING_RANGE: u32 = 7;
+/// The ID components' `max_range`.
+const ID_RANGE: u32 = 1;
 
 /// tg `/obj/item/integrated_circuit`.
 #[derive(Component, Clone, Debug, Default)]
@@ -242,6 +244,39 @@ fn make_structures(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Comma
 
 // --- Running ----------------------------------------------------------------------------
 
+/// `/mob/living/carbon/human/get_idcard(hand_first)`: the hands, then the ID slot and belt,
+/// or those first.
+// tg's human override returns only the worn ID without `hand_first`, even with one in hand;
+// here the hands are still looked at after the worn slots.
+fn id_of(world: &World, mob: Entity, hands_first: bool) -> Option<Entity> {
+    let inv = world.get::<crate::inventory::Inventory>(mob)?;
+    let hands = [inv.hands[inv.active], inv.hands[1 - inv.active]];
+    let worn = [inv.id, inv.belt];
+    let order: [Option<Entity>; 4] = if hands_first {
+        [hands[0], hands[1], worn[0], worn[1]]
+    } else {
+        [worn[0], worn[1], hands[0], hands[1]]
+    };
+    order
+        .into_iter()
+        .flatten()
+        .find_map(|e| crate::inventory::get_id(world, e))
+}
+
+/// What the ID components read off `card` (an ID card itself, `istype(target, /obj/item/card/id)`).
+fn id_info(world: &World, card: Entity) -> Option<crate::wiremod::circuit::IdInfo> {
+    let access = world.get::<crate::inventory::IdCard>(card)?.access.clone();
+    let reg = world.get::<crate::outfit::IdRegistration>(card);
+    Some(crate::wiremod::circuit::IdInfo {
+        access,
+        name: reg.map(|r| r.registered_name.clone()).unwrap_or_default(),
+        assignment: reg.map(|r| r.assignment.clone()).unwrap_or_default(),
+        age: world
+            .get::<crate::id_access::CardAccess>(card)
+            .map_or(30.0, |c| f64::from(c.registered_age)),
+    })
+}
+
 /// Runs `f` on circuit `e` with its cell's charge, the round's RNG and the names in range;
 /// then writes the charge back and applies the effects.
 pub fn with_circuit<R>(
@@ -274,12 +309,23 @@ pub fn with_circuit<R>(
                 .filter(|&d| d <= TOSTRING_RANGE)
                 .map(|_| name_of(w, t))
         };
+        let near = move |t: Entity| -> bool {
+            let (Some(a), Some(b)) = (pos, crate::explosions::turf_of(w, t)) else {
+                return false;
+            };
+            a.chebyshev(b).is_some_and(|d| d <= ID_RANGE)
+        };
+        let ids =
+            move |mob: Entity, hands_first: bool| id_of(w, mob, hands_first).filter(|_| near(mob));
+        let cards = move |card: Entity| id_info(w, card).filter(|_| near(card));
         let mut ctx = Ctx {
             now,
             charge,
             has_shell: ic.shell.is_some(),
             rng: &mut rng,
             name_of: &names,
+            id_of: &ids,
+            id_card: &cards,
             effects: Vec::new(),
         };
         let result = f(&mut ic.circuit, &mut ctx);

@@ -69,6 +69,12 @@ pub fn break_tile(world: &mut World, pos: TilePos) -> bool {
     let Some(turf) = turf_at(world, pos) else {
         return false;
     };
+    // `/turf/open/floor/engine/break_tile`: unbreakable.
+    if crate::construction::path_of(world, turf)
+        .is_some_and(|p| crate::reinforced_floor::is_engine(&p))
+    {
+        return false;
+    }
     let Some(damage) = world.get::<DmTurfDamage>(turf).cloned() else {
         return false;
     };

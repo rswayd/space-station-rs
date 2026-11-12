@@ -28,11 +28,12 @@ const AIRLOCK: &str = "/obj/machinery/door/airlock";
 /// Types the construction code spawns or turns turfs into, so `ss13-mapload convert` emits them
 /// even when no converted map uses them. Fixtures convert without them; the game then skips
 /// what has no prototype.
-pub const CONSTRUCTION_TYPES: [&str; 26] = [
+pub const CONSTRUCTION_TYPES: [&str; 27] = [
     "/turf/open/floor/plating",
     "/turf/open/floor/iron",
     "/turf/closed/wall",
     "/turf/closed/wall/r_wall",
+    "/turf/closed/wall/metal_foam_base",
     "/obj/structure/girder",
     "/obj/structure/girder/displaced",
     "/obj/structure/girder/reinforced",

@@ -481,10 +481,12 @@ fn hulk_wall(world: &mut World, hulk: Entity, wall: Entity, pos: TilePos, path: 
             world,
             crate::sound::PlaySound::new(pos, METEOR_IMPACT, 100.0, true),
         );
-        crate::construction::dismantle_wall(world, wall, pos);
+        // `dismantle_wall(1)`: devastated, sheets and iron instead of the girder.
+        crate::construction::devastate_wall(world, wall, pos);
         return;
     }
     crate::sound::playsound(world, crate::sound::PlaySound::new(pos, BANG, 50.0, true));
+    crate::wall_damage::add_dent(world, wall, crate::wall_damage::Dent::Hit);
     let user = crate::medical::name_of(world, hulk);
     crate::chem::visible(
         world,

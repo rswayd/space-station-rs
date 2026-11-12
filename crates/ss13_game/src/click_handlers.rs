@@ -142,6 +142,7 @@
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
+//! | 469 | `electric_chair::item_interaction` (a helmet on the electropack, a wrench on the shock kit in the other hand) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 477 | `instruments::boombox::other_hand` (a music tape into the boombox in the other hand, its menu) |
 //! | 479 | `toys::item_on_item` (caps into a cap gun, toy sword tools, filling and bursting balloons, emagging a Mini-Meteor) |
@@ -446,7 +447,9 @@
 //! | 2885 | `door_structures::item_interaction` (firelock frames and bolts, windoor assemblies, mineral doors) |
 //! | 2900 | `mecha::item_interaction` |
 //! | 2950 | `vehicles::item_interaction` |
+//! | 2959 | `electric_chair::item_interaction` (a helmet on an electropack, a shock kit on a chair, its screwdriver, wrenches on the kit and the electric chair) |
 //! | 2960 | `flora::item_interaction` |
+//! | 2969 | `wall_damage::item_interaction` (a welder on a dented wall, rust scraped or burnt off, tiles refused by rusty floors) |
 //! | 2970 | `cargo::mail_sorter::item_interaction` |
 //! | 2975 | `cargo::coupon::attack_atom` (supply consoles) |
 //! | 2977 | `cargo::money::item_interaction` (cash and ID cards, holochips) |

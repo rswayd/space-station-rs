@@ -18,7 +18,7 @@
 //!   `crate::tables::Elevating`).
 //! - The furniture's `buckle_sound` / `unbuckle_sound` (shuttle seats, medical beds).
 // shortcut: no armrest overlays (`[icon_state]_armrest` above the mob: overlays have no layer of
-// their own here), no electric chairs (shock kits), no office chairs rolling under their mob, no
+// their own here; electric chairs are `crate::electric_chair`), no office chairs rolling under their mob, no
 // smashing item chairs on people, no greyscale material chairs (they leave no stack), no
 // spinning bronze chairs, no ghost rotation; alt+right click (clockwise) is not told apart from
 // alt-click.
@@ -384,10 +384,12 @@ pub(crate) fn wrench_secondary(world: &mut World, target: Entity) -> bool {
 
 /// `atom_deconstruct` of chairs and beds: their build stack on the tile. True when `path` is
 /// one of them.
-pub(crate) fn deconstruct(world: &mut World, dm: &DmObj, pos: TilePos) -> bool {
+pub(crate) fn deconstruct(world: &mut World, target: Entity, dm: &DmObj, pos: TilePos) -> bool {
     if !is_chair(&dm.path) && !is_under(&dm.path, BED) {
         return false;
     }
+    // The shock kit of an electrified chair drops out.
+    crate::electric_chair::release(world, target);
     if !dm.build_stack.is_empty() && dm.build_stack_amount > 0 {
         crate::construction::spawn_stack(world, &dm.build_stack, pos, dm.build_stack_amount);
     }
@@ -412,6 +414,7 @@ pub(crate) fn mouse_drop_dragged(world: &mut World, actor: Actor, chair: Entity)
     let Some(item) = crate::construction::spawn_obj(world, &dm.item_chair, pos) else {
         return true;
     };
+    crate::electric_chair::release(world, chair);
     let (user, what) = (name_of(world, actor.mob), name_of(world, chair));
     visible(
         world,

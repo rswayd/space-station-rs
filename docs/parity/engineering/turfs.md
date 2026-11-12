@@ -30,7 +30,7 @@
 `/turf/open/floor/engine` не снимаются ломом: гаечный ключ снимает пластины за несколько секунд (выпадают стальные прутья); устойчивы к взрывам; есть варианты с газом для камер.
 
 - **Код:** [`/turf/open/floor/engine`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor/reinforced_floor.dm#L2), [`engine/wrench_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor/reinforced_floor.dm#L44), [`/turf/open/floor/plating/reinforced`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/open/floor/plating.dm#L230)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/reinforced_floor.rs`: полы `engine` (с газом, корпусные, культовые) не снимаются ломом, не ломаются и не горят; гаечный ключ за 3 с снимает их в 2 прута (`insulation` — 1 лист пластитана) с наследованием воздуха; взрыв: тяжёлый — 50% снять слой, опустошающий — 80% два слоя с решёткой над космосом, иначе два или один слой; подпольное под ними задевает только опустошающий; укреплённая обшивка — три обратимых шага (ключ 10 с, сварка с 3 топлива 15 с / отвёртка 15 с, лом 20 с → 2 листа пластали / сварка 15 с), спрайты `r_plate-N`, подсказки осмотра. Нет: болтов, падающих на уровень ниже (`drop_screws`)
 
 ### Космос и стройка в космосе
 Космос (`/turf/open/space`) — вакуум и свет звёзд; прутья на космосе дают решётку (`lattice`), плитка на решётке — обшивку, прутья на решётке — мостик (`catwalk`).

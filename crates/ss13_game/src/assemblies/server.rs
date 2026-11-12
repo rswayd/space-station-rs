@@ -1120,6 +1120,8 @@ pub fn post_signal(
     }
     // Chem implants synced to a signaler listen too (`crate::implants`).
     crate::implants::chem_signal(world, frequency, code, from, range);
+    // Electropacks, alone or in a shock kit (`crate::electric_chair`).
+    crate::electric_chair::electropack_signal(world, frequency, code, from, range);
     for r in receivers {
         if range > 0 {
             let (Some(from), Some(to)) = (from, crate::explosions::turf_of(world, r)) else {
