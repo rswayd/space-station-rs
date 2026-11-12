@@ -327,7 +327,9 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 370] = [
+    pub const GAME_CODE: [&str; 372] = [
+        "sound/items/weapons/jammed.ogg",
+        "sound/items/weapons/throwtap.ogg",
         "modular_bandastation/weapon/sound/melee/electrostaff_on.ogg",
         "sound/effects/clock_tick.ogg",
         "sound/effects/woodhit.ogg",
