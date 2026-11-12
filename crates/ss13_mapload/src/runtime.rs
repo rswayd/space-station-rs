@@ -1681,6 +1681,9 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(crate::food::FOOD_MESS_TYPES);
     // Conjured things, the Grand Ritual, the runic scepter, the demon bottles (`ss13_game`).
     out.extend(antag::SPELL_RUNTIME_TYPES);
+    // Completed golem shells and what they fall apart into (`ss13_game::golems`).
+    out.extend(crate::mob_spawn::GOLEM_RUNTIME_TYPES);
+    out.extend(crate::mob_spawn::GOLEM_STACK_FOOD);
     // Lavaland fauna, their spawns and drops (`ss13_game::mobs::lavaland`).
     out.extend(mobs::LAVALAND_RUNTIME_TYPES);
     // The lavaland bosses, their bolts and chests (`ss13_game::mobs::megafauna`).

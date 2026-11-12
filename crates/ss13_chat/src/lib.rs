@@ -17,6 +17,8 @@ pub mod radio;
 pub mod server;
 #[cfg(feature = "server")]
 pub mod speech;
+#[cfg(feature = "server")]
+pub mod speech_filter;
 
 pub use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, MAX_MESSAGE_LEN, Span};
 

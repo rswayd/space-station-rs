@@ -596,6 +596,8 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     }
     // `/datum/job/chaplain/after_spawn`: the bible, the religion's names.
     crate::service::chaplain_spawned(world, client, mob);
+    // The job traits' jobs' `after_spawn` (the veteran advisor's paraplegia and PTSD).
+    crate::station_traits::job_after_spawn(world, mob, &def.title);
     // `/datum/outfit/job/curator/post_equip`: `grant_all_languages(source = LANGUAGE_CURATOR)`.
     if def.path == "/datum/job/curator"
         && let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob)

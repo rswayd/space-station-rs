@@ -1,7 +1,8 @@
 //! Map mob spawners (`ss13_game::ghost_roles`): a placed human corpse spawner leaves a dead,
 //! damaged human in its outfit at map init; a placed ghost role sleeper is listed for ghosts,
 //! and a ghost that takes it controls a new human in the role's outfit, the sleeper keeping one
-//! use less.
+//! use less. A servant golem shell fed by a living creator makes "Golem (N)" in the creator's
+//! factions.
 
 use std::path::{Path, PathBuf};
 
@@ -45,6 +46,12 @@ const TYPES: &str = r##"{
         "parent": "/obj/effect/mob_spawn/ghost_role/human", "declared_vars": {
         "name": "beach bum sleeper", "you_are_text": "You're a beach bum.", "uses": 2,
         "outfit": { "path": "/datum/outfit/beachbum" } } },
+    "/obj/effect/mob_spawn/ghost_role/human/golem": {
+        "parent": "/obj/effect/mob_spawn/ghost_role/human", "declared_vars": {
+        "name": "inert free golem shell", "you_are_text": "You are a Free Golem." } },
+    "/obj/effect/mob_spawn/ghost_role/human/golem/servant": {
+        "parent": "/obj/effect/mob_spawn/ghost_role/human/golem", "declared_vars": {
+        "name": "inert servant golem shell" } },
     "/obj/effect/mob_spawn/corpse": { "parent": "/obj/effect/mob_spawn", "declared_vars": {
         "brute_damage": 0, "oxy_damage": 0, "burn_damage": 0 } },
     "/obj/effect/mob_spawn/corpse/human": { "parent": "/obj/effect/mob_spawn/corpse",
@@ -90,6 +97,7 @@ const TYPES: &str = r##"{
 const BEACH: &str = "/obj/effect/mob_spawn/ghost_role/human/beach";
 const CORPSE: &str = "/obj/effect/mob_spawn/corpse/human/bum";
 const JEANS: &str = "/obj/item/clothing/under/pants/jeans";
+const SERVANT: &str = "/obj/effect/mob_spawn/ghost_role/human/golem/servant";
 
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
@@ -124,6 +132,7 @@ fn fixture_assets() -> PathBuf {
         BEACH,
         CORPSE,
         JEANS,
+        SERVANT,
         "/turf/open/floor",
         "/turf/closed/wall",
         "/turf/open/space/basic",
@@ -186,4 +195,44 @@ fn corpses_are_made_and_ghost_roles_spawn_humans_in_their_outfit() {
         world.get::<GhostRoleSpawner>(sleeper).map(|r| r.uses),
         Some(1)
     );
+}
+
+#[test]
+fn a_servant_golem_serves_its_living_creator() {
+    let assets = fixture_assets();
+    let mut s = Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+    let p = s.join("p0", |_| {});
+    let link = s.players[p].link;
+    let world = s.server.world_mut();
+    let mut roles = world.query_filtered::<&ss13_shared::TilePos, With<GhostRoleSpawner>>();
+    let pos = *roles.iter(world).next().expect("the sleeper's tile");
+    let creator = world
+        .spawn((
+            Stat::Conscious,
+            Name::new("Мастер"),
+            ss13_game::mobs::Faction(vec!["neutral".to_owned(), "cult".to_owned()]),
+        ))
+        .id();
+    let shell = ss13_game::golems::complete_shell(
+        world,
+        SERVANT,
+        pos,
+        Some(creator),
+        Some("/obj/item/stack/sheet/iron"),
+    )
+    .expect("a completed shell");
+    assert_eq!(
+        world
+            .get::<GhostRoleSpawner>(shell)
+            .and_then(|r| r.def.clone())
+            .as_deref(),
+        Some(SERVANT)
+    );
+    let ghost = ss13_game::ghost::ghostize_client(world, link).expect("a ghost");
+    let golem = take_role(world, ghost, shell).expect("a golem");
+    let name = world.get::<Name>(golem).unwrap().as_str().to_owned();
+    assert!(name.starts_with("Golem ("), "{name}");
+    let factions = &world.get::<ss13_game::mobs::Faction>(golem).unwrap().0;
+    assert!(factions.contains(&"cult".to_owned()), "{factions:?}");
+    assert!(world.get_entity(shell).is_err(), "one use");
 }

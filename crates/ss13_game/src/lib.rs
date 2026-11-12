@@ -365,6 +365,8 @@ pub mod gibber;
 #[cfg(feature = "server")]
 pub mod gifts;
 #[cfg(feature = "server")]
+pub mod golems;
+#[cfg(feature = "server")]
 pub mod gravity;
 #[cfg(feature = "server")]
 pub mod grenades;

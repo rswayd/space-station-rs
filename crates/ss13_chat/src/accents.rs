@@ -505,9 +505,230 @@ pub fn apply_all(accents: &[Accent], text: &str, mut roll: impl FnMut() -> f32) 
         .fold(text.to_owned(), |text, a| a.apply(&text, &mut roll))
 }
 
+/// The speech of a tongue that changes it (`modifies_speech`: its `speechmod` or
+/// `modify_speech`), kept on the body by the game (`ss13_game::medical::organs`). It is left out
+/// when the body speaks a language native to the tongue ([`TongueSpeech::native`],
+/// `should_modify_speech`).
+// shortcut: no zombie translation (`zombie_replacement.json`), alien hiss sound, bone or robot
+// voice spans; add them with their species.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TongueSpeech {
+    /// `/obj/item/organ/tongue/lizard` (BandaStation: also Cyrillic `с` and `ч`).
+    Lizard,
+    /// `/obj/item/organ/tongue/fly` (BandaStation: also `з` and `с`).
+    Fly,
+    /// BandaStation `/obj/item/organ/tongue/tajaran`: rolled `r`.
+    Tajaran,
+    /// BandaStation `/obj/item/organ/tongue/vulpkanin`: rolled `r`.
+    Vulpkanin,
+    /// `/obj/item/organ/tongue/snail`.
+    Snail,
+    /// `/obj/item/organ/tongue/rat` with BandaStation's `autohiss` greeting.
+    Rat,
+}
+
+/// BandaStation's tajaran and vulpkanin `speech_replacements`.
+const ROLLED: Table = &[
+    ("r", &["rr", "rrr", "rrrr"]),
+    ("R", &["RR", "RRR", "RRRR"]),
+    ("р", &["рр", "ррр", "рррр"]),
+    ("Р", &["РР", "РРР", "РРРР"]),
+];
+
+/// BYOND regex `\w`.
+fn ascii_word(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+/// `regex("<from>+", "g")` → `to`: every run of `from` becomes `to`.
+fn runs(text: &str, from: char, to: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut in_run = false;
+    for c in text.chars() {
+        if c == from {
+            if !in_run {
+                out.push_str(to);
+            }
+            in_run = true;
+        } else {
+            out.push(c);
+            in_run = false;
+        }
+    }
+    out
+}
+
+/// `regex(@"(\w)<x>", "g")` → `$1<to>`.
+fn after_word(text: &str, x: char, to: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        if ascii_word(chars[i]) && chars.get(i + 1) == Some(&x) {
+            out.push(chars[i]);
+            out.push_str(to);
+            i += 2;
+        } else {
+            out.push(chars[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// `regex(@"\b<x>([\-|r|R]|\b)", "g")` → `<to>$1`.
+fn word_start(text: &str, x: char, to: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < chars.len() {
+        let starts = chars[i] == x && (i == 0 || !ascii_word(chars[i - 1]));
+        if starts {
+            match chars.get(i + 1) {
+                Some(&c) if matches!(c, '-' | '|' | 'r' | 'R') => {
+                    out.push_str(to);
+                    out.push(c);
+                    i += 2;
+                    continue;
+                }
+                Some(&c) if ascii_word(c) => {}
+                _ => {
+                    out.push_str(to);
+                    i += 1;
+                    continue;
+                }
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+impl TongueSpeech {
+    /// The speech of a tongue organ type, `None` for a tongue that leaves it alone.
+    pub fn of_path(path: &str) -> Option<Self> {
+        const TONGUES: [(&str, TongueSpeech); 6] = [
+            ("/obj/item/organ/tongue/lizard", TongueSpeech::Lizard),
+            ("/obj/item/organ/tongue/fly", TongueSpeech::Fly),
+            ("/obj/item/organ/tongue/tajaran", TongueSpeech::Tajaran),
+            ("/obj/item/organ/tongue/vulpkanin", TongueSpeech::Vulpkanin),
+            ("/obj/item/organ/tongue/snail", TongueSpeech::Snail),
+            ("/obj/item/organ/tongue/rat", TongueSpeech::Rat),
+        ];
+        TONGUES
+            .into_iter()
+            .find(|(root, _)| {
+                path.strip_prefix(root)
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+            })
+            .map(|(_, speech)| speech)
+    }
+
+    /// The tongue's `languages_native`.
+    pub fn native(self) -> &'static [crate::language::LanguageId] {
+        use crate::language::LanguageId::*;
+        match self {
+            Self::Lizard => &[Draconic],
+            Self::Fly => &[Buzzwords],
+            Self::Tajaran => &[Siiktajr],
+            Self::Vulpkanin => &[Canilunzt],
+            Self::Snail | Self::Rat => &[],
+        }
+    }
+
+    /// What the tongue makes of `text`; `roll` gives values in 0..100.
+    pub fn apply(self, text: &str, roll: &mut impl FnMut() -> f32) -> String {
+        if text.starts_with('*') {
+            return text.to_owned();
+        }
+        match self {
+            Self::Lizard => {
+                let t = runs(text, 's', "sss");
+                let t = runs(&t, 'S', "SSS");
+                let t = after_word(&t, 'x', "kss");
+                let t = after_word(&t, 'X', "KSSS");
+                let t = word_start(&t, 'x', "ecks");
+                let t = word_start(&t, 'X', "ECKS");
+                let t = runs(&t, 'с', "ссс");
+                let t = runs(&t, 'С', "ССС");
+                let t = runs(&t, 'ч', "щ");
+                runs(&t, 'Ч', "Щ").trim().to_owned()
+            }
+            Self::Fly => {
+                let t = runs(text, 'z', "zzz");
+                let t = runs(&t, 'Z', "ZZZ").replace('s', "z").replace('S', "Z");
+                let t = runs(&t, 'з', "ззз");
+                let t = runs(&t, 'З', "ЗЗЗ").replace('с', "з").replace('С', "З");
+                t.trim().to_owned()
+            }
+            Self::Tajaran | Self::Vulpkanin => speechmod(text, ROLLED, &[], 0.0, roll),
+            // tg's letter list misses `Q`: every Latin letter is drawn out.
+            Self::Snail => text
+                .chars()
+                .flat_map(|c| {
+                    let n = if c.is_ascii_alphabetic() { 3 } else { 1 };
+                    std::iter::repeat_n(c, n)
+                })
+                .collect(),
+            Self::Rat => {
+                // shortcut: tg's `whimsy_check` is only its 1% roll (no April Fools, no
+                // whimsical personality); add them when the chat knows holidays and personalities.
+                let whimsy = roll() < 1.0;
+                match text.to_lowercase().as_str() {
+                    "привет" | "привет." => "Сыррретствую вас!".to_owned(),
+                    "привет?" => "Мм... сыррретствую вас?".to_owned(),
+                    "hi" | "hi." if whimsy => "Cheesed to meet you!".to_owned(),
+                    "hi?" if whimsy => "Um... cheesed to meet you?".to_owned(),
+                    _ => text.to_owned(),
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tongues_change_speech() {
+        let mut low = || 0.0;
+        let lizard = TongueSpeech::Lizard;
+        assert_eq!(lizard.apply("snakes", &mut low), "sssnakesss");
+        assert_eq!(lizard.apply("SOS box", &mut low), "SSSOSSS bokss");
+        assert_eq!(lizard.apply("x-ray xr x", &mut low), "ecks-ray ecksr ecks");
+        assert_eq!(lizard.apply("xeno", &mut low), "xeno");
+        assert_eq!(lizard.apply("Сосиска, чай", &mut low), "СССосссиссска, щай");
+        assert_eq!(lizard.apply("*hiss", &mut low), "*hiss");
+        assert_eq!(
+            TongueSpeech::Fly.apply("buzz sss зса", &mut low),
+            "buzzz zzz зззза"
+        );
+        // One pick per key for the whole message.
+        assert_eq!(
+            TongueSpeech::Tajaran.apply("Rarr, ррр", &mut low),
+            "RRarrrr, рррррр"
+        );
+        assert_eq!(TongueSpeech::Snail.apply("qa б!", &mut low), "qqqaaa б!");
+        let rat = TongueSpeech::Rat;
+        assert_eq!(rat.apply("Привет.", &mut || 50.0), "Сыррретствую вас!");
+        assert_eq!(
+            rat.apply("привет?", &mut || 50.0),
+            "Мм... сыррретствую вас?"
+        );
+        assert_eq!(rat.apply("hi", &mut || 50.0), "hi");
+        assert_eq!(rat.apply("hi", &mut low), "Cheesed to meet you!");
+        assert_eq!(
+            TongueSpeech::of_path("/obj/item/organ/tongue/lizard/silver"),
+            Some(TongueSpeech::Lizard)
+        );
+        assert_eq!(
+            TongueSpeech::of_path("/obj/item/organ/tongue/lizardx"),
+            None
+        );
+        assert_eq!(TongueSpeech::of_path("/obj/item/organ/tongue"), None);
+    }
 
     #[test]
     fn accents_rewrite_speech() {

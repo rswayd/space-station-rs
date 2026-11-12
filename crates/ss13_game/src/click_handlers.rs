@@ -179,6 +179,7 @@
 //! | 1385 | `recycling::conveyor::link_stack` (a switch assembly on a belt stack in the other hand) |
 //! | 1393 | `guns_special::item_interaction` (a syringe or DNA injector into a syringe gun, a grenade into a grenade launcher) |
 //! | 1400 | `chem::item_interaction` |
+//! | 1405 | `golems::item_interaction` (minerals or a crowbar on the golem shell in the other hand) |
 //! | 1450 | `mining::hand_interaction` (modkits, point cards, gibtonite ore) |
 //! | 1477 | `security::item_interaction` (a screwdriver, cell, conversion kit, crystal or diamond onto a baton in the other hand) |
 //! | 1491 | `gun_attachments::attach` (a seclite, suppressor, bayonet or screwdriver on the gun or a security helmet) |
@@ -524,6 +525,7 @@
 //! | 4501 | `antag::xeno::reproduction::held_on_target` (a held facehugger pressed to a face) |
 //! | 4495 | `events::space_vines::attacked_by` (an item hitting kudzu) |
 //! | 4467 | `misc_items::flatpacks::load` (a flatpack onto a flatpack cart) |
+//! | 4475 | `golems::item_interaction` (minerals or a crowbar on an incomplete golem shell, a crowbar on a completed one) |
 //! | 4500 | `construction::item_interaction` |
 //! | 4600 | core: a cyborg module or `NoDrop` item stops here |
 //! | 4650 | `lockbox::item_interaction` (`closets` plugin) |

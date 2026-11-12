@@ -33,7 +33,7 @@
 
 - **Код:** [`job_traits.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/station_traits/job_traits.dm#L1)
 - **BandaStation:** [`job_traits.dm#L22`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/station_traits/job_traits.dm#L22) — кнопки записи перенесены в HTML-лобби
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/station_traits.rs`: «Bridge Assistant» и «Veteran Advisor» в пуле (нейтральные, вес 2, полная цена, в отчёте, блеклист остальных трейтов-профессий); `pre_jobs_assigned` перед `divide_occupations` (`crates/ss13_game/src/round.rs`, `setup`) даёт профессии одну позицию и случайного готового записавшегося из лобби, профессии трейтов не выдаются по предпочтениям (`JOB_LATEJOIN_ONLY`), записи сбрасываются; `job_after_spawn` (`crates/ss13_game/src/jobs.rs`, `join`): ветеран-советник получает квирк «Paraplegic» и травму PTSD. Тест: `a_job_trait_gives_its_job_to_a_ready_sign_up`. Нет: горилла карго (нет игровой гориллы, удаления ленивца и рипли), ИИ-человек (нет его профессии и факса на спутнике), Пун-Пун; у ассистента мостика — травмы «axedoration», спавна на стуле мостика и кофеварки на столе мостика; проверки возраста аккаунта для кнопки
 
 ### Админ-панель трейтов
 TGUI-панель для форсирования/запрета трейтов на следующий раунд.

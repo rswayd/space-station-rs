@@ -24,6 +24,40 @@ pub const MOB_SPAWN_FILE: &str = "mob_spawns.ron";
 pub const GHOST_ROLE_ROOT: &str = "/obj/effect/mob_spawn/ghost_role/human";
 pub const CORPSE_ROOT: &str = "/obj/effect/mob_spawn/corpse/human";
 const COMPONENT: &str = "dm_mob_spawn";
+/// What `ss13_game::golems` spawns besides [`GOLEM_STACK_FOOD`]: the completed shells and the
+/// adamantine sheet they leave.
+pub const GOLEM_RUNTIME_TYPES: [&str; 3] = [
+    "/obj/effect/mob_spawn/ghost_role/human/golem",
+    "/obj/effect/mob_spawn/ghost_role/human/golem/servant",
+    "/obj/item/stack/sheet/mineral/adamantine",
+];
+
+/// The stacks of tg `golem_stack_food_directory` (its light bulbs and gibtonite are no stacks
+/// and never feed a golem shell); a taken-apart shell gives five of its own back.
+pub const GOLEM_STACK_FOOD: [&str; 22] = [
+    "/obj/item/stack/sheet/iron",
+    "/obj/item/stack/ore/iron",
+    "/obj/item/stack/sheet/glass",
+    "/obj/item/stack/sheet/mineral/uranium",
+    "/obj/item/stack/ore/uranium",
+    "/obj/item/stack/sheet/mineral/silver",
+    "/obj/item/stack/ore/silver",
+    "/obj/item/stack/sheet/mineral/plasma",
+    "/obj/item/stack/ore/plasma",
+    "/obj/item/stack/sheet/mineral/gold",
+    "/obj/item/stack/ore/gold",
+    "/obj/item/stack/sheet/mineral/diamond",
+    "/obj/item/stack/ore/diamond",
+    "/obj/item/stack/sheet/mineral/titanium",
+    "/obj/item/stack/ore/titanium",
+    "/obj/item/stack/sheet/plasteel",
+    "/obj/item/stack/ore/bananium",
+    "/obj/item/stack/sheet/mineral/bananium",
+    "/obj/item/stack/ore/bluespace_crystal",
+    "/obj/item/stack/ore/bluespace_crystal/refined",
+    "/obj/item/stack/ore/bluespace_crystal/artificial",
+    "/obj/item/stack/sheet/bluespace_crystal",
+];
 
 /// On a placed human mob spawner: its type, the key into [`MobSpawnData`].
 #[derive(Component, Reflect, Default, Clone, Debug, PartialEq)]

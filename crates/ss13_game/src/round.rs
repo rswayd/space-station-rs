@@ -696,11 +696,17 @@ fn setup(world: &mut World, now: f64) {
     let clowns = invaders(crate::antag::dynamic::CLOWNOPS_RULESET);
     let wizards = invaders(crate::antag::dynamic::WIZARD_RULESET);
     ready.retain(|(c, _)| !operatives.contains(c) && !clowns.contains(c) && !wizards.contains(c));
+    // `COMSIG_GLOB_PRE_JOBS_ASSIGNED`: the job traits' sign-ups take their jobs first.
+    let trait_jobs = crate::station_traits::pre_jobs_assigned(world, &mut ready);
     let prefs: Vec<&JobPreferences> = ready.iter().map(|(_, p)| p).collect();
     let assigned = divide_occupations(&mut world.resource_mut::<Jobs>(), &prefs);
     // `setup_officer_positions`: lockers for the officer slots the map lacks.
     crate::jobs::security::spawn_extra_lockers(world, SECURITY_MAX_POSITIONS);
     let mut spawned = Vec::new();
+    for (client, job) in trait_jobs {
+        let mob = crate::jobs::join(world, client, job, false);
+        spawned.push((client, mob, job));
+    }
     for ((client, _), assignment) in ready.iter().zip(assigned) {
         match assignment {
             Assignment::Job(job) => {

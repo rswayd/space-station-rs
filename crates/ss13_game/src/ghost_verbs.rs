@@ -688,10 +688,13 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     }
     let mob = match &def {
         Some(d) => {
-            let name = d
-                .mob_name
-                .clone()
-                .unwrap_or_else(|| crate::jobs::character_name(world, client));
+            let name = match crate::golems::forced_name(world, spawner) {
+                Some(name) => name,
+                None => d
+                    .mob_name
+                    .clone()
+                    .unwrap_or_else(|| crate::jobs::character_name(world, client)),
+            };
             crate::ghost_roles::create_human(world, d, pos, name)
         }
         None => {
@@ -712,6 +715,7 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     crate::noncrew_jobs::set_assigned_role(world, mob, crate::noncrew_jobs::GHOST_ROLE);
     // The spawner type's `special` (the battlecruiser's crew).
     crate::antag::nukeop::battlecruiser::special(world, mob, client, s.def.as_deref());
+    crate::golems::special(world, mob, spawner);
     if !infinite {
         let left = s.uses - 1;
         let deletes = def.as_ref().is_none_or(|d| d.deletes_on_zero_uses_left);
