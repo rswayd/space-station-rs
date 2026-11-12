@@ -2,7 +2,7 @@
 //! ([`two_handed`]), the double-bladed energy sword ([`energy`]), blocking and shields
 //! ([`block`]), whetstones ([`sharpener`]), the fork's sledgehammer components
 //! ([`stamina_cost`], [`rip_and_tear`]), the baseball bat's kneecapping ([`kneecap`]), the
-//! fork's backstabs ([`backstab`]).
+//! fork's backstabs ([`backstab`]), the power-fist and the supermatter sword ([`special`]).
 
 use bevy::prelude::*;
 
@@ -12,6 +12,7 @@ pub mod energy;
 pub mod kneecap;
 pub mod rip_and_tear;
 pub mod sharpener;
+pub mod special;
 pub mod stamina_cost;
 pub mod two_handed;
 
@@ -33,6 +34,21 @@ impl Plugin for WeaponsPlugin {
         app.add_click_handler(ClickPhase::HeldOnTarget, 251, |w, c| {
             c.held
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // The supermatter sword consumes an object or a turf (`special`).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 25, |w, c| {
+            c.held
+                .is_some_and(|h| special::sm_pre_attack(w, c.mob, h, c.target))
+        });
+        // A tank, wrench or screwdriver on a power-fist on the floor or a table.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 35, |w, c| {
+            c.held
+                .is_some_and(|h| special::powerfist_interaction(w, c.client, c.mob, h, c.target))
+        });
+        // ... or in the other hand.
+        app.add_click_handler(ClickPhase::OtherHand, 1265, |w, c| {
+            c.held
+                .is_some_and(|h| special::powerfist_interaction(w, c.client, c.mob, h, c.target))
         });
         // A right click with a shield or a pillow shoves (`/datum/element/disarm_attack`).
         app.add_click_handler(ClickPhase::HeldOnTarget, 247, |w, c| {

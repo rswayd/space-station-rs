@@ -36,7 +36,7 @@
 //! | 989 | `service::burden` pray refill (the chaplain's revolver) |
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 997 | `guns::box_attack_self` (a round out of a held ammo box or magazine) |
-//! | 1000 | `guns::attack_self` |
+//! | 1000 | `guns::attack_self` (also the crank guns, `gun_crank`, and bows, `bows`) |
 //! | 1093 | `food::open_can` (a canned food's tab) |
 //! | 1097 | `sprays::attack_self` (stream or spray mode; lets `chem::attack_self` run) |
 //! | 1100 | `chem::attack_self` |
@@ -177,6 +177,7 @@
 //! | 1255 | `clothing::item_interaction` |
 //! | 1259 | `clothing::reactive::shell_interaction` (an anomaly core into a reactive armor shell) |
 //! | 1261 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
+//! | 1265 | `weapons::special::powerfist_interaction` (the same on a power-fist in the other hand) |
 //! | 1300 | `disposals::mail_interaction` |
 //! | 1350 | `botany::grown_interaction` (log cutting, potato batteries) |
 //! | 1369 | `sheets::item_interaction` (a hot tool on burning sheets, rods on titanium in the other hand) |
@@ -339,6 +340,8 @@
 //! | ---- | ------- |
 //! | 3 | `modsuit::ninja` cloak (a cloaked wearer hitting something living drops the cloak; never takes the click) |
 //! | 21 | `power::supermatter_consume::attackby_hit` (an item on the crystal turns to dust; a cigarette lights) |
+//! | 25 | `weapons::special::sm_pre_attack` (the supermatter sword consumes an object or a turf) |
+//! | 35 | `weapons::special::powerfist_interaction` (a tank, wrench or screwdriver on a power-fist) |
 //! | 43 | `embedding::item_interaction` (a hemostat or wirecutters pluck what is embedded in the aimed bodypart) |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction`, `fishing::mount::item_interaction` (a fish onto a trophy mount, its screwdriver), `fishing::catalog::analyze` (the fish analyzer) |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
