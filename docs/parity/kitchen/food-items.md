@@ -31,7 +31,7 @@
 Торты (режутся на куски), пироги, маффины, печенье, вафли, блины, пончики. Кремовый пирог при броске залепляет лицо кремом.
 
 - **Код:** [`/obj/item/food/cake`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/cake.dm#L1), [`/obj/item/food/pie`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/pie.dm#L1), [`/obj/item/food/pie/cream`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/pie.dm#L60), [`/obj/item/food/muffin`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/pastries.dm#L5), [`/obj/item/food/donut`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/donuts.dm#L3), [`/obj/item/food/pancakes`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/pancakes.dm#L3)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/food.rs`: едятся и режутся, макание в напиток (`dunk`), запекание — `cooking.rs`; брошенный кремовый пирог (`thrown`) оставляет пятно, парализует на 2 с (кроме `nostun`), размывает зрение на 2 с, звук. `// shortcut:` нет крема на лице (`face_decal/splat`) и его мудлета
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/food.rs`: едятся и режутся, макание в напиток (`dunk`), запекание — `cooking.rs`; брошенный кремовый пирог (`thrown`) оставляет пятно, парализует на 2 с (кроме `nostun`), размывает зрение на 2 с, звук. `// shortcut:` нет крема на лице (`face_decal/splat`) и его мудлета
 
 ### Мясо и мясные блюда
 Куски мяса разных существ (из гиббера, мясника), котлеты, стейки, отбивные, рыба, морепродукты; сырое мясо жарится на гриле/сковороде в стейк.
@@ -43,7 +43,7 @@
 Яйца, варёные и жареные яйца, омлеты, шоколадные яйца; яйцо можно разбить о предмет или в посуду.
 
 - **Код:** [`/obj/item/food/egg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/egg.dm#L19), [`/obj/item/food/boiledegg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/egg.dm#L235), [`/obj/item/food/friedegg`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/food_and_drinks/food/egg.dm#L203)
-- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/kitchen.rs` (варка в микроволновке), `food.rs`: ПКМ яйцом по грилю разбивает его в сырое яйцо на плите (`crack_egg`, жарится в глазунью по `grill_result`), брошенное яйцо оставляет пятно и с шансом 13% цыплёнка (`thrown`). Нет раскраски мелком и клоунского штампа, проверки на тухлость в воде, реагентов яйца на цели броска
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/kitchen.rs` (варка в микроволновке), `food.rs`: ПКМ яйцом по грилю разбивает его в сырое яйцо на плите (`crack_egg`, жарится в глазунью по `grill_result`), брошенное яйцо оставляет пятно и с шансом 13% цыплёнка (`thrown`). Нет раскраски мелком и клоунского штампа, проверки на тухлость в воде, реагентов яйца на цели броска
 
 ### Сыр
 Головки сыра режутся на дольки; есть особые сорта (моцарелла, творожный сыр, сыры мотыльков).
