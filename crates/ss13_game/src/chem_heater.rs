@@ -668,6 +668,7 @@ mod tests {
             nutriment_factor: 0.0,
             penetrates_skin: 4,
             default_container: String::new(),
+            addiction_types: Vec::new(),
         }
     }
 

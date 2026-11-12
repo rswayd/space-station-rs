@@ -60,6 +60,10 @@ pub struct ReagentDef {
     /// `default_container`: what the ChemMaster suggests for it (a type path).
     #[serde(default)]
     pub default_container: String,
+    /// `addiction_types`: `/datum/addiction` path -> the units metabolized to get addicted
+    /// (ethanol's alcohol entry comes from `boozepwr` in its `New()`, not from here).
+    #[serde(default)]
+    pub addiction_types: Vec<(String, f32)>,
 }
 
 /// One tg `/datum/chemical_reaction` type. Reagent lists keep their DM order (it decides what is

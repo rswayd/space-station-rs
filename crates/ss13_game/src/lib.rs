@@ -296,6 +296,8 @@ pub mod drag;
 #[cfg(feature = "server")]
 pub mod dreams;
 #[cfg(feature = "server")]
+pub mod drugs;
+#[cfg(feature = "server")]
 pub mod effects;
 #[cfg(feature = "server")]
 pub mod electric_chair;
@@ -549,6 +551,8 @@ pub mod prediction;
 pub mod projectile;
 #[cfg(feature = "server")]
 pub mod pull;
+#[cfg(feature = "server")]
+pub mod pyrotechnics;
 #[cfg(feature = "server")]
 pub mod quirks;
 #[cfg(feature = "server")]

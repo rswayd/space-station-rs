@@ -29,11 +29,14 @@
 //!   medipens inject at once (a medipen is spent empty); droppers draw and squirt small amounts.
 //! - An explosive instant reaction (`reagent_explosion`) blows up and empties its container; a
 //!   lit welder heats a cup.
+//! - What goes into a mob exposes it by its method (`trans_to(methods)`): drinking and pills
+//!   INGEST, syringes and hyposprays INJECT, patches PATCH; droppers and splashing TOUCH. The
+//!   `expose_*` effects are `crate::janitor::expose_by`.
+//! - What metabolized each tick goes on to addiction points (`crate::addictions`), the drugs
+//!   and stacked effects (`crate::drugs`) and the pyrotechnics (`crate::pyrotechnics`).
 // shortcut: the machines are `crate::chem_dispenser`, `crate::chem_master` and
-// `crate::chem_heater`; no sprays or IV drips here; no lids; pouring exposes
-// nothing (most reagents' `expose_*` procs are not ported, `crate::janitor::expose_by` has the
-// ones that are; splashing goes through it: water does not put out fires, acid does
-// not melt); no mixing sounds.
+// `crate::chem_heater`; no sprays or IV drips here; no lids; pouring into a container exposes
+// nothing; most reagents' `expose_*` procs are not ported; no mixing sounds.
 
 use std::sync::Arc;
 
@@ -474,10 +477,32 @@ pub(crate) fn transfer_to_mob(
     amount: f32,
     ingest: bool,
 ) -> f32 {
+    use crate::janitor::{INGEST, INJECT};
+    transfer_to_mob_by(
+        world,
+        from,
+        mob,
+        amount,
+        if ingest { INGEST } else { INJECT },
+    )
+}
+
+/// tg `trans_to(mob, methods)`: INGEST into the stomach, anything else (INJECT, PATCH) into the
+/// blood; the mob is then exposed to what it got (`expose(mob, methods)`).
+pub(crate) fn transfer_to_mob_by(
+    world: &mut World,
+    from: Entity,
+    mob: Entity,
+    amount: f32,
+    methods: u32,
+) -> f32 {
+    let ingest = methods & crate::janitor::INGEST != 0;
     let chem = chem(world);
     let Some(mut a) = take(world, from) else {
         return 0.0;
     };
+    let before: Vec<(ss13_reagents::ReagentId, f32)> =
+        a.reagents.iter().map(|r| (r.id, r.volume)).collect();
     let mut moved = 0.0;
     // Injected blood becomes blood volume (`crate::medical::blood::expose_inject`).
     let blood = chem.id(crate::medical::blood::BLOOD_REAGENT);
@@ -507,7 +532,20 @@ pub(crate) fn transfer_to_mob(
     let injected = blood_before - blood.map_or(0.0, |id| a.amount(id));
     let vaccinated = vaccine_before - vaccine.map_or(0.0, |id| a.amount(id));
     let strange_moved = strange.map_or(0.0, |id| strange_before - a.amount(id));
+    // `r_to_send`: what the transfer added, for `expose`.
+    let mut exposed = Holder::new(moved.max(0.0) + 1.0, flags::NO_REACT, Owner::default());
+    if !expelled {
+        for &(id, volume) in &before {
+            let gone = volume - a.amount(id);
+            if gone > 0.0 {
+                exposed.add_reagent(&chem, id, gone, a.chem_temp, None, None, false, false);
+            }
+        }
+    }
     put(world, from, a);
+    if methods != 0 && !exposed.reagents.is_empty() {
+        crate::janitor::expose_methods(world, mob, &exposed, methods);
+    }
     // `strange_reagent/expose_mob`: a carbon is revived by what it swallows.
     if ingest && strange_moved > 0.0 {
         crate::medical::strange_reagent::expose(world, mob, strange_moved);
@@ -1161,8 +1199,8 @@ fn hypospray_draw(world: &mut World, actor: Actor, target: Entity) -> bool {
 /// tg `/obj/item/reagent_containers/dropper/interact_with_atom`: a full dropper squirts its
 /// transfer amount into an injectable container or someone's eyes, an empty one draws from a
 /// drawable container (never a mob).
-// shortcut: eye protection does not catch the drops (`is_eyes_covered`) and the drops expose
-// nothing (no `expose`, see the module's shortcut); no droplet sound (not converted).
+// shortcut: eye protection does not catch the drops (`is_eyes_covered`); no droplet sound (not
+// converted).
 fn dropper(world: &mut World, actor: Actor, target: Entity) -> bool {
     let held = actor.item.expect("a held dropper");
     let living = world.get::<MobReagents>(target).is_some();
@@ -1197,7 +1235,14 @@ fn dropper(world: &mut World, actor: Actor, target: Entity) -> bool {
                 &format!("{user} капает что-то в глаза {dst}!"),
                 Span::Danger,
             );
-            transfer_to_mob(world, held, target, amount, false)
+            // `reagents.expose(target, TOUCH, fraction)`, then a plain `trans_to`.
+            if let Some(h) = holder(world, held).cloned()
+                && h.total_volume > 0.0
+            {
+                let fraction = (amount / h.total_volume).min(1.0);
+                crate::janitor::expose(world, target, &h, fraction);
+            }
+            transfer_to_mob_by(world, held, target, amount, 0)
         } else {
             transfer(world, held, target, amount)
         };
@@ -1341,7 +1386,7 @@ fn process_patches(world: &mut World) {
             world.despawn(patch);
             continue;
         }
-        transfer_to_mob(world, patch, mob, rate, false);
+        transfer_to_mob_by(world, patch, mob, rate, crate::janitor::PATCH);
     }
 }
 
@@ -2308,6 +2353,8 @@ struct MobBody<'a> {
     /// tg `IS_UNCONSCIOUS`, `on_fire`.
     unconscious: bool,
     on_fire: bool,
+    /// tg `reagents_metabolized` of this tick.
+    metabolized: Vec<metabolism::Metabolized>,
 }
 
 impl Body for MobBody<'_> {
@@ -2365,6 +2412,9 @@ impl Body for MobBody<'_> {
     fn on_fire(&self) -> bool {
         self.on_fire
     }
+    fn metabolized(&mut self, reagent: metabolism::Metabolized) {
+        self.metabolized.push(reagent);
+    }
 }
 
 /// tg `Life()` -> `handle_organs` of every carbon each `SSmobs` fire: the stomach digests, the
@@ -2383,14 +2433,20 @@ fn metabolize_mobs(world: &mut World, mut last_fired: Local<u64>) {
     };
     let seconds = metabolism::SSMOBS_DT;
     // `TRAIT_STASIS`: nothing metabolizes (`handle_stasis_chems` runs none of the ported).
-    let mut query =
-        world.query_filtered::<(Entity, &MobReagents), Without<crate::medical::stasis::InStasis>>();
+    // A drug that just left the blood still ends its effects (`crate::drugs::DrugsActive`).
+    let mut query = world.query_filtered::<
+        (Entity, &MobReagents, Has<crate::drugs::DrugsActive>),
+        Without<crate::medical::stasis::InStasis>,
+    >();
     let mobs: Vec<Entity> = query
         .iter(world)
-        .filter(|(_, m)| {
-            !m.blood.reagents.is_empty() || !m.stomach.reagents.is_empty() || m.drunk > 0.0
+        .filter(|(_, m, drugs)| {
+            !m.blood.reagents.is_empty()
+                || !m.stomach.reagents.is_empty()
+                || m.drunk > 0.0
+                || *drugs
         })
-        .map(|(e, _)| e)
+        .map(|(e, _, _)| e)
         .collect();
     for mob in mobs {
         for _ in 0..fires {
@@ -2451,7 +2507,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
         .get::<crate::fire::FireStacks>(mob)
         .is_some_and(|f| f.on_fire);
     let liver_damage;
-    let told = {
+    let (told, metabolized) = {
         let mut body = MobBody {
             health: &mut health,
             losebreath: &mut losebreath,
@@ -2463,6 +2519,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
             booze,
             unconscious,
             on_fire,
+            metabolized: Vec::new(),
         };
         if !dead && has_stomach {
             metabolism::digest(chem, &mut reagents.stomach, &mut reagents.blood, seconds);
@@ -2478,7 +2535,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
             liver,
         );
         metabolism::inebriation_tick(&mut body);
-        body.told
+        (body.told, body.metabolized)
     };
     world.resource_mut::<CombatRng>().0 = rng.0;
     let mut new_stat = stat;
@@ -2513,6 +2570,12 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     if !dead {
         crate::status_effects::drunk_pulse(world, mob, drunk);
     }
+    // What `metabolize_reagent` and `metabolize` do beyond `ss13_reagents`, in tg's order:
+    // addiction points, the reagents' own effects, then the stacked effects.
+    crate::addictions::metabolized(world, chem, mob, &metabolized);
+    crate::drugs::metabolized(world, chem, mob, &metabolized, seconds);
+    crate::pyrotechnics::metabolized(world, chem, mob, &metabolized, seconds);
+    crate::drugs::stacked_effects(world, chem, mob, &metabolized, seconds);
     if let Some(liver) = liver_organ {
         if liver_damage > 0.0 {
             organs::damage_organ(world, liver, liver_damage, organs::STANDARD_ORGAN_THRESHOLD);

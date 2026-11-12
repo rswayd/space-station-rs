@@ -529,6 +529,7 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
         .iter()
         .map(|r| (r.id, r.volume * part))
         .collect();
+    let mut swallowed = false;
     // tg `expel_ingested` without a stomach.
     // shortcut: the bite is lost (no vomit decal with the reagents).
     if crate::medical::organs::lacks(world, eater, crate::medical::organs::Slot::Stomach) {
@@ -552,6 +553,24 @@ fn take_bite(world: &mut World, eater: Entity, feeder: Entity, food: Entity) {
             false,
             false,
         );
+        swallowed = true;
+    }
+    // `trans_to(eater, methods = INGEST)`: the bite exposes the eater.
+    if swallowed {
+        let mut exposed = Holder::new(dm.bite_consumption + 1.0, flags::NO_REACT, Owner::default());
+        for &(id, volume) in &bite {
+            exposed.add_reagent(
+                &chem,
+                id,
+                volume,
+                holder.chem_temp,
+                None,
+                None,
+                false,
+                false,
+            );
+        }
+        crate::janitor::expose_methods(world, eater, &exposed, crate::janitor::INGEST);
     }
     let left = holder.total_volume;
     world.entity_mut(food).insert(Reagents(holder));
@@ -1275,6 +1294,7 @@ mod tests {
             nutriment_factor: 15.0,
             penetrates_skin: 4,
             default_container: String::new(),
+            addiction_types: Vec::new(),
         }
     }
 
