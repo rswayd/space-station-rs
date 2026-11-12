@@ -300,7 +300,7 @@ fn living_on(world: &World, pos: TilePos) -> Vec<Entity> {
 }
 
 /// `shake_camera(mob, duration, strength)`; `duration_ds` in deciseconds.
-fn shake_camera(world: &mut World, client: Entity, duration_ds: f32, strength: f32) {
+pub(crate) fn shake_camera(world: &mut World, client: Entity, duration_ds: f32, strength: f32) {
     if world.contains_resource::<Messages<SendCameraEffect>>() {
         world.write_message(SendCameraEffect {
             client,
@@ -313,7 +313,7 @@ fn shake_camera(world: &mut World, client: Entity, duration_ds: f32, strength: f
 }
 
 /// `playsound_local(mob, file, volume)`: at the listener.
-fn play_local(world: &mut World, client: Entity, file: &str, volume: f32) {
+pub(crate) fn play_local(world: &mut World, client: Entity, file: &str, volume: f32) {
     if world.contains_resource::<Messages<SendSound>>() {
         world.write_message(SendSound {
             client,

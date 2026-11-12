@@ -66,7 +66,7 @@
 Генераторы защиты от радиационной туманности (на картах с туманностью); переносной генератор гравитации.
 
 - **Код:** [`/obj/machinery/nebula_shielding`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/nebula_shielding.dm#L2), [`/obj/machinery/power/portagrav`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/portagrav.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано (переносной гравген) — `crates/ss13_game/src/power/portagrav.rs` (`Portagrav`, `PortagravWindow`), окно `Portagrav` (`crates/ss13_tgui/src/interfaces/portagrav.rs`), поле — `crate::gravity::GravityFields`: закреплённый ключом блок включается ПКМ или из окна при достатке энергии, поле `grav_strength` (0..2 G, после емага 0..4) в радиусе `range` (0..`max_range` = 4 + ярусы конденсаторов); каждый тик машин берёт `draw_per_range × range` из ячейки (high-ячейка при постройке) или в режиме провода из сети под ним, иначе выключается; ячейка меняется при открытой панели; сборка/разборка рамой (`machine_frame::Family::Portagrav`). Нет частиц поля и предупреждений при входе. Генераторы защиты от туманности перенесены к трейтам станции (`docs/parity/round/station-traits-goals.md`): без трейта туманностей им нечего блокировать
 
 ### Космический обогреватель
 Переносной обогреватель/охладитель на батарее: греет или охлаждает воздух тайла до заданной температуры (tgui).

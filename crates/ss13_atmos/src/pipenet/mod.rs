@@ -219,6 +219,11 @@ impl Device {
         !matches!(self.kind, DeviceKind::Component)
     }
 
+    /// The directions of its nodes, in node order.
+    pub fn node_dirs(&self) -> &[u8] {
+        &self.node_dirs
+    }
+
     /// BYOND dir bits of the connected nodes (tg `get_dir(src, node)` over `nodes`).
     pub fn connections(&self, net: &Pipenet) -> u8 {
         self.nodes

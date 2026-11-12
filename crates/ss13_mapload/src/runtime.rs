@@ -1235,6 +1235,9 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/flatpack",
     // Modular shield fields (`ss13_game::eng_machines::modular_shield`).
     "/obj/structure/emergency_shield/modular",
+    // The portable gravity unit and its board (`ss13_game::power::portagrav`).
+    "/obj/machinery/power/portagrav",
+    "/obj/item/circuitboard/machine/portagrav",
     // Exosuits (`ss13_game::mecha`): the holodiagnostic sheet, the Vim assembly, the syringe
     // gun's dart.
     "/obj/item/mecha_diagnostic",

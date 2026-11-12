@@ -19,9 +19,10 @@
 //!   gas jetpack ([`crate::jetpack::GasJetpack`]) with gas lets its wearer step without a backup
 //!   and, stabilized, stops its drift; without stabilizers the wearer always drifts, faster by
 //!   the jetpack's force.
-// shortcut: weightless only over space turfs of space areas (no gravity generators; a floor in a
-// space area keeps gravity, which fixture stations rely on) — add gravity generators and
-// `force_no_gravity` with the gravity subsystem. Cardinal drift only (a diagonal step drifts along
+// shortcut: without gravity, weightless only over space turfs, unless the gravity there is a
+// generator's or a field's (`crate::gravity::gravity_managed`): a floor of a space area on a
+// level with no generator keeps its footing, which fixture stations rely on; no
+// `force_no_gravity`. Cardinal drift only (a diagonal step drifts along
 // its last half); no throw recoil, no floating bob
 // (`DO_FLOATING_ANIM` loops forever: it needs replicated state, not an animation event), no
 // input block while gliding to a halt.
@@ -143,7 +144,8 @@ pub fn weightless_at(world: &World, e: Entity, pos: TilePos) -> bool {
     world
         .get::<crate::gravity::ForcedGravity>(e)
         .is_some_and(|g| g.0 <= 0.0)
-        || (!crate::multiz::has_gravity(world, pos) && on_space_turf(world, pos))
+        || (!crate::multiz::has_gravity(world, pos)
+            && (on_space_turf(world, pos) || crate::gravity::gravity_managed(world, pos)))
 }
 
 fn is_lattice(world: &World, e: Entity) -> bool {
@@ -480,6 +482,39 @@ fn drift(
     cursor.clear(world.resource::<Messages<Moved>>());
 }
 
+/// The [`Weightless`] `mob` should have at `pos`.
+fn weightless_state(world: &World, mob: Entity, pos: TilePos) -> Option<Weightless> {
+    weightless_at(world, mob, pos).then(|| Weightless {
+        stuck: !holds_on(world, mob)
+            && !crate::modsuit::modules::jetpack_ready(world, mob)
+            && !crate::jetpack::ready(world, mob)
+            && spacemove_backup(world, mob, pos, None, false).is_none(),
+    })
+}
+
+/// tg `refresh_gravity`: [`Weightless`] of a living `mob` that did not move (its level's gravity
+/// changed).
+pub fn refresh_weightless(world: &mut World, mob: Entity) {
+    if world.get::<Health>(mob).is_none() {
+        return;
+    }
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    let state = weightless_state(world, mob, pos);
+    if state.as_ref() == world.get::<Weightless>(mob) {
+        return;
+    }
+    match state {
+        Some(state) => {
+            world.entity_mut(mob).insert(state);
+        }
+        None => {
+            world.entity_mut(mob).remove::<Weightless>();
+        }
+    }
+}
+
 /// Files [`Weightless`] on living mobs that moved or are weightless.
 // Cost: per tick, the mobs that moved plus the weightless ones (a 3x3 scan each).
 fn track_weightless(
@@ -498,12 +533,7 @@ fn track_weightless(
     mut commands: Commands,
 ) {
     for (mob, &pos, current) in &mobs {
-        let state = weightless_at(world, mob, pos).then(|| Weightless {
-            stuck: !holds_on(world, mob)
-                && !crate::modsuit::modules::jetpack_ready(world, mob)
-                && !crate::jetpack::ready(world, mob)
-                && spacemove_backup(world, mob, pos, None, false).is_none(),
-        });
+        let state = weightless_state(world, mob, pos);
         match (state, current) {
             (Some(state), Some(&current)) if state == current => {}
             (Some(state), _) => {

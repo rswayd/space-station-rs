@@ -38,6 +38,7 @@ pub mod flashlight;
 pub mod gps;
 pub mod hand_items;
 pub mod laser_pointer;
+pub mod pipe_painter;
 pub mod rcd;
 pub mod rhd;
 pub mod table_clock;
@@ -166,6 +167,7 @@ impl Plugin for DevicesPlugin {
         flashlight::build(app);
         gps::build(app);
         laser_pointer::build(app);
+        pipe_painter::build(app);
         rcd::build(app);
         rhd::build(app);
         taperecorder::build(app);
