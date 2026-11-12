@@ -16,7 +16,6 @@
 //! a message that went to the radio is whispered locally (`REDUCE_RANGE`). A whisper is heard in
 //! full at 1 tile, starred at 2, and seen as "whispers something" up to 7.
 
-use crate::speech_filter::{NOTIFICATIONS as FILTER_NOTIFICATIONS, SpeechFilter, SpeechFiltered};
 use bevy::ecs::lifecycle::{Discard, Insert};
 use bevy::ecs::system::SystemParam;
 use bevy::platform::collections::HashMap;
@@ -43,6 +42,7 @@ use crate::speech::{
     Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech, muffle, parse_mods_speaking, slur,
     stars, stutter, stutter_with, unintelligize, whisper_heard,
 };
+use crate::speech_filter::{NOTIFICATIONS as FILTER_NOTIFICATIONS, SpeechFilter, SpeechFiltered};
 
 /// tg `get_hearers_in_view(world.view)`: 7 tiles, Chebyshev, like BYOND `view()`.
 pub const HEARING_RANGE: u32 = 7;
