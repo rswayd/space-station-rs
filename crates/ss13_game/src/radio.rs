@@ -34,6 +34,8 @@ use ss13_mapload::fidelity::is_under;
 use ss13_mapload::radio::{HEADSET_ROOT, INTERCOM_ROOT};
 use ss13_mapload::{Areas, DmRadio};
 use ss13_net::chat::server::SendChat;
+use ss13_net::sound::server::SendSound;
+use ss13_shared::protocol::SoundEvent;
 use ss13_shared::TilePos;
 use ss13_tgui::server::{
     AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
@@ -82,6 +84,20 @@ pub struct MachineRadio {
     pub name: String,
     pub text: String,
 }
+
+/// A living speaker talked into `radio` (tg `talk_into_impl` past the superspace broadcast).
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RadioTalked {
+    pub speaker: Entity,
+    pub radio: Entity,
+}
+
+/// tg `radio_talk.ogg`, sent to the speaker only.
+pub const RADIO_TALK_SOUND: &str = "sound/items/radio/radio_talk.ogg";
+/// `/obj/item/radio/entertainment`: `radio_noise = FALSE`.
+const ENTERTAINMENT_ROOT: &str = "/obj/item/radio/entertainment";
+/// `audio_cooldown`, per radio.
+const NOISE_COOLDOWN: f64 = 0.5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RadioKind {
@@ -272,6 +288,7 @@ impl Plugin for RadioServerPlugin {
             .add_message::<Spoke>()
             .add_message::<SendChat>()
             .add_message::<MachineRadio>()
+            .add_message::<RadioTalked>()
             .init_resource::<Listeners>()
             .init_resource::<TelecommsOutage>()
             .register_ui::<RadioUi>()
@@ -281,6 +298,7 @@ impl Plugin for RadioServerPlugin {
                 (
                     mark_ears,
                     transmit_speech.after(SaySystems).after(TelecommsSystems),
+                    radio_noise.after(transmit_speech),
                     open_intercoms
                         .after(ss13_world::WorldSystems::Movement)
                         .after(crate::click::ResolveClicks)
@@ -289,6 +307,58 @@ impl Plugin for RadioServerPlugin {
                     radio_acts.in_set(UiSystems::Handle),
                 ),
             );
+    }
+}
+
+/// The radio noise of `talk_into_impl` (BandaStation plays it on every frequency): the speaker
+/// hears `radio_talk.ogg` at a random low pitch, at most once per 0.5 s per radio, unless deaf.
+/// No volume preference here, so it plays at its default 100. The receive sounds are a
+/// BandaStation removal.
+fn radio_noise(world: &mut World, mut ready_at: Local<std::collections::HashMap<Entity, f64>>) {
+    let talked: Vec<RadioTalked> = world
+        .resource_mut::<Messages<RadioTalked>>()
+        .drain()
+        .collect();
+    if talked.is_empty() {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    ready_at.retain(|_, at| *at > now);
+    let can_send = world.contains_resource::<Messages<SendSound>>();
+    for RadioTalked { speaker, radio } in talked {
+        if ready_at.contains_key(&radio)
+            || world
+                .get::<Radio>(radio)
+                .is_none()
+            || world
+                .get::<DmRadio>(radio)
+                .is_some_and(|d| is_under(&d.path, ENTERTAINMENT_ROOT))
+            || !crate::sound::can_hear(world, speaker)
+        {
+            continue;
+        }
+        let Some(client) = world.get::<crate::server::PlayerMob>(speaker).map(|p| p.client) else {
+            continue;
+        };
+        ready_at.insert(radio, now + NOISE_COOLDOWN);
+        // `get_rand_frequency_low_range()`.
+        let Some(hz) = world
+            .get_resource_mut::<crate::sound::SoundRng>()
+            .map(|mut rng| rng.0.range(38000, 45000) as f32)
+        else {
+            continue;
+        };
+        if can_send {
+            world.write_message(SendSound {
+                client,
+                sound: SoundEvent {
+                    file: RADIO_TALK_SOUND.into(),
+                    volume: 100.0,
+                    speed: crate::sound::speed_of(hz),
+                    offset: None,
+                },
+            });
+        }
     }
 }
 
@@ -677,6 +747,7 @@ fn transmit_speech(
         mut server_logs,
         implant_radios,
         (controls, codewords),
+        mut talked,
     ): (
         Res<TelecommsOutage>,
         Res<Time>,
@@ -690,6 +761,7 @@ fn transmit_speech(
             Query<&ss13_net::server::ControlledEntity>,
             Query<&ss13_chat::server::Codewords>,
         ),
+        mut talked: MessageWriter<RadioTalked>,
     ),
 ) {
     let now = time.elapsed_secs_f64();
@@ -786,6 +858,15 @@ fn transmit_speech(
             let Some(freq) = radio.transmit_freq(channel) else {
                 continue;
             };
+            let superspace = radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
+                && (freq == FREQ_CENTCOM || freq == FREQ_STATUS_DISPLAYS);
+            // The superspace broadcast returns before the noise.
+            if !superspace {
+                talked.write(RadioTalked {
+                    speaker: spoke.speaker,
+                    radio: e,
+                });
+            }
             transmissions.push(Transmission {
                 freq,
                 z: pos.z,
@@ -798,8 +879,7 @@ fn transmit_speech(
                 italics: spoke.whisper,
                 language: spoke.language,
                 subspace: radio.subspace(),
-                superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
-                    && (freq == FREQ_CENTCOM || freq == FREQ_STATUS_DISPLAYS),
+                superspace,
                 race,
             });
         }
@@ -1124,5 +1204,41 @@ mod tests {
         let mut edited = dm("/obj/item/radio/intercom", &[]);
         edited.frequency = 1446.0;
         assert_eq!(Radio::new(&edited).frequency, FREQ_AI_PRIVATE);
+    }
+
+    #[test]
+    fn radio_noise_goes_to_the_speaker_once_per_half_second() {
+        let mut world = World::new();
+        world.init_resource::<Messages<RadioTalked>>();
+        world.init_resource::<Messages<SendSound>>();
+        world.init_resource::<Time>();
+        world.init_resource::<crate::sound::SoundRng>();
+        let client = world.spawn_empty().id();
+        let speaker = world.spawn(crate::server::PlayerMob { client }).id();
+        let headset = dm("/obj/item/radio/headset", &[]);
+        let radio = world.spawn((Radio::new(&headset), headset)).id();
+        let speakers = dm("/obj/item/radio/entertainment/speakers", &[]);
+        let quiet = world.spawn((Radio::new(&speakers), speakers)).id();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(radio_noise);
+        let mut talk = |world: &mut World, radio: Entity| {
+            world.write_message(RadioTalked { speaker, radio });
+            schedule.run(world);
+            world
+                .resource_mut::<Messages<SendSound>>()
+                .drain()
+                .map(|s| (s.client, s.sound.file, s.sound.speed))
+                .collect::<Vec<_>>()
+        };
+        let sent = talk(&mut world, radio);
+        assert_eq!(sent.len(), 1);
+        assert_eq!((sent[0].0, sent[0].1.as_str()), (client, RADIO_TALK_SOUND));
+        assert!((38000.0 / 44100.0..=45000.0 / 44100.0).contains(&sent[0].2));
+        assert!(talk(&mut world, radio).is_empty(), "audio_cooldown");
+        assert!(talk(&mut world, quiet).is_empty(), "radio_noise = FALSE");
+        world
+            .resource_mut::<Time>()
+            .advance_by(std::time::Duration::from_millis(600));
+        assert_eq!(talk(&mut world, radio).len(), 1);
     }
 }
