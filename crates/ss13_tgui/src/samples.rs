@@ -51,6 +51,7 @@ use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
 };
 use crate::interfaces::gps::{GpsData, GpsSignal, GpsUi};
+use crate::interfaces::gravity_generator::{GravityGeneratorData, GravityGeneratorUi};
 use crate::interfaces::holodeck::{HoloProgram, HolodeckData, HolodeckUi};
 use crate::interfaces::implant_chair::{ImplantChairData, ImplantChairOccupant, ImplantChairUi};
 use crate::interfaces::implant_pad::{ImplantPadData, ImplantPadUi};
@@ -75,6 +76,7 @@ use crate::interfaces::pipe_dispenser::{
     PipeRecipeEntry,
 };
 use crate::interfaces::portable_generator::{PortableGeneratorData, PortableGeneratorUi};
+use crate::interfaces::portagrav::{PortagravData, PortagravUi};
 use crate::interfaces::power_monitor::{PowerMonitorArea, PowerMonitorData, PowerMonitorUi};
 use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
@@ -84,6 +86,7 @@ use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
 use crate::interfaces::smes::{SmesData, SmesStatic, SmesUi};
 use crate::interfaces::solar_control::{SolarControlData, SolarControlUi};
 use crate::interfaces::space_heater::{SpaceHeaterData, SpaceHeaterUi};
+use crate::interfaces::supermatter::{SmEntry, SmFactor, SmGasShare, SupermatterUi};
 use crate::interfaces::tank::{TankData, TankStatic, TankUi};
 use crate::interfaces::teg::{
     CirculatorData, ThermoElectricGeneratorData, ThermoElectricGeneratorUi,
@@ -694,6 +697,71 @@ pub fn sample(name: &str) -> Option<Sample> {
                 output_level: 90_000.0,
                 output_used: 60_000.0,
                 outputting: true,
+            },
+        ),
+        SupermatterUi::NAME => of::<SupermatterUi>(
+            "Supermatter",
+            &(),
+            &SmEntry {
+                uid: 1,
+                area_name: "Supermatter Engine".into(),
+                integrity: 98.4,
+                integrity_factors: vec![SmFactor {
+                    name: "Термическое повреждение".into(),
+                    amount: -0.02,
+                }],
+                internal_energy: 1450.0,
+                internal_energy_factors: vec![SmFactor {
+                    name: "Внутреннее снижение мощности".into(),
+                    amount: -23.5,
+                }],
+                zap_transmission: 1.6e6,
+                zap_transmission_factors: vec![SmFactor {
+                    name: "Базовая передача импульса".into(),
+                    amount: 1.5e6,
+                }],
+                temp_limit: 313.15,
+                temp_limit_factors: vec![SmFactor {
+                    name: "Базовая термостойкость".into(),
+                    amount: 313.15,
+                }],
+                waste_multiplier: 1.0,
+                waste_multiplier_factors: vec![SmFactor {
+                    name: "Множитель базовых отходов".into(),
+                    amount: 1.0,
+                }],
+                absorbed_ratio: 0.15,
+                gas_composition: vec![SmGasShare {
+                    name: "Nitrogen".into(),
+                    color: [255, 255, 0],
+                    amount: 1.0,
+                }],
+                gas_temperature: 290.0,
+                gas_total_moles: 420.0,
+            },
+        ),
+        PortagravUi::NAME => of::<PortagravUi>(
+            "Portable Gravity Unit",
+            &(),
+            &PortagravData {
+                percentage: Some(87.0),
+                gravity: 1.0,
+                range: 4,
+                maxrange: 6,
+                on: true,
+                wiremode: false,
+                draw: 4000.0,
+            },
+        ),
+        GravityGeneratorUi::NAME => of::<GravityGeneratorUi>(
+            "gravitational generator",
+            &(),
+            &GravityGeneratorData {
+                breaker: true,
+                charge_count: 64,
+                charging_state: 1,
+                on: false,
+                operational: true,
             },
         ),
         PortableGeneratorUi::NAME => of::<PortableGeneratorUi>(

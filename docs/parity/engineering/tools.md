@@ -59,7 +59,7 @@
 Краскопульт декалей рисует разметку на полу (tgui с выбором цвета и направления), краскопульт труб перекрашивает трубы.
 
 - **Код:** [`/obj/item/airlock_painter/decal`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/painter/decal_painter.dm#L1), [`paintable_decals.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/painter/paintable_decals.dm), [`/obj/item/pipe_painter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/pipe_painter.dm#L1); tgui: [`DecalPainter.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/DecalPainter.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — краскопульт труб: `crates/ss13_game/src/devices/pipe_painter.rs` (`PipePainter`, `interact_with_atom`): в руке — список цветов `GLOB.pipe_paint_colors`, на атмос-машине перекрашивает и переподключает её по новому цвету (`atmos_machinery::fitting::repaint`; кроме multiz-труб, цветовых адаптеров и насоса шлюза), на фитинге меняет `pipe_color`; щелчок и балун. Нет краскопульта декалей (окно `DecalPainter` со спрайтами декалей, категории `paintable_decals.dm`, декали как элемент турфа — см. `docs/parity/effects/decals.md`)
 
 ### Огнетушитель
 Распыляет воду/пену по конусу, тушит огонь и людей, толкает стрелка в невесомости; заправка из бака; мини, самодельный, продвинутый.

@@ -72,6 +72,7 @@
 //! | 2300 | `atmos_machinery::rpd::attack_self` |
 //! | 2400 | `science::experi_scanner::attack_self` |
 //! | 2500 | `atmos_machinery::fitting::attack_self` |
+//! | 2591 | `devices::pipe_painter::attack_self` (the paint color list) |
 //! | 2593 | `modpc::laptop::attack_self` (a closed laptop opens) |
 //! | 2600 | `modpc::pda::attack_self` |
 //! | 2700 | `radio::attack_self` |
@@ -240,7 +241,9 @@
 //! | 1970 | `power::shields::interact` |
 //! | 1971 | `power::monitor::interact` (the power monitoring console's window) |
 //! | 1979 | `eng_machines::atmos_shield::interact` (toggle; right click: lock) |
+//! | 1981 | `power::gravity_generator::interact` (the `GravityGenerator` window, also from its parts) |
 //! | 1989 | `eng_machines::flatpacker::interact` (the `Flatpacker` window) |
+//! | 1991 | `power::portagrav::interact` (the `Portagrav` window, the cell out of an open unit; right click: on/off) |
 //! | 1999 | `eng_machines::modular_shield::interact` (`ModularShieldGen`, `ModularShieldConsole` windows) |
 //! | 2000 | `wallmount::interact` |
 //! | 2010 | `power::lighting::remove_by_hand` (right click: a bulb out of its fixture) |
@@ -459,9 +462,13 @@
 //! | 2830 | `power::emitter::toggle_lock` (an ID or a PDA with one on an emitter) |
 //! | 2850 | `power::pacman::item_interaction` (also PACMAN boards) |
 //! | 2860 | `power::smes::item_interaction` (also SMES terminals) |
+//! | 2861 | `devices::pipe_painter::interact_with_atom` (an atmos machine or a pipe fitting repainted) |
 //! | 2870 | `power::shields::item_interaction` |
+//! | 2871 | `power::gravity_generator::item_interaction` (the repair of a broken generator) |
 //! | 2880 | `airlock_construction::item_interaction` (door assemblies, the airlock painter) |
+//! | 2881 | `power::portagrav::item_interaction` (a cell, the wrench) |
 //! | 2885 | `door_structures::item_interaction` (firelock frames and bolts, windoor assemblies, mineral doors) |
+//! | 2891 | `power::pipe_cleaner::held_on_target` (a pipe cleaner coil on plating or a piece, wirecutters on a piece) |
 //! | 2900 | `mecha::item_interaction` |
 //! | 2950 | `vehicles::item_interaction` |
 //! | 2959 | `electric_chair::item_interaction` (a helmet on an electropack, a shock kit on a chair, its screwdriver, wrenches on the kit and the electric chair) |

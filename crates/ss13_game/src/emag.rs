@@ -346,6 +346,12 @@ pub fn emag_act(world: &mut World, actor: Actor, card: Entity, target: Entity) -
     if world.get::<crate::power::pacman::Pacman>(target).is_some() {
         return crate::power::pacman::emag_act(world, client, target);
     }
+    if world
+        .get::<crate::power::portagrav::Portagrav>(target)
+        .is_some()
+    {
+        return crate::power::portagrav::emag_act(world, client, target);
+    }
     if crate::power::shields::takes_emag(world, target) {
         return crate::power::shields::emag_act(world, client, target);
     }

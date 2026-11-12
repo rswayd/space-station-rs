@@ -65,4 +65,4 @@
 Цветные проволочки, которые укладываются как кабели, но не проводят ток (поделки, украшения).
 
 - **Код:** [`/obj/structure/pipe_cleaner`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/pipecleaners.dm#L26), [`/obj/item/stack/pipe_cleaner_coil`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/pipecleaners.dm#L180)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/pipe_cleaner.rs` (`PipeCleaner`, `place_turf`, `join`, `cut`): моток на покрытии кладёт отрезок от центра к игроку (на своём тайле — по взгляду), моток на отрезке рядом достраивает его до полного `d1-d2` или кладёт встречный отрезок на тайл игрока, по одной длине; кусачки снимают кусок мотком в 1–2 длины его цвета; цвет от мотка. Нет снятия по Alt-клику, радиального выбора цвета у киборга, случайного цвета у `random`-мотков, притяжения сингулярностью

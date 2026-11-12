@@ -714,6 +714,7 @@ fn metastation_families() {
             Family::AtmosShieldGen => {
                 e.contains::<ss13_game::eng_machines::atmos_shield::AtmosShieldGen>()
             }
+            Family::Portagrav => e.contains::<ss13_game::power::portagrav::Portagrav>(),
             Family::Flatpacker => e.contains::<ss13_game::eng_machines::flatpacker::Flatpacker>(),
             Family::ModularShieldGen => {
                 e.contains::<ss13_game::eng_machines::modular_shield::ShieldGenerator>()

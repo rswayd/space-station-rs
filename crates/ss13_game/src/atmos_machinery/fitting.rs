@@ -807,14 +807,31 @@ pub(super) fn narrow_smart_pipe(world: &mut World, id: ss13_atmos::pipenet::Devi
     else {
         return;
     };
-    let new = world.resource_mut::<Pipenet>().reconnect(
+    reconnect_device(
+        world,
         id,
+        entity,
         theirs,
         default_node_dirs(4, theirs),
         layer,
         color,
     );
-    let Some(new) = new else { return };
+}
+
+/// `reconnect_nodes` of a device, its entity and the meters on it following the new id.
+fn reconnect_device(
+    world: &mut World,
+    id: ss13_atmos::pipenet::DeviceId,
+    entity: Entity,
+    init_dirs: u8,
+    node_dirs: Vec<u8>,
+    layer: u8,
+    color: [u8; 3],
+) -> bool {
+    let new = world
+        .resource_mut::<Pipenet>()
+        .reconnect(id, init_dirs, node_dirs, layer, color);
+    let Some(new) = new else { return false };
     if let Some(mut device) = world.get_mut::<AtmosDevice>(entity) {
         device.id = new;
     }
@@ -824,6 +841,24 @@ pub(super) fn narrow_smart_pipe(world: &mut World, id: ss13_atmos::pipenet::Devi
             meter.target = Some(new);
         }
     }
+    true
+}
+
+/// `/obj/machinery/atmospherics/paint`: the device takes `color` and connects again by it (pipes
+/// of other colors than its own and omni no longer join it). False when it has no device.
+pub(crate) fn repaint(
+    world: &mut World,
+    id: ss13_atmos::pipenet::DeviceId,
+    color: [u8; 3],
+) -> bool {
+    let Some((entity, init_dirs, node_dirs, layer)) = world
+        .resource::<Pipenet>()
+        .device(id)
+        .map(|d| (d.entity, d.init_dirs, d.node_dirs().to_vec(), d.layer))
+    else {
+        return false;
+    };
+    reconnect_device(world, id, entity, init_dirs, node_dirs, layer, color)
 }
 
 /// `pipe_meter/wrench_act`: onto the pipe of its layer on its tile.

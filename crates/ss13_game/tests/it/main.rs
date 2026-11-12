@@ -58,6 +58,7 @@ mod furniture;
 mod genetics;
 mod ghost_roles;
 mod grabs;
+mod gravity;
 mod grenades;
 mod gulag;
 mod guns;

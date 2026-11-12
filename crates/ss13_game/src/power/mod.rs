@@ -21,11 +21,14 @@ pub mod cable_coil;
 pub mod chargers;
 pub mod emitter;
 pub mod field_generator;
+pub mod gravity_generator;
 pub mod grid;
 pub mod lighting;
 pub mod model;
 pub mod monitor;
 pub mod pacman;
+pub mod pipe_cleaner;
+pub mod portagrav;
 pub mod shields;
 pub mod singularity;
 pub mod smes;
@@ -33,6 +36,7 @@ pub mod smes_portable;
 pub mod solar;
 pub mod supermatter;
 pub mod supermatter_consume;
+pub mod supermatter_ui;
 pub mod teg;
 pub mod tesla;
 
@@ -383,6 +387,10 @@ impl Plugin for PowerServerPlugin {
                 monitor::PowerMonitorPlugin,
                 supermatter_consume::SupermatterConsumePlugin,
                 smes_portable::SmesPortablePlugin,
+                gravity_generator::GravityGeneratorPlugin,
+                portagrav::PortagravPlugin,
+                supermatter_ui::SupermatterUiPlugin,
+                pipe_cleaner::PipeCleanerPlugin,
             ))
             .add_systems(
                 MapInit,

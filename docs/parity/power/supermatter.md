@@ -50,7 +50,7 @@
 Окно с интегритетом, мощностью, температурой и составом газа кристалла (консоль; программа ПДА — см. ../comms/).
 
 - **Код:** [`proc/sm_ui_data()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L396), [`ui_interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/supermatter/supermatter.dm#L381); tgui: [`Supermatter.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/Supermatter.tsx)
-- **Статус в ss13-rs:** ❌ нет — данные есть в `Crystal` (энергия, урон, газы, температура), окна `Supermatter`/`NtosSupermatter` нет
+- **Статус в ss13-rs:** ✅ реализовано — окно `Supermatter` для призраков (клик призрака по кристаллу, `attack_ghost`): `crates/ss13_game/src/power/supermatter_ui.rs` (`sm_entry`, `SupermatterWindow`, `SmUid`), вид — `crates/ss13_tgui/src/interfaces/supermatter.rs` (`SmEntry`); `Crystal` теперь хранит факторы последнего вдоха (`SmFactors`: энергия, урон, предел температуры, отходы, передача разряда; имена — `SM_*_FACTORS` BandaStation): целостность, энергия (эВ), передача разряда с бонусом высокой энергии, моли, температура, предел, отходы, коэффициент поглощения, состав газа. Нет `gas_metadata` (описаний газов), раскрывающихся списков (факторы всегда раскрыты), окно призрака закрывается по обычной дистанции; программа NTOS `NtosSupermatter` и инженерная консоль — у modpc (`docs/parity/comms/ntos-apps.md`, `sm_entry` готов для неё)
 
 ### Варианты кристалла
 Двигательный кристалл, осколок, малый кристалл, «hugbox» без деламинации (BandaStation приглушает его звук), адамантиновый пьедестал для каскада.

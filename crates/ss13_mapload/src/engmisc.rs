@@ -92,6 +92,11 @@ pub const ENGMISC_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/disposalpipe/junction/flip",
     "/obj/structure/disposalpipe/rotator/flip",
     "/obj/structure/disposalpipe/sorting/mail/flip",
+    // The gravity generator's eight other parts (`setup_parts`).
+    "/obj/machinery/gravity_generator/part",
+    // Pipe cleaners a coil lays and the coil a cut piece drops (`ss13_game::power::pipe_cleaner`).
+    "/obj/structure/pipe_cleaner",
+    "/obj/item/stack/pipe_cleaner_coil",
 ];
 
 /// Paths of the [`DISPOSAL_RECIPES`] for the runtime type registry.

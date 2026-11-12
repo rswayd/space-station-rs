@@ -238,9 +238,9 @@ pub fn z_pass_in(world: &World, pos: TilePos, up: bool) -> bool {
     is_under(path, OPEN_TURF) && !up && flags & BLOCK_Z_IN_DOWN == 0
 }
 
-/// `has_gravity(turf)`.
+/// `has_gravity(turf)` ([`crate::gravity::turf_gravity`]).
 pub fn has_gravity(world: &World, pos: TilePos) -> bool {
-    !crate::antag::nukeop::bomb::is_space_area(world, pos)
+    crate::gravity::turf_gravity(world, pos) > 0.0
 }
 
 /// `movement_type & (FLYING | FLOATING)`: ghosts, the AI's eye, flying basic mobs.

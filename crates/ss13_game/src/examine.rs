@@ -236,6 +236,9 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::vending::examine_lines(world, target, &mut lines);
     crate::wallmount::examine_lines(world, target, &mut lines);
     crate::power::lighting::examine_lines(world, target, &mut lines);
+    crate::power::gravity_generator::examine_lines(world, target, &mut lines);
+    crate::power::portagrav::examine_lines(world, target, &mut lines);
+    crate::devices::pipe_painter::examine_lines(world, target, &mut lines);
     crate::brig::timer::examine_lines(world, target, &mut lines);
     crate::brig::sentence::examine_lines(world, target, &mut lines);
     crate::furniture::examine_lines(world, target, &mut lines);

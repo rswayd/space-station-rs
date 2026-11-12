@@ -243,6 +243,55 @@ pub struct Crystal {
     /// `current_gas_behavior[/datum/gas/nitrogen]`: tg's one shared datum, which the
     /// Supermatter Surge changes for its duration (`crate::events::supermatter_surge`).
     pub nitrogen: SmGas,
+    /// What the last breath's `calculate_*` procs added up, for the monitor.
+    pub factors: SmFactors,
+}
+
+/// `SM_POWER_*` (`internal_energy_factors`, MeV), in tg's order.
+pub const SM_POWER_FACTORS: [&str; 6] = [
+    "Внешнее питание малым током",
+    "Внешнее увеличение мощности",
+    "Увеличение тепловой мощности газа",
+    "Внутреннее снижение мощности",
+    "Компенсация спада газовой мощности",
+    "Компенсация психологом потери мощности",
+];
+/// `SM_DAMAGE_*` (`damage_factors`), in tg's order.
+pub const SM_DAMAGE_FACTORS: [&str; 6] = [
+    "Внешнее повреждение",
+    "Термическое повреждение",
+    "Повреждение от заряда",
+    "Молярное повреждение",
+    "Повреждение от воздействия космоса",
+    "Восстановление с помощью охлаждения",
+];
+/// `SM_TEMP_LIMIT_*` (`temp_limit_factors`, K).
+pub const SM_TEMP_LIMIT_FACTORS: [&str; 4] = [
+    "Базовая термостойкость",
+    "Термостойкость к нагреву газа",
+    "Психологическая термостойкость",
+    "Термостойкость при низком уровне молей",
+];
+/// `SM_WASTE_*` (`waste_multiplier_factors`).
+pub const SM_WASTE_FACTORS: [&str; 3] = [
+    "Множитель базовых отходов",
+    "Множитель газовых отходов",
+    "Множитель отходов (психолог)",
+];
+/// `SM_ZAP_*` (`zap_factors`, W/MeV).
+pub const SM_ZAP_FACTORS: [&str; 2] = [
+    "Базовая передача импульса",
+    "Модификатор передачи газового импульса",
+];
+
+/// The `*_factors` lists of the last breath, by the name tables above.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SmFactors {
+    pub internal_energy: [f64; 6],
+    pub damage: [f64; 6],
+    pub temp_limit: [f64; 4],
+    pub waste_multiplier: [f64; 3],
+    pub zap: [f64; 2],
 }
 
 impl Default for Crystal {
@@ -282,6 +331,7 @@ impl Default for Crystal {
             delam: Delam::Explosive,
             bullet_energy: SUPERMATTER_DEFAULT_BULLET_ENERGY,
             nitrogen: SM_GASES[GasId::N2.0 as usize],
+            factors: SmFactors::default(),
         }
     }
 }
@@ -383,6 +433,7 @@ impl Crystal {
         };
         let gas = -self.gas_powerloss_inhibition * powerloss;
         let soothed = -(1.0 - self.gas_powerloss_inhibition).min(0.2 * self.psy_coeff) * powerloss;
+        self.factors.internal_energy = [trickle, immediate, heat, powerloss, gas, soothed];
         self.internal_energy =
             (self.internal_energy + trickle + immediate + heat + powerloss + gas + soothed)
                 .max(0.0);
@@ -394,19 +445,22 @@ impl Crystal {
 
     /// `calculate_zap_transmission_rate`.
     pub fn calculate_zap_transmission_rate(&mut self) {
-        self.zap_transmission_rate = (BASE_POWER_TRANSMISSION_RATE
-            + BASE_POWER_TRANSMISSION_RATE * self.gas_power_transmission_rate)
-            .max(0.0);
+        let gas = BASE_POWER_TRANSMISSION_RATE * self.gas_power_transmission_rate;
+        self.factors.zap = [BASE_POWER_TRANSMISSION_RATE, gas];
+        self.zap_transmission_rate = (BASE_POWER_TRANSMISSION_RATE + gas).max(0.0);
     }
 
     /// `calculate_temp_limit`.
     pub fn calculate_temp_limit(&mut self, total_moles: f64) {
         let base = T0C + HEAT_PENALTY_THRESHOLD;
-        self.temp_limit = (base
-            + self.gas_heat_resistance * base
-            + self.psy_coeff * 45.0
-            + (2.0 - total_moles / 100.0).clamp(0.0, 1.0) * base)
-            .max(TCMB);
+        let factors = [
+            base,
+            self.gas_heat_resistance * base,
+            self.psy_coeff * 45.0,
+            (2.0 - total_moles / 100.0).clamp(0.0, 1.0) * base,
+        ];
+        self.factors.temp_limit = factors;
+        self.temp_limit = factors.iter().sum::<f64>().max(TCMB);
     }
 
     /// `calculate_damage`.
@@ -428,11 +482,13 @@ impl Crystal {
         } else {
             0.0
         };
+        self.factors.damage = [external, heat, power, moles, spaced, heal];
         self.damage = (self.damage + external + heat + power + moles + spaced + heal).max(0.0);
     }
 
     /// `calculate_waste_multiplier`.
     pub fn calculate_waste_multiplier(&mut self) {
+        self.factors.waste_multiplier = [1.0, self.gas_heat_modifier, -0.2 * self.psy_coeff];
         self.waste_multiplier = (1.0 + self.gas_heat_modifier - 0.2 * self.psy_coeff).max(0.5);
     }
 

@@ -124,6 +124,8 @@ pub enum Family {
     Sheetifier,
     /// Atmospheric shield generators (`crate::eng_machines::atmos_shield`).
     AtmosShieldGen,
+    /// Portable gravity units (`crate::power::portagrav`).
+    Portagrav,
     /// Flatpackers (`crate::eng_machines::flatpacker`).
     Flatpacker,
     /// Modular shield generators and gates (`crate::eng_machines::modular_shield`).
@@ -205,6 +207,7 @@ const FAMILIES: [(&str, Family); 51] = [
         crate::eng_machines::atmos_shield::GENERATOR,
         Family::AtmosShieldGen,
     ),
+    (crate::power::portagrav::PORTAGRAV, Family::Portagrav),
     (
         crate::eng_machines::flatpacker::FLATPACKER,
         Family::Flatpacker,
@@ -1210,6 +1213,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::QuantumPad | Family::Teleportation => {}
         Family::Sheetifier => crate::eng_machines::sheetifier::setup(world, machine),
         Family::AtmosShieldGen => crate::eng_machines::atmos_shield::setup(world, machine),
+        Family::Portagrav => crate::power::portagrav::setup(world, machine),
         Family::Flatpacker => crate::eng_machines::flatpacker::setup(world, machine),
         Family::ModularShieldGen | Family::ShieldModule => {
             crate::eng_machines::modular_shield::setup(world, machine)
@@ -1264,6 +1268,7 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
     crate::power::pacman::on_deconstruction(world, machine, pos);
     crate::power::smes::on_deconstruction(world, machine);
     crate::power::smes_portable::on_deconstruction(world, machine);
+    crate::power::portagrav::on_deconstruction(world, machine);
     crate::eng_machines::manufactorio::on_destroy(world, machine);
     let Some(def) = board_def(world, &board) else {
         return;
