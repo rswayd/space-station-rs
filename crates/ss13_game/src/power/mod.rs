@@ -31,6 +31,7 @@ pub mod singularity;
 pub mod smes;
 pub mod solar;
 pub mod supermatter;
+pub mod supermatter_consume;
 pub mod teg;
 pub mod tesla;
 
@@ -376,7 +377,10 @@ impl Plugin for PowerServerPlugin {
                 lighting::LightingPlugin,
                 singularity::SingularityPlugin,
                 tesla::TeslaPlugin,
+            ))
+            .add_plugins((
                 monitor::PowerMonitorPlugin,
+                supermatter_consume::SupermatterConsumePlugin,
             ))
             .add_systems(
                 MapInit,
