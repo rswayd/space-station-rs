@@ -1050,6 +1050,17 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/poster/wanted",
     "/obj/item/poster/wanted/missing",
     "/obj/structure/sign/poster/wanted",
+    // Seditious posters (`ss13_game::decor`, `TRAITOR_POSTERS`).
+    "/obj/item/poster/traitor",
+    "/obj/structure/sign/poster/traitor/small_brain",
+    "/obj/structure/sign/poster/traitor/lick_supermatter",
+    "/obj/structure/sign/poster/traitor/cloning",
+    "/obj/structure/sign/poster/traitor/ai_rights",
+    "/obj/structure/sign/poster/traitor/metroid",
+    "/obj/structure/sign/poster/traitor/low_pay",
+    "/obj/structure/sign/poster/traitor/look_up",
+    "/obj/structure/sign/poster/traitor/accidents",
+    "/obj/structure/sign/poster/traitor/starve",
     // The nightmare's light eater and the morph (`ss13_game::antag`).
     "/obj/item/light_eater",
     "/mob/living/basic/morph",

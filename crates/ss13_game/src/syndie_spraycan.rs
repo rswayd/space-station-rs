@@ -6,10 +6,13 @@
 //!   unfinished one; then the can is spent.
 //! - The finished rune shines: for 5 minutes cleaning does not take it off, then it is an
 //!   ordinary hard decal. From then on it slips whoever moves next to it (6 s, not walking)
-//!   and demoralises those who move within sight of it (7 tiles, conscious, not blind, once
-//!   per mood): an antagonist feels bold (+2), command and security worried (-3), the crew
-//!   uneasy (-2), for 2 minutes.
-// shortcut: no tagger trait, examine demoralising, literacy/light check, traitor objective
+//!   and demoralises those who move within sight of it ([`Demoraliser`]).
+//! - [`Demoraliser`] (tg `/datum/proximity_monitor/advanced/demoraliser`) on a finished rune, a
+//!   hung seditious poster (`crate::decor`) or the wearer of an active psi-echo module
+//!   (`crate::modsuit::modules`): a living mob that moves within sight of it (7 tiles) or
+//!   examines it, conscious, not blind, in light (and literate, for posters), without that
+//!   mood yet, gets the antagonist's, the authority's or the crew's mood for 2 minutes.
+// shortcut: no night vision for the light check; no tagger trait, traitor objective
 // (`COMSIG_TRAITOR_GRAFFITI_DRAWN`/`_SLIPPED`, the traitor objectives' group), suicide face
 // decal; "authority" is a head of staff or a mindshielded job instead of the department
 // bitflags; flying mobs slip too.
@@ -47,28 +50,117 @@ const NO_DRAW_TURFS: [&str; 4] = [
     "/turf/open/lava",
     "/turf/open/chasm",
 ];
-const MOOD_CATEGORY: &str = "evil graffiti";
-const ANTAG_MOOD: MoodEvent = MoodEvent {
-    id: "traitor_graffiti_antag",
-    description: "Логотип Синдиката? Как восхитительно смело.",
-    mood_change: 2.0,
-    timeout: 120.0,
-    hidden: true,
+/// `/datum/demoralise_moods`: the mood category, then the antagonist's, the authority's and the
+/// crew's notification and mood; `literacy`: `READING_CHECK_LITERACY` on top of the light.
+pub struct DemoraliseMoods {
+    pub category: &'static str,
+    pub antag: (&'static str, MoodEvent),
+    pub authority: (&'static str, MoodEvent),
+    pub crew: (&'static str, MoodEvent),
+    pub literacy: bool,
+}
+
+const fn hidden(id: &'static str, description: &'static str, mood_change: f32) -> MoodEvent {
+    MoodEvent {
+        id,
+        description,
+        mood_change,
+        timeout: 120.0,
+        hidden: true,
+    }
+}
+
+/// `/datum/demoralise_moods/graffiti`.
+pub static GRAFFITI: DemoraliseMoods = DemoraliseMoods {
+    category: "evil graffiti",
+    antag: (
+        "Трехглавая змея. Заебись.",
+        hidden(
+            "traitor_graffiti_antag",
+            "Логотип Синдиката? Как восхитительно смело.",
+            2.0,
+        ),
+    ),
+    authority: (
+        "Трехглавая змея означает только неприятности.",
+        hidden(
+            "traitor_graffiti_auth",
+            "Кто из этих бездельников нарисовал логотип Синдиката?!",
+            -3.0,
+        ),
+    ),
+    crew: (
+        "Это... трёхголовая змея?",
+        hidden(
+            "traitor_graffiti_crew",
+            "Логотип Синдиката? Я точно здесь в безопасности?",
+            -2.0,
+        ),
+    ),
+    literacy: false,
 };
-const CREW_MOOD: MoodEvent = MoodEvent {
-    id: "traitor_graffiti_crew",
-    description: "Логотип Синдиката? Я точно здесь в безопасности?",
-    mood_change: -2.0,
-    timeout: 120.0,
-    hidden: true,
+
+/// `/datum/demoralise_moods/poster`.
+pub static POSTER: DemoraliseMoods = DemoraliseMoods {
+    category: "evil poster",
+    antag: (
+        "Хороший плакат.",
+        hidden("traitor_poster_antag", "Я поступаю правильно.", 2.0),
+    ),
+    authority: (
+        "Э блять! Кто повесил этот плакат?",
+        hidden(
+            "traitor_poster_auth",
+            "Надеюсь этот плакат не будет давать экипажу никаких забавных идей...",
+            -3.0,
+        ),
+    ),
+    crew: (
+        "Подожди, а правда ли то, что написано на этом плакате?",
+        hidden(
+            "traitor_poster_crew",
+            "Этот плакат заставил меня чувствовать себя плохо из-за своей работы...",
+            -2.0,
+        ),
+    ),
+    literacy: true,
 };
-const AUTH_MOOD: MoodEvent = MoodEvent {
-    id: "traitor_graffiti_auth",
-    description: "Кто из этих бездельников нарисовал логотип Синдиката?!",
-    mood_change: -3.0,
-    timeout: 120.0,
-    hidden: true,
+
+/// `/datum/demoralise_moods/module`.
+pub static MODULE: DemoraliseMoods = DemoraliseMoods {
+    category: "module",
+    antag: (
+        "Я чувствую себя странно отдохнувшим.",
+        hidden(
+            "traitor_module_antag",
+            "Думаю, я специально создам проблемы.",
+            1.0,
+        ),
+    ),
+    authority: (
+        "У меня начинает кружиться голова. Враг у ворот. Я одинок...",
+        hidden(
+            "traitor_module_auth",
+            "Никто на этой станции не на моей стороне, а врагом может быть кто угодно! Придётся \
+             принять более решительные меры...",
+            -5.0,
+        ),
+    ),
+    crew: (
+        "Моя голова болит. Такое ощущение, будто что-то вбивает мне гвозди в мозг!",
+        hidden(
+            "traitor_module_crew",
+            "Они на станции! Я знаю это! Они собираются схватить меня!",
+            -4.0,
+        ),
+    ),
+    literacy: false,
 };
+
+/// `/datum/proximity_monitor/advanced/demoraliser` on its host (a finished rune, a hung
+/// seditious poster, the wearer of an active psi-echo module), range 7.
+#[derive(Component, Clone, Copy)]
+pub struct Demoraliser(pub &'static DemoraliseMoods);
 
 /// `expended` of a seditious spray can.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -106,7 +198,15 @@ impl Plugin for SyndieSpraycanPlugin {
             Update,
             (
                 protection_ends.run_if(any_with_component::<TraitorRune>),
-                near_runes.after(ss13_world::WorldSystems::Movement),
+                near_runes
+                    .run_if(any_with_component::<TraitorRune>)
+                    .after(ss13_world::WorldSystems::Movement),
+                near_demoralisers
+                    .run_if(any_with_component::<Demoraliser>)
+                    .after(ss13_world::WorldSystems::Movement),
+                examined
+                    .run_if(any_with_component::<Demoraliser>)
+                    .after(crate::click::ResolveClicks),
             ),
         );
     }
@@ -308,6 +408,9 @@ pub fn set_stage(world: &mut World, rune: Entity, stage: RuneStage) {
             r.removable_at = now + PROTECTED_SECS;
         }
     }
+    if stage == RuneStage::Complete {
+        world.entity_mut(rune).insert(Demoraliser(&GRAFFITI));
+    }
     let id = world
         .get_resource::<IconIndex>()
         .and_then(|ix| ix.get(RUNE_DMI, state));
@@ -342,8 +445,7 @@ fn protection_ends(world: &mut World) {
     }
 }
 
-/// The finished runes' proximity monitors: a living mob that moved next to one slips
-/// (`HasProximity`), one that moved within its sight is demoralised (`field_turf_crossed`).
+/// The finished runes' `HasProximity`: a living mob that moved next to one slips.
 // Cost: per tick, the moved living mobs × the finished runes (a handful per round).
 fn near_runes(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
     let moved: Vec<(Entity, TilePos)> = cursor
@@ -366,24 +468,60 @@ fn near_runes(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
         if world.get::<Health>(mob).is_none() {
             continue;
         }
-        for &rune in &runes {
-            let Some(dist) = to.chebyshev(rune) else {
-                continue;
-            };
-            if dist <= 1 {
-                crate::janitor::try_slip(world, mob, (SLIP_SECS, true));
-            }
-            if dist <= DEMORALISE_RANGE
-                && crate::mobs::ai::behaviors::can_see(world, to, rune, DEMORALISE_RANGE)
+        if runes
+            .iter()
+            .any(|&rune| to.chebyshev(rune).is_some_and(|d| d <= 1))
+        {
+            crate::janitor::try_slip(world, mob, (SLIP_SECS, true));
+        }
+    }
+}
+
+/// `demoraliser/field_turf_crossed`: a living mob that moved within sight of a host.
+// Cost: per tick, the moved living mobs × the demoralisers (a handful per round).
+fn near_demoralisers(world: &mut World, mut cursor: Local<MessageCursor<Moved>>) {
+    let moved: Vec<(Entity, TilePos)> = cursor
+        .read(world.resource::<Messages<Moved>>())
+        .map(|m| (m.entity, m.to))
+        .collect();
+    if moved.is_empty() {
+        return;
+    }
+    let mut q = world.query::<(&Demoraliser, &TilePos)>();
+    let hosts: Vec<(&'static DemoraliseMoods, TilePos)> =
+        q.iter(world).map(|(d, &p)| (d.0, p)).collect();
+    for (mob, to) in moved {
+        if world.get::<Health>(mob).is_none() {
+            continue;
+        }
+        for &(moods, at) in &hosts {
+            if to.chebyshev(at).is_some_and(|d| d <= DEMORALISE_RANGE)
+                && crate::mobs::ai::behaviors::can_see(world, to, at, DEMORALISE_RANGE)
             {
-                demoralise(world, mob);
+                demoralise(world, mob, moods);
             }
         }
     }
 }
 
+/// `demoraliser/on_examine`: a living examiner of a host is demoralised at any distance.
+fn examined(world: &mut World, mut cursor: Local<MessageCursor<crate::click::ExamineClick>>) {
+    let clicks: Vec<(Entity, Entity)> = cursor
+        .read(world.resource::<Messages<crate::click::ExamineClick>>())
+        .map(|c| (c.examiner, c.target))
+        .collect();
+    for (examiner, host) in clicks {
+        if world.get::<Health>(examiner).is_none() {
+            continue;
+        }
+        if let Some(&Demoraliser(moods)) = world.get::<Demoraliser>(host) {
+            demoralise(world, examiner, moods);
+        }
+    }
+}
+
 /// `demoraliser/on_seen`.
-fn demoralise(world: &mut World, viewer: Entity) {
+pub fn demoralise(world: &mut World, viewer: Entity, moods: &DemoraliseMoods) {
     let Some(client) = world
         .get::<crate::server::PlayerMob>(viewer)
         .map(|p| p.client)
@@ -396,20 +534,30 @@ fn demoralise(world: &mut World, viewer: Entity) {
     }
     if world
         .get::<Mood>(viewer)
-        .is_none_or(|m| m.get(MOOD_CATEGORY).is_some())
+        .is_none_or(|m| m.get(moods.category).is_some())
     {
+        return;
+    }
+    // `can_read(host, reading_requirements, silent = TRUE)`.
+    if moods.literacy && crate::medical::traumas::illiterate(world, viewer) {
+        return;
+    }
+    let lit = world.get::<TilePos>(viewer).is_none_or(|&pos| {
+        crate::antag::nightmare::is_lit(crate::botany::lumcount(world, pos), 0.2)
+    });
+    if !lit {
         return;
     }
     use crate::antag::revolution::server::{is_head_of_staff, mindshielded};
     let (text, event) = if world.get::<crate::antag::AntagHudData>(viewer).is_some() {
-        ("Трехглавая змея. Заебись.", &ANTAG_MOOD)
+        &moods.antag
     } else if is_head_of_staff(world, viewer) || mindshielded(world, viewer) {
-        ("Трехглавая змея означает только неприятности.", &AUTH_MOOD)
+        &moods.authority
     } else {
-        ("Это... трёхголовая змея?", &CREW_MOOD)
+        &moods.crew
     };
-    tell(world, client, Span::Notice, text);
-    crate::mood::add_event(world, viewer, MOOD_CATEGORY, event);
+    tell(world, client, Span::Notice, *text);
+    crate::mood::add_event(world, viewer, moods.category, event);
 }
 
 #[cfg(test)]

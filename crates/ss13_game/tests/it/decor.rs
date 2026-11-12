@@ -45,6 +45,17 @@ const TYPES: &str = r##"{
         "name": "poster", "icon_state": "poster" } },
     "/obj/structure/sign/poster/ripped": { "parent": "/obj/structure/sign/poster",
         "declared_vars": { "name": "ripped poster", "icon_state": "poster_ripped" } },
+    "/obj/structure/sign/poster/traitor": { "parent": "/obj/structure/sign/poster",
+        "declared_vars": { "name": "seditious poster" } },
+    "/obj/structure/sign/poster/traitor/small_brain": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/lick_supermatter": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/cloning": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/ai_rights": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/metroid": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/low_pay": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/look_up": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/accidents": { "parent": "/obj/structure/sign/poster/traitor" },
+    "/obj/structure/sign/poster/traitor/starve": { "parent": "/obj/structure/sign/poster/traitor" },
     "/obj/structure/showcase": { "parent": "/obj/structure", "declared_vars": {
         "name": "showcase", "icon": { "resource": "fl.dmi" }, "icon_state": "showcase",
         "density": 1 } },
@@ -71,6 +82,8 @@ const TYPES: &str = r##"{
     "/obj/item/grown/log/tree": { "parent": "/obj/item/grown/log" },
     "/obj/item/poster": { "parent": "/obj/item", "declared_vars": {
         "icon": { "resource": "p.dmi" }, "icon_state": "rolled_poster" } },
+    "/obj/item/poster/traitor": { "parent": "/obj/item/poster", "declared_vars": {
+        "name": "random traitor poster" } },
     "/obj/item/stack": { "parent": "/obj/item", "declared_vars": { "amount": 1, "max_amount": 50 } },
     "/obj/item/stack/sheet": { "parent": "/obj/item/stack" },
     "/obj/item/stack/sheet/iron": { "parent": "/obj/item/stack/sheet" },
@@ -160,6 +173,16 @@ fn fixture_assets() -> PathBuf {
         "/obj/item/crowbar",
         "/obj/item/grown/log/tree",
         "/obj/item/poster",
+        "/obj/item/poster/traitor",
+        "/obj/structure/sign/poster/traitor/small_brain",
+        "/obj/structure/sign/poster/traitor/lick_supermatter",
+        "/obj/structure/sign/poster/traitor/cloning",
+        "/obj/structure/sign/poster/traitor/ai_rights",
+        "/obj/structure/sign/poster/traitor/metroid",
+        "/obj/structure/sign/poster/traitor/low_pay",
+        "/obj/structure/sign/poster/traitor/look_up",
+        "/obj/structure/sign/poster/traitor/accidents",
+        "/obj/structure/sign/poster/traitor/starve",
         "/obj/item/stack/sheet/iron",
         "/turf/open/floor",
         "/turf/closed/wall",
@@ -323,6 +346,56 @@ fn rip_roll_and_hang_posters() {
     let hung = s.obj_on(SPAWN, "/obj/structure/sign/poster").unwrap();
     assert_eq!(s.get::<Appearance>(hung).pixel_offset, [0, -32]);
     assert!(s.held().is_none(), "the rolled poster is used up");
+}
+
+#[test]
+fn a_seditious_poster_hangs_as_a_random_one_that_demoralises() {
+    let mut s = Station::start();
+    let rolled = s.give_new("/obj/item/poster/traitor");
+    s.run_for(1.0);
+    assert_eq!(
+        s.get::<RolledPoster>(rolled).structure,
+        "/obj/structure/sign/poster/traitor/random"
+    );
+    let wall = s.turf_at(SOUTH_WALL);
+    s.click(0, wall);
+    s.run_until("hung", |s| {
+        let world = s.server.world();
+        world
+            .resource::<SpatialIndex>()
+            .on_tile(SPAWN)
+            .iter()
+            .any(|&e| {
+                world
+                    .get::<ss13_game::syndie_spraycan::Demoraliser>(e)
+                    .is_some()
+            })
+    });
+    let world = s.server.world();
+    let hung = world
+        .resource::<SpatialIndex>()
+        .on_tile(SPAWN)
+        .iter()
+        .copied()
+        .find(|&e| {
+            world
+                .get::<ss13_game::syndie_spraycan::Demoraliser>(e)
+                .is_some()
+        })
+        .unwrap();
+    let path = world.get::<DmObj>(hung).unwrap().path.clone();
+    assert!(
+        ss13_game::decor::TRAITOR_POSTERS.contains(&path.as_str()),
+        "{path}"
+    );
+    assert_eq!(
+        world
+            .get::<ss13_game::syndie_spraycan::Demoraliser>(hung)
+            .unwrap()
+            .0
+            .category,
+        "evil poster"
+    );
 }
 
 #[test]
