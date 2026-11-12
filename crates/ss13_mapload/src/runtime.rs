@@ -1140,6 +1140,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/bikehorn/airhorn",
     "/obj/item/bodybag",
     "/obj/item/bodybag/bluespace",
+    // A tourniquet taken off or dropped with its limb (`ss13_game::medical::tourniquet`).
+    "/obj/item/tourniquet",
     // The roller bed and the emergency bed it unfolds into (`ss13_game::furniture`).
     "/obj/item/emergency_bed",
     "/obj/structure/bed/medical/emergency",

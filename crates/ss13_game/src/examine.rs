@@ -570,6 +570,18 @@ fn examine(world: &mut World, mut clicks: Local<MessageCursor<ExamineClick>>) {
                 message,
             });
         }
+        // Tourniquets, with the links to take them off.
+        for message in crate::medical::tourniquet::examine_messages(
+            world,
+            click.client,
+            click.examiner,
+            click.target,
+        ) {
+            world.write_message(SendChat {
+                clients: vec![click.client],
+                message,
+            });
+        }
         // Hidden prints for admins only (`R_ADMIN` checked inside).
         crate::forensics::server::admin_examine(world, click.client, click.target);
         crate::quirks::examined(world, click.examiner, click.target);

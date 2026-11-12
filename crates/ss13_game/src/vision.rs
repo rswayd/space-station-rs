@@ -398,6 +398,16 @@ pub fn set_eye_blur_if_lower(world: &mut World, mob: Entity, secs: f32) {
     }
 }
 
+/// tg `adjust_eye_blur(seconds)`.
+pub fn adjust_eye_blur(world: &mut World, mob: Entity, secs: f32) {
+    if world.get::<OrganHost>(mob).is_none() {
+        return;
+    }
+    if let Some(mut v) = vision_mut(world, mob) {
+        v.blur = (v.blur + secs).max(0.0);
+    }
+}
+
 /// tg `remove_status_effect(/datum/status_effect/eye_blur)`.
 pub fn cure_eye_blur(world: &mut World, mob: Entity) {
     if let Some(mut v) = world.get_mut::<Vision>(mob) {

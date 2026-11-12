@@ -56,6 +56,7 @@ pub mod stasis;
 pub mod strange_reagent;
 pub mod surgery;
 pub mod symptoms;
+pub mod tourniquet;
 pub mod traumas;
 pub mod wounds;
 
@@ -147,6 +148,10 @@ pub enum MedJob {
     Defib { unit: Entity, stage: defib::Stage },
     /// An autosurgeon implanting someone else ([`cyberimps::finish_autosurgeon`]).
     Autosurgeon,
+    /// A tourniquet going on ([`tourniquet::complete`]).
+    Tourniquet { zone: BodyZone },
+    /// A tourniquet coming off through the examine link ([`tourniquet::complete_removal`]).
+    RemoveTourniquet { zone: BodyZone },
     /// A wound treatment ([`wounds::finish_treatment`]).
     Treat {
         zone: BodyZone,
@@ -175,6 +180,10 @@ pub fn complete_med(world: &mut World, mob: Entity, action: &DoAfter, job: MedJo
         MedJob::LoadDisk => operating::finish_load(world, actor, target),
         MedJob::Defib { unit, stage } => defib::complete(world, mob, action, unit, stage),
         MedJob::Autosurgeon => cyberimps::finish_autosurgeon(world, actor, target),
+        MedJob::Tourniquet { zone } => tourniquet::complete(world, actor, target, zone),
+        MedJob::RemoveTourniquet { zone } => {
+            tourniquet::complete_removal(world, mob, target, zone);
+        }
         MedJob::Treat { zone, treat, kind } => {
             wounds::finish_treatment(world, actor, target, zone, treat, kind);
         }
@@ -262,6 +271,7 @@ impl Plugin for MedicalServerPlugin {
         limbgrower::build(app);
         iv_drip::build(app);
         strange_reagent::build(app);
+        tourniquet::build(app);
     }
 }
 
@@ -453,6 +463,13 @@ pub fn item_interaction(
             begin_wrap(world, actor, target);
         } else {
             begin_heal_loop(world, actor, target, !modifiers.right);
+        }
+        return true;
+    }
+    if is_under(&path, tourniquet::TOURNIQUET) {
+        if world.get::<wounds::Limbs>(target).is_some() {
+            let zone = selected_zone(world, mob);
+            tourniquet::begin(world, actor, target, zone);
         }
         return true;
     }
@@ -1229,6 +1246,7 @@ fn life_tick(world: &mut World, mob: Entity, secs: f32, now: f64) {
             }
         }
     }
+    tourniquet::neck_tick(world, &mut rng, mob, secs);
     organs::life(world, mob, secs, dead, bodytemperature);
     let dead = world.get::<Stat>(mob) == Some(&Stat::Dead);
     if !dead {

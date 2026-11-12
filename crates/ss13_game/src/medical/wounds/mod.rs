@@ -294,6 +294,8 @@ pub struct Limb {
     pub robotic: bool,
     /// tg `scars` of the bodypart ([`scars`]).
     pub scars: Vec<scars::Scar>,
+    /// `applied_items[LIMB_ITEM_TOURNIQUET]` (`crate::medical::tourniquet`).
+    pub tourniquet: bool,
 }
 
 impl Limb {
@@ -382,6 +384,9 @@ impl Limb {
         if lying {
             rate *= 0.75;
         }
+        if self.tourniquet {
+            rate *= crate::medical::tourniquet::BLEED_FACTOR;
+        }
         rate
     }
 
@@ -457,6 +462,12 @@ impl Limbs {
             .count();
         let usable = 2 - disabled;
         let mut slowdown = (2 - usable) as f32 * 3.0;
+        // A tourniquet's `set_speed_modifier(speed_modifier + 0.5)` on a leg.
+        slowdown += legs
+            .iter()
+            .filter(|&&z| self.limb(z).tourniquet && !self.limb(z).missing)
+            .count() as f32
+            * crate::medical::tourniquet::LEG_SLOWDOWN;
         // The limp alternates legs: each step rolls one leg's chance.
         for leg in legs {
             let (limp, chance) = self.limb(leg).limp();
