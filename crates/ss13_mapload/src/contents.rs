@@ -165,6 +165,46 @@ pub struct DmStorage {
     pub max_total_storage: u32,
 }
 
+/// What a storage item's `storage_type` may hold (`set_holdable` in the datum's `New`): type
+/// paths, subtypes included. Only on storages with at least one list.
+#[derive(Component, Reflect, Clone, Debug, Default, PartialEq)]
+pub struct DmHoldable {
+    /// Empty: anything.
+    pub can_hold: Vec<String>,
+    pub cant_hold: Vec<String>,
+    /// These fit whatever their size, `exception_max` of them at once.
+    pub exception_hold: Vec<String>,
+    pub exception_max: u32,
+}
+
+/// `path`'s `storage_type` lists: the nearest `/datum/storage` ancestor with its own
+/// `set_holdable` call.
+pub fn holdable(types: &DmTypes, path: &str) -> Option<DmHoldable> {
+    let datum = match types.resolved(path, "storage_type")? {
+        serde_json::Value::Object(o) => o.get("path")?.as_str()?,
+        _ => return None,
+    };
+    let raw = types.chain(datum).find_map(|t| types.holdable.get(t))?;
+    let known = |list: &Option<Vec<String>>| -> Vec<String> {
+        list.iter()
+            .flatten()
+            .filter(|p| types.types.contains_key(*p))
+            .cloned()
+            .collect()
+    };
+    let out = DmHoldable {
+        can_hold: known(&raw.can_hold),
+        cant_hold: known(&raw.cant_hold),
+        exception_hold: known(&raw.exception_hold),
+        exception_max: types
+            .resolved(datum, "exception_max")
+            .and_then(|v| num(Some(v)))
+            .map_or(1, |n| n.max(0.0) as u32),
+    };
+    (!(out.can_hold.is_empty() && out.cant_hold.is_empty() && out.exception_hold.is_empty()))
+        .then_some(out)
+}
+
 impl Default for DmStorage {
     /// `/datum/storage` defaults.
     fn default() -> Self {
@@ -299,6 +339,30 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             "dm_storage",
             "max_total_storage",
             storage.max_total_storage.to_string(),
+        ));
+    }
+    // A subtype whose `storage_type` holds anything still overrides its parent's lists.
+    let parent_holds = ty
+        .parent
+        .as_deref()
+        .is_some_and(|p| holdable(types, p).is_some());
+    let hold = holdable(types, path);
+    if is_under(path, STORAGE_ROOT)
+        && (hold.is_some() || parent_holds)
+        && let Some(hold) = hold.or_else(|| Some(DmHoldable::default()))
+    {
+        let list = |l: &Vec<String>| ron::to_string(l).expect("strings always serialize");
+        out.push(ext("dm_holdable", "can_hold", list(&hold.can_hold)));
+        out.push(ext("dm_holdable", "cant_hold", list(&hold.cant_hold)));
+        out.push(ext(
+            "dm_holdable",
+            "exception_hold",
+            list(&hold.exception_hold),
+        ));
+        out.push(ext(
+            "dm_holdable",
+            "exception_max",
+            hold.exception_max.to_string(),
         ));
     }
     if let Some(contents) = contents(types, path) {

@@ -127,9 +127,8 @@ pub struct Candidate {
 
 /// tg `/datum/storage/proc/can_insert` for the rules that exist here: weight class, slots,
 /// total weight, anchoring, nesting (`allow_big_nesting = FALSE`) and the outer storage.
-// shortcut: no `can_hold`/`cant_hold` type lists (the medal box takes anything), `exception_hold`
-// or `TRAIT_NODROP`; add them with the storages that use them (belts, holsters). A locked
-// lockbox is refused in [`can_insert`].
+// shortcut: no `TRAIT_NODROP`. The `can_hold`/`cant_hold`/`exception_hold` type lists
+// ([`ss13_mapload::DmHoldable`]) and a locked lockbox are checked in [`can_insert`].
 pub fn fits(
     storage: &Storage,
     container_w_class: u8,
@@ -211,7 +210,47 @@ pub fn can_insert(world: &World, storage: Entity, item: Entity) -> Result<(), Re
         anchored: dm.anchored,
         is_storage: world.get::<Storage>(item).is_some(),
     };
-    fits(limits, w_class(world, storage), &contents, outer, candidate)
+    // tg `can_insert`: the storage type's `set_holdable` lists.
+    let mut limits = *limits;
+    if let Some(hold) = world.get::<ss13_mapload::DmHoldable>(storage) {
+        let listed = |list: &[String]| {
+            list.iter()
+                .any(|root| ss13_mapload::fidelity::is_under(&dm.path, root))
+        };
+        let exception = listed(&hold.exception_hold);
+        if candidate.w_class > limits.max_specific_storage {
+            if !exception {
+                return Err(Refusal::TooBig);
+            }
+            let held = world.get::<Stored>(storage).map_or(0, |s| {
+                s.items()
+                    .iter()
+                    .filter(|&&e| {
+                        world.get::<DmItem>(e).is_some_and(|i| {
+                            hold.exception_hold
+                                .iter()
+                                .any(|r| ss13_mapload::fidelity::is_under(&i.path, r))
+                        })
+                    })
+                    .count()
+            });
+            if held as u32 >= hold.exception_max {
+                return Err(Refusal::Full);
+            }
+            limits.max_specific_storage = candidate.w_class;
+        }
+        let can = hold.can_hold.is_empty() || listed(&hold.can_hold) || exception;
+        if !can || listed(&hold.cant_hold) {
+            return Err(Refusal::CantHold);
+        }
+    }
+    fits(
+        &limits,
+        w_class(world, storage),
+        &contents,
+        outer,
+        candidate,
+    )
 }
 
 /// Into `container` from wherever it is (a hand, the floor, another container).
@@ -1051,6 +1090,56 @@ mod tests {
             anchored: false,
             is_storage: false,
         }
+    }
+
+    #[test]
+    fn holdable_lists_follow_can_insert() {
+        let mut world = World::new();
+        let item = |world: &mut World, path: &str, w_class: u8| {
+            world
+                .spawn((
+                    DmItem {
+                        path: path.into(),
+                        ..default()
+                    },
+                    DmWeight { w_class },
+                ))
+                .id()
+        };
+        let belt = world
+            .spawn((
+                DmItem {
+                    path: "/obj/item/storage/belt".into(),
+                    ..default()
+                },
+                DmWeight { w_class: 4 },
+                Storage {
+                    max_slots: 7,
+                    max_specific_storage: 2,
+                    max_total_storage: 21,
+                },
+                ss13_mapload::DmHoldable {
+                    can_hold: vec!["/obj/item/crowbar".into()],
+                    cant_hold: vec!["/obj/item/crowbar/red".into()],
+                    exception_hold: vec!["/obj/item/fish_tank".into()],
+                    exception_max: 1,
+                },
+            ))
+            .id();
+        let crowbar = item(&mut world, "/obj/item/crowbar/large", 2);
+        let red = item(&mut world, "/obj/item/crowbar/red", 2);
+        let pen = item(&mut world, "/obj/item/pen", 1);
+        let tank = item(&mut world, "/obj/item/fish_tank", 4);
+        let big = item(&mut world, "/obj/item/crowbar/huge", 4);
+        assert_eq!(can_insert(&world, belt, crowbar), Ok(()));
+        assert_eq!(can_insert(&world, belt, red), Err(Refusal::CantHold));
+        assert_eq!(can_insert(&world, belt, pen), Err(Refusal::CantHold));
+        // An exception fits whatever its size, once.
+        assert_eq!(can_insert(&world, belt, tank), Ok(()));
+        assert_eq!(can_insert(&world, belt, big), Err(Refusal::TooBig));
+        put_inside(&mut world, tank, belt);
+        let second = item(&mut world, "/obj/item/fish_tank", 4);
+        assert_eq!(can_insert(&world, belt, second), Err(Refusal::Full));
     }
 
     #[test]

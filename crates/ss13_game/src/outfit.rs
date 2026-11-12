@@ -6,7 +6,7 @@
 //! ([`fill_backpack`]).
 // The outfit's `accessory` is pinned to its uniform (`crate::clothing::accessories::pin`).
 // The outfit's `implants` go in last, silently ([`implant_outfit`]).
-// shortcut: no `can_equip` check (tg deletes an item that does not fit), no `belt_contents`,
+// shortcut: no `can_equip` check (tg deletes an item that does not fit),
 // no `internals_slot` (tg opens that tank at spawn).
 
 use std::collections::HashMap;
@@ -176,16 +176,22 @@ pub fn equip_outfit(
 /// tg `equip`: `box` first, then every `backpack_contents` entry (`count` times) into the
 /// backpack (`equip_to_storage(..., del_on_fail = TRUE)`: what does not fit is deleted).
 pub fn fill_backpack(world: &mut World, pack: Entity, outfit: &Outfit) {
-    for (path, count) in &outfit.backpack_contents {
+    fill_storage(world, pack, &outfit.backpack_contents, &outfit.path);
+}
+
+/// `contents` (type, count) into `pack`, as [`fill_backpack`]; a `pack` without storage takes
+/// nothing.
+pub fn fill_storage(world: &mut World, pack: Entity, contents: &[(String, u32)], outfit: &str) {
+    if world.get::<crate::storage::Storage>(pack).is_none() {
+        return;
+    }
+    for (path, count) in contents {
         for _ in 0..*count {
             let item = world.resource_scope(|world, templates: Mut<OutfitTemplates>| {
                 Some(templates.0.get(path)?.spawn(world, None))
             });
             let Some(item) = item else {
-                warn!(
-                    "{}: no prototype for {path}; not in the backpack",
-                    outfit.path
-                );
+                warn!("{outfit}: no prototype for {path}; not in the storage");
                 break;
             };
             crate::storage::finish_item(world, item, 1);

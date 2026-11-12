@@ -245,6 +245,7 @@ fn operative_outfit(path: &str) -> Outfit {
         backpack_contents: vec![("/obj/item/storage/box/survival".into(), 1)],
         accessory: None,
         implants: Vec::new(),
+        belt_contents: Vec::new(),
     }
 }
 

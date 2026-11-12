@@ -13,6 +13,7 @@ use dreammaker::objtree::{ObjectTree, TypeRef, VarValue};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+pub mod holdable;
 pub mod populate;
 
 /// Vars whose resolved (inherited, const-evaluated) values are dumped for every type.
@@ -185,6 +186,9 @@ pub struct Dump {
     pub element_calls: BTreeMap<&'static str, Vec<ElementCall>>,
     /// What container types spawn into themselves ([`populate`]).
     pub populate: populate::Populate,
+    /// What each `/datum/storage` type may hold ([`holdable`]).
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub holdable: holdable::Holdable,
     /// `SSid_access.accesses_by_flag`: access flag (as a decimal string) -> its accesses.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub access_flags: BTreeMap<String, Vec<String>>,
@@ -244,6 +248,7 @@ pub fn extract(env: &Environment) -> (Dump, NonConstStats) {
     }
     let element_calls = element_calls(env, &mut sources);
     let populate = populate::populate(env, &mut sources);
+    let holdable = holdable::holdable(env);
     let access_flags = proc_code(env, ACCESS_FLAGS_PROC.0, ACCESS_FLAGS_PROC.1)
         .and_then(access_flag_groups)
         .unwrap_or_else(|| {
@@ -282,6 +287,7 @@ pub fn extract(env: &Environment) -> (Dump, NonConstStats) {
         types,
         element_calls,
         populate,
+        holdable,
         access_flags,
         globals,
         unparsed_access_helpers,

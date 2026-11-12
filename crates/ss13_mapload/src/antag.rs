@@ -795,6 +795,7 @@ impl AntagData {
                     .iter()
                     .map(|(_, p)| p.as_str())
                     .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+                    .chain(o.belt_contents.iter().map(|(p, _)| p.as_str()))
             })
             .collect()
     }
@@ -808,6 +809,7 @@ impl AntagData {
                     .iter()
                     .map(|(_, p)| p.as_str())
                     .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+                    .chain(o.belt_contents.iter().map(|(p, _)| p.as_str()))
             })
             .collect()
     }
@@ -821,6 +823,7 @@ impl AntagData {
                     .iter()
                     .map(|(_, p)| p.as_str())
                     .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+                    .chain(o.belt_contents.iter().map(|(p, _)| p.as_str()))
             })
             .chain(NUKEOP_RUNTIME_TYPES)
             .collect()

@@ -406,6 +406,7 @@ pub fn fallback_jobs() -> JobsData {
                 backpack_contents: vec![(ss13_mapload::RUNTIME_CONTAINER_TYPES[1].into(), 1)],
                 accessory: None,
                 implants: Vec::new(),
+                belt_contents: Vec::new(),
             }),
             trim: Some("/datum/id_trim/job/assistant".into()),
             assignment: "Assistant".into(),
@@ -557,6 +558,10 @@ pub fn join(world: &mut World, client: Entity, job: usize, latejoin: bool) -> En
     inventory.back = crate::storage::spawn_backpack(world, mob);
     if let (Some(pack), Some(outfit)) = (inventory.back, &def.outfit) {
         crate::outfit::fill_backpack(world, pack, outfit);
+    }
+    // tg `equip`: `belt_contents` into the belt's storage.
+    if let (Some(belt), Some(outfit)) = (inventory.belt, &def.outfit) {
+        crate::outfit::fill_storage(world, belt, &outfit.belt_contents, &outfit.path);
     }
     world.entity_mut(mob).insert(inventory);
     // `/datum/outfit/job/detective/post_equip`: the cigarette is lit.

@@ -120,6 +120,9 @@ pub struct Outfit {
     /// `implants`: implant types put into the body after the items (`implant(user, null, TRUE)`).
     #[serde(default)]
     pub implants: Vec<String>,
+    /// `belt_contents` (type, count): into the storage worn on the belt.
+    #[serde(default)]
+    pub belt_contents: Vec<(String, u32)>,
 }
 
 impl Outfit {
@@ -247,6 +250,7 @@ impl JobsData {
                 let slots = o.items.iter().map(|(_, p)| p.as_str());
                 slots
                     .chain(o.backpack_contents.iter().map(|(p, _)| p.as_str()))
+                    .chain(o.belt_contents.iter().map(|(p, _)| p.as_str()))
                     .chain(o.accessory.as_deref())
             })
             .collect()
@@ -322,12 +326,20 @@ pub fn outfit(types: &DmTypes, path: &str) -> Outfit {
         .into_iter()
         .filter_map(|(k, _)| path_value(Some(k)))
         .collect();
+    let belt_contents = list_items(types.resolved(path, "belt_contents"))
+        .into_iter()
+        .filter_map(|(key, count)| {
+            let n = count.and_then(Value::as_f64).unwrap_or(1.0).max(1.0) as u32;
+            Some((path_value(Some(key))?, n))
+        })
+        .collect();
     Outfit {
         path: path.to_owned(),
         items,
         backpack_contents,
         accessory: slot("accessory"),
         implants,
+        belt_contents,
     }
 }
 

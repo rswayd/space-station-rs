@@ -36,6 +36,23 @@ pub struct DmTypes {
     /// `init_factors()` lists by reaction type (`ss13_dm_extract`). Absent in older dumps.
     #[serde(default)]
     pub reaction_factors: BTreeMap<String, serde_json::Value>,
+    /// `set_holdable` lists by `/datum/storage` type (`ss13_dm_extract::holdable`). Absent in
+    /// older dumps.
+    #[serde(default)]
+    pub holdable: HashMap<String, RawHoldLists>,
+}
+
+/// One storage type's own `set_holdable` call; a `None` list was not passed.
+#[derive(Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct RawHoldLists {
+    #[serde(default)]
+    pub can_hold: Option<Vec<String>>,
+    #[serde(default)]
+    pub cant_hold: Option<Vec<String>>,
+    #[serde(default)]
+    pub exception_hold: Option<Vec<String>>,
+    #[serde(default)]
+    pub unsupported: bool,
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]

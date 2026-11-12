@@ -5,7 +5,7 @@
 `equip`: слоты (униформа, костюм, обувь, перчатки, голова, маска, глаза, уши, пояс, ID, руки, карманы, рюкзак), содержимое рюкзака и пояса, коробка выживания, баллон для internals, отпечатки; `pre_equip`/`post_equip`.
 
 - **Код:** [`/datum/outfit`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/outfit.dm#L16), [`/datum/outfit/proc/equip()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/outfit.dm#L178), [`/datum/outfit/proc/pre_equip()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/outfit.dm#L143), [`/datum/outfit/proc/post_equip()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/outfit.dm#L158)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/outfit.rs`: слоты, `box`, `backpack_contents`; нет `can_equip`, `belt_contents`, `internals_slot`, отпечатков
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/outfit.rs`: слоты, `box`, `backpack_contents`, `belt_contents` (`fill_storage`), аксессуар, импланты; нет `can_equip`, `internals_slot`, отпечатков
 
 ### Аутфиты профессий
 `/datum/outfit/job/*`: экипировка профессии с выбором рюкзака/сумки/вещмешка по предпочтениям, ID-картой трима, КПК, гарнитурой.
