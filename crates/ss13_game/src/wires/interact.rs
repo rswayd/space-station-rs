@@ -123,7 +123,7 @@ pub(super) fn status(s: &WiresSourceItem<'_, '_>) -> Vec<String> {
             ]
         }
         // `/datum/wires/mulebot` and `/datum/wires/explosive` have no `get_status`.
-        WireHolder::Mulebot | WireHolder::ChemGrenade => Vec::new(),
+        WireHolder::Mulebot | WireHolder::ChemGrenade | WireHolder::CollarBomb => Vec::new(),
         // Refreshed by `crate::machine_wires` while the window is open.
         WireHolder::Machine(_) => s.machine_status.map(|m| m.0.clone()).unwrap_or_default(),
         WireHolder::Autolathe => {
@@ -234,6 +234,7 @@ pub fn screwdriver_act(world: &mut World, actor: Actor, kind: ToolKind, target: 
         | WireHolder::Autolathe
         | WireHolder::Mulebot
         | WireHolder::ChemGrenade
+        | WireHolder::CollarBomb
         | WireHolder::Machine(_) => return false,
     };
     crate::tools::tell(world, actor.client, Span::Notice, text);

@@ -17,7 +17,7 @@
 Герметичный комбинезон плазмамена: не даёт им гореть в кислороде, сам тушит владельца с перезарядкой, пополняется картриджами.
 
 - **Код:** [`/obj/item/clothing/under/plasmaman`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/jobs/Plasmaman/civilian_service.dm#L2), [`code/modules/clothing/under/jobs/Plasmaman`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/under/jobs/Plasmaman)
-- **Статус в ss13-rs:** ❌ нет — нет вида плазменов и самотушения
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/clothing/envirosuit.rs`: комбинезон работает из слота униформы — 5 зарядов самотушения при герметичности (`PLASMAMAN_PREVENT_IGNITION` со шлемом), перезарядка 10 с, заряды при осмотре, картридж `/obj/item/extinguisher_refill` перезаправляет; клоунский (`plasmaman/clown`) вместо этого разбрызгивает пену космической смазки (`do_foam(4, lube 15)`); горение плазмамена в кислороде без герметичности — `crates/ss13_game/src/species/mod.rs`; нет частицы воды при тушении
 
 ### Подкатывание комбинезона
 Alt-клик сворачивает комбинезон (`can_adjust`, меняет спрайт и открывает торс), правый alt-клик — альтернативный стиль.

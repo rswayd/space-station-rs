@@ -72,4 +72,4 @@
 Взрывной ошейник с пультом: нельзя снять, по кнопке взрывается.
 
 - **Код:** [`/obj/item/clothing/neck/collar_bomb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/neck/collar_bomb.dm#L2), [`/obj/item/collar_bomb_button`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/neck/collar_bomb.dm#L89)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ — `crates/ss13_game/src/clothing/collar_bomb.rs`: на шее не снимается (`NoDrop`); кнопка (1,2 с нажатия) или импульс единственного провода (`/datum/wires/collar_bomb`: мультитул в окне проводов, сигналер на проводе; цвета на каждый ошейник, ЭМИ не действует, носитель до проводов не дотягивается — `crates/ss13_game/src/wires/`) запускают 5-секундный отсчёт со звуком и цифрами; в конце у человека на шее — 200 урона голове и отрыв головы, иначе «осечка»; коробка `/obj/item/storage/box/collar_bomb` связывает кнопку со своим ошейником; нет задержек надевания (6/8 с), `cuffable_item`, красной вспышки экрана

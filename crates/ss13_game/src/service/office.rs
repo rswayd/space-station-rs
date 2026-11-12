@@ -18,7 +18,8 @@
 //!   faxes to send it to (and the Central Command network), or takes it out. The receiving fax
 //!   says who sent it and drops it 1.9 s later.
 // shortcut: tier-1 stock parts (30 sheets, efficiency 2, 4 s per copy) and one blank paper
-// kind; photos are copied in colour only (no greyscale mode); no blank-form or ass copies,
+// kind; photos are copied in colour only (no greyscale mode); forms ([`super::blanks`]) are
+// a list (category: name) instead of the window's tabs; no ass copies,
 // payment, emag, toner colour or pixel shifting; folders cannot be renamed or cut apart;
 // planes have no eye hits, carbon look or stamp overlays; the fax has no wires, jams,
 // history, emag network or multitool renaming, and a fax to Central Command reaches the
@@ -102,6 +103,9 @@ pub struct Photocopier {
     pub copies: u32,
     /// `copies_left`: busy while above zero.
     pub queue: u32,
+    /// The form being printed instead of copies (`make_blank_print`): its index in
+    /// [`super::blanks::PaperBlanks`] and the user whose keys fill it.
+    pub blank: Option<(u16, Entity)>,
 }
 
 /// A prebuilt photocopier's `starting_toner`, made after map load: map objects initialize
@@ -146,6 +150,11 @@ pub enum OfficeAsk {
     Copies {
         copier: Entity,
     },
+    /// The forms the user may print, by index into `PaperBlanks`.
+    Blank {
+        copier: Entity,
+        blanks: Vec<u16>,
+    },
     Fax {
         fax: Entity,
         acts: Vec<FaxAct>,
@@ -164,6 +173,8 @@ pub enum HolderAct {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CopierAct {
     Copy,
+    /// `print_blank`: the form list.
+    PrintBlank,
     SetCopies,
     RemoveObject,
     RemoveToner,
@@ -207,6 +218,7 @@ pub(super) fn add_obj_parts(world: &mut World, e: Entity, path: &str) {
             object: None,
             copies: 1,
             queue: 0,
+            blank: None,
         });
         if prebuilt {
             world.entity_mut(e).insert(StartingToner);
@@ -531,6 +543,14 @@ pub(super) fn answer(world: &mut World, actor: Entity, ask: OfficeAsk, answer: P
                 copier_act(world, client, actor, copier, act);
             }
         }
+        (OfficeAsk::Blank { copier, blanks }, PromptAnswer::Item(i)) => {
+            if let Some(&blank) = blanks.get(i)
+                && in_reach(world, actor, copier)
+                && powered(world, copier)
+            {
+                print_blank(world, client, actor, copier, blank);
+            }
+        }
         (OfficeAsk::Copies { copier }, PromptAnswer::Number(n)) => {
             if in_reach(world, actor, copier)
                 && let Some(mut state) = world.get_mut::<Photocopier>(copier)
@@ -849,6 +869,12 @@ fn copier_menu(world: &mut World, client: Entity, mob: Entity, copier: Entity) {
     if state.object.is_some() {
         acts.push(CopierAct::Copy);
     }
+    if world
+        .get_resource::<super::blanks::PaperBlanks>()
+        .is_some_and(|b| !b.0.is_empty())
+    {
+        acts.push(CopierAct::PrintBlank);
+    }
     acts.push(CopierAct::SetCopies);
     if state.object.is_some() {
         acts.push(CopierAct::RemoveObject);
@@ -861,6 +887,7 @@ fn copier_menu(world: &mut World, client: Entity, mob: Entity, copier: Entity) {
         .iter()
         .map(|act| match act {
             CopierAct::Copy => format!("Copy ({})", state.copies),
+            CopierAct::PrintBlank => format!("Печать бланка ({})", state.copies),
             CopierAct::SetCopies => "Set the number of copies".to_owned(),
             CopierAct::RemoveObject => format!("Take out: {object}"),
             CopierAct::RemoveToner => "Take out the toner cartridge".to_owned(),
@@ -886,7 +913,38 @@ fn copier_act(world: &mut World, client: Entity, actor: Entity, copier: Entity, 
         return;
     }
     match act {
-        CopierAct::Copy => start_copies(world, client, copier, state),
+        CopierAct::Copy => start_copies(world, client, copier, state, None),
+        CopierAct::PrintBlank => {
+            // `ui_static_data`: the forms the user's access allows.
+            let access = crate::inventory::mob_access(world, actor);
+            let (blanks, items): (Vec<u16>, Vec<String>) = world
+                .get_resource::<super::blanks::PaperBlanks>()
+                .map(|all| {
+                    super::blanks::printable(all, &access)
+                        .into_iter()
+                        .filter_map(|b| {
+                            let index = all.0.iter().position(|x| x.code == b.code)?;
+                            Some((
+                                index as u16,
+                                format!("{}: {} ({})", b.category, b.name, b.code),
+                            ))
+                        })
+                        .unzip()
+                })
+                .unwrap_or_default();
+            if blanks.is_empty() {
+                return;
+            }
+            let name = name_of(world, copier);
+            ask_list(
+                world,
+                client,
+                actor,
+                &name,
+                items,
+                OfficeAsk::Blank { copier, blanks },
+            );
+        }
         CopierAct::SetCopies => {
             let name = name_of(world, copier);
             let prompt = ask_world(
@@ -932,17 +990,48 @@ fn copier_act(world: &mut World, client: Entity, actor: Entity, copier: Entity, 
     }
 }
 
+/// `print_blank`, checked at the moment of effect: not busy, the form still there and allowed
+/// to the user (tg trusts the window's list here).
+fn print_blank(world: &mut World, client: Entity, actor: Entity, copier: Entity, blank: u16) {
+    let Some(state) = world.get::<Photocopier>(copier).copied() else {
+        return;
+    };
+    if state.queue > 0 {
+        tell(world, client, Span::Warning, "printer is busy!");
+        return;
+    }
+    let access = crate::inventory::mob_access(world, actor);
+    let allowed = world
+        .get_resource::<super::blanks::PaperBlanks>()
+        .and_then(|all| all.0.get(blank as usize))
+        .is_some_and(|b| {
+            b.required_access
+                .as_ref()
+                .is_none_or(|a| access.contains(a))
+        });
+    if allowed {
+        start_copies(world, client, copier, state, Some((blank, actor)));
+    }
+}
+
 /// `do_copy_loop`'s checks: as many copies as the toner and paper allow, the first one
-/// `time_to_print` away.
-fn start_copies(world: &mut World, client: Entity, copier: Entity, state: Photocopier) {
-    if !state.object.is_some_and(|o| inside(world, o, copier)) {
+/// `time_to_print` away. `blank`: a form instead of the original.
+fn start_copies(
+    world: &mut World,
+    client: Entity,
+    copier: Entity,
+    state: Photocopier,
+    blank: Option<(u16, Entity)>,
+) {
+    if blank.is_none() && !state.object.is_some_and(|o| inside(world, o, copier)) {
         return;
     }
     let name = name_of(world, copier);
     let flash = |text: &str| format!("An error message flashes across {name}'s screen: \"{text}\"");
-    let (paper_use, toner_use) = state
-        .object
-        .map_or((1, PAPER_TONER_USE), |o| copy_cost(world, o));
+    let (paper_use, toner_use) = match (blank, state.object) {
+        (None, Some(o)) => copy_cost(world, o),
+        _ => (1, PAPER_TONER_USE),
+    };
     let per_copy = toner_use / TONER_EFFICIENCY;
     let mut amount = state.copies;
     let mut error = None;
@@ -973,7 +1062,10 @@ fn start_copies(world: &mut World, client: Entity, copier: Entity, state: Photoc
     if amount == 0 {
         return;
     }
-    set_copier(world, copier, |c| c.queue = amount);
+    set_copier(world, copier, |c| {
+        c.queue = amount;
+        c.blank = blank;
+    });
     sound_at(world, copier, PRINTER_SOUND, 50.0, false);
     after(world, PRINT_SECS, TimerJob::Copy { copier });
 }
@@ -1000,6 +1092,10 @@ pub(super) fn next_copy(world: &mut World, copier: Entity) {
         return;
     };
     if state.queue == 0 {
+        return;
+    }
+    if let Some((blank, user)) = state.blank {
+        next_blank(world, copier, state, blank, user);
         return;
     }
     let original = state.object.filter(|&o| inside(world, o, copier));
@@ -1043,6 +1139,59 @@ pub(super) fn next_copy(world: &mut World, copier: Entity) {
     set_copier(world, copier, |c| {
         c.paper -= paper_use;
         c.queue -= 1;
+    });
+    if world
+        .get::<Photocopier>(copier)
+        .is_some_and(|c| c.queue > 0)
+    {
+        sound_at(world, copier, PRINTER_SOUND, 50.0, false);
+        after(world, PRINT_SECS, TimerJob::Copy { copier });
+    }
+}
+
+/// One form (`make_blank_print`): a sheet named after it with the user's keys filled in. The
+/// loop stops like [`next_copy`]'s, without the original.
+fn next_blank(world: &mut World, copier: Entity, state: Photocopier, blank: u16, user: Entity) {
+    let per_copy = PAPER_TONER_USE / TONER_EFFICIENCY;
+    let toner = state
+        .toner
+        .filter(|&t| world.get::<Toner>(t).is_some_and(|t| t.charges >= per_copy));
+    let form = world
+        .get_resource::<super::blanks::PaperBlanks>()
+        .and_then(|b| b.0.get(blank as usize).cloned());
+    let pos = world.get::<TilePos>(copier).copied();
+    let (Some(form), Some(toner), Some(pos), true, true) =
+        (form, toner, pos, powered(world, copier), state.paper >= 1)
+    else {
+        set_copier(world, copier, |c| {
+            c.queue = 0;
+            c.blank = None;
+        });
+        return;
+    };
+    // The user may be gone by now: `replace_text_keys(text, null)` then.
+    let user = world.get_entity(user).is_ok().then_some(user);
+    let text = super::blanks::replace_text_keys(&form.info, |key| {
+        super::blanks::replacement(world, user, key)
+    });
+    if let Some(sheet) = crate::construction::spawn_obj(world, PAPER, pos) {
+        super::paper::write_printed(world, sheet, text);
+        super::server::set_name(world, sheet, &format!("бумага - '{}'", form.name));
+        let mut rng = world.resource_mut::<crate::combat::CombatRng>();
+        let offset = [0, 0].map(|_| rng.range(0, 20) as i16 - 10);
+        if let Some(mut look) = world.get_mut::<Appearance>(sheet) {
+            look.pixel_offset = offset;
+        }
+    }
+    if let Some(mut cartridge) = world.get_mut::<Toner>(toner) {
+        cartridge.charges -= per_copy;
+    }
+    set_copier(world, copier, |c| {
+        c.paper -= 1;
+        c.queue -= 1;
+        if c.queue == 0 {
+            c.blank = None;
+        }
     });
     if world
         .get::<Photocopier>(copier)

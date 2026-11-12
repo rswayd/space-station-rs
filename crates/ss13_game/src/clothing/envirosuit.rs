@@ -9,10 +9,11 @@
 //!   10, jumpsuit: 5) and a 10 s cooldown, after which it checks again.
 //! - Examine shows the charges left; an envirosuit extinguisher cartridge used on the suit
 //!   refills it (the cartridge is used up), unless it is full.
+//! - The clown's envirosuit (`plasmaman/clown/activate_fire_safety`) spews space lube foam
+//!   instead (`do_foam(4, ..., /datum/reagent/lube, 15)`).
 // shortcut: no water particle on the extinguish (`/obj/effect/particle_effect/water`); the
 // check runs each tick over worn envirosuits instead of on `COMSIG_LIVING_IGNITED` and
-// equips. The job jumpsuits' special `activate_fire_safety` (the clown's lube foam) is not
-// ported: they extinguish like the plain one.
+// equips.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;
@@ -26,6 +27,8 @@ use crate::inventory::{CarriedBy, Inventory};
 pub const EVA_SUIT: &str = "/obj/item/clothing/suit/space/eva/plasmaman";
 pub const JUMPSUIT: &str = "/obj/item/clothing/under/plasmaman";
 pub const REFILL: &str = "/obj/item/extinguisher_refill";
+const CLOWN_JUMPSUIT: &str = "/obj/item/clothing/under/plasmaman/clown";
+const LUBE: &str = "/datum/reagent/lube";
 /// `extinguish_cooldown` (100 ds), seconds.
 pub const COOLDOWN: f64 = 10.0;
 /// `PLASMAMAN_PREVENT_IGNITION` (`clothing_flags`).
@@ -101,23 +104,63 @@ fn check_fire_state(world: &mut World) {
             continue;
         };
         let who = crate::security::name_of(world, owner);
+        let clown = world
+            .get::<DmItem>(suit)
+            .is_some_and(|i| is_under(&i.path, CLOWN_JUMPSUIT));
+        let (seen, own) = if clown {
+            (
+                format!("Костюм {who} разбрызгивает космическую смазку повсюду!"),
+                "Ваш костюм разбрызгивает космическую смазку повсюду!",
+            )
+        } else {
+            (
+                format!("Костюм {who} автоматически тушит его!"),
+                "Ваш костюм автоматически тушит вас.",
+            )
+        };
         crate::security::show(
             world,
             at,
             crate::health::DEFAULT_MESSAGE_RANGE,
             ChatChannel::Info,
-            (
-                Span::Warning,
-                format!("Костюм {who} автоматически тушит его!"),
-            ),
-            &[(
-                owner,
-                Span::Warning,
-                "Ваш костюм автоматически тушит вас.".to_owned(),
-            )],
+            (Span::Warning, seen),
+            &[(owner, Span::Warning, own.to_owned())],
         );
         crate::fire::extinguish_mob(world, owner);
+        if clown {
+            lube_foam(world, at);
+        }
     }
+}
+
+/// `do_foam(4, src, get_turf(owner), /datum/reagent/lube, 15)`.
+fn lube_foam(world: &mut World, at: TilePos) {
+    use crate::effects::foam::{FoamKind, FoamOptions, do_foam};
+    let carry = world.get_resource::<crate::chem::Chem>().and_then(|chem| {
+        let chem = chem.0.clone();
+        let id = chem.id(LUBE)?;
+        let mut holder = ss13_reagents::Holder::new(15.0, 0, ss13_reagents::Owner::default());
+        holder.add_reagent(
+            &chem,
+            id,
+            15.0,
+            ss13_atmos::gas::T20C as f32,
+            None,
+            None,
+            true,
+            false,
+        );
+        Some(holder)
+    });
+    do_foam(
+        world,
+        4,
+        at,
+        None,
+        carry.as_ref(),
+        FoamKind::Plain,
+        FoamOptions::default(),
+    );
 }
 
 /// `examine`: the charges left.

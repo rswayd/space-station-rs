@@ -15,7 +15,7 @@ use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::misc_items::documents::DocumentCopy;
 use ss13_game::service::{
     BarcodeScanner, Biscuit, Book, Canvas, CarbonPaper, Clipboard, FilingCabinet, Ledger,
-    LibraryArchive, Paper, PaperCutter, Photocopier, ScanMode,
+    LibraryArchive, PaintingFrame, Palette, Paper, PaperCutter, Photocopier, ScanMode,
 };
 use ss13_game::storage::StoredIn;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -24,6 +24,7 @@ use ss13_shared::TilePos;
 use ss13_shared::protocol::{ClickModifiers, ClientIntent, InventorySlot};
 use ss13_tgui::UiInterface;
 use ss13_tgui::interfaces::alert::AlertUi;
+use ss13_tgui::interfaces::color_picker::ColorPickerUi;
 use ss13_tgui::interfaces::list_input::ListInputUi;
 use ss13_tgui::interfaces::text_input::TextInputUi;
 use ss13_tgui::server::UiWindow;
@@ -75,6 +76,9 @@ const TYPES: &str = r##"{
     "/obj/item/toy/crayon": { "parent": "/obj/item/toy" },
     "/obj/item/toy/crayon/red": { "parent": "/obj/item/toy/crayon" },
     "/obj/item/canvas": { "parent": "/obj/item" },
+    "/obj/item/paint_palette": { "parent": "/obj/item" },
+    "/obj/item/wirecutters": { "parent": "/obj/item", "declared_vars": {
+        "tool_behaviour": "cutters" } },
     "/obj/item/book": { "parent": "/obj/item", "declared_vars": {
         "starting_title": null, "starting_author": null, "starting_content": null } },
     "/obj/item/card": { "parent": "/obj/item" },
@@ -91,6 +95,9 @@ const TYPES: &str = r##"{
     "/obj/structure": { "parent": "/obj", "declared_vars": { "density": 1, "anchored": 1,
         "icon": { "resource": "i.dmi" }, "icon_state": "card_grey" } },
     "/obj/structure/easel": { "parent": "/obj/structure" },
+    "/obj/structure/sign": { "parent": "/obj/structure", "declared_vars": { "density": 0 } },
+    "/obj/structure/sign/painting": { "parent": "/obj/structure/sign", "declared_vars": {
+        "name": "Painting" } },
     "/obj/structure/filingcabinet": { "parent": "/obj/structure" },
     "/obj/machinery": { "parent": "/obj", "declared_vars": { "density": 1, "anchored": 1,
         "icon": { "resource": "i.dmi" }, "icon_state": "card_grey" } },
@@ -130,7 +137,7 @@ const TYPES: &str = r##"{
 const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "f" = (/turf/open/floor,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
-"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/toy/crayon/red,/obj/item/paper/carbon,/obj/item/papercutter,/obj/item/folder/biscuit,/obj/item/barcodescanner,/obj/item/book,/turf/open/floor,/area/space)
+"o" = (/obj/item/paper/form,/obj/item/paper/fluff,/obj/item/paper,/obj/item/pen,/obj/item/clipboard,/obj/item/canvas,/obj/item/paint_palette,/obj/item/wirecutters,/obj/item/toy/crayon/red,/obj/item/paper/carbon,/obj/item/papercutter,/obj/item/folder/biscuit,/obj/item/barcodescanner,/obj/item/book,/turf/open/floor,/area/space)
 "K" = (/obj/item/paper/paperslip,/obj/structure/filingcabinet,/turf/open/floor,/area/space)
 "Q" = (/obj/machinery/photocopier/prebuilt,/turf/open/floor,/area/space)
 "Y" = (/obj/machinery/fax/bridge,/turf/open/floor,/area/space)
@@ -139,10 +146,11 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "C" = (/obj/machinery/computer/libraryconsole/bookmanagement,/turf/open/floor,/area/space)
 "B" = (/obj/machinery/bookbinder,/turf/open/floor,/area/space)
 "E" = (/obj/structure/easel,/turf/open/floor,/area/space)
+"P" = (/obj/structure/sign/painting,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwwwwww
-wQfYfSfCKw
+wQfYfSPCKw
 wsoffffffw
 wfffBfZfEw
 wwwwwwwwww
@@ -172,6 +180,9 @@ const SCANNER: &str = "/obj/machinery/libraryscanner";
 const CONSOLE: &str = "/obj/machinery/computer/libraryconsole/bookmanagement";
 const BINDER: &str = "/obj/machinery/bookbinder";
 const EASEL: &str = "/obj/structure/easel";
+const PALETTE: &str = "/obj/item/paint_palette";
+const CUTTERS: &str = "/obj/item/wirecutters";
+const FRAME: &str = "/obj/structure/sign/painting";
 const CARBON: &str = "/obj/item/paper/carbon";
 const CARBON_COPY: &str = "/obj/item/paper/carbon_copy";
 const SLIP: &str = "/obj/item/paper/paperslip";
@@ -193,6 +204,9 @@ fn fixture_assets(test: &str) -> PathBuf {
         PEN,
         CLIPBOARD,
         CANVAS,
+        PALETTE,
+        CUTTERS,
+        FRAME,
         CRAYON,
         "/obj/item/toner",
         "/obj/item/documents/nanotrasen",
@@ -400,6 +414,45 @@ fn a_pen_fills_a_field_and_a_paper_clips_and_folds() {
 }
 
 #[test]
+fn the_photocopier_prints_a_blank_with_the_users_keys() {
+    let mut s = Station::start("the_photocopier_prints_a_blank_with_the_users_keys");
+    let copier = s.obj(COPIER);
+    s.run_until("the copier is set up with paper and toner", |s| {
+        s.try_get::<Photocopier>(copier)
+            .is_some_and(|c| c.paper == 30 && c.toner.is_some())
+    });
+    let blank = |code: &str, name: &str, access: Option<&str>| ss13_game::service::blanks::Blank {
+        code: code.into(),
+        category: "Общие формы".into(),
+        name: name.into(),
+        info: "Я, [name], прошу: [input_field]".into(),
+        required_access: access.map(str::to_owned),
+    };
+    s.server
+        .world_mut()
+        .insert_resource(ss13_game::service::blanks::PaperBlanks(vec![
+            blank("NT-CC", "Секретная", Some("cent_general")),
+            blank("NT-GENERAL", "Заявление", None),
+        ]));
+    let mob = s.players[0].mob;
+    let name = s.get::<Name>(mob).as_str().to_owned();
+    s.click(0, copier);
+    s.pick("Печать бланка (1)");
+    // The CentCom form needs its access: only the general one is listed.
+    s.pick("Общие формы: Заявление (NT-GENERAL)");
+    let wanted = format!("Я, {name}, прошу: [input_field]");
+    s.run_until("the form comes out", |s| {
+        let world = s.server.world_mut();
+        let mut q = world.query::<(&Paper, &ss13_mapload::DmName)>();
+        q.iter(world).any(|(p, n)| {
+            n.name == "бумага - 'Заявление'" && p.inputs.iter().any(|i| i.raw_text == wanted)
+        })
+    });
+    assert_eq!(s.get::<Photocopier>(copier).paper, 29);
+    assert_eq!(s.get::<Photocopier>(copier).blank, None);
+}
+
+#[test]
 fn the_photocopier_copies_and_the_fax_sends() {
     let mut s = Station::start("the_photocopier_copies_and_the_fax_sends");
     let fluff = s.item(FLUFF);
@@ -600,6 +653,60 @@ fn a_canvas_is_painted_finished_and_put_up() {
     s.click(0, easel);
     s.run_until("the canvas is on the easel", |s| {
         s.try_get::<TilePos>(canvas) == Some(&TilePos::new(9, 2, 1))
+    });
+}
+
+#[test]
+fn a_painting_is_framed_cut_out_and_the_palette_keeps_colours() {
+    let mut s = Station::start("a_painting_is_framed_cut_out_and_the_palette_keeps_colours");
+    let (canvas, crayon, frame) = (s.item(CANVAS), s.item(CRAYON), s.obj(FRAME));
+    s.run_until("the canvas and frame are set up", |s| {
+        s.try_get::<Canvas>(canvas).is_some() && s.try_get::<PaintingFrame>(frame).is_some()
+    });
+    s.put_in_hand(crayon);
+    s.click(0, canvas);
+    s.run_until("the canvas is painted", |s| s.get::<Canvas>(canvas).used);
+
+    // Framing an unfinished canvas finishes it.
+    s.put_in_hand(canvas);
+    s.stand(TilePos::new(7, 3, 1));
+    s.click(0, frame);
+    s.run_until("the canvas is framed", |s| {
+        s.get::<PaintingFrame>(frame).canvas == Some(canvas)
+    });
+    assert_eq!(s.get::<StoredIn>(canvas).0, frame);
+    s.type_in("Sunset");
+    s.answer(AlertUi::NAME, "choose", "choice", "Yes");
+    s.run_until("the framed painting is finished", |s| {
+        s.get::<Canvas>(canvas).finalized
+    });
+    s.run_until("the frame is named after it", |s| {
+        s.get::<ss13_mapload::DmName>(frame).name == "картина - Sunset"
+    });
+
+    // Wirecutters take it out onto the frame's tile.
+    let cutters = s.item(CUTTERS);
+    s.put_in_hand(cutters);
+    s.click(0, frame);
+    s.run_until("the painting is cut out", |s| {
+        s.try_get::<TilePos>(canvas) == Some(&TilePos::new(7, 4, 1))
+    });
+    assert_eq!(s.get::<PaintingFrame>(frame).canvas, None);
+    assert_eq!(s.get::<ss13_mapload::DmName>(frame).name, "Painting");
+
+    // The palette picks a colour in hand and saves it from its list.
+    let palette = s.item(PALETTE);
+    s.put_in_hand(palette);
+    let slot = s.active_slot();
+    s.send(0, ClientIntent::ClickSlot(slot));
+    s.answer(ColorPickerUi::NAME, "submit", "entry", "#aabbcc");
+    s.run_until("the colour is picked", |s| {
+        s.get::<Palette>(palette).selected == "#aabbcc"
+    });
+    s.send(0, ClientIntent::RightClickSlot(slot));
+    s.pick("Добавить цвет (#aabbcc)");
+    s.run_until("the colour is saved", |s| {
+        s.get::<Palette>(palette).colors == ["#aabbcc"]
     });
 }
 

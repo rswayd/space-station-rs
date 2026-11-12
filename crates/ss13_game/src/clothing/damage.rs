@@ -83,6 +83,8 @@ pub enum ClothingJob {
     HelmetStraps { item: Entity },
     /// A tape piece onto the target's mouth (`crate::clothing::muzzle`).
     TapeMouth { tape: Entity },
+    /// The collar bomb's button pressed (`crate::clothing::collar_bomb`).
+    CollarButton { button: Entity },
 }
 
 /// `body_zone2cover_flags`.
@@ -477,6 +479,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         }
         ClothingJob::TapeMouth { tape } => {
             super::muzzle::complete_tape(world, mob, action, tape);
+            return;
+        }
+        ClothingJob::CollarButton { button } => {
+            super::collar_bomb::complete_press(world, mob, button);
             return;
         }
     };

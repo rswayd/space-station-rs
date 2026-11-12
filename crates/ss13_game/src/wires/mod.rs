@@ -179,6 +179,8 @@ pub enum WireHolder {
     Mulebot,
     /// `/datum/wires/explosive/chem_grenade` (`crate::assemblies::chem_grenade`).
     ChemGrenade,
+    /// `/datum/wires/collar_bomb` (`crate::clothing::collar_bomb`).
+    CollarBomb,
     /// The machines of [`crate::machine_wires`].
     Machine(crate::machine_wires::MachineWires),
 }
