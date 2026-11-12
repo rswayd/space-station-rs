@@ -6,7 +6,7 @@
 
 - **Код:** [`/turf/closed/wall`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L1), [`proc/try_decon()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L234), [`proc/dismantle_wall()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L99)
 - **BandaStation:** [`modular_bandastation/aesthetics/walls/code/walls.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/walls/code/walls.dm) — свои спрайты стен
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`: стена из 2 листов на балке за 4 с, разрезка сваркой за 10 с; нет вмятин, повреждений и разрушения стен
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`: стена из 2 листов на балке за 4 с, разрезка сваркой за 10 с; вмятины, ржавчина и разрушение — «Повреждение стен»
 
 ### Укреплённая стена: многошаговая разборка
 `r_wall` разбирается в 7 шагов (`d_state`): кусачки → отвёртка → сварка → лом → гаечный ключ → сварка → лом, каждый шаг обратим; не режется обычной сваркой за один раз, устойчива к взрывам.
@@ -19,7 +19,7 @@
 Стены получают вмятины от пуль, ломаются и сносятся взрывами (`ex_act`), халком, блобом, сингулярностью, кислотой; ржавчина ослабляет стены (`rust_turf`), её счищают щёткой.
 
 - **Код:** [`ex_act()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L124), [`attack_hulk()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L157), [`proc/add_dent()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L310), [`rust_turf()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L332), [`/turf/closed/wall/rust`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/wall/misc_walls.dm#L45)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wall_damage.rs`: вмятины (`WallDents`, до 15): пулевые от снарядов урона brute/burn (75%, `crates/ss13_game/src/projectile.rs`), следы ударов Халка (`crates/ss13_game/src/genetics/effects.rs`: при сносе — `devastate_wall`, лист вместо балки); горящая сварка с 1 топлива вне боевого режима заваривает все вмятины до резки стены; ржавчина (`Rusty`, оверлей форка `rust_overlay.dmi`) на картовых `wall/rust`, `r_wall/rust`, `plating/rust` и heretic-вариантах, `rust_turf` (ржавая стена рушится, ржавая r_wall становится `wall/rust`, пол — ржавой обшивкой), ржавый пол не принимает плитку и прутья, строка осмотра; взрывы — `crates/ss13_game/src/explosions/ex_act.rs`. Нет: точки попадания пули (вмятина в случайном месте ±8 px), кислоты (`acid_melt`), смывания ржавчины космоколой, рун и эффектов еретической ржавчины (группа еретика), `blob_act` (группа блоба)
 
 ### Опора для настенного оборудования
 Временная опора (`wall_support`) позволяет разобрать стену, не роняя APC, лампы и прочее висящее на ней.
@@ -37,7 +37,7 @@
 Металлическая пена затвердевает в хрупкую стену (`metal_foam_base`), которую легко сломать.
 
 - **Код:** [`/turf/closed/wall/metal_foam_base`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L339)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/construction.rs` (`GIRDER_RECIPES`, `foam_stack`): 2 листа железа на металлопене (любой, `state` не проверяется) за 4 с — `/turf/closed/wall/metal_foam_base`; построенная стена запоминает, на чём стояла (`girder_type = structure.type`), и при разборке возвращает ту же пену; сама пена — `crates/ss13_game/src/effects/foam.rs`
 
 ### Балки (girder)
 Каркас стены: лист стали на полу (ПКМ) — смещённая балка, гаечный ключ закрепляет, отвёртка/кусачки/сварка разбирают; пласталь укрепляет балку (стойки → укреплённая балка → r_wall); листы других материалов дают минеральные стены; железо на смещённой балке — фальшстена.

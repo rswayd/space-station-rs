@@ -605,6 +605,13 @@ fn impact(world: &mut World, p: &Projectile, name: &str, target: Entity) {
     if crate::antag::blob::structures::damage(world, target, p.data.damage, kind, flag).is_some() {
         return;
     }
+    // A wall takes a bullet hole (`add_dent(WALL_DENT_SHOT)`).
+    if world.get::<Turf>(target).is_some()
+        && p.data.damage > 0.0
+        && matches!(kind, DamageType::Brute | DamageType::Burn)
+    {
+        crate::wall_damage::projectile_hit(world, target);
+    }
     if world.get::<Turf>(target).is_none() && matches!(kind, DamageType::Brute | DamageType::Burn) {
         // shortcut: objects check their melee armor, not the projectile's flag, but for the
         // security barrier (`crate::defenses::barricades::projectile_armor`).

@@ -246,6 +246,8 @@ impl Plugin for GameServerPlugin {
             crate::airlock_controllers::AirlockControllersPlugin,
         ))
         .add_plugins((
+            crate::electric_chair::ElectricChairPlugin,
+            crate::wall_damage::WallDamagePlugin,
             crate::traps::TrapsPlugin,
             crate::safes::SafesPlugin,
             crate::secure_safes::SecureSafesPlugin,

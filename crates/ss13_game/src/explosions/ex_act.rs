@@ -59,7 +59,7 @@ const EARMUFFS: &str = "/obj/item/clothing/ears/earmuffs";
 /// `EX_ACT(turf, severity)` at once: what is on the tile, then the turf (meteors ram tiles
 /// this way; explosions queue the same steps, [`super`]).
 pub fn ex_act_tile(world: &mut World, pos: TilePos, severity: Severity) {
-    for thing in tile_contents(world, pos) {
+    for thing in blasted_contents(world, pos, severity) {
         ex_act_movable(world, thing, severity);
     }
     ex_act_turf(world, pos, severity);
@@ -76,6 +76,18 @@ pub fn tile_contents(world: &World, pos: TilePos) -> Vec<Entity> {
         .copied()
         // A mech's pilot meets the blast through the mech (`mecha/contents_explosion`).
         .filter(|&e| Some(e) != turf && world.get::<crate::mecha::core::Pilot>(e).is_none())
+        .collect()
+}
+
+/// `/turf/contents_explosion` with the turf's `can_propagate_explosion`: what on the tile the
+/// blast reaches.
+pub fn blasted_contents(world: &World, pos: TilePos, severity: Severity) -> Vec<Entity> {
+    let turf = turf_at(world, pos)
+        .and_then(|t| path_of(world, t))
+        .unwrap_or_default();
+    tile_contents(world, pos)
+        .into_iter()
+        .filter(|&e| !crate::reinforced_floor::shields_underfloor(world, &turf, e, severity))
         .collect()
 }
 
@@ -675,6 +687,11 @@ pub fn ex_act_turf(world: &mut World, pos: TilePos, severity: Severity) {
             }
         }
     } else if is_under(&path, FLOOR) {
+        if shielded(world, pos, severity)
+            || crate::reinforced_floor::ex_act(world, pos, &path, severity)
+        {
+            return;
+        }
         ex_act_floor(world, pos, severity);
     } else {
         crate::mining::rocks::ex_act(world, pos, severity);

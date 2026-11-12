@@ -611,7 +611,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         crate::machine_frame::frame_deconstruct(world, target, pos, disassembled);
     } else if is_under(&obj.path, crate::explosions::ex_act::LATTICE) {
         crate::explosions::ex_act::lattice_debris(world, &obj.path, pos);
-    } else if crate::furniture::deconstruct(world, &obj, pos)
+    } else if crate::furniture::deconstruct(world, target, &obj, pos)
         || crate::plumbing::deconstruct(world, target, &obj, pos)
         || crate::decor::deconstruct(world, target, &obj, pos, disassembled)
         || crate::tank_storage::deconstruct(world, target, &obj, pos)

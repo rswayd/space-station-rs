@@ -45,6 +45,7 @@ mod emp;
 mod eng_machines;
 mod eng_tools;
 mod engine;
+mod engsci;
 mod events2;
 mod events3;
 mod explosions;

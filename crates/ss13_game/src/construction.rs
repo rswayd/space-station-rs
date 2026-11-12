@@ -86,6 +86,10 @@ const OPENSPACE: &str = "/turf/open/openspace";
 const PLATING: &str = "/turf/open/floor/plating";
 /// `ismetaltile`.
 const IRON_TILE: &str = "/obj/item/stack/tile/iron";
+/// `/obj/structure/foamedmetal`: also takes the girder wall recipes
+/// (`/datum/element/uses_girder_wall_recipes`).
+const FOAMED_METAL: &str = crate::effects::foam::FOAMED_METAL;
+const METAL_FOAM_WALL: &str = "/turf/closed/wall/metal_foam_base";
 
 /// A `GLOB.main_girder_wall_recipes` entry (`create_girder_wall_recipes`): `wall` (a turf or
 /// a false wall) from `amount` of `stack` on a `girder` (or subtype) in `state`.
@@ -101,12 +105,22 @@ pub struct GirderRecipe {
 }
 
 /// The iron and plasteel recipes, in tg's order (the first match wins).
-pub const GIRDER_RECIPES: [GirderRecipe; 4] = [
+pub const GIRDER_RECIPES: [GirderRecipe; 5] = [
     GirderRecipe {
         wall: WALL,
         stack: IRON,
         amount: 2,
         girder: GIRDER,
+        state: GIRDER_NORMAL,
+        delay: 40.0,
+    },
+    // `/turf/closed/wall/metal_foam_base`: its `girder_type` is the foamed metal; the state is
+    // only checked on girders (`check_girder_state`).
+    GirderRecipe {
+        wall: METAL_FOAM_WALL,
+        stack: IRON,
+        amount: 2,
+        girder: FOAMED_METAL,
         state: GIRDER_NORMAL,
         delay: 40.0,
     },
@@ -160,6 +174,10 @@ pub enum Job {
     GirderGrille,
     /// Reinforced wall and window steps ([`crate::reinforced`]).
     Reinforced(crate::reinforced::ReinforcedJob),
+    /// Engine floor and reinforced plating steps ([`crate::reinforced_floor`]).
+    Floor(crate::reinforced_floor::FloorJob),
+    /// Rust scraped or burnt off ([`crate::wall_damage`]).
+    WallDamage(crate::wall_damage::WallJob),
     /// A holosign projector's `creation_time` ([`crate::holosign`]).
     Holosign,
     /// Wrench on fans.
@@ -575,6 +593,9 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     }
     let client = actor.client;
     if world.get::<Turf>(target).is_some() {
+        if crate::reinforced_floor::tool_act(world, actor, kind, target) {
+            return Interact::Done;
+        }
         // `/turf/open/floor/crowbar_act`: pry the tile.
         let overfloor = world
             .get::<DmTurfBuild>(target)
@@ -1034,6 +1055,9 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     if is_under(&path, GIRDER) && world.get::<Stack>(held).is_some() {
         return girder_stack(world, actor, held, target);
     }
+    if is_under(&path, FOAMED_METAL) && world.get::<Stack>(held).is_some() {
+        return foam_stack(world, actor, held, target);
+    }
     if is_under(&path, GRILLE) {
         let broken = world.get::<Integrity>(target).is_some_and(|i| i.broken);
         if broken && stack_of(world, held, RODS) {
@@ -1328,11 +1352,48 @@ fn girder_stack(world: &mut World, actor: Actor, stack: Entity, girder: Entity) 
     Interact::Done
 }
 
+/// `uses_girder_wall_recipes` on foamed metal: only the main recipes (the metal foam wall).
+fn foam_stack(world: &mut World, actor: Actor, stack: Entity, foam: Entity) -> Interact {
+    let (Some(foam_path), Some(stack_path)) = (
+        path_of(world, foam),
+        world.get::<DmItem>(stack).map(|i| i.path.clone()),
+    ) else {
+        return Interact::None;
+    };
+    let Some(index) = girder_recipe(&stack_path, &foam_path, obj_state(world, foam)) else {
+        return Interact::None;
+    };
+    let recipe = GIRDER_RECIPES[index];
+    if wall_recipe_ok(world, actor, foam, &recipe)
+        && use_tool(
+            world,
+            actor,
+            foam,
+            recipe.delay,
+            recipe.amount,
+            Job::Wall { recipe: index },
+        )
+    {
+        tell(
+            world,
+            actor.client,
+            Span::Notice,
+            "Вы начинаете строить стену на каркасе.",
+        );
+    }
+    Interact::Done
+}
+
 /// `get_main_recipe`: the first recipe for this stack on this girder in its state.
 fn girder_recipe(stack: &str, girder: &str, state: i32) -> Option<usize> {
-    GIRDER_RECIPES
-        .iter()
-        .position(|r| is_under(stack, r.stack) && is_under(girder, r.girder) && r.state == state)
+    GIRDER_RECIPES.iter().position(|r| {
+        is_under(stack, r.stack) && is_under(girder, r.girder) && state_ok(girder, state, r)
+    })
+}
+
+/// `check_girder_state`: only a girder's state has to match the recipe's.
+fn state_ok(structure: &str, state: i32, recipe: &GirderRecipe) -> bool {
+    !is_under(structure, GIRDER) || recipe.state == state
 }
 
 /// `check_recipe`: no wall (or false wall) yet, a floor under the girder, the girder still in
@@ -1356,7 +1417,15 @@ fn wall_recipe_ok(world: &mut World, actor: Actor, girder: Entity, recipe: &Gird
         Some(_) if falsewall => "Здесь уже есть стена!",
         Some(t) if !is_under(&t, FLOOR) => "Нужен пол!",
         None => "Нужен пол!",
-        Some(_) if obj_state(world, girder) != recipe.state => return false,
+        Some(_)
+            if !state_ok(
+                &path_of(world, girder).unwrap_or_default(),
+                obj_state(world, girder),
+                recipe,
+            ) =>
+        {
+            return false;
+        }
         Some(_) => return true,
     };
     tell(world, actor.client, Span::Warning, text);
@@ -1601,7 +1670,14 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
             }
             world.despawn(target);
             if is_under(recipe.wall, "/turf") {
-                place_on_top(world, pos, recipe.wall, false);
+                // `griderholder.girder_type = structure.type`: the wall gives back what it was
+                // built on (iron foamed metal, a girder subtype).
+                if let Some(wall) = place_on_top(world, pos, recipe.wall, false)
+                    && let Some(mut build) = world.get_mut::<DmTurfBuild>(wall)
+                    && !build.girder_type.is_empty()
+                {
+                    build.girder_type = path.clone();
+                }
             } else {
                 spawn_obj(world, recipe.wall, pos);
             }
@@ -1650,6 +1726,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
             );
         }
         &Job::Reinforced(job) => crate::reinforced::complete(world, client, target, job),
+        &Job::Floor(job) => crate::reinforced_floor::complete(world, client, target, job),
+        &Job::WallDamage(job) => crate::wall_damage::complete(world, client, target, job),
         Job::Holosign => crate::holosign::complete(world, item, pos),
         Job::Satellite => crate::station_goals::complete_toggle(world, client, target),
         Job::TearWall => crate::weapons::rip_and_tear::complete(world, mob, action),
@@ -2372,6 +2450,12 @@ mod tests {
             Some(crate::falsewall::R_FALSEWALL)
         );
         assert_eq!(wall(PLASTEEL, GIRDER, GIRDER_NORMAL), None);
+        // Foamed metal has no girder state of its own.
+        assert_eq!(
+            wall(IRON, "/obj/structure/foamedmetal/iron", GIRDER_DISPLACED),
+            Some(METAL_FOAM_WALL)
+        );
+        assert_eq!(wall(PLASTEEL, "/obj/structure/foamedmetal", 0), None);
         assert_eq!(wall(IRON, REINFORCED_GIRDER, GIRDER_REINF), None);
     }
 
