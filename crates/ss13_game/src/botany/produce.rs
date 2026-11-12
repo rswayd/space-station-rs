@@ -112,6 +112,7 @@ struct GlowLitOn(Entity, LightSource);
 
 pub(super) fn build(app: &mut App) {
     app.add_observer(on_new_plant)
+        .add_observer(anti_weed)
         .add_observer(unlight)
         .add_systems(
             Update,
@@ -196,6 +197,40 @@ pub fn gene_name(plants: &Plants, gene: &Gene) -> String {
         format!("Essential {name}")
     } else {
         format!("Immutable {name}")
+    }
+}
+
+const ANTI_WEED_SEED: &str = "/obj/item/seeds/cannabis/anti";
+const ANTI_WEED_LEAF: &str = "/obj/item/food/grown/cannabis/anti";
+
+/// `seeds/cannabis/anti/Initialize` and `grown/cannabis/anti/Initialize`: turned upside down,
+/// and one leaf in 2000 is "evil".
+// shortcut: no `COLOR_MATRIX_INVERT` (appearances only multiply a colour), so the seed, the leaf
+// and the plant in a tray keep their colours.
+fn anti_weed(
+    add: On<Add<Seed>>,
+    mut items: Query<(
+        &DmItem,
+        Option<&mut Appearance>,
+        Option<&mut ss13_mapload::DmName>,
+    )>,
+    mut rng: Option<ResMut<CombatRng>>,
+) {
+    let Ok((item, appearance, name)) = items.get_mut(add.entity) else {
+        return;
+    };
+    let leaf = is_under(&item.path, ANTI_WEED_LEAF);
+    if !leaf && !is_under(&item.path, ANTI_WEED_SEED) {
+        return;
+    }
+    if let Some(mut look) = appearance {
+        look.rotation = 180;
+    }
+    if leaf
+        && let Some(mut name) = name
+        && rng.as_mut().is_some_and(|r| r.chance(0.05))
+    {
+        name.name = "evil cannabis leaf".to_owned();
     }
 }
 

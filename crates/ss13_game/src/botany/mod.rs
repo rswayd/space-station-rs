@@ -29,6 +29,7 @@
 // tgui; invasive spreading ignores windows between trays (tg `Adjacent`).
 
 pub mod barrel;
+pub mod crafts;
 pub mod genes;
 pub mod grafts;
 pub mod plants;
@@ -163,6 +164,8 @@ pub enum BotanyJob {
     BagSoil,
     /// A held snail put into a tray.
     InsertSnail,
+    /// A shrub planted into a hedge ([`crafts`]).
+    PlantShrub,
 }
 
 pub struct BotanyServerPlugin;
@@ -1080,7 +1083,8 @@ pub fn interact(
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
     world.contains_resource::<Botany>()
         && (unique::attack_self(world, client, mob, item)
-            || produce::attack_self(world, client, mob, item))
+            || produce::attack_self(world, client, mob, item)
+            || crafts::attack_self(world, client, mob, item))
 }
 
 /// The end of a [`BotanyJob`].
@@ -1092,6 +1096,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         BotanyJob::FillTray => soil::complete_fill(world, mob, action),
         BotanyJob::BagSoil => soil::complete_bag(world, mob, action),
         BotanyJob::InsertSnail => complete_snail(world, mob, action),
+        BotanyJob::PlantShrub => crafts::complete_plant_shrub(world, mob, action),
     }
 }
 

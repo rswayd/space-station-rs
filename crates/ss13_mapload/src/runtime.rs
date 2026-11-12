@@ -1288,6 +1288,20 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/poster/contraband/silver",
     "/obj/item/poster/contraband/jovial",
     "/obj/item/poster/contraband/bojack",
+    // The charcoal grill taken apart (`ss13_game::grill`).
+    "/obj/item/assembly/igniter",
+    // Cotton, grass and shrubs worked by hand (`ss13_game::botany::crafts`).
+    "/obj/item/stack/sheet/cotton",
+    "/obj/item/stack/sheet/cotton/durathread",
+    "/obj/item/stack/tile/grass",
+    "/obj/item/stack/tile/fairygrass",
+    "/obj/item/stack/tile/carpet",
+    "/obj/structure/hedge/opaque",
+    // What a food cart carries (`ss13_game::food_cart`).
+    "/obj/structure/table/reinforced",
+    "/obj/machinery/smartfridge/food",
+    "/obj/effect/food_cart_stand",
+    "/obj/machinery/griddle/stand",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman
