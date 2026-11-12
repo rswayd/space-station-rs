@@ -78,7 +78,7 @@ mod spells;
 mod windows;
 pub use bite::*;
 pub use gain::*;
-pub use hemomancer::{TendrilSlow, TendrilStrike, report_prey, slow};
+pub use hemomancer::{TendrilSlow, TendrilStrike, report_prey, tendril_slow};
 use life::*;
 pub use spells::*;
 pub use windows::*;

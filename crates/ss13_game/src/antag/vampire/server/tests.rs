@@ -225,8 +225,8 @@ fn tendrils_slow_for_six_seconds_once() {
     let mut world = World::new();
     world.insert_resource(Time::<()>::default());
     let victim = world.spawn(MoveSpeedModifier(0.25)).id();
-    slow(&mut world, victim, 6.0);
-    slow(&mut world, victim, 7.0);
+    tendril_slow(&mut world, victim, 6.0);
+    tendril_slow(&mut world, victim, 7.0);
     assert_eq!(world.get::<MoveSpeedModifier>(victim).unwrap().0, 0.75);
     assert_eq!(world.get::<TendrilSlow>(victim).unwrap().until, 7.0);
 }

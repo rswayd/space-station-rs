@@ -104,7 +104,7 @@ fn tendril_strikes(world: &mut World) {
             if !affects_vampire(world, victim, caster) {
                 continue;
             }
-            slow(world, victim, now + TENDRIL_SLOW_SECS);
+            tendril_slow(world, victim, now + TENDRIL_SLOW_SECS);
             let text = format!(
                 "{} опутан кровавыми щупальцами!",
                 ss13_shared::capitalize(&name_of(world, victim))
@@ -118,7 +118,7 @@ fn tendril_strikes(world: &mut World) {
 }
 
 /// `set_timed_status_effect(6 SECONDS, blood_tendril_slow)`: a running one is only prolonged.
-pub fn slow(world: &mut World, victim: Entity, until: f64) {
+pub fn tendril_slow(world: &mut World, victim: Entity, until: f64) {
     if let Some(mut slow) = world.get_mut::<TendrilSlow>(victim) {
         slow.until = slow.until.max(until);
         return;

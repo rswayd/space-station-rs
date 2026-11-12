@@ -279,20 +279,16 @@ pub fn syndicate_codewords(world: &mut World) -> SyndicateCodewords {
     let mut rng = world
         .remove_resource::<DynamicRng>()
         .map_or_else(|| Rng::new(0x5ec7e7), |r| r.0);
-    let mut names = world.remove_resource::<Jobs>();
     let mut name = |rng: &mut Rng| {
-        names
-            .as_mut()
-            .and_then(|j| j.random_name(&Default::default()))
+        world
+            .get_resource_mut::<Jobs>()
+            .and_then(|mut j| j.random_name(&Default::default()))
             .unwrap_or_else(|| format!("Агент {}", rng.range(1, 99)))
     };
     let words = SyndicateCodewords {
         phrases: generate_code_phrase(&pools, &mut rng, &mut name),
         responses: generate_code_phrase(&pools, &mut rng, &mut name),
     };
-    if let Some(jobs) = names {
-        world.insert_resource(jobs);
-    }
     world.insert_resource(DynamicRng(rng));
     world.insert_resource(words.clone());
     info!(
