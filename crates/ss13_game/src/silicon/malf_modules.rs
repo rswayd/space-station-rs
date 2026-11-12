@@ -17,12 +17,18 @@
 //!   (`no_low_power`).
 //! - Air Alarm Safety Override (50, once): the station's air alarms are emagged (their dangerous
 //!   modes are offered).
+//! - Doomsday Device (130, once, 10 hacked APCs): [`super::malf_doomsday`].
+//! - Upgrades (`upgrade = TRUE`: applied on purchase, no button, gone from the list): Upgrade
+//!   Camera Network (35: every camera x-ray and EMP-proof, the count in the unlock text), AI
+//!   Turret Upgrade (30: AI turrets 200 integrity, repaired, EMP-proof), Enhanced Surveillance
+//!   (30: the eye's `relay_speech`, [`super::ai_upgrades::Eavesdrop`]).
 // shortcut: a list prompt instead of the `MalfunctionModulePicker` window (no descriptions or
-// categories shown); no unlock or activation sounds; no status display lockdown alert; only these
-// four modules (the doomsday device, machine override and overload, RCD destruction, megahonk,
-// robotic factory, fire alarm override, camera reactivation and upgrades, remote emag, core
-// tilt, vendor tipping, turret upgrade, eavesdropping, mech domination and voice changer are not
-// ported).
+// categories shown); no unlock or activation sounds; no status display lockdown alert; the
+// camera upgrade gives the AI no night vision tint; upgraded turrets keep their own lethal
+// projectile (tg swaps in the heavy laser: no runtime projectile lookup yet). Machine override
+// and overload, RCD destruction, megahonk, robotic factory, fire alarm override, camera
+// reactivation, remote emag, core tilt, vendor tipping, mech domination and the voice changer
+// are not ported.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -43,6 +49,8 @@ use crate::server::PlayerMob;
 /// The picker's button (tg `/datum/action/innate/choose_modules`).
 pub const PICKER: &str = "malf_picker";
 pub const ACTIONS_AI: &str = "icons/mob/actions/actions_AI.dmi";
+/// tg `/obj/machinery/porta_turret/ai`.
+pub const AI_TURRET: &str = "/obj/machinery/porta_turret/ai";
 /// `_malf_ai_undo_lockdown` after `90 SECONDS`.
 pub const LOCKDOWN_SECS: f64 = 90.0;
 
@@ -53,6 +61,10 @@ pub enum Power {
     Lockdown,
     EmergencyLights,
     AirAlarms,
+    Doomsday,
+    UpgradeCameras,
+    UpgradeTurrets,
+    Eavesdrop,
 }
 
 /// A `/datum/ai_module/malf` and its `/datum/action/innate/ai`.
@@ -66,9 +78,13 @@ pub struct ModuleDef {
     pub uses: u32,
     pub unlock_text: &'static str,
     pub power: Power,
+    /// tg `minimum_apcs`: hacked APCs needed to buy it.
+    pub minimum_apcs: usize,
+    /// tg `upgrade`: applied at once on purchase, no action.
+    pub upgrade: bool,
 }
 
-pub static MODULES: [ModuleDef; 4] = [
+pub static MODULES: [ModuleDef; 8] = [
     ModuleDef {
         name: "Blackout",
         cost: 15,
@@ -79,6 +95,8 @@ pub static MODULES: [ModuleDef; 4] = [
         unlock_text: "You hook into the powernet and route bonus power towards the station's \
                       lighting.",
         power: Power::Blackout,
+        minimum_apcs: 0,
+        upgrade: false,
     },
     ModuleDef {
         name: "Hostile Station Lockdown",
@@ -90,6 +108,8 @@ pub static MODULES: [ModuleDef; 4] = [
         unlock_text: "Вы загружаете спящий троян в систему управления дверями. Вы можете \
                       отправить сигнал, чтобы активировать его в любое время",
         power: Power::Lockdown,
+        minimum_apcs: 0,
+        upgrade: false,
     },
     ModuleDef {
         name: "Disable Emergency Lights",
@@ -101,6 +121,8 @@ pub static MODULES: [ModuleDef; 4] = [
         unlock_text: "Вы подключаетесь к энергосети и находите связи между лампами и резервными \
                       источниками.",
         power: Power::EmergencyLights,
+        minimum_apcs: 0,
+        upgrade: false,
     },
     ModuleDef {
         name: "Air Alarm Safety Override",
@@ -113,6 +135,59 @@ pub static MODULES: [ModuleDef; 4] = [
                       оставляете окно подтверждения открытым. Вы можете нажать 'Да' в любой \
                       момент... ублюдок.",
         power: Power::AirAlarms,
+        minimum_apcs: 0,
+        upgrade: false,
+    },
+    ModuleDef {
+        name: "Doomsday Device",
+        cost: 130,
+        one_purchase: true,
+        action: "Doomsday Device",
+        icon: ("icons/obj/machines/nuke_terminal.dmi", "nuclearbomb_timing"),
+        uses: 1,
+        unlock_text: "Вы медленно и осторожно устанавливаете соединение с устройством \
+                      самоуничтожения станции. Вы можете активировать его в любое время.",
+        power: Power::Doomsday,
+        minimum_apcs: 10,
+        upgrade: false,
+    },
+    ModuleDef {
+        name: "Upgrade Camera Network",
+        cost: 35,
+        one_purchase: false,
+        action: "",
+        icon: ("", ""),
+        uses: 0,
+        unlock_text: "Распространения прошивки через OTA завершено! Камеры улучшены: \
+                      CAMSUPGRADED. Система усиления освещения активна.",
+        power: Power::UpgradeCameras,
+        minimum_apcs: 0,
+        upgrade: true,
+    },
+    ModuleDef {
+        name: "AI Turret Upgrade",
+        cost: 30,
+        one_purchase: false,
+        action: "",
+        icon: ("", ""),
+        uses: 0,
+        unlock_text: "Вы перенаправляете часть энергии на турели, усиливая их живучесть и урон.",
+        power: Power::UpgradeTurrets,
+        minimum_apcs: 0,
+        upgrade: true,
+    },
+    ModuleDef {
+        name: "Enhanced Surveillance",
+        cost: 30,
+        one_purchase: false,
+        action: "",
+        icon: ("", ""),
+        uses: 0,
+        unlock_text: "Распространения прошивки через OTA завершено! Камеры улучшены: Система \
+                      улучшенного наблюдения активна.",
+        power: Power::Eavesdrop,
+        minimum_apcs: 0,
+        upgrade: true,
     },
 ];
 
@@ -143,16 +218,18 @@ pub struct MalfModulesPlugin;
 
 impl Plugin for MalfModulesPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Lockdowns>().add_systems(
-            Update,
-            (
-                buttons.in_set(UiSystems::Handle),
-                picked
-                    .in_set(UiSystems::Handle)
-                    .after(PromptSystems::Answer),
-                end_lockdowns.run_if(|l: Res<Lockdowns>| !l.0.is_empty()),
-            ),
-        );
+        app.init_resource::<Lockdowns>()
+            .add_systems(
+                Update,
+                (
+                    buttons.in_set(UiSystems::Handle),
+                    picked
+                        .in_set(UiSystems::Handle)
+                        .after(PromptSystems::Answer),
+                    end_lockdowns.run_if(|l: Res<Lockdowns>| !l.0.is_empty()),
+                ),
+            )
+            .add_plugins(super::malf_doomsday::DoomsdayPlugin);
     }
 }
 
@@ -281,7 +358,7 @@ fn buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
         } else if id == CORE_RETURN {
             super::malf::vacate(world, ai);
         } else if let Some(index) = (0..MODULES.len()).find(|&i| power_id(i) == id) {
-            activate(world, ai, index);
+            activate(world, client, actor, ai, index);
         }
     }
 }
@@ -335,17 +412,32 @@ pub fn purchase(world: &mut World, ai: Entity, index: usize) -> bool {
     let Some(def) = MODULES.get(index) else {
         return false;
     };
-    let Some(points) = world.get::<MalfAi>(ai).map(|m| m.processing_time) else {
+    let Some((points, hacked)) = world
+        .get::<MalfAi>(ai)
+        .map(|m| (m.processing_time, m.hacked_apcs.len()))
+    else {
         return false;
     };
     let mut modules = world.get::<MalfModules>(ai).cloned().unwrap_or_default();
     if world.get::<Stat>(ai) == Some(&Stat::Dead)
         || def.cost > points
+        || def.minimum_apcs > hacked
         || modules.sold_out.contains(&index)
     {
         return false;
     }
     let eye = eye_of(world, ai);
+    if def.upgrade {
+        let text = upgrade(world, ai, def.power, def.unlock_text);
+        modules.sold_out.push(index);
+        world.entity_mut(ai).insert(modules);
+        if let Some(mut m) = world.get_mut::<MalfAi>(ai) {
+            m.processing_time -= def.cost;
+        }
+        tell_ai(world, ai, Span::Notice, text);
+        info!("{ai} purchased the malf upgrade {}", def.name);
+        return true;
+    }
     match modules.uses.iter_mut().find(|(i, _)| *i == index) {
         // tg: `action.uses += initial(action.uses)`.
         Some((_, uses)) => *uses += def.uses,
@@ -378,8 +470,87 @@ pub fn purchase(world: &mut World, ai: Entity, index: usize) -> bool {
     true
 }
 
+/// tg `upgrade(AI)` of the upgrade modules; the unlock text as it reads after it.
+fn upgrade(world: &mut World, ai: Entity, power: Power, text: &str) -> String {
+    match power {
+        Power::UpgradeCameras => {
+            let n = upgrade_cameras(world);
+            text.replace("CAMSUPGRADED", &n.to_string())
+        }
+        Power::UpgradeTurrets => {
+            upgrade_turrets(world);
+            text.to_owned()
+        }
+        Power::Eavesdrop => {
+            world.entity_mut(ai).insert(super::ai_upgrades::Eavesdrop);
+            text.to_owned()
+        }
+        _ => text.to_owned(),
+    }
+}
+
+/// `upgrade_cameras/upgrade`: every camera gets x-ray and EMP protection; the number of cameras
+/// that gained either.
+// Cost: once, every camera (~500 on MetaStation).
+pub fn upgrade_cameras(world: &mut World) -> u32 {
+    use crate::emp::{EmpProtection, PROTECT_ALL};
+    let mut q = world.query_filtered::<
+        (Entity, Has<super::cameras::XRay>, Option<&EmpProtection>),
+        With<super::cameras::Camera>,
+    >();
+    let cams: Vec<(Entity, bool, bool)> = q
+        .iter(world)
+        .map(|(e, xray, emp)| {
+            (
+                e,
+                xray,
+                emp.is_some_and(|p| p.0 & PROTECT_ALL == PROTECT_ALL),
+            )
+        })
+        .collect();
+    let mut upgraded = 0;
+    for (cam, xray, emp_proof) in cams {
+        if !xray {
+            world.entity_mut(cam).insert(super::cameras::XRay);
+            // The network reads x-ray with the camera's other state.
+            if let Some(mut c) = world.get_mut::<super::cameras::Camera>(cam) {
+                c.set_changed();
+            }
+        }
+        if !emp_proof {
+            world.entity_mut(cam).insert(EmpProtection(PROTECT_ALL));
+        }
+        if !xray || !emp_proof {
+            upgraded += 1;
+        }
+    }
+    upgraded
+}
+
+/// `upgrade_turrets/upgrade`: every `/obj/machinery/porta_turret/ai` EMP-proof, 200 max
+/// integrity, repaired by 200.
+pub fn upgrade_turrets(world: &mut World) {
+    let mut q = world.query::<(Entity, &ss13_mapload::DmTurret)>();
+    let turrets: Vec<Entity> = q
+        .iter(world)
+        .filter(|(_, dm)| ss13_mapload::fidelity::is_under(&dm.path, AI_TURRET))
+        .map(|(e, _)| e)
+        .collect();
+    for turret in turrets {
+        world
+            .entity_mut(turret)
+            .insert(crate::emp::EmpProtection(crate::emp::PROTECT_ALL));
+        if let Some(mut obj) = world.get_mut::<ss13_mapload::DmObj>(turret) {
+            obj.max_integrity = 200.0;
+        }
+        if let Some(mut integrity) = world.get_mut::<crate::obj_damage::Integrity>(turret) {
+            integrity.current = (integrity.current + 200.0).min(200.0);
+        }
+    }
+}
+
 /// tg `adjust_uses(-1)`: the message, the button gone at zero.
-fn spend_use(world: &mut World, ai: Entity, index: usize) {
+pub(crate) fn spend_use(world: &mut World, ai: Entity, index: usize) {
     let def = &MODULES[index];
     let Some(mut modules) = world.get::<MalfModules>(ai).cloned() else {
         return;
@@ -420,7 +591,7 @@ fn spend_use(world: &mut World, ai: Entity, index: usize) {
     }
 }
 
-fn activate(world: &mut World, ai: Entity, index: usize) {
+fn activate(world: &mut World, client: Entity, eye: Entity, ai: Entity, index: usize) {
     let owned = world
         .get::<MalfModules>(ai)
         .is_some_and(|m| m.uses.iter().any(|&(i, u)| i == index && u > 0));
@@ -428,6 +599,12 @@ fn activate(world: &mut World, ai: Entity, index: usize) {
         return;
     }
     match MODULES[index].power {
+        // `auto_use_uses = FALSE`: spent when the device starts.
+        Power::Doomsday => {
+            super::malf_doomsday::activate(world, client, eye, ai, index);
+            return;
+        }
+        Power::UpgradeCameras | Power::UpgradeTurrets | Power::Eavesdrop => return,
         Power::Blackout => {
             blackout(world);
             tell_ai(
@@ -597,6 +774,34 @@ mod tests {
         assert_eq!(world.get::<MalfModules>(ai).unwrap().uses, [(1, 1), (0, 6)]);
         assert_eq!(world.get::<MalfAi>(ai).unwrap().processing_time, 0);
         assert!(for_sale(world.get::<MalfModules>(ai).unwrap()).contains(&0));
+    }
+
+    #[test]
+    fn the_doomsday_device_needs_ten_hacked_apcs() {
+        let mut world = World::new();
+        let ai = malf(&mut world, 400);
+        assert!(!purchase(&mut world, ai, 4));
+        let apcs: Vec<Entity> = (0..10).map(|_| world.spawn_empty().id()).collect();
+        world.get_mut::<MalfAi>(ai).unwrap().hacked_apcs = apcs;
+        assert!(purchase(&mut world, ai, 4));
+        assert_eq!(world.get::<MalfAi>(ai).unwrap().processing_time, 270);
+        assert_eq!(world.get::<MalfModules>(ai).unwrap().uses, [(4, 1)]);
+    }
+
+    #[test]
+    fn upgrades_apply_at_once_and_leave_the_list() {
+        let mut world = World::new();
+        let ai = malf(&mut world, 30);
+        assert!(purchase(&mut world, ai, 7));
+        assert!(
+            world
+                .get::<super::super::ai_upgrades::Eavesdrop>(ai)
+                .is_some()
+        );
+        let modules = world.get::<MalfModules>(ai).unwrap();
+        assert!(modules.uses.is_empty());
+        assert!(!for_sale(modules).contains(&7));
+        assert_eq!(world.get::<MalfAi>(ai).unwrap().processing_time, 0);
     }
 
     #[test]

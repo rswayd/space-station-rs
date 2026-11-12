@@ -84,6 +84,8 @@ pub mod laws;
 #[cfg(feature = "server")]
 pub mod malf;
 #[cfg(feature = "server")]
+pub mod malf_doomsday;
+#[cfg(feature = "server")]
 pub mod malf_modules;
 #[cfg(feature = "server")]
 pub mod mmi;

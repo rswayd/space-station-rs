@@ -290,7 +290,7 @@ pub fn refresh(world: &mut World, mob: Entity) {
         icon(world, (ACTIONS_DMI, "bg_changeling")),
         icon(world, (ACTIONS_DMI, "bg_changeling_border")),
     );
-    let button = |id: &str, name: &str, icon: Option<ss13_shared::IconStateId>| {
+    let button = |id: &str, name: &str, icon: Option<ss13_shared::IconStateId>, active: bool| {
         (
             ActionButton {
                 id: id.to_owned(),
@@ -300,7 +300,7 @@ pub fn refresh(world: &mut World, mob: Entity) {
                 border,
                 available: true,
                 cooldown: 0.0,
-                active: false,
+                active,
                 maptext: None,
             },
             0.0,
@@ -312,6 +312,7 @@ pub fn refresh(world: &mut World, mob: Entity) {
             EMPORIUM_ID,
             "Cellular Emporium",
             icon(world, EMPORIUM_ICON),
+            false,
         ));
         let powers = Power::ALL
             .into_iter()
@@ -325,7 +326,14 @@ pub fn refresh(world: &mut World, mob: Entity) {
             } else {
                 (def.name, def.icon)
             };
-            buttons.push(button(def.id, name, icon(world, (ACTIONS_DMI, state))));
+            // The chosen sting's button shows it (tg the HUD's sting icon).
+            let active = ling.chosen_sting == Some(power);
+            buttons.push(button(
+                def.id,
+                name,
+                icon(world, (ACTIONS_DMI, state)),
+                active,
+            ));
         }
     }
     set_buttons(world, mob, buttons);
@@ -419,6 +427,11 @@ pub(super) fn trigger_powers(
 
 /// tg `try_to_sting` of `power`, with the powers' own overrides.
 pub(super) fn try_power(world: &mut World, client: Entity, mob: Entity, power: Power) {
+    // `sting/Trigger`: choosing or putting away, no checks until it stings.
+    if power.is_sting() {
+        toggle_sting(world, client, mob, power);
+        return;
+    }
     // `weapon/try_to_sting`, `suit/try_to_sting`: a second use takes it back, for free.
     match power {
         Power::ArmBlade if retract_blade(world, mob) => return,
@@ -450,6 +463,14 @@ pub(super) fn try_power(world: &mut World, client: Entity, mob: Entity, power: P
         Power::Fleshmend => fleshmend(world, client, mob),
         Power::ArmBlade => form_blade(world, client, mob),
         Power::Armor => form_armor(world, client, mob),
+        // Handled above.
+        Power::TransformationSting
+        | Power::FalseArmbladeSting
+        | Power::ExtractDnaSting
+        | Power::MuteSting
+        | Power::BlindSting
+        | Power::LsdSting
+        | Power::CryoSting => false,
     };
     if done {
         spend(world, mob, power);

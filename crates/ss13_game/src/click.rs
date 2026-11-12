@@ -100,6 +100,24 @@ pub struct MiddleClick {
     pub mob: Entity,
 }
 
+/// On a mob whose middle and alt clicks on another living mob within [`STING_RANGE`] are
+/// [`StingClick`]s instead (tg `COMSIG_MOB_MIDDLECLICKON` / `COMSIG_MOB_ALTCLICKON` of a
+/// changeling with a chosen sting, `on_click_sting`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct StingReady;
+
+/// tg `sting_range`: `on_click_sting`'s preliminary `IN_GIVEN_RANGE`.
+pub const STING_RANGE: u32 = 2;
+
+/// A middle or alt click of a conscious [`StingReady`] mob on a living mob in range
+/// (`crate::antag::changeling`).
+#[derive(Message, Clone, Copy, Debug)]
+pub struct StingClick {
+    pub client: Entity,
+    pub mob: Entity,
+    pub target: Entity,
+}
+
 /// A shift+middle click on an entity the client sees: tg `ShiftMiddleClickOn` -> `pointed`.
 #[derive(Message, Clone, Copy, Debug)]
 pub struct PointClick {
@@ -182,6 +200,7 @@ impl Plugin for ClickServerPlugin {
             .add_message::<GiveClick>()
             .add_message::<ThrowClick>()
             .add_message::<MiddleClick>()
+            .add_message::<StingClick>()
             .add_message::<PointClick>()
             .add_message::<AltClick>()
             .add_message::<ClickOn>()
@@ -254,9 +273,16 @@ fn resolve_clicks(
     inside: Query<(), Or<(With<crate::mecha::Pilot>, With<InCloset>)>>,
     positions: Query<(&TilePos, Has<ControlsFromInside>)>,
     module_users: Query<(), With<crate::modsuit::server::ModuleSelected>>,
-    jaunters: Query<(), With<crate::spells::Jaunting>>,
+    (jaunters, stingers, living): (
+        Query<(), With<crate::spells::Jaunting>>,
+        Query<(), With<StingReady>>,
+        Query<(), With<crate::health::Health>>,
+    ),
     mut out: ClickWriters,
-    mut xeno: MessageWriter<crate::science::xenobio_console::XenoConsoleClick>,
+    (mut xeno, mut sting): (
+        MessageWriter<crate::science::xenobio_console::XenoConsoleClick>,
+        MessageWriter<StingClick>,
+    ),
 ) {
     let now = time.elapsed_secs_f64();
     let second = now as u64;
@@ -424,6 +450,25 @@ fn resolve_clicks(
                     modifiers,
                 });
             }
+            continue;
+        }
+        // tg `on_click_sting` cancels the middle or alt click it takes.
+        if (modifiers.middle || (modifiers.alt && !modifiers.right))
+            && !modifiers.ctrl
+            && !modifiers.shift
+            && stingers.contains(mob)
+            && target != mob
+            && stat == Some(&Stat::Conscious)
+            && living.contains(target)
+            && mob_pos
+                .chebyshev(target_pos)
+                .is_some_and(|d| d <= STING_RANGE)
+        {
+            sting.write(StingClick {
+                client,
+                mob,
+                target,
+            });
             continue;
         }
         if modifiers.middle {

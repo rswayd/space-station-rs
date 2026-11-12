@@ -16,8 +16,9 @@ pub const ANTAG_FILE: &str = "antag.ron";
 
 /// Items a changeling grows at runtime (`/datum/action/changeling/weapon/arm_blade`,
 /// `/datum/action/changeling/suit/armor`).
-pub const CHANGELING_RUNTIME_TYPES: [&str; 3] = [
+pub const CHANGELING_RUNTIME_TYPES: [&str; 4] = [
     "/obj/item/melee/arm_blade",
+    "/obj/item/melee/arm_blade/false",
     "/obj/item/clothing/suit/armor/changeling",
     "/obj/item/clothing/head/helmet/changeling",
 ];

@@ -367,6 +367,7 @@ pub fn readapt(world: &mut World, mob: Entity) {
         ling.remove_purchased();
         ling.can_respec -= 1;
     }
+    world.entity_mut(mob).remove::<crate::click::StingReady>();
     info!("{mob} readapted (changeling)");
     refresh(world, mob);
 }

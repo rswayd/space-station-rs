@@ -102,6 +102,15 @@ pub fn refresh(world: &mut World, mob: Entity) {
             _ => {}
         }
     }
+    // The heretic's curse of paralysis (`TRAIT_PARALYSIS_L_LEG`, `TRAIT_PARALYSIS_R_LEG`).
+    if world
+        .get::<crate::antag::heretic::server::ParalysisCurse>(mob)
+        .is_some()
+    {
+        for zone in [BodyZone::LLeg, BodyZone::RLeg] {
+            paralyzed[zone.index()] = true;
+        }
+    }
     // The Mute (`TRAIT_MUTE`), Soft-Spoken (`TRAIT_FORCE_WHISPER`) and Pacifist
     // (`TRAIT_PACIFISM`) quirks (`crate::quirks`).
     if let Some(quirks) = world.get::<crate::quirks::Quirks>(mob) {
