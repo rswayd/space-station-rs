@@ -57,7 +57,7 @@ impl Plugin for SupermatterConsumePlugin {
         app.add_click_handler(ClickPhase::EmptyHand, 11, |w, c| {
             hand_hit(w, c.mob, c.target)
         });
-        // `attackby_hit` (and `tool_hit` of anything but a movable crystal's wrench).
+        // `attackby_hit` (`tool_hit` of a wrench excepted).
         app.add_click_handler(ClickPhase::HeldOnTarget, 21, |w, c| {
             c.held.is_some_and(|h| attackby_hit(w, c.mob, h, c.target))
         });
