@@ -16,9 +16,9 @@
 //! - Crazy and insane sanity bring hallucinations (`crate::hallucination::SanityHallucinations`).
 //! - The face on the owner's HUD ([`MoodHudData`], headless tgui [`MoodHudUi`]) shows the level
 //!   tinted by sanity; clicking it prints the mood (`print_mood`).
+// Room beauty and area bonuses are `crate::area_mood`'s.
 // shortcut: no crit threshold change from insanity (crit thresholds are constants in
-// `crate::health`), no area beauty or area
-// mood bonuses (but those of `crate::personality`), no special screen icons, no full-heal
+// `crate::health`), no special screen icons, no full-heal
 // reset (no aheal yet), gibbed/dusted deaths count as plain ones, conditional death moodlets other
 // than the base one (cult, revolution, pets) are not ported. The food, drug, morbid and most
 // generic events wait for the mechanics that raise them.

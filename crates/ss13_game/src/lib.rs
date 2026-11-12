@@ -188,6 +188,8 @@ pub mod animation_client;
 pub mod announce;
 pub mod antag;
 #[cfg(feature = "server")]
+pub mod area_mood;
+#[cfg(feature = "server")]
 pub mod armor;
 #[cfg(feature = "server")]
 pub mod arrivals;

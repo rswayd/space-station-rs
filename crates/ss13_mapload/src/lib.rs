@@ -87,7 +87,7 @@ use bevy::prelude::*;
 use ss13_proto::ProtoAppExt;
 
 pub use airlock_control::DmAirlockControl;
-pub use atmos::{DmArea, DmAtmosPass, DmTurfAtmos};
+pub use atmos::{DmArea, DmAtmosPass, DmBeauty, DmTurfAtmos};
 pub use atmos_machine::DmAtmosDevice;
 pub use barsign::DmBarsign;
 pub use border::DmBorder;
@@ -365,6 +365,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmTurfAtmos>("dm_turf_atmos")
             .register_proto_component::<DmAtmosPass>("dm_atmos_pass")
             .register_proto_component::<DmArea>("dm_area")
+            .register_proto_component::<DmBeauty>("dm_beauty")
             .register_proto_component::<turf_damage::DmTurfDamage>("dm_turf_damage")
             .register_proto_component::<DmAtmosDevice>("dm_atmos_device")
             .register_proto_component::<DmCloset>("dm_closet")

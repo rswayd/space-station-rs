@@ -340,6 +340,7 @@ impl Plugin for GameServerPlugin {
             crate::quirks::QuirksServerPlugin,
             crate::personality::PersonalityServerPlugin,
             crate::hallucination::HallucinationPlugin,
+            crate::area_mood::AreaMoodPlugin,
         ))
         .add_plugins(crate::vision::VisionServerPlugin)
         .add_plugins(crate::stock_parts::StockPartsPlugin)
