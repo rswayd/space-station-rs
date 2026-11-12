@@ -321,6 +321,8 @@ pub mod extinguisher;
 #[cfg(feature = "server")]
 pub mod falsewall;
 #[cfg(feature = "server")]
+pub mod fancy;
+#[cfg(feature = "server")]
 pub mod fire;
 #[cfg(feature = "server")]
 pub mod fireplace;

@@ -100,7 +100,7 @@ pub use construct::{
     DmTurfBuild,
 };
 pub use contents::{
-    DmCloset, DmContents, DmHoldable, DmLockbox, DmStorage, DmWeight, Fill, PickArm,
+    DmCloset, DmContents, DmFancy, DmHoldable, DmLockbox, DmStorage, DmWeight, Fill, PickArm,
 };
 pub use dispenser::DmChemDispenser;
 pub use disposal::{DISPOSAL_RUNTIME_TYPES, DmMailSort};
@@ -372,6 +372,7 @@ impl Plugin for DmProtoPlugin {
             .register_proto_component::<DmContents>("dm_contents")
             .register_proto_component::<DmStorage>("dm_storage")
             .register_proto_component::<DmHoldable>("dm_holdable")
+            .register_proto_component::<DmFancy>("dm_fancy")
             .register_proto_component::<DmWeight>("dm_weight")
             .register_proto_component::<DmPower>("dm_power")
             .register_proto_component::<DmRadio>("dm_radio")

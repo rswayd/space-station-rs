@@ -354,6 +354,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::emag::EmagPlugin)
         .add_plugins(crate::embedding::EmbeddingPlugin)
         .add_plugins(crate::gun_pins::GunPinsPlugin)
+        .add_plugins(crate::fancy::FancyPlugin)
         .add_plugins(crate::grenades::GrenadesServerPlugin)
         .add_plugins((
             crate::effects::EffectsPlugin,

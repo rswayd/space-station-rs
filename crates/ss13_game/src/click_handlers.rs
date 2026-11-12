@@ -76,6 +76,7 @@
 //! | 2700 | `radio::attack_self` |
 //! | 2800 | `martial::attack_self` |
 //! | 2900 | `botany::attack_self` |
+//! | 2993 | `fancy::attack_self` (a donut, egg or cigarette box opens, closes or folds) |
 //! | 2999 | `service::sparring` contract menu |
 //! | 3000 | `service::server::attack_self` |
 //! | 3010 | `service::barber::attack_self` (lipstick twist, the dye spray on oneself) |

@@ -65,7 +65,7 @@
 Упаковки, чей спрайт показывает число оставшихся предметов и которые открываются/закрываются: пачки сигарет, коробки пончиков, яиц, свечей, наггетсов, банка огурцов.
 
 - **Код:** [`/obj/item/storage/fancy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/fancy.dm#L16), [`/obj/item/storage/fancy/cigarettes`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/fancy.dm#L183), [`/obj/item/storage/fancy/donut_box`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/fancy.dm#L90)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/storage.rs`: наполняются и работают как хранилища; спрайт не следует числу предметов, нет открытия крышки
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/fancy.rs`, данные `DmFancy` (`crates/ss13_mapload/src/contents.rs`): Z в руке открывает и закрывает коробку, взятие или вкладывание предмета открывает закрытую, открытая показывает число предметов на спрайте (`[base_icon_state][contents.len]`) и в осмотре, пустая складывается в картон в те же руки; наполнение по `spawn_type`/`spawn_count`, списки `set_holdable`. `// shortcut:` нет оверлеев содержимого (пончики по вкусу, сигареты и зажигалка в пачке), сигареты в рот ПКМ
 
 ### Ящики для инструментов
 Тулбоксы (механический, электрический, аварийный, синдикатовский и т.д.) — хранилище и тяжёлое оружие ближнего боя.

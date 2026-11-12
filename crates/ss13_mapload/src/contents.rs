@@ -205,6 +205,42 @@ pub fn holdable(types: &DmTypes, path: &str) -> Option<DmHoldable> {
         .then_some(out)
 }
 
+pub const FANCY_ROOT: &str = "/obj/item/storage/fancy";
+
+/// `/obj/item/storage/fancy` vars: boxes whose sprite shows how many items are left.
+#[derive(Component, Reflect, Clone, Debug, Default, PartialEq)]
+pub struct DmFancy {
+    pub base_icon_state: String,
+    /// `FANCY_CONTAINER_CLOSED` 0, `_OPEN` 1, `_ALWAYS_OPEN` 2.
+    pub open_status: u8,
+    pub has_open_closed_states: bool,
+    pub contents_tag: String,
+    /// Empty: it does not fold.
+    pub foldable_result: String,
+}
+
+fn fancy(types: &DmTypes, path: &str) -> DmFancy {
+    let text = |var: &str| match types.resolved(path, var) {
+        Some(serde_json::Value::String(s)) => s.clone(),
+        Some(serde_json::Value::Object(o)) => o
+            .get("path")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        _ => String::new(),
+    };
+    DmFancy {
+        base_icon_state: text("base_icon_state"),
+        open_status: types
+            .resolved(path, "open_status")
+            .and_then(|v| num(Some(v)))
+            .map_or(0, |n| n.clamp(0.0, 2.0) as u8),
+        has_open_closed_states: truthy(types.resolved(path, "has_open_closed_states")),
+        contents_tag: text("contents_tag"),
+        foldable_result: text("foldable_result"),
+    }
+}
+
 impl Default for DmStorage {
     /// `/datum/storage` defaults.
     fn default() -> Self {
@@ -340,6 +376,19 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             "max_total_storage",
             storage.max_total_storage.to_string(),
         ));
+    }
+    if is_under(path, FANCY_ROOT) {
+        let f = fancy(types, path);
+        let s = |v: &str| ron::to_string(v).expect("strings always serialize");
+        out.push(ext("dm_fancy", "base_icon_state", s(&f.base_icon_state)));
+        out.push(ext("dm_fancy", "open_status", f.open_status.to_string()));
+        out.push(ext(
+            "dm_fancy",
+            "has_open_closed_states",
+            f.has_open_closed_states.to_string(),
+        ));
+        out.push(ext("dm_fancy", "contents_tag", s(&f.contents_tag)));
+        out.push(ext("dm_fancy", "foldable_result", s(&f.foldable_result)));
     }
     // A subtype whose `storage_type` holds anything still overrides its parent's lists.
     let parent_holds = ty
