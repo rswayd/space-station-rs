@@ -259,7 +259,7 @@ fn melee(
     handled: Res<crate::security::MeleeHandled>,
     medical: Res<crate::medical::MedicalHandled>,
     clothing: Query<(&ss13_mapload::DmClothing, &ss13_mapload::DmArmor)>,
-    (mut sounds, pacifists, artists, mut reactive, blockers, staminas, bayonets, buckled): (
+    (mut sounds, pacifists, artists, mut reactive, blockers, staminas, bayonets, buckled, moods): (
         MessageWriter<PlaySound>,
         Query<(), With<crate::medical::traumas::Pacifist>>,
         Query<&crate::martial::MartialArts>,
@@ -268,6 +268,7 @@ fn melee(
         Query<&crate::status_effects::StatusEffects>,
         Query<&crate::gun_attachments::BayonetMount>,
         Query<(), With<crate::medical::surgery::Buckled>>,
+        Query<&crate::mood::Mood>,
     ),
     mut commands: Commands,
 ) {
@@ -313,6 +314,24 @@ fn melee(
                 .unwrap_or(item)
         });
         let held = held_entity.and_then(|item| items.get(item).ok());
+        // `balloon_mallet/attack`: a giggle and the target's sanity sets the force; it only
+        // hits in combat mode.
+        let mallet_force = held
+            .filter(|(item, _, _)| crate::service::is_balloon_mallet(&item.path))
+            .map(|_| {
+                let sanity = moods
+                    .get(target)
+                    .map_or(crate::mood::SANITY_NEUTRAL, |m| m.sanity);
+                let (force, humiliated) = crate::service::mallet_hit(sanity);
+                let pos = click.mob_pos;
+                commands.queue(move |world: &mut World| {
+                    crate::service::mallet_effects(world, pos, target, humiliated);
+                });
+                force
+            });
+        if mallet_force.is_some() && !combat.0 {
+            continue;
+        }
         // tg `interact_with_atom` of medical items, health analyzers and reagent containers
         // succeeds, so they never attack (`crate::medical`, `crate::chem` handle that click).
         if held.is_some_and(|(item, _, _)| {
@@ -338,7 +357,7 @@ fn melee(
             next_move.0 = now + f64::from(item.attack_speed) / 10.0;
             Weapon {
                 entity: held_entity.expect("held"),
-                force: item.force,
+                force: mallet_force.unwrap_or(item.force),
                 kind: DamageType::from_dm(&item.damtype).unwrap_or(DamageType::Brute),
                 name: name.map_or_else(|| "предмет".to_owned(), |n| n.name.clone()),
                 wounding: wounding.cloned().unwrap_or_default(),

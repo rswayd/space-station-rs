@@ -29,7 +29,7 @@
 //! The effects are in [`effects`], staves and wands in [`magic_guns`].
 // shortcut: antimagic with charges (the holymelon helmet, the psyker's) and from implants or
 // organs is not ported; no spell levels past the spellbook's limits from admins, no
-// `SPELL_REQUIRES_MIND` or mime vows, no emote invocations, no muteness (tg `can_speak`), no
+// `SPELL_REQUIRES_MIND`, no emote invocations, no muteness (tg `can_speak`), no
 // `COMSIG_MOB_PRE_INVOCATION` (chuuni) and no splattercasting; the buttons share the action row with other antagonists'
 // own buttons (`crate::actions::set_buttons` replaces the row: a heretic wizard loses the spell
 // buttons until the next spell refresh).
@@ -73,6 +73,7 @@ pub const SPELL_REQUIRES_WIZARD_GARB: u32 = 1 << 0;
 pub const SPELL_REQUIRES_HUMAN: u32 = 1 << 1;
 pub const SPELL_REQUIRES_NO_ANTIMAGIC: u32 = 1 << 4;
 pub const SPELL_REQUIRES_STATION: u32 = 1 << 5;
+pub const SPELL_REQUIRES_MIME_VOW: u32 = 1 << 7;
 /// The default `spell_requirements`.
 const GARB_AND_NO_ANTIMAGIC: u32 = SPELL_REQUIRES_WIZARD_GARB | SPELL_REQUIRES_NO_ANTIMAGIC;
 
@@ -610,7 +611,7 @@ pub const SPELLS: [SpellDef; 50] = [
         invocation: "%CASTER pulls out an invisible chair and sits down.",
         invocation_type: Invocation::Emote,
         emote_self: "You conjure an invisible chair and sit down.",
-        requirements: SPELL_REQUIRES_HUMAN,
+        requirements: SPELL_REQUIRES_HUMAN | SPELL_REQUIRES_MIME_VOW,
         antimagic: 0,
         ..def(
             Spell::InvisibleChair,
@@ -629,7 +630,7 @@ pub const SPELLS: [SpellDef; 50] = [
         invocation: "%CASTER looks as if a wall is in front of %PRONOUN_them.",
         invocation_type: Invocation::Emote,
         emote_self: "You form a wall in front of yourself.",
-        requirements: SPELL_REQUIRES_HUMAN,
+        requirements: SPELL_REQUIRES_HUMAN | SPELL_REQUIRES_MIME_VOW,
         antimagic: 0,
         ..def(
             Spell::InvisibleWall,
@@ -818,7 +819,7 @@ pub const SPELLS: [SpellDef; 50] = [
                      box out of the air.",
         invocation_type: Invocation::Emote,
         emote_self: "You conjure up an invisible box, large enough to store a few things.",
-        requirements: SPELL_REQUIRES_HUMAN,
+        requirements: SPELL_REQUIRES_HUMAN | SPELL_REQUIRES_MIME_VOW,
         antimagic: 0,
         ..def(
             Spell::InvisibleBox,
@@ -1425,6 +1426,11 @@ pub fn can_cast(world: &World, mob: Entity, spell: Spell) -> Result<(), Option<S
         && !crate::events::controller::station_levels(world).contains(&pos.z)
     {
         return Err(Some(format!("You can't cast {} here!", def.name)));
+    }
+    if def.requirements & SPELL_REQUIRES_MIME_VOW != 0
+        && world.get::<crate::service::MimeVow>(mob).is_none()
+    {
+        return Err(Some("You must dedicate yourself to silence first!".into()));
     }
     if def.requirements & SPELL_REQUIRES_NO_ANTIMAGIC != 0
         && !can_cast_magic(world, mob, def.antimagic)

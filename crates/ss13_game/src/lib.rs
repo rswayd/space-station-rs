@@ -664,6 +664,8 @@ pub mod t_scanner;
 #[cfg(feature = "server")]
 pub mod tables;
 #[cfg(feature = "server")]
+pub mod talking_toys;
+#[cfg(feature = "server")]
 pub mod tank_storage;
 #[cfg(feature = "server")]
 pub mod taser;

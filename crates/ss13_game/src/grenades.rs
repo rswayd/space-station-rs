@@ -22,6 +22,10 @@
 //!   rotfrag and rotsting grenades (`primer`) count turns in hand after arming (from 1): shrapnel
 //!   (or stingballs) at the ring at `turns / rots_per_mag` tiles, rounded down. Flashbangs and stingbangs
 //!   spark (5-9) when they go off.
+//! - The large firecracker (`festive.dm`) does not arm by hand: a hot item lights it (the
+//!   ignition line, the fuse sound, 3 s), wirecutters take a second off its fuse each (the
+//!   `firecracker_20`.. sprites), fire sets it off at once; it goes off with `explosion(-1, -1,
+//!   2)`.
 //! - A grenade destroyed by a blast goes off (`atom_deconstruct(disassembled = FALSE)`,
 //!   [`on_destroyed`]).
 //!
@@ -70,6 +74,11 @@ const PRIMER_STING: &str = "/obj/item/grenade/primer/stingbang";
 const STINGBALL: &str = ss13_mapload::runtime::STINGBALL;
 const STINGBALL_MEGA: &str = ss13_mapload::runtime::STINGBALL_MEGA;
 const BOX_DEPLOY: &str = "sound/misc/box_deploy.ogg";
+const FIRECRACKER: &str = "/obj/item/grenade/firecracker";
+const FUSE_SOUND: &str = "sound/effects/fuse.ogg";
+const WIRECUTTER_SOUND: &str = "sound/items/tools/wirecutter.ogg";
+/// The firecracker's `det_time` (3 SECONDS).
+const FIRECRACKER_DET_TIME: f64 = 3.0;
 /// The stingbang's `flashbang_range`, `shrapnel_radius` (mega: 12).
 const STINGBANG_RANGE: u32 = 1;
 const STINGBANG_SHRAPNEL: u32 = 5;
@@ -140,6 +149,8 @@ pub enum Kind {
         sting: bool,
         rots_per_mag: u32,
     },
+    /// `/obj/item/grenade/firecracker` (`festive.dm`): lit by a hot item, not by hand.
+    Firecracker,
 }
 
 /// Which shrapnel a grenade's pellet cloud fires.
@@ -226,6 +237,8 @@ pub fn kind_of(path: &str) -> Option<(Kind, &'static [f64])> {
     };
     let kind = if crate::assemblies::chem_grenade::is_casing(path) {
         Kind::Chem
+    } else if is_under(path, FIRECRACKER) {
+        Kind::Firecracker
     } else if is_under(path, FLASHBANG) {
         return Some((Kind::Flashbang, FLASHBANG_FUSES));
     } else if is_under(path, EMP) {
@@ -280,9 +293,14 @@ pub fn grenade(world: &mut World, item: Entity) -> Option<Grenade> {
     }
     let path = world.get::<DmItem>(item)?.path.clone();
     let (kind, fuses) = kind_of(&path)?;
+    let det_time = if kind == Kind::Firecracker {
+        FIRECRACKER_DET_TIME
+    } else {
+        DET_TIME
+    };
     let g = Grenade {
         kind,
-        det_time: DET_TIME,
+        det_time,
         fuses,
         used: false,
         cluster: false,
@@ -301,8 +319,12 @@ use crate::tools::tell_mob;
 /// `/obj/item/grenade/attack_self`: arms it (an armed one ignores it). False for anything that
 /// is not a ported grenade.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
-    if grenade(world, item).is_none() {
+    let Some(g) = grenade(world, item) else {
         return false;
+    };
+    // `firecracker/attack_self`: "You need to light it manually."
+    if g.kind == Kind::Firecracker {
+        return true;
     }
     if world.get::<Armed>(item).is_none() {
         arm(world, item, Some((client, mob)), None);
@@ -348,10 +370,16 @@ pub fn arm(world: &mut World, item: Entity, user: Option<(Entity, Entity)>, dela
             format!("You prime {name}! {time}!"),
         );
     }
+    // `firecracker/arm_grenade`: the fuse at volume 80.
+    let (sound, volume) = if g.kind == Kind::Firecracker {
+        (FUSE_SOUND, 80.0)
+    } else {
+        (ARM_SOUND, 60.0)
+    };
     if let Some(pos) = pos {
         crate::sound::playsound(
             world,
-            crate::sound::PlaySound::new(pos, ARM_SOUND, 60.0, true),
+            crate::sound::PlaySound::new(pos, sound, volume, true),
         );
     }
     // `icon_state = (base_icon_state || initial(icon_state)) + "_active"`.
@@ -489,6 +517,17 @@ pub fn detonate(world: &mut World, item: Entity) -> bool {
                     Pellet::Shrapnel
                 };
                 fire_shrapnel(world, item, pos, radius, pellet);
+            }
+        }
+        Kind::Firecracker => {
+            update_mob(world, item);
+            if let Some(pos) = crate::explosions::turf_of(world, item) {
+                let name = name_of(world, item);
+                crate::explosions::explosion(
+                    world,
+                    pos,
+                    crate::explosions::Explosion::new(-1, -1, 2).cause(&name),
+                );
             }
         }
         // The casing stays (a screwdriver resets its trigger).
@@ -1006,6 +1045,9 @@ pub fn item_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
+    if firecracker_interaction(world, client, mob, held, target) {
+        return true;
+    }
     let Some((tool, _)) = crate::tools::tool_of(world, held) else {
         return false;
     };
@@ -1053,6 +1095,83 @@ pub fn item_interaction(
     world
         .entity_mut(prompt)
         .insert(FusePrompt { grenade: target });
+    true
+}
+
+/// `firecracker/item_interaction` (a hot item lights it) and `wirecutter_act` (a second off the
+/// fuse, down to none). False when `target` is no firecracker or the tool does neither.
+fn firecracker_interaction(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    if world
+        .get::<DmItem>(target)
+        .is_none_or(|i| !is_under(&i.path, FIRECRACKER))
+        || grenade(world, target).is_none()
+    {
+        return false;
+    }
+    if world.get::<Armed>(target).is_some() {
+        return false;
+    }
+    let (user, what) = (name_of(world, mob), name_of(world, target));
+    if let Some(text) = crate::smoking::ignition_text(world, held, &user, &what) {
+        crate::chem::visible(world, mob, &text, &text, Span::Notice);
+        arm(world, target, Some((client, mob)), None);
+        return true;
+    }
+    if crate::tools::tool_of(world, held).map(|(t, _)| t) != Some(ToolKind::Wirecutters) {
+        return false;
+    }
+    let det_time = world.get::<Grenade>(target).map_or(0.0, |g| g.det_time);
+    if det_time <= 0.0 {
+        crate::tools::tell(
+            world,
+            client,
+            Span::Danger,
+            "You've already removed all of the fuse!",
+        );
+        return true;
+    }
+    let det_time = (det_time - 1.0).max(0.0);
+    if let Some(mut g) = world.get_mut::<Grenade>(target) {
+        g.det_time = det_time;
+    }
+    let tool = name_of(world, held);
+    crate::tools::tell(
+        world,
+        client,
+        Span::Notice,
+        format!("You shorten the fuse of {what} with {tool}."),
+    );
+    if let Some(pos) = crate::explosions::turf_of(world, target) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, WIRECUTTER_SOUND, 20.0, true),
+        );
+    }
+    // `icon_state = initial(icon_state) + "_[det_time]"` (deciseconds).
+    if let Some(state) = world
+        .get::<DmAtom>(target)
+        .map(|a| format!("{}_{}", a.icon_state, (det_time * 10.0).round() as i64))
+    {
+        set_icon_state(world, target, &state);
+    }
+    true
+}
+
+/// `firecracker/fire_act`: it goes off. True when `thing` is a firecracker.
+pub fn fire_act(world: &mut World, thing: Entity) -> bool {
+    if world
+        .get::<DmItem>(thing)
+        .is_none_or(|i| !is_under(&i.path, FIRECRACKER))
+    {
+        return false;
+    }
+    detonate(world, thing);
     true
 }
 
@@ -1105,6 +1224,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
     let det_time = match world.get::<Grenade>(target) {
         Some(g) => g.det_time,
         None => match world.get::<DmItem>(target).and_then(|d| kind_of(&d.path)) {
+            Some((Kind::Firecracker, _)) => FIRECRACKER_DET_TIME,
             Some(_) => DET_TIME,
             None => return,
         },
@@ -1135,6 +1255,10 @@ mod tests {
 
     #[test]
     fn kinds_follow_the_type_tree() {
+        assert_eq!(
+            kind_of("/obj/item/grenade/firecracker").map(|k| k.0),
+            Some(Kind::Firecracker)
+        );
         assert_eq!(
             kind_of("/obj/item/grenade/flashbang/cluster").map(|k| k.0),
             Some(Kind::Flashbang)

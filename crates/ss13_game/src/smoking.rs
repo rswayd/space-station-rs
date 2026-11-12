@@ -777,7 +777,12 @@ fn check_oxygen(world: &World, item: Entity) -> bool {
 }
 
 /// `ignition_effect(A, user)` of `tool`: its line, or `None` when it is not hot.
-fn ignition_text(world: &World, tool: Entity, user: &str, target: &str) -> Option<String> {
+pub(crate) fn ignition_text(
+    world: &World,
+    tool: Entity,
+    user: &str,
+    target: &str,
+) -> Option<String> {
     if heat_of(world, tool) <= 0.0 {
         return None;
     }

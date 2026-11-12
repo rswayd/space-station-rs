@@ -8,8 +8,17 @@
 //!   else gives them the `honk` mood event.
 //! - A desk bell rings on an empty-hand click (0.3 s apart) and when hit; every ring may break
 //!   its clapper (`prob(times_rang / 100)`), and a broken one is silent.
+//! - Canned laughter's reagent makes the drinker laugh once, with its moodlet. The balloon
+//!   mallet giggles on every swing at a living mob; the target's sanity sets the force (8 when
+//!   crazy or worse, 4 when unstable or disturbed, else 1) and humiliates the less mad; it only
+//!   hits in combat mode (`crate::combat`).
+//! - The Guide to Dank Mimery (the mime's backpack) offers the routines not known yet on a
+//!   radial: invisible wall, chair or box (`crate::spells`, which need the vow); the pick is
+//!   learned and the book is gone.
 //! - The mime spawns under the vow of silence (`TRAIT_MIMING`): it cannot say, whisper or use
 //!   the radio (`crate::medical::traumas::refresh` folds it into the mute flag).
+// shortcut: the Advanced Mimery books (Invisible Blockade, Finger Guns) are not ported; a
+// non-mime reading the mimery book gets no vow action.
 // shortcut: no squeaks on bumps, throws, projectiles, disposals or hulk hits; plushies keep
 // silent; the golden horn does not flip people; the vow cannot be broken (the spell action is
 // not ported) and mime emotes are not muted; desk bells cannot be fixed, taken apart or picked
@@ -298,4 +307,209 @@ pub(super) fn mime_takes_the_vow(add: On<Add<crate::jobs::PlayerJob>>, mut comma
         world.entity_mut(mob).insert(MimeVow);
         crate::medical::traumas::refresh(world, mob);
     });
+}
+
+// --- Canned laughter and the balloon mallet ------------------------------------------------
+
+const BALLOON_MALLET: &str = "/obj/item/balloon_mallet";
+const HEHE: &str = "sound/mobs/non-humanoids/clown/hehe.ogg";
+const LAUGHTER: &str = "/datum/reagent/consumable/laughter";
+
+/// `/datum/mood_event/mallet_humiliation`.
+const MALLET_HUMILIATION: MoodEvent = MoodEvent {
+    id: "mallet_humiliation",
+    description: "Попасть под удар такого глупого оружия довольно унизительно...",
+    mood_change: -3.0,
+    timeout: 10.0,
+    hidden: false,
+};
+
+/// `/datum/mood_event/chemical_laughter`.
+const CHEMICAL_LAUGHTER: MoodEvent = MoodEvent {
+    id: "chemical_laughter",
+    description: "Смех и правда продлевает жизнь, не так ли?",
+    mood_change: 4.0,
+    timeout: 180.0,
+    hidden: false,
+};
+
+pub fn is_balloon_mallet(path: &str) -> bool {
+    is_under(path, BALLOON_MALLET)
+}
+
+/// `balloon_mallet/attack`'s `switch(target.mob_mood.sanity)`: the force of this hit and
+/// whether the target is humiliated. tg keeps the last force set; here every hit starts from
+/// the mallet's own 1.
+pub fn mallet_hit(sanity: f32) -> (f32, bool) {
+    use crate::mood::{
+        SANITY_CRAZY, SANITY_DISTURBED, SANITY_GREAT, SANITY_INSANE, SANITY_NEUTRAL,
+        SANITY_UNSTABLE,
+    };
+    if (SANITY_INSANE..=SANITY_CRAZY).contains(&sanity) {
+        (8.0, false)
+    } else if (SANITY_UNSTABLE..=SANITY_DISTURBED).contains(&sanity) {
+        (4.0, true)
+    } else if (SANITY_NEUTRAL..=SANITY_GREAT).contains(&sanity) {
+        (1.0, true)
+    } else {
+        (1.0, false)
+    }
+}
+
+/// The giggle at the attacker's tile and the humiliation of a hit with the mallet.
+pub fn mallet_effects(
+    world: &mut World,
+    at: ss13_shared::TilePos,
+    target: Entity,
+    humiliated: bool,
+) {
+    crate::sound::playsound(world, crate::sound::PlaySound::new(at, HEHE, 20.0, true));
+    if humiliated {
+        crate::mood::add_event(world, target, "humiliated", &MALLET_HUMILIATION);
+    }
+}
+
+/// `laughter/on_mob_life` (once: it metabolizes at `INFINITY`): a laugh and its moodlet.
+pub fn laughter(world: &mut World, mob: Entity) {
+    if crate::chem::blood_amount(world, mob, LAUGHTER) <= 0.0
+        || world.get::<crate::health::Stat>(mob) == Some(&crate::health::Stat::Dead)
+    {
+        return;
+    }
+    crate::mobs::space_fauna::run_emote(world, mob, "laugh");
+    crate::mood::add_event(world, mob, "chemical_laughter", &CHEMICAL_LAUGHTER);
+}
+
+// --- The mime's book ------------------------------------------------------------------------
+
+const MIMERY: &str = "/obj/item/book/granter/action/spell/mime/mimery";
+/// `mimery/on_reading_start`'s list, in tg's order.
+const MIMERY_SPELLS: [crate::spells::Spell; 3] = [
+    crate::spells::Spell::InvisibleWall,
+    crate::spells::Spell::InvisibleChair,
+    crate::spells::Spell::InvisibleBox,
+];
+
+/// The radial of a Guide to Dank Mimery: the spells offered, in the slices' order.
+#[derive(Clone, Debug)]
+pub struct MimeryAsk {
+    pub book: Entity,
+    pub spells: Vec<crate::spells::Spell>,
+}
+
+fn knows(world: &World, mob: Entity, spell: crate::spells::Spell) -> bool {
+    world
+        .get::<crate::spells::Spells>(mob)
+        .is_some_and(|s| s.get(spell).is_some())
+}
+
+/// `/obj/item/book/granter/attack_self` of the Guide to Dank Mimery (no pages, no reading
+/// time): the routines not known yet on a radial. True when `item` is that book.
+pub(super) fn mimery_attack_self(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    item: Entity,
+) -> bool {
+    if !is_under(&item_path(world, item), MIMERY) {
+        return false;
+    }
+    if crate::vision::is_blind(world, mob) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Вы слепы и не можете ничего прочесть!",
+        );
+        return true;
+    }
+    let spells: Vec<crate::spells::Spell> = MIMERY_SPELLS
+        .into_iter()
+        .filter(|&s| !knows(world, mob, s))
+        .collect();
+    // `mimery/can_learn`.
+    if spells.is_empty() {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "You already know the secrets of mimery!",
+        );
+        return true;
+    }
+    let choices = spells
+        .iter()
+        .map(|s| {
+            let def = s.def();
+            ss13_tgui::prompt::RadialChoice {
+                name: def.name.to_owned(),
+                icon: crate::radial::icon_of(world, def.dmi, def.icon),
+            }
+        })
+        .collect();
+    let title = crate::chem::name_of(world, item);
+    if let Some(prompt) = crate::radial::show(
+        world,
+        crate::radial::RadialMenu {
+            client,
+            actor: mob,
+            anchor: item,
+            title,
+            choices,
+            require_near: true,
+        },
+    ) {
+        world
+            .entity_mut(prompt)
+            .insert(super::server::PendingAsk::Mimery(MimeryAsk {
+                book: item,
+                spells,
+            }));
+    }
+    true
+}
+
+/// The routine picked: `check_menu` again (a human holding the book, not incapacitated), then
+/// `mimery/on_reading_finished`.
+pub(super) fn mimery_answer(world: &mut World, mob: Entity, ask: MimeryAsk, choice: usize) {
+    let Some(&spell) = ask.spells.get(choice) else {
+        return;
+    };
+    let holds = world
+        .get::<crate::inventory::Inventory>(mob)
+        .is_some_and(|i| i.hands.contains(&Some(ask.book)));
+    if !holds
+        || world.get::<crate::human::HumanLook>(mob).is_none()
+        || crate::status_effects::incapacitation(world, mob).incapacitated
+        || knows(world, mob, spell)
+    {
+        return;
+    }
+    crate::spells::learn(world, mob, spell);
+    if let Some(client) = super::server::client_of(world, mob) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "The book disappears into thin air.",
+        );
+    }
+    if world.get_entity(ask.book).is_ok() {
+        world.despawn(ask.book);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_mallet_hits_harder_the_madder_the_target() {
+        assert_eq!(mallet_hit(10.0), (8.0, false));
+        assert_eq!(mallet_hit(60.0), (4.0, true));
+        assert_eq!(mallet_hit(110.0), (1.0, true));
+        // Between tg's ranges nothing changes.
+        assert_eq!(mallet_hit(35.0), (1.0, false));
+        assert_eq!(mallet_hit(140.0), (1.0, false));
+    }
 }

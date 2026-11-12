@@ -139,6 +139,7 @@ mod teg;
 mod teleportation;
 mod teleporters;
 mod tendrils;
+mod ticket_machine;
 mod traitor;
 mod transport;
 mod traumas;

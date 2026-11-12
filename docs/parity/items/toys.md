@@ -24,7 +24,7 @@
 Фигурки всех должностей и говорящие игрушки произносят фразы при использовании; «Капитан сказал», игрушечная ядерка (отсчёт), красная кнопка, кукла чревовещателя.
 
 - **Код:** [`/obj/item/toy/talking`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/toys.dm#L890), [`/obj/item/toy/figure`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/toys.dm#L1214), [`/obj/item/toy/captainsaid`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/toys.dm#L398), [`/obj/item/toy/nuke`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/toys.dm#L991), [`/obj/item/toy/redbutton`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/toys.dm#L1063), [`/obj/item/toy/dummy`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/toys.dm#L1449)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/talking_toys.rs`: экшен-фигурки всех должностей (фраза держателю и звук, 5 с), говорящие игрушки (сова, грифон, Codex Gigas, игрушечный ИИ с ион-законом) говорят вслух, большая красная кнопка (звук взрыва и тряска экрана), игрушечная ядерка (тревога и спрайты, табло с остатком; emag — взрыв через 14,5 с), Captain's Aid (режимы дисплея); нет разговора через игрушку (`toy_talk`, `.l`/`.r`), фонем совы и грифона, куклы чревовещателя
 
 ### Игрушечные мехи
 Коллекционные мини-мехи: два игрока устраивают пошаговую дуэль мехов.
