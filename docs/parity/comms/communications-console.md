@@ -37,7 +37,7 @@
 Капитан покупает другой эвакуационный шаттл за деньги отдела (см. ../shuttles/).
 
 - **Код:** [`ui_act "purchaseShuttle"`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L265), [`proc/can_buy_shuttles()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L747)
-- **Статус в ss13-rs:** ❌ нет — кнопка скрыта (`can_buy_shuttles` всегда ложно), действие отклоняется: нет каталога шаблонов эвакуационных шаттлов с ценами и замены шаблона посреди раунда (`crates/ss13_game/src/shuttle.rs` грузит один шаблон при старте)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/shuttle_catalog.rs` (`can_buy_shuttles`, `purchase`), страница `BuyingShuttle` (`crates/ss13_game/src/comms_client.rs`), действие `purchaseShuttle` (`crates/ss13_game/src/comms_server.rs`): доступ из `who_can_purchase`, шаттл в покое или отозван, одна покупка за раунд, оплата из бюджета карго, малый анонс с покупателем, купленный шаблон грузится посреди раунда и становится аварийным. Запись была устаревшей. Неполный каталог (9 из 74 шаблонов, без особых, емаг- и отдельских) — ../shuttles/emergency.md «Каталог аварийных шаттлов»
 
 ### Консоль связи: аварийный доступ, коды ядерной бомбы, ОБР
 Включение аварийного доступа в техтоннели, запрос кодов самоуничтожения у ЦК; форк добавляет запрос ОБР от капитана.
