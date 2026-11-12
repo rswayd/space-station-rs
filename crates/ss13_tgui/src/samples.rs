@@ -75,6 +75,7 @@ use crate::interfaces::pipe_dispenser::{
     PipeRecipeEntry,
 };
 use crate::interfaces::portable_generator::{PortableGeneratorData, PortableGeneratorUi};
+use crate::interfaces::power_monitor::{PowerMonitorArea, PowerMonitorData, PowerMonitorUi};
 use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
@@ -441,6 +442,37 @@ pub fn sample(name: &str) -> Option<Sample> {
                 connected_tracker: true,
                 history_supply: (0..20).map(|i| 20_000.0 + 800.0 * i as f32).collect(),
                 history_capacity: vec![64_000.0; 20],
+            },
+        ),
+        PowerMonitorUi::NAME => of::<PowerMonitorUi>(
+            "power monitoring console",
+            &(),
+            &PowerMonitorData {
+                stored: 60,
+                interval: 5.0,
+                attached: true,
+                history_supply: (0..30).map(|i| 400_000.0 + 2_000.0 * i as f32).collect(),
+                history_demand: (0..30).map(|i| 250_000.0 + 1_500.0 * i as f32).collect(),
+                areas: vec![
+                    PowerMonitorArea {
+                        name: "Bridge".into(),
+                        charge: 100.0,
+                        load: "3.42 kW".into(),
+                        charging: 2,
+                        eqp: 3,
+                        lgt: 3,
+                        env: 3,
+                    },
+                    PowerMonitorArea {
+                        name: "Medbay".into(),
+                        charge: 41.0,
+                        load: "8.10 kW".into(),
+                        charging: 1,
+                        eqp: 1,
+                        lgt: 3,
+                        env: 2,
+                    },
+                ],
             },
         ),
         ThermoElectricGeneratorUi::NAME => of::<ThermoElectricGeneratorUi>(

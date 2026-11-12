@@ -24,6 +24,7 @@ pub mod field_generator;
 pub mod grid;
 pub mod lighting;
 pub mod model;
+pub mod monitor;
 pub mod pacman;
 pub mod shields;
 pub mod singularity;
@@ -375,6 +376,7 @@ impl Plugin for PowerServerPlugin {
                 lighting::LightingPlugin,
                 singularity::SingularityPlugin,
                 tesla::TeslaPlugin,
+                monitor::PowerMonitorPlugin,
             ))
             .add_systems(
                 MapInit,

@@ -36,7 +36,7 @@ tgui-окно: заряд, режимы ввода и вывода (вкл/ав�
 Показывает мощность и нагрузку подключённой сети, графики и список APC с их каналами. Программа ПДА — см. ../comms/.
 
 - **Код:** [`/obj/machinery/computer/monitor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/monitor.dm#L3), [`proc/record()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/monitor.dm#L62); tgui: [`PowerMonitor.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/PowerMonitor.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/monitor.rs` (`search`, `powernet`, `record`, `process_monitors`): сеть кабеля под консолью или APC зоны, активная/холостая нагрузка, запись supply/demand раз в 5 с (60 точек), список APC сети (заряд, нагрузка, каналы); окно `crates/ss13_tgui/src/interfaces/power_monitor.rs`; постройка из платы (`machine_frame::Family::PowerMonitor`), ИИ/киборг. Нет: графика (`Chart.Line` нет в ss13_ui_kit — поле пустое), сортировки списка в клиенте
 
 ### Аккумулятор энергии (energy_accumulator)
 База тесла-катушек и заземлителей: накапливает принятую энергию разряда и отдаёт её в сеть.

@@ -136,9 +136,11 @@ pub enum Family {
     ChemMachine,
     /// LTSRBT pads (`crate::cargo::black_market`).
     Ltsrbt,
+    /// Power monitoring consoles (`crate::power::monitor`).
+    PowerMonitor,
 }
 
-const FAMILIES: [(&str, Family); 49] = [
+const FAMILIES: [(&str, Family); 50] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -230,6 +232,7 @@ const FAMILIES: [(&str, Family); 49] = [
         Family::ChemMachine,
     ),
     (crate::cargo::black_market::LTSRBT, Family::Ltsrbt),
+    (crate::power::monitor::MONITOR, Family::PowerMonitor),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -469,7 +472,11 @@ pub fn rped_interaction(world: &mut World, client: Entity, rped: Entity, target:
     } else if let Some(fam) = buildable_machine(world, target) {
         if matches!(
             fam,
-            Family::RdConsole | Family::CargoConsole | Family::AtmosAlert | Family::ServerControl
+            Family::RdConsole
+                | Family::CargoConsole
+                | Family::AtmosAlert
+                | Family::ServerControl
+                | Family::PowerMonitor
         ) {
             // `istype(attacked_object, /obj/machinery/computer)`.
             return false;
@@ -1202,6 +1209,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
             crate::chem_machines::ensure(world, machine);
         }
         Family::Ltsrbt => crate::cargo::black_market::setup(world, machine),
+        Family::PowerMonitor => crate::power::monitor::setup(world, machine),
     }
 }
 

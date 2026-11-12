@@ -227,6 +227,7 @@
 //! | 1950 | `power::pacman::interact` |
 //! | 1960 | `power::smes::interact` |
 //! | 1970 | `power::shields::interact` |
+//! | 1971 | `power::monitor::interact` (the power monitoring console's window) |
 //! | 1979 | `eng_machines::atmos_shield::interact` (toggle; right click: lock) |
 //! | 1989 | `eng_machines::flatpacker::interact` (the `Flatpacker` window) |
 //! | 1999 | `eng_machines::modular_shield::interact` (`ModularShieldGen`, `ModularShieldConsole` windows) |

@@ -114,6 +114,10 @@ pub fn attack_ai(world: &mut World, client: Entity, user: Entity, target: Entity
         crate::power::solar::open(world, client, user, target);
         return true;
     }
+    if e.contains::<crate::power::monitor::PowerMonitor>() {
+        crate::power::monitor::open(world, client, user, target);
+        return true;
+    }
     if e.contains::<crate::power::chargers::CellCharger>() {
         return true;
     }
