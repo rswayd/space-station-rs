@@ -42,7 +42,7 @@
 Генератор гравитации отключается: на станции пропадает гравитация, пока инженеры его не перезапустят.
 
 - **Код:** [`/datum/round_event_control/gravity_generator_blackout`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/gravity_generator_blackout.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — генератор гравитации и гравитация уровней есть (`crates/ss13_game/src/power/gravity_generator.rs`, `crates/ss13_game/src/gravity.rs`), для события готов `gravity_generator::blackout(world, генератор)` на генераторах уровней станции; самого события (вес 30, объявление 33% `ANNOUNCER_GRANOMALIES`, `can_spawn_event` по наличию станционного генератора) в контроллере нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/gravity_blackout.rs` (вес 30, `can_spawn_event`: главный генератор на станционном уровне — `has_station_generator`): на первом тике все станционные генераторы получают `gravity_generator::blackout` (заряд 0, рубильник выключен, уровень без гравитации), объявление 33% с `ANNOUNCER_GRANOMALIES`; тест `crates/ss13_game/tests/it/gravity.rs`. Нет `min/max_wizard_trigger_potency` (в порту нет потенциала wizard-триггеров)
 
 ### Radiation Leak
 Машина в случайной зоне начинает излучать радиацию и газ (часто плазму/трития), пока её не починят инструментами.

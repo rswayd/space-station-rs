@@ -6,6 +6,7 @@
 //! - A blackout drains it: the level loses gravity, so a mob on a floor away from it floats;
 //!   with the breaker closed again it charges 2% a machine tick and comes back on at 100%.
 //! - A devastating blast on a part breaks it: off, drained, and it needs the repair.
+//! - The Gravity Generator Blackout event does the blackout on the station generator.
 
 use std::path::{Path, PathBuf};
 
@@ -154,4 +155,25 @@ fn the_generator_gives_its_level_gravity_until_it_goes_down() {
     let gen_state = world.get::<GravityGenerator>(g).unwrap();
     assert!(gen_state.broken && !gen_state.on && gen_state.charge_count == 0);
     assert!(!ss13_game::multiz::has_gravity(world, FAR));
+}
+
+/// Gravity Generator Blackout: available with a station generator, and its start (the first
+/// event tick) drains the generator and opens the breaker.
+#[test]
+fn gravity_blackout_event_drains_the_station_generator() {
+    use ss13_game::events::{Events, force_event, gravity_blackout};
+    let assets = assets("blackout_event");
+    let mut app = testing::server_app(fixture_map(&assets, &["map.dmm"]), |_| {});
+    run(&mut app, 3.0);
+    let g = generator(&mut app);
+    let world = app.world_mut();
+    assert!(gravity_blackout::has_station_generator(world));
+    world.resource_mut::<Events>().scheduled = f64::MAX;
+    force_event(world, gravity_blackout::NAME, Some(false)).unwrap();
+    for _ in 0..3 {
+        ss13_game::events::controller::fire(world);
+    }
+    let gen_state = world.get::<GravityGenerator>(g).unwrap();
+    assert!(!gen_state.on && !gen_state.breaker && gen_state.charge_count == 0);
+    assert_eq!(world.resource::<LevelGravity>().level(1), Some(0.0));
 }
