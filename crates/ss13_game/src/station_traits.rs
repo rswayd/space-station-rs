@@ -23,10 +23,11 @@
 // cramped pods, advanced medbots, shuttle loans, wise cows, ion storms, shuttle sale, missing
 // wallet, assistant gimmicks, hangover, overflow bureaucracy, bot and machine languages, Pun
 // Pun's revenge, revolutionary trashing, nebulae, structural weaknesses, every neutral trait but
-// the announcers, the job traits; planetary-only ones (bright day, forested, eternal storm) never
-// apply to the space maps here. No admin traits panel (forcing is `SS13_STATION_TRAITS`), no
-// `revert()`. The lobby sign-up buttons ([`LobbyCandidates`]) exist; the job traits that own
-// them (and `pre_jobs_assigned`, which picks among the candidates) are not in the pool yet.
+// the announcers and two job traits; planetary-only ones (bright day, forested, eternal storm)
+// never apply to the space maps here. No admin traits panel (forcing is `SS13_STATION_TRAITS`), no
+// `revert()`. Job traits: the bridge assistant and the veteran advisor are in the pool
+// ([`pre_jobs_assigned`] gives their job to a lobby sign-up); the cargo gorilla, the human AI
+// and Pun Pun are not (no player gorilla, no human AI job kit, no Pun Pun crew job).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -54,6 +55,18 @@ pub const DUST_STORMS: &str = "/datum/station_trait/random_event_weight_modifier
 pub const SPIKED_DRINKS: &str = "/datum/station_trait/spiked_drinks";
 pub const VENDING_SHORTAGE: &str = "/datum/station_trait/vending_shortage";
 pub const XENOBUREAUCRACY_ERROR: &str = "/datum/station_trait/xenobureaucracy_error";
+pub const BRIDGE_ASSISTANT: &str = "/datum/station_trait/job/bridge_assistant";
+pub const VETERAN_ADVISOR: &str = "/datum/station_trait/job/veteran_advisor";
+const CARGORILLA: &str = "/datum/station_trait/job/cargorilla";
+const HUMAN_AI: &str = "/datum/station_trait/job/human_ai";
+const PUN_PUN: &str = "/datum/station_trait/job/pun_pun";
+
+/// The ported `/datum/station_trait/job` traits and the title of their `job_to_add`
+/// (`position_amount` 1).
+pub const JOB_TRAITS: [(&str, &str); 2] = [
+    (BRIDGE_ASSISTANT, "Bridge Assistant"),
+    (VETERAN_ADVISOR, "Veteran Security Advisor"),
+];
 
 /// Blacklist entries of traits that are not ported (kept so the tables read as tg's).
 const RANDOM_SPAWNS: &str = "/datum/station_trait/random_spawns";
@@ -138,7 +151,7 @@ const fn def(
 use TraitKind::{Negative, Neutral, Positive};
 
 /// The ported traits with tg's (BandaStation's) vars, in tg's file order.
-pub static TRAITS: [TraitDef; 18] = [
+pub static TRAITS: [TraitDef; 20] = [
     def(
         GALACTIC_GRANT,
         "Галактический грант",
@@ -303,6 +316,26 @@ pub static TRAITS: [TraitDef; 18] = [
         "We haven't had the time to take care of the station's food and drink vending \
          machines. Food and drink products are empty and need to be restocked.",
         &[],
+    ),
+    // `/datum/station_trait/job`: every other job trait is blacklisted.
+    def(
+        BRIDGE_ASSISTANT,
+        "Bridge Assistant",
+        Neutral,
+        2,
+        COST_FULL,
+        "We have installed a Bridge Assistant on your station.",
+        &[CARGORILLA, VETERAN_ADVISOR, HUMAN_AI, PUN_PUN],
+    ),
+    def(
+        VETERAN_ADVISOR,
+        "Veteran Advisor",
+        Neutral,
+        2,
+        COST_FULL,
+        "Veteran Security Advisor has been assigned to your station to help with Security \
+         matters.",
+        &[CARGORILLA, BRIDGE_ASSISTANT, HUMAN_AI, PUN_PUN],
     ),
     // BandaStation `/datum/station_trait/xenobureaucracy_error`: weight 0, only forced (an
     // admin's pick); lifts the species job restrictions (`crate::jobs::species_restricted`).
@@ -610,6 +643,83 @@ fn rng_prob(world: &mut World, percent: f32) -> bool {
     world.resource_mut::<TraitRng>().0.prob(percent)
 }
 
+/// `/datum/station_trait/job/pre_jobs_assigned` (`COMSIG_GLOB_PRE_JOBS_ASSIGNED`) of the active
+/// job traits: their job gets one position and a random ready sign-up from the lobby, who leaves
+/// `ready` (the caller spawns them in that job). Every job trait's job is kept out of
+/// `divide_occupations` (`JOB_LATEJOIN_ONLY`). The sign-ups are dropped.
+pub fn pre_jobs_assigned(
+    world: &mut World,
+    ready: &mut Vec<(Entity, crate::round::JobPreferences)>,
+) -> Vec<(Entity, usize)> {
+    let candidates = world
+        .remove_resource::<LobbyCandidates>()
+        .unwrap_or_default();
+    world.init_resource::<LobbyCandidates>();
+    let active: Vec<&'static str> = world
+        .get_resource::<StationTraits>()
+        .map(|t| t.active.iter().map(|d| d.path).collect())
+        .unwrap_or_default();
+    let mut assigned = Vec::new();
+    let Some(mut jobs) = world.remove_resource::<crate::jobs::Jobs>() else {
+        return assigned;
+    };
+    let trait_jobs: Vec<usize> = JOB_TRAITS
+        .iter()
+        .filter_map(|(_, title)| jobs.data.job(title))
+        .collect();
+    for (_, prefs) in ready.iter_mut() {
+        prefs.prevented.extend(trait_jobs.iter().copied());
+    }
+    for (path, title) in JOB_TRAITS {
+        if !active.contains(&path) {
+            continue;
+        }
+        let Some(job) = jobs.data.job(title) else {
+            continue;
+        };
+        let slots = &mut jobs.data.jobs[job];
+        slots.total_positions = 1;
+        slots.spawn_positions = 1;
+        // Stale sign-ups (gone, not ready) are dropped, as tg does.
+        let signees: Vec<Entity> = candidates
+            .0
+            .get(path)
+            .map(|c| {
+                c.iter()
+                    .copied()
+                    .filter(|e| ready.iter().any(|(r, _)| r == e))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if signees.is_empty() {
+            continue;
+        }
+        let i = world
+            .get_resource_mut::<TraitRng>()
+            .map_or(0, |mut r| r.0.range(0, signees.len() as i64 - 1) as usize);
+        let picked = signees[i.min(signees.len() - 1)];
+        ready.retain(|(e, _)| *e != picked);
+        assigned.push((picked, job));
+    }
+    world.insert_resource(jobs);
+    assigned
+}
+
+/// The job traits' `after_spawn` of their jobs: the veteran advisor is paraplegic with PTSD.
+// shortcut: the bridge assistant's axe adoration trauma, bridge chair spawn and coffeemaker on a
+// bridge table are not ported (no axedoration trauma, no table placement helper yet).
+pub fn job_after_spawn(world: &mut World, mob: Entity, title: &str) {
+    if title != "Veteran Security Advisor" {
+        return;
+    }
+    crate::quirks::add_quirk(world, mob, crate::quirks::Quirk::Paraplegic, true, true);
+    if let Some(brain) =
+        crate::medical::organs::organ(world, mob, crate::medical::organs::Slot::Brain)
+    {
+        crate::medical::traumas::gain(world, brain, crate::medical::traumas::Kind::Ptsd, None);
+    }
+}
+
 /// `COMSIG_TICKER_ROUND_STARTING`: every active trait's `on_round_start`.
 pub fn on_round_start(world: &mut World) {
     let Some(traits) = world.get_resource::<StationTraits>().cloned() else {
@@ -840,8 +950,20 @@ mod tests {
                 }
                 assert_eq!(traits.iter().filter(|o| o.path == t.path).count(), 1);
             }
-            // Two neutral traits exist and blacklist each other: one at most.
-            assert!(traits.iter().filter(|t| t.kind == Neutral).count() <= 1);
+            // The two announcers blacklist each other, as do the job traits: one of each at most.
+            let announcers = [ANNOUNCEMENT_INTERN, ANNOUNCEMENT_MEDBOT];
+            assert!(
+                traits
+                    .iter()
+                    .filter(|t| announcers.contains(&t.path))
+                    .count()
+                    <= 1
+            );
+            let jobs = traits
+                .iter()
+                .filter(|t| JOB_TRAITS.iter().any(|(p, _)| *p == t.path))
+                .count();
+            assert!(jobs <= 1);
         }
     }
 
@@ -891,8 +1013,57 @@ mod tests {
     }
 
     #[test]
+    fn a_job_trait_gives_its_job_to_a_ready_sign_up() {
+        let mut world = World::new();
+        let mut data = crate::jobs::fallback_jobs();
+        for title in ["Bridge Assistant", "Veteran Security Advisor"] {
+            data.jobs.push(ss13_mapload::jobs::Job {
+                title: title.into(),
+                ..Default::default()
+            });
+        }
+        world.insert_resource(crate::jobs::Jobs::new(data, 1));
+        world.insert_resource(TraitRng(Rng::new(1)));
+        world.insert_resource(StationTraits {
+            active: vec![trait_def(VETERAN_ADVISOR).unwrap()],
+        });
+        let (signed, gone, other) = (
+            world.spawn_empty().id(),
+            world.spawn_empty().id(),
+            world.spawn_empty().id(),
+        );
+        let mut candidates = LobbyCandidates::default();
+        candidates.0.insert(VETERAN_ADVISOR, vec![gone, signed]);
+        world.insert_resource(candidates);
+        let mut ready = vec![
+            (signed, crate::round::JobPreferences::default()),
+            (other, crate::round::JobPreferences::default()),
+        ];
+        let assigned = pre_jobs_assigned(&mut world, &mut ready);
+        let jobs = world.resource::<crate::jobs::Jobs>();
+        let veteran = jobs.data.job("Veteran Security Advisor").unwrap();
+        let bridgie = jobs.data.job("Bridge Assistant").unwrap();
+        assert_eq!(assigned, vec![(signed, veteran)]);
+        assert_eq!(jobs.data.jobs[veteran].total_positions, 1);
+        // An inactive trait's job stays closed.
+        assert_eq!(jobs.data.jobs[bridgie].total_positions, 0);
+        // The others never get a trait job from their preferences.
+        assert_eq!(ready.len(), 1);
+        assert!(ready[0].1.prevented.contains(&veteran));
+        assert!(ready[0].1.prevented.contains(&bridgie));
+        assert!(world.resource::<LobbyCandidates>().0.is_empty());
+    }
+
+    #[test]
     fn every_trait_is_defined_once_and_blacklists_point_at_traits() {
-        let known = [RANDOM_SPAWNS, HANGOVER, BIRTHDAY];
+        let known = [
+            RANDOM_SPAWNS,
+            HANGOVER,
+            BIRTHDAY,
+            CARGORILLA,
+            HUMAN_AI,
+            PUN_PUN,
+        ];
         for t in &TRAITS {
             assert_eq!(TRAITS.iter().filter(|o| o.path == t.path).count(), 1);
             for b in t.blacklist {
