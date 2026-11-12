@@ -11,25 +11,25 @@
 Поддевает плитку, вскрывает обесточенные двери, разбирает окна/шлюзы; большой и аварийный ломы, абдукторский, лом-молот.
 
 - **Код:** [`/obj/item/crowbar`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/crowbar.dm#L1), [`/obj/item/crowbar/large`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/crowbar.dm#L57), [`/obj/item/crowbar/abductor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/crowbar.dm#L47)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/tools.rs`, `crates/ss13_game/src/construction.rs`: плитка и окна; дверей не вскрывает
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/tools.rs`, `construction.rs`: плитка, окна, сборки шлюзов; `doors.rs` (`try_to_crowbar`): вскрывает обесточенный шлюз (болты и сварка мешают), пожарные шлюзы; панели и платы машин — `machine_frame.rs`; варианты ломов — те же `tool_behaviour` со своим `toolspeed`. Челюсти жизни и топор по запитанной двери — запись «Силовые инструменты»
 
 ### Отвёртка
 Открывает панели машин, крепит окна и решётки, разбирает балки; электроотвёртка, абдукторская.
 
 - **Код:** [`/obj/item/screwdriver`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/screwdriver.dm#L1), [`/obj/item/screwdriver/power`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/screwdriver.dm#L85)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`, `crates/ss13_game/src/wires.rs`: панели шлюзов, APC и автоматов, окна, решётки, балки
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/construction.rs`, `wires.rs`, `machine_wires.rs`, `machine_frame.rs`: панели шлюзов, APC, автоматов и прочих машин (`default_deconstruction_screwdriver`), окна, решётки, балки; варианты — тот же `tool_behaviour` со своим `toolspeed`
 
 ### Гаечный ключ
 Закрепляет и откручивает машины и структуры (`default_unfasten_wrench`), разбирает окна; медицинский, боевой, болтовёрт.
 
 - **Код:** [`/obj/item/wrench`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/wrench.dm#L1), [`/obj/item/wrench/combat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/wrench.dm#L97), [`/obj/item/wrench/bolter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/wrench.dm#L134)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`: балки, окна, торговые автоматы; другие машины не откручиваются
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/construction.rs`: балки, окна, торговые автоматы; `machine_frame.rs` (`default_unfasten_wrench`, с повторной проверкой в конце): закрепление и откручивание машин и рам, трубы и атмосферные устройства — `atmos_machinery/`; варианты — тот же `tool_behaviour` со своим `toolspeed`
 
 ### Кусачки
 Режут провода, решётки, кабели, наручники-стяжки; абдукторские.
 
 - **Код:** [`/obj/item/wirecutters`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/wirecutters.dm#L1), [`/obj/item/wirecutters/abductor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/tools/engineering/wirecutters.dm#L67)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs`, `crates/ss13_game/src/construction.rs`: провода и решётки; кабели не режутся
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/wires.rs`, `construction.rs`: провода и решётки; кабели режутся (`power/cable_coil.rs` `cut`, терминал SMES — `power/smes.rs`); стяжки и слабые наручники срезаются ПКМ (`restraints.rs`, `cuffsnapping`; абдукторские режут и обычные за 1 с); застрявшие предметы — `embedding.rs`
 
 ### Сварочный аппарат
 Включается в руке, жжёт топливо (1 ед./5 с, расход на работу), нагревает до 1500+ K: режет стены, заваривает двери, чинит окна и роботов, поджигает плазму; заправка из бака топлива; без защиты глаз повреждает зрение; варианты: большой, мини, экспериментальный (самозаправка), промышленный.
