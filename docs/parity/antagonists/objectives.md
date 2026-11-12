@@ -42,14 +42,14 @@ Escape — улететь живым на шаттле/капсуле, не в �
 Hijack — улететь на шаттле, где нет лояльного экипажа; elimination — остаться единственным живым на шаттле (Highlander).
 
 - **Код:** [`/datum/objective/hijack`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L407), [`/datum/objective/elimination`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L425), [`/datum/objective/elimination/highlander`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L440)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/objectives.rs`: hijack выдаётся, но никогда не выполняется; elimination нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/objectives.rs` (`ObjectiveKind::Hijack`): выдаётся с шансом `HIJACK_PROB` при 30+ игроках, выполнен, когда шаттл угнан (`crate::shuttle::hijacked`) и владелец жив на нём у ЦК; нет elimination (хайлендер)
 
 ### Цели малфа ИИ: блок органиков и армия роботов
 Block — ни одна органическая форма жизни не должна улететь на шаттле (или станция уничтожена); robot_army — иметь армию киборгов.
 
 - **Код:** [`/datum/objective/block`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L453), [`/datum/objective/robot_army`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L471)
 - **BandaStation:** [`objective.dm#L452`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L452) — переработка целей малфа
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/silicon/malf.rs` (`MalfObjective::Block`, `RobotArmy`, `forge_objectives`): одна из двух особых целей (50/50, как в BandaStation) выдаётся сбойному ИИ с текстом; выполнение не проверяется, в отчёте конца раунда секции ИИ нет
 
 ### Защита, удержание и прочие цели на цель
 Protect/protect_object — сохранить человека/объект; debrain — украсть мозг цели; jailbreak/detain — освободить или посадить цель; capture — поймать живых существ; destroy — уничтожить ИИ; mutiny — убить глав (революция).
@@ -68,7 +68,7 @@ Steal_n_of_type: набрать N предметов (оружие при Summon
 Nuclear — взорвать станцию; absorb/absorb_most/absorb_changeling — цели генокрада; custom — произвольный текст от админа.
 
 - **Код:** [`/datum/objective/nuclear`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L598), [`/datum/objective/absorb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L767), [`/datum/objective/custom`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/gamemodes/objective.dm#L983)
-- **Статус в ss13-rs:** 🟡 частично — absorb, absorb_most и absorb_changeling у генокрада (`crates/ss13_game/src/antag/changeling/server.rs`, `LingObjective`); нет nuclear и custom
+- **Статус в ss13-rs:** 🟡 частично — absorb, absorb_most и absorb_changeling у генокрада (`crates/ss13_game/src/antag/changeling/server.rs`, `LingObjective`), nuclear у нюков (`crates/ss13_game/src/antag/nukeop/server.rs`); нет custom (текст от админа)
 
 ### Замена целей при уходе цели в крио (BandaStation)
 Если цель уходит в криосон, зависимые цели (одержимость, генокрадские личность+изоляция) и индивидуальные цели переназначаются на новую цель или отменяются с уведомлением; цели культа и революции не переназначаются.
