@@ -1877,6 +1877,27 @@ pub(crate) fn refresh_container(world: &mut World, chem: &Chemistry, e: Entity) 
         {
             reagent_emps(world, chem, e, &reacted);
         }
+        // `/datum/chemical_reaction/food/on_reaction`: `created_volume` of the reaction's
+        // food where the container is (dough, cheese, tofu, chocolate...).
+        let foods: Vec<(String, u32)> = reacted
+            .iter()
+            .filter_map(|&(i, made)| {
+                let food = chem.reactions[i as usize].def.food.clone()?;
+                Some((food, made.floor() as u32))
+            })
+            .collect();
+        if !foods.is_empty()
+            && let Some(pos) = map_pos(world, e)
+        {
+            for (food, amount) in foods {
+                for _ in 0..amount {
+                    crate::construction::spawn_obj(world, &food, pos);
+                }
+            }
+            if world.get_entity(e).is_err() {
+                return;
+            }
+        }
         // Slime extracts: their uses and `on_reaction` effects (`crate::science::xenobio`).
         if !reacted.is_empty()
             && world

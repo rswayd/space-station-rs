@@ -664,7 +664,7 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         // A boomerang baton flies back (`crate::security::thrown`).
         crate::security::thrown(world, item, None, thrown.thrower);
         // Toys, plates and pizza boxes (`crate::toys::thrown`).
-        if crate::toys::thrown(world, item, None) {
+        if crate::food::thrown(world, item, None) || crate::toys::thrown(world, item, None) {
             return;
         }
         // `/obj/item/light/throw_impact`: a bulb shatters where it lands.
@@ -700,7 +700,10 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         if world.get_entity(item).is_err() {
             return;
         }
-        if world.get::<CarriedBy>(item).is_none() && crate::toys::thrown(world, item, Some(hit)) {
+        if world.get::<CarriedBy>(item).is_none()
+            && (crate::food::thrown(world, item, Some(hit))
+                || crate::toys::thrown(world, item, Some(hit)))
+        {
             return;
         }
         // `frozen/shatter_on_throw`: not caught.
@@ -729,7 +732,8 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     if world.get::<Health>(hit).is_none()
         && world.get_entity(item).is_ok()
         && world.get::<TilePos>(item).is_some()
-        && crate::toys::thrown(world, item, Some(hit))
+        && (crate::food::thrown(world, item, Some(hit))
+            || crate::toys::thrown(world, item, Some(hit)))
     {
         return;
     }

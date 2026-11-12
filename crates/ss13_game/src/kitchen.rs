@@ -825,6 +825,7 @@ pub fn microwave_act(
         let total = source.total_volume;
         source.trans_to(&chem, &mut target.0, total, 1.0, None, false, false);
     }
+    crate::food::warm_bonus(world, item, made);
     world.despawn(item);
     Some(made)
 }

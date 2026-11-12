@@ -663,6 +663,34 @@ const ASH: [&str; 2] = [
 /// `/datum/component/decomposition/decompose` of an ant-attracting food.
 const ANTS: &str = "/obj/effect/decal/cleanable/ants";
 
+/// Foods the other food reactions make (`resulting_food_path`, and the two made in
+/// `on_reaction`): `ss13_game::chem` spawns them by path.
+pub const FOOD_REACTION_RESULTS: [&str; 15] = [
+    "/obj/item/food/bread/corn",
+    "/obj/item/food/cakebatter",
+    "/obj/item/food/cakebatter/vegan",
+    "/obj/item/food/candy_corn",
+    "/obj/item/food/cheese/curd_cheese",
+    "/obj/item/food/cheese/mozzarella",
+    "/obj/item/food/cheese/wheel",
+    "/obj/item/food/chocolatebar",
+    "/obj/item/food/dough",
+    "/obj/item/food/meat/slab/synthmeat",
+    "/obj/item/food/mothic_pizza_dough",
+    "/obj/item/food/rice_dough",
+    "/obj/item/food/tofu",
+    "/obj/item/food/fishmeat/carp/imitation",
+    "/obj/item/food/uncooked_rice",
+];
+
+/// What eggs and cream pies leave and make (`ss13_game::food`).
+pub const FOOD_MESS_TYPES: [&str; 4] = [
+    "/obj/item/food/rawegg",
+    "/obj/effect/decal/cleanable/food/egg_smudge",
+    "/obj/effect/decal/cleanable/food/pie_smudge",
+    "/mob/living/basic/chick",
+];
+
 /// Foods soup reactions make (`resulting_food_path`).
 const SOUP_POT_RESULTS: [&str; 4] = [
     "/obj/item/reagent_containers/cup/soup_pot",

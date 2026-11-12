@@ -548,6 +548,7 @@ fn finish_cooking(
         let total = source.total_volume;
         source.trans_to(&chem, &mut target.0, total, 1.0, None, false, false);
     }
+    crate::food::warm_bonus(world, item, made);
     if let (Some(offset), Some(mut look)) = (offset, world.get_mut::<Appearance>(made)) {
         look.pixel_offset = offset;
     }
@@ -662,7 +663,7 @@ fn griddle_item(
 }
 
 /// `AddToGrill`: on the griddle's tile at `offset`.
-fn add_to_griddle(world: &mut World, griddle: Entity, item: Entity, offset: [i16; 2]) {
+pub(crate) fn add_to_griddle(world: &mut World, griddle: Entity, item: Entity, offset: [i16; 2]) {
     let Some(&pos) = world.get::<TilePos>(griddle) else {
         return;
     };

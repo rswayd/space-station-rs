@@ -94,6 +94,15 @@ impl Plugin for FoodServerPlugin {
     fn build(&self, app: &mut App) {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
+        // A can's tab, an egg cracked onto a griddle.
+        app.add_click_handler(ClickPhase::AttackSelf, 1093, |w, c| {
+            open_can(w, c.client, c.target)
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1893, |w, c| {
+            c.modifiers.right
+                && c.held
+                    .is_some_and(|h| crack_egg(w, c.client, c.mob, h, c.target, c.modifiers.pixel))
+        });
         app.add_click_handler(ClickPhase::HeldOnTarget, 3300, |w, c| {
             c.held
                 .is_some_and(|h| crate::food::item_interaction(w, c.client, c.mob, h, c.target))
@@ -184,6 +193,17 @@ pub fn item_interaction(
         item: Some(held),
     };
     if world.get::<DmFood>(held).is_some() && world.get::<MobReagents>(target).is_some() {
+        // `/obj/item/food/canned/attack`: not through a closed lid.
+        if is_under(&item_path(world, held), CANNED) && world.get::<CanOpened>(held).is_none() {
+            let name = name_of(world, held);
+            tell(
+                world,
+                client,
+                Span::Warning,
+                format!("Крышка {name} ещё не открыта!"),
+            );
+            return true;
+        }
         try_to_eat(world, actor, target);
         return true;
     }
@@ -1083,5 +1103,234 @@ mod tests {
         assert_eq!(ru_eat_verb("chomp", false), "лопаете");
         assert_eq!(ru_eat_verb("chomp", true), "лопает");
         assert_eq!(ru_eat_verb("slurp", true), "slurps");
+    }
+}
+
+/// `/obj/item/food/egg`, what it cracks into and the mess it leaves.
+const EGG: &str = "/obj/item/food/egg";
+const RAW_EGG: &str = "/obj/item/food/rawegg";
+const EGG_SMUDGE: &str = "/obj/effect/decal/cleanable/food/egg_smudge";
+const CHICK: &str = "/mob/living/basic/chick";
+/// `chick_throw_prob`.
+const CHICK_THROW_PROB: f32 = 13.0;
+const CANNED: &str = "/obj/item/food/canned";
+const CREAM_PIE: &str = "/obj/item/food/pie/cream";
+const CREAM_PIE_NOSTUN: &str = "/obj/item/food/pie/cream/nostun";
+const PIE_SMUDGE: &str = "/obj/effect/decal/cleanable/food/pie_smudge";
+const DONK_POCKET: &str = "/obj/item/food/donkpocket";
+const OMNIZINE: &str = "/datum/reagent/medicine/omnizine";
+
+/// `/obj/item/food/canned`: its tab is pulled back (`reagents.flags |= OPENCONTAINER`).
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct CanOpened;
+
+fn item_path(world: &World, item: Entity) -> String {
+    world
+        .get::<DmItem>(item)
+        .map(|i| i.path.clone())
+        .unwrap_or_default()
+}
+
+/// `omnizine_to_add` of a donk pocket type: 6, the flavoured ones 2, a warm one none.
+fn donk_omnizine(path: &str) -> f32 {
+    const FLAVOURED: [&str; 5] = ["dank", "spicy", "teriyaki", "pizza", "berry"];
+    let Some(kind) = path.strip_prefix(DONK_POCKET) else {
+        return 0.0;
+    };
+    let kind = kind.trim_start_matches('/');
+    if !(kind.is_empty() || path.as_bytes().get(DONK_POCKET.len()) == Some(&b'/')) {
+        return 0.0;
+    }
+    match kind.split('/').next().unwrap_or_default() {
+        "warm" => 0.0,
+        first if FLAVOURED.contains(&first) => 2.0,
+        _ => 6.0,
+    }
+}
+
+/// The `added_reagents` of a donk pocket's `bakeable`/`microwavable`: the warmed `made` gets
+/// the omnizine of the cold `source`.
+pub fn warm_bonus(world: &mut World, source: Entity, made: Entity) {
+    let amount = donk_omnizine(&item_path(world, source));
+    if amount <= 0.0 {
+        return;
+    }
+    let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone()) else {
+        return;
+    };
+    if let (Some(id), Some(mut reagents)) = (chem.id(OMNIZINE), world.get_mut::<Reagents>(made)) {
+        let temp = reagents.0.chem_temp;
+        reagents
+            .0
+            .add_reagent(&chem, id, amount, temp, None, None, false, false);
+    }
+}
+
+/// `/obj/item/food/canned/attack_self` -> `open_can`. True when the click opened it.
+pub fn open_can(world: &mut World, client: Entity, item: Entity) -> bool {
+    if !is_under(&item_path(world, item), CANNED) || world.get::<CanOpened>(item).is_some() {
+        return false;
+    }
+    let name = name_of(world, item);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы отгибаете язычок {name}."),
+    );
+    if let Some(pos) = crate::explosions::turf_of(world, item) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, "sound/items/foodcanopen.ogg", 50.0, false),
+        );
+    }
+    world.entity_mut(item).insert(CanOpened);
+    if let Some(mut reagents) = world.get_mut::<Reagents>(item) {
+        reagents.0.flags |= flags::OPENCONTAINER;
+    }
+    if let Some(state) = world
+        .get::<ss13_mapload::DmAtom>(item)
+        .map(|a| format!("{}_open", a.icon_state))
+    {
+        crate::obj_damage::set_icon_state(world, item, &state);
+    }
+    true
+}
+
+/// `/obj/item/food/egg/interact_with_atom_secondary`: a right click with an egg on a griddle
+/// cracks it open there. True when the click is taken.
+pub fn crack_egg(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    egg: Entity,
+    griddle: Entity,
+    pixel: Option<[i8; 2]>,
+) -> bool {
+    if !is_under(&item_path(world, egg), EGG) {
+        return false;
+    }
+    let Some(count) = world
+        .get::<crate::cooking::Griddle>(griddle)
+        .map(|g| g.items.len())
+    else {
+        return false;
+    };
+    if count >= crate::cooking::GRIDDLE_MAX_ITEMS {
+        tell(world, client, Span::Warning, "нет места!");
+        return true;
+    }
+    let Some(&pos) = world.get::<TilePos>(griddle) else {
+        return true;
+    };
+    let Some(raw) = crate::construction::spawn_obj(world, RAW_EGG, pos) else {
+        return true;
+    };
+    // `reagents.trans_to(broken_egg, total_volume, copy_only = TRUE)`.
+    let source = world.get::<Reagents>(egg).map(|r| r.0.clone());
+    let chem = world.get_resource::<Chem>().map(|c| c.0.clone());
+    if let (Some(mut source), Some(chem)) = (source, chem)
+        && let Some(mut target) = world.get_mut::<Reagents>(raw)
+    {
+        let total = source.total_volume;
+        source.trans_to(&chem, &mut target.0, total, 1.0, None, false, false);
+    }
+    let offset = pixel.map_or([0, 0], |p| p.map(|v| i16::from(v).clamp(-16, 16)));
+    crate::cooking::add_to_griddle(world, griddle, raw, offset);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, "sound/items/sheath.ogg", 40.0, true),
+    );
+    let name = name_of(world, egg);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы разбиваете {name}."),
+    );
+    if let Some(mut inventory) = world.get_mut::<Inventory>(mob) {
+        for hand in &mut inventory.hands {
+            if *hand == Some(egg) {
+                *hand = None;
+            }
+        }
+    }
+    world.entity_mut(egg).despawn();
+    true
+}
+
+/// `throw_impact` of an egg and `/datum/component/splat` of a cream pie, thrown and not
+/// caught: `hit` is what it hit (`None`: it landed). True when the item is gone.
+// shortcut: the cream on the face (`/datum/component/face_decal/splat`, its moodlet and
+// memory) and the egg's reagents on what it hit (`reagents.expose(TOUCH)`) are not here.
+pub fn thrown(world: &mut World, item: Entity, hit: Option<Entity>) -> bool {
+    let path = item_path(world, item);
+    let (egg, pie) = (is_under(&path, EGG), is_under(&path, CREAM_PIE));
+    if !(egg || pie) || world.get::<CarriedBy>(item).is_some() {
+        return false;
+    }
+    let Some(pos) = hit
+        .and_then(|h| crate::explosions::turf_of(world, h))
+        .or_else(|| world.get::<TilePos>(item).copied())
+    else {
+        return false;
+    };
+    if egg {
+        crate::construction::spawn_obj(world, EGG_SMUDGE, pos);
+        if world.resource_mut::<CombatRng>().chance(CHICK_THROW_PROB) {
+            crate::mobs::spawn::spawn_mob(world, CHICK, pos);
+        }
+        world.entity_mut(item).despawn();
+        return true;
+    }
+    crate::construction::spawn_obj(world, PIE_SMUDGE, pos);
+    if let Some(victim) = hit.filter(|&h| world.get::<crate::health::Health>(h).is_some()) {
+        // `stun_and_blur`.
+        if !is_under(&path, CREAM_PIE_NOSTUN) {
+            crate::status_effects::apply(
+                world,
+                victim,
+                crate::status_effects::Incap::Paralyze,
+                2.0,
+            );
+        }
+        let has_head = world
+            .get::<crate::medical::wounds::Limbs>(victim)
+            .is_none_or(|l| !l.limb(crate::zone::BodyZone::Head).missing);
+        if has_head {
+            crate::vision::set_eye_blur_if_lower(world, victim, 2.0);
+        }
+        let (who, what) = (name_of(world, victim), name_of(world, item));
+        visible(
+            world,
+            victim,
+            &format!("Вам в лицо прилетает {what}!"),
+            &format!("{who} получает в лицо {what}!"),
+            Span::Warning,
+        );
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pos, "desecration", 50.0, true),
+        );
+    }
+    world.entity_mut(item).despawn();
+    true
+}
+
+#[cfg(test)]
+mod kitchen_tests {
+    use super::*;
+
+    #[test]
+    fn donk_pockets_warm_up_with_omnizine() {
+        assert_eq!(donk_omnizine("/obj/item/food/donkpocket"), 6.0);
+        assert_eq!(
+            donk_omnizine("/obj/item/food/donkpocket/spicy/homemade"),
+            2.0
+        );
+        assert_eq!(donk_omnizine("/obj/item/food/donkpocket/honk"), 6.0);
+        assert_eq!(donk_omnizine("/obj/item/food/donkpocket/warm/spicy"), 0.0);
+        assert_eq!(donk_omnizine("/obj/item/food/donkpocketx"), 0.0);
+        assert_eq!(donk_omnizine("/obj/item/food/burger"), 0.0);
     }
 }

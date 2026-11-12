@@ -101,6 +101,10 @@ pub struct ReactionDef {
     /// ingredients.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub soup: Option<SoupDef>,
+    /// `/datum/chemical_reaction/food` `resulting_food_path` (not of a soup): `on_reaction`
+    /// makes `created_volume` of it where the container is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food: Option<String>,
 }
 
 /// `reagent_explosion`'s `strengthdiv` and `modifier`: power `modifier + round(volume /

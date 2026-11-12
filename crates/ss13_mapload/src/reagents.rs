@@ -227,9 +227,21 @@ pub fn chem_data(types: &DmTypes) -> (ChemData, Skipped) {
                 .unwrap_or(0.25) as f32,
             resulting_food_path: path_value(get("resulting_food_path")),
         });
+        // The two food reactions that make their food in their own `on_reaction`.
+        let food = match path {
+            _ if soup.is_some() || !is_under(path, FOOD_REACTIONS) => None,
+            "/datum/chemical_reaction/food/imitationcarpmeat" => {
+                Some("/obj/item/food/fishmeat/carp/imitation".to_owned())
+            }
+            "/datum/chemical_reaction/food/uncooked_rice" => {
+                Some("/obj/item/food/uncooked_rice".to_owned())
+            }
+            _ => path_value(get("resulting_food_path")),
+        };
         let n = |var: &str| num(get(var)).unwrap_or(0.0) as f32;
         let truthy = |var: &str| n(var) != 0.0;
         data.reactions.push(ReactionDef {
+            food,
             path: path.to_owned(),
             required_reagents,
             results,
