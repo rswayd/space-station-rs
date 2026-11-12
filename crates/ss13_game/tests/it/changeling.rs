@@ -500,7 +500,13 @@ fn roundstart_changeling_absorbs_transforms_and_evolves() {
     let (shop, st) = s.wait_window(a, CellularEmporiumUi::NAME);
     let st: EmporiumStatic = ss13_tgui::decode(&st).unwrap();
     let names: Vec<&str> = st.abilities.iter().map(|x| x.name.as_str()).collect();
-    for power in ["Arm Blade", "Chitinous Armor", "Fleshmend", "Gene Stim", "Blind Sting"] {
+    for power in [
+        "Arm Blade",
+        "Chitinous Armor",
+        "Fleshmend",
+        "Gene Stim",
+        "Blind Sting",
+    ] {
         assert!(names.contains(&power), "{power} in {names:?}");
     }
     let data: EmporiumData = s.latest_data(a, shop);
