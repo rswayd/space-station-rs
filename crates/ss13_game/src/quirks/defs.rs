@@ -24,7 +24,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 52] = [
+pub const QUIRKS: [QuirkDef; 53] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -458,6 +458,16 @@ pub const QUIRKS: [QuirkDef; 52] = [
         -6,
         Some((Span::Danger, "У вас немного подкашиваются ноги.")),
         Some((Span::Notice, "Ваши ноги снова в норме.")),
+    ),
+    q(
+        Quirk::Prosopagnosia,
+        "/datum/quirk/prosopagnosia",
+        "Prosopagnosia",
+        "У вас психическое расстройство, из-за которого вы вообще не можете распознавать лица.",
+        "user-secret",
+        -4,
+        None,
+        None,
     ),
     q(
         Quirk::PoorAim,

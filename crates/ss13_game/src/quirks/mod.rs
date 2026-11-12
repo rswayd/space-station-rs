@@ -378,6 +378,9 @@ pub enum Quirk {
     Pacifist,
     /// Stormtrooper Aim: every shot spreads 10 to 35 degrees more (`crate::guns`).
     PoorAim,
+    /// `see_no_names/allow_ids`: other humans are named by their ID or not at all
+    /// (`crate::clothing::cover::unrecognized_name`).
+    Prosopagnosia,
     /// `TRAIT_CLUMSY` (`crate::genetics::is_clumsy`).
     Clumsy,
     /// `TRAIT_EASILY_WOUNDED` (`crate::medical::wounds`).

@@ -213,6 +213,9 @@ mod server {
         {
             name = visible;
         }
+        if let Some(seen) = crate::clothing::cover::unrecognized_name(world, user, target) {
+            name = seen;
+        }
         let mut context = Context::default();
         // `isliving(user)`: ghosts (and the AI eye) see names only.
         if world.get::<Health>(user).is_some() && world.get::<Ghost>(user).is_none() {

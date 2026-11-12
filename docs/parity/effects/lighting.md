@@ -54,4 +54,4 @@
 Оружие и способности (клинок теней, ночное зрение тенеходов) «съедают» свет: источник навсегда гаснет и не может быть включён (`light_eaten`).
 
 - **Код:** [`/datum/element/light_eater`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/light_eater.dm#L6), [`/datum/element/light_eaten`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/elements/light_eaten.dm#L4)
-- **Статус в ss13-rs:** ❌ нет — нет механики
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/nightmare.rs` (`LightEater`, `LightEaten`): удар клинком теней гасит свет того, по чему попал (лампа разбивается, прочее со своим светом гаснет навсегда); носимый источник (фонарь КПК) гаснет на владельце до следующего включения, а не навсегда; нет поедания света зрением тенеходов и разделки клинком

@@ -199,6 +199,19 @@ pub fn hidden_face_name(world: &World, mob: Entity) -> Option<String> {
     Some(id_name(world, mob).unwrap_or_else(|| UNKNOWN_NAME.to_owned()))
 }
 
+/// `/datum/status_effect/grouped/see_no_names/allow_ids` (the Prosopagnosia quirk): how
+/// `viewer` names another human, the worn ID's name with a question mark or "Неизвестный".
+/// `None`: as everyone sees it.
+pub fn unrecognized_name(world: &World, viewer: Entity, mob: Entity) -> Option<String> {
+    if viewer == mob
+        || world.get::<crate::inventory::Inventory>(mob).is_none()
+        || !crate::quirks::has(world, viewer, crate::quirks::Quirk::Prosopagnosia)
+    {
+        return None;
+    }
+    Some(id_name(world, mob).map_or_else(|| UNKNOWN_NAME.to_owned(), |name| format!("{name}?")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

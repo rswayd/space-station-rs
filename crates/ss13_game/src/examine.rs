@@ -150,6 +150,9 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
         if let Some(visible) = crate::clothing::cover::hidden_face_name(world, target) {
             name = visible;
         }
+        if let Some(seen) = crate::clothing::cover::unrecognized_name(world, examiner, target) {
+            name = seen;
+        }
         carbon_lines(world, examiner, target, &mut lines);
         return (name, lines);
     }

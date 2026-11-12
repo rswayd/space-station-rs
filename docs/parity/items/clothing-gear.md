@@ -60,7 +60,7 @@
 Наушники-беруши защищают от оглушения громкими звуками (флешбанг, хонк).
 
 - **Код:** [`/obj/item/clothing/ears/earmuffs`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/clothing/ears/_ears.dm#L13)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs`: слот ушей (занят гарнитурой); нет защиты от звука (нет звуков и флешбангов)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/explosions/ex_act.rs` (`ear_protection`, `soundbang_act`): наушники-беруши в слоте ушей дают `EAR_PROTECTION_NORMAL` против светошумовых и хлопков; `crates/ss13_game/src/sound.rs`: в них не слышны звуки (`TRAIT_DEAF`)
 
 ### Галстуки, шарфы, плащи и прочее на шею
 Галстуки (завязываются), бабочки, шарфы, плащи глав отделов, ожерелья, ошейники для питомцев, бусы, стетоскоп (слушать сердце и сейфы).
