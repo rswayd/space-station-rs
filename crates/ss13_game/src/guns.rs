@@ -356,7 +356,12 @@ impl Plugin for GunsServerPlugin {
             .add_observer(unrack)
             .add_systems(
                 Update,
-                (ranged_clicks, run_bursts, crate::gunpoint::upkeep)
+                (
+                    ranged_clicks,
+                    run_bursts,
+                    crate::gunpoint::upkeep,
+                    crate::bows::arrows_fall_out,
+                )
                     .chain()
                     .in_set(GunSystems)
                     .after(crate::click::ResolveClicks)
@@ -410,7 +415,10 @@ fn add_magazine_state(add: On<Add<DmMagazine>>, mags: Query<&DmMagazine>, mut co
 }
 
 fn is_revolver(dm: &DmGun) -> bool {
-    dm.internal_magazine && dm.bolt_type == BOLT_TYPE_NO_BOLT
+    // A bow's `chamber_round` nocks the arrow like a magazine gun (`crate::bows`).
+    dm.internal_magazine
+        && dm.bolt_type == BOLT_TYPE_NO_BOLT
+        && !is_under(&dm.path, crate::bows::BOW)
 }
 
 /// tg `chamber_round`; a revolver turns its cylinder instead (the chambered round stays in it).
@@ -797,6 +805,15 @@ fn try_fire(
         return false;
     };
     if world.get::<Stat>(mob) != Some(&Stat::Conscious) {
+        return false;
+    }
+    // `/obj/item/gun/ballistic/bow/try_fire_gun`: nocked and drawn.
+    if let Some(fired) = crate::bows::before_fire(world, client, gun_entity) {
+        return fired;
+    }
+    // `/obj/item/gun/ballistic/automatic/l6_saw/try_fire_gun`.
+    if world.get::<SawCover>(gun_entity).is_some_and(|c| c.0) {
+        crate::balloon::balloon_alert(world, mob, gun_entity, "закройте крышку!");
         return false;
     }
     if world
@@ -1454,7 +1471,14 @@ fn shoot(
     if dm.auto_rack {
         handle_chamber(world, &dm, &mut gun, from, false);
     }
+    // `rocketlauncher/try_fire_gun`: `magazine.get_round()`, the fired rocket is gone.
+    if is_under(&dm.path, "/obj/item/gun/ballistic/rocketlauncher")
+        && let Some(mag) = gun.magazine.as_mut()
+    {
+        mag.rounds.retain(|r| r.live);
+    }
     world.entity_mut(gun_entity).insert(gun);
+    crate::bows::after_shot(world, gun_entity);
     // `ready_proj`: the gun's `projectile_damage_multiplier`.
     let mut data = casing.projectile.clone();
     let mult = if dm.projectile_damage_multiplier > 0.0 {
@@ -1490,6 +1514,25 @@ fn shoot(
             None => crate::projectile::fire(world, shot),
         };
     }
+    // `/datum/element/backblast` of a rocket launcher (`COMSIG_GUN_FIRED`): a 60° explosion
+    // behind the gun (light 6, flame 6) that spares its own tile; not by a pacifist.
+    if is_under(&dm.path, "/obj/item/gun/ballistic/rocketlauncher")
+        && !is_under(
+            &dm.path,
+            "/obj/item/gun/ballistic/rocketlauncher/nobackblast",
+        )
+        && world
+            .get::<crate::medical::traumas::Pacifist>(mob)
+            .is_none()
+    {
+        let mut ex = crate::explosions::Explosion::new(0, 0, 6).flame(6);
+        ex.protect_epicenter = true;
+        ex.direction =
+            (crate::projectile::aim_angle(from, target_pos, aim.pixel) + 180.0).rem_euclid(360.0);
+        ex.arc = 60.0;
+        ex.cause = "backblast".to_owned();
+        crate::explosions::explosion(world, from, ex);
+    }
     // `shoot_live_shot` -> `simulate_recoil` -> `calculate_recoil`.
     // shortcut: the `min_recoil_multiplier` preference is always its default (100%).
     let sawn = if world.get::<Gun>(gun_entity).is_some_and(|g| g.sawn_off) {
@@ -1521,8 +1564,11 @@ fn handle_chamber(world: &mut World, dm: &DmGun, gun: &mut Gun, at: TilePos, fro
     if from_firing && !dm.semi_auto {
         return;
     }
+    // A shot arrow is `caseless`: it flew off (`crate::bows::arrow_drop`).
+    let caseless = from_firing && is_under(&dm.path, crate::bows::BOW);
     if let Some(round) = gun.chambered.take()
         && (dm.casing_ejector || !from_firing)
+        && !caseless
     {
         drop_casing(world, &round, at);
     }
@@ -1532,7 +1578,7 @@ fn handle_chamber(world: &mut World, dm: &DmGun, gun: &mut Gun, at: TilePos, fro
 }
 
 /// A casing onto `at`: a live one keeps its round.
-fn drop_casing(world: &mut World, round: &Round, at: TilePos) -> Option<Entity> {
+pub(crate) fn drop_casing(world: &mut World, round: &Round, at: TilePos) -> Option<Entity> {
     if round.casing.path.is_empty() {
         return None;
     }
@@ -1776,6 +1822,10 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
         return true;
     };
     if dm.energy {
+        // `crank_recharge`: the crank guns charge instead (`crate::gun_crank`).
+        if crate::gun_crank::attack_self(world, client, mob, item) {
+            return true;
+        }
         if dm.shots.len() > 1 {
             gun.select = (gun.select + 1) % dm.shots.len();
             let name = &dm.shots[gun.select].select_name;
@@ -1796,6 +1846,10 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
                 format!("У {name} три режима, и все они — УНИЧТОЖЕНИЕ."),
             );
         }
+        return true;
+    }
+    // `/obj/item/gun/ballistic/bow/attack_self`: the string is drawn or released.
+    if crate::bows::attack_self(world, mob, item) {
         return true;
     }
     // `/obj/item/gun/ballistic/rifle/boltaction/attack_self`: a jammed bolt does not move.
@@ -2110,7 +2164,48 @@ pub fn attack_hand(world: &mut World, client: Entity, mob: Entity, item: Entity)
     if !(detachable && loaded && holding) {
         return false;
     }
+    // `l6_saw/attack_hand`: the magazine comes out only with the cover open.
+    if is_saw(world, item) && !world.get::<SawCover>(item).is_some_and(|c| c.0) {
+        crate::balloon::balloon_alert(world, mob, item, "откройте крышку!");
+        return true;
+    }
     eject_magazine(world, client, mob, item);
+    true
+}
+
+/// `/obj/item/gun/ballistic/automatic/l6_saw` (and the toy one).
+const L6_SAW: &str = "/obj/item/gun/ballistic/automatic/l6_saw";
+
+/// The L6 SAW's `cover_open`.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SawCover(pub bool);
+
+fn is_saw(world: &World, gun: Entity) -> bool {
+    world
+        .get::<DmGun>(gun)
+        .is_some_and(|d| is_under(&d.path, L6_SAW))
+}
+
+/// `l6_saw/click_alt`: the dust cover opens or closes.
+pub fn saw_click_alt(world: &mut World, mob: Entity, gun: Entity) -> bool {
+    if !is_saw(world, gun) {
+        return false;
+    }
+    let open = !world.get::<SawCover>(gun).is_some_and(|c| c.0);
+    world.entity_mut(gun).insert(SawCover(open));
+    let text = if open {
+        "крышка открыта"
+    } else {
+        "крышка закрыта"
+    };
+    crate::balloon::balloon_alert(world, mob, gun, text);
+    gun_sound(
+        world,
+        gun,
+        "sound/items/weapons/gun/l6/l6_door.ogg",
+        60.0,
+        true,
+    );
     true
 }
 
@@ -2129,6 +2224,16 @@ pub fn item_interaction(
     ) else {
         return false;
     };
+    // `l6_saw/item_interaction`: its magazine goes in only with the cover open.
+    if is_saw(world, target)
+        && !world.get::<SawCover>(target).is_some_and(|c| c.0)
+        && world
+            .get::<Magazine>(held)
+            .is_some_and(|m| is_under(&m.data.path, &dm.accepted_magazine))
+    {
+        crate::balloon::balloon_alert(world, mob, target, "откройте крышку!");
+        return true;
+    }
     // `/obj/item/gun/ballistic/rifle/item_interaction`: nothing but a bayonet goes on while
     // the bolt is closed.
     if dm.need_bolt_lock_to_interact

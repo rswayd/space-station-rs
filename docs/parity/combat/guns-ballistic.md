@@ -47,12 +47,12 @@ L6 SAW, гранатомёты (револьверный, подствольны
 
 - **Код:** [`/obj/item/gun/ballistic/revolver/grenadelauncher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic/launchers.dm#L4), [`/obj/item/gun/ballistic/rocketlauncher`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic/launchers.dm#L73), [`/obj/item/gun/ballistic/automatic/gyropistol`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic/launchers.dm#L62)
 - **BandaStation:** [`modular_bandastation/weapon/code/ranged/ballistic/mounted_machine_gun.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/weapon/code/ranged/ballistic/mounted_machine_gun.dm#L1) — станковый пулемёт и тяжёлое оружие форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — гранатомёты (переломный, подствольный), гиропистолет и ракетница идут на общей баллистике `guns.rs` (внутренний/съёмный магазин), их снаряды взрываются (`projectile_special.rs`); ракетница: выпущенная ракета уходит из магазина, обратный выхлоп — направленный взрыв 60° за спиной (лёгкий 6, огонь 6, кроме `nobackblast` и пацифистов); L6 SAW: alt-клик открывает/закрывает крышку (`SawCover`), с открытой не стреляет, магазин вставляется и снимается только с открытой. Нет станкового пулемёта M2T9 и тяжёлого оружия форка (ДШК, «Волна», РПГ, ПМК)
 
 ### Луки
 Длинный, короткий, божественный (капеллан), пепельный лук; стрелы натягиваются, разные наконечники.
 
 - **Код:** [`/obj/item/gun/ballistic/bow`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic/bows/_bow.dm#L2), [`/obj/item/gun/ballistic/bow/longbow`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/projectiles/guns/ballistic/bows/bow_types.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/bows.rs`: стрела накладывается кликом (тетива — внутренний магазин на 1), Z натягивает/отпускает, выстрел без натяжения роняет стрелу, после выстрела тетива отпущена, alt-клик снимает стрелу в руку, стрела выпадает, когда лук уходит из рук; выпущенная стрела (`caseless`) ложится там, где остановилась (пластиковая и пылающая расходуются); множители урона луков — общие (`projectile_damage_multiplier`). `// shortcut:` нет спрайтов натяжения, застревания стрел, `projectile_speed_multiplier` божественного лука и особых эффектов стрел
 
 _«Игрушечное оружие» описано в [../items/toys.md](../items/toys.md)._

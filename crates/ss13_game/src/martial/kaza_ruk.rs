@@ -104,12 +104,10 @@ pub(super) fn run_followups(world: &mut World) {
         .filter(|(_, d): &(Entity, Vec<Followup>)| !d.is_empty())
         .collect();
     for (source, list) in due {
-        let emptied = world
-            .get_mut::<KazaFollowups>(source)
-            .is_some_and(|mut f| {
-                f.0.retain(|f| f.at > now);
-                f.0.is_empty()
-            });
+        let emptied = world.get_mut::<KazaFollowups>(source).is_some_and(|mut f| {
+            f.0.retain(|f| f.at > now);
+            f.0.is_empty()
+        });
         if emptied {
             world.entity_mut(source).remove::<KazaFollowups>();
         }

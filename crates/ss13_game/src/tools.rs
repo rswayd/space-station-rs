@@ -680,11 +680,14 @@ fn still_valid(world: &World, mob: Entity, action: &DoAfter) -> bool {
         return false;
     };
     // tg `do_after` stops when the user is incapacitated (stuns, stamcrit).
-    let in_place = entity.get::<TilePos>() == Some(&action.user_pos)
+    // `IGNORE_USER_LOC_CHANGE` (a crank gun's `charge_move`): the user (its own target) may
+    // move.
+    let moves = matches!(action.job, Job::Crank { moving: true });
+    let in_place = (moves || entity.get::<TilePos>() == Some(&action.user_pos))
         && entity.get::<Stat>() == Some(&Stat::Conscious)
         && !crate::status_effects::incapacitation(world, mob).incapacitated;
     let holding = entity.get::<Inventory>().and_then(Inventory::active_item) == action.item;
-    let target = world.get::<TilePos>(action.target) == Some(&action.target_pos);
+    let target = moves || world.get::<TilePos>(action.target) == Some(&action.target_pos);
     let tool = action.item.is_none_or(|item| {
         world.get::<Welder>(item).is_none_or(|w| w.usable(0.0))
             && (world.get::<Stack>(item).is_none() || stack_amount(world, item) >= action.amount)

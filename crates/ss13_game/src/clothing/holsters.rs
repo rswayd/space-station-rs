@@ -12,7 +12,7 @@
 //! (`can_attach_accessory`: "isn't compatible!"). BandaStation's `update_accessory_weight`: the
 //! jumpsuit weighs as much as its heaviest accessory of normal weight or more.
 // shortcut: no quick-draw keybind (`quick_accessory_draw`: the port has no keybindings), no
-// `TRAIT_GUNFLIP`, holster sounds or "tries to rip the holster off" message; the detective
+// gun spinning of `TRAIT_GUNFLIP` ([`gunflip`] only lets thermal pistols crank), holster sounds or "tries to rip the holster off" message; the detective
 // holster refuses a second gun instead of handing it back with "В кобуре уже есть оружие!".
 
 use bevy::prelude::*;
@@ -288,6 +288,33 @@ pub fn storage_accessory(world: &World, uniform: Entity) -> Option<Entity> {
     attached(world, uniform)
         .into_iter()
         .find(|&a| world.get::<Storage>(a).is_some())
+}
+
+/// tg `TRAIT_GUNFLIP`: a belt holster worn on the belt or the suit storage, a wand bandolier on
+/// the suit storage, or BandaStation's holster accessory pinned to the worn jumpsuit.
+pub fn gunflip(world: &World, mob: Entity) -> bool {
+    use ss13_shared::protocol::InventorySlot;
+    let Some(inv) = world.get::<crate::inventory::Inventory>(mob) else {
+        return false;
+    };
+    let path = |slot| {
+        inv.slot(slot)
+            .and_then(|e| world.get::<DmItem>(e))
+            .map(|i| i.path.as_str())
+    };
+    let holster =
+        |p: Option<&str>| p.is_some_and(|p| is_under(p, "/obj/item/storage/belt/holster"));
+    holster(path(InventorySlot::Belt))
+        || holster(path(InventorySlot::SuitStorage))
+        || path(InventorySlot::SuitStorage)
+            .is_some_and(|p| is_under(p, "/obj/item/storage/belt/wand_bandolier"))
+        || inv.slot(InventorySlot::Uniform).is_some_and(|u| {
+            attached(world, u).into_iter().any(|a| {
+                world
+                    .get::<DmItem>(a)
+                    .is_some_and(|i| is_under(&i.path, HOLSTER_ROOT))
+            })
+        })
 }
 
 /// The jumpsuit a pinned accessory is on.

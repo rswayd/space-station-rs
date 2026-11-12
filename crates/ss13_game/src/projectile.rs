@@ -291,6 +291,13 @@ fn step(world: &mut World, e: Entity, dt: f32) {
             let name = crate::obj_damage::strip(&crate::security::name_of(world, e)).to_owned();
             crate::mining::rocks::kinetic_prehit(world, &mut p, target);
             hit(world, e, &p, &name, target);
+            // A reusable arrow lies where it stopped: before a wall, under a mob.
+            let stopped = if world.get::<Turf>(target).is_some() {
+                prev
+            } else {
+                tile
+            };
+            crate::bows::arrow_drop(world, &p.data.path, stopped);
             crate::mining::rocks::kinetic_strike(world, &p, target);
             crate::mining::rocks::bullet_act(world, p.firer, target);
             if let Ok(entity) = world.get_entity_mut(e) {
@@ -300,6 +307,7 @@ fn step(world: &mut World, e: Entity, dt: f32) {
         }
         if p.moved >= p.data.range {
             crate::mining::rocks::kinetic_on_range(world, &mut p, tile);
+            crate::bows::arrow_drop(world, &p.data.path, tile);
             // `/obj/projectile/energy/electrode/on_range`.
             if p.data.tase_stamina > 0.0 {
                 crate::effects::particles::do_sparks(world, 1, true, tile);
@@ -535,6 +543,8 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     }
     impact(world, p, name, target);
     pulse_hit(world, p, target);
+    // Thermal, temperature, explosive, meteor and ink rounds (`crate::projectile_special`).
+    crate::projectile_special::on_hit(world, p, target);
     // A dart's `on_hit`: its reagents or DNA injector (`crate::guns_special`).
     crate::guns_special::dart_hit(world, e, p, target);
     // The kinetic crusher's destabilizer marks or mines (`crate::mining::crusher`).
