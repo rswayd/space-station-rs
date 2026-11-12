@@ -98,6 +98,10 @@ pub enum Span {
     Looc,
     /// `.adminooc`: an admin in OOC.
     AdminOoc,
+    /// `.blue`: a traitor's code phrases in heard speech (`codeword_hearing`).
+    Blue,
+    /// `.red`: a traitor's code responses in heard speech.
+    Red,
     /// tg `emoji_parse`: the segment is one emoji, drawn as this icon state of `EMOJI_SET`; its
     /// text (`:name:`) is what a client without the icon shows and what logs keep.
     Emoji(crate::IconStateId),

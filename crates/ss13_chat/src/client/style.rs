@@ -69,6 +69,9 @@ pub fn span_style(span: Span) -> SpanStyle {
         // `.adminooc`.
         Span::AdminOoc => (Color::hsl(226.6, 0.528, 0.502), true, false),
         Span::Hypnophrase => (Color::hsl(272.0, 0.863, 0.6), true, false),
+        // `chat-dark.scss`.
+        Span::Blue => (Color::hsl(224.1, 1.0, 0.565), false, false),
+        Span::Red => (Color::hsl(0.0, 1.0, 0.5), false, false),
         // Drawn as an icon (`super::panel`); its `:name:` text measures the line.
         Span::Emoji(_) => (CHAT_TEXT, false, false),
         // `a { color: var(--color-hyperlink) }`.

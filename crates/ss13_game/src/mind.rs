@@ -457,6 +457,9 @@ pub fn remove_antag(world: &mut World, mob: Entity, role: AntagRole) -> bool {
             if world.entity_mut(mob).take::<Traitor>().is_none() {
                 return false;
             }
+            world
+                .entity_mut(mob)
+                .remove::<ss13_chat::server::Codewords>();
         }
         AntagRole::Brother => {
             let Some(brother) = world.entity_mut(mob).take::<Brother>() else {

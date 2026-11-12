@@ -198,6 +198,11 @@ pub struct ObjectiveInfo {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TraitorInfo {
     pub has_codewords: bool,
+    /// The code phrases and responses, `", "`-joined.
+    #[serde(default)]
+    pub phrases: String,
+    #[serde(default)]
+    pub responses: String,
     /// The employer's `ui_theme` (`syndicate`, `ntos`, ...).
     pub theme: String,
     pub intro: String,
