@@ -217,10 +217,10 @@ use crate::construction::panel_open;
 /// An empty hand opens the window of a SMES that works (a broken one, without a terminal,
 /// cannot be interacted with).
 pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
-    let Some(s) = world.get::<Smes>(target) else {
+    let Some(no_terminal) = world.get::<Smes>(target).map(|s| s.terminal.is_none()) else {
         return false;
     };
-    if s.terminal.is_none() || super::smes_portable::connector_refuses_ui(world, mob, target) {
+    if no_terminal || super::smes_portable::connector_refuses_ui(world, mob, target) {
         return true;
     }
     let title = crate::security::name_of(world, target);
