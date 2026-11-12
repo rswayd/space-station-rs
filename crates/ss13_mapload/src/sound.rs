@@ -327,7 +327,12 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 372] = [
+    pub const GAME_CODE: [&str; 377] = [
+        "sound/announcer/announcement/announce_dig.ogg",
+        "sound/effects/clang.ogg",
+        "sound/machines/compiler/compiler-stage1.ogg",
+        "sound/machines/compiler/compiler-stage2.ogg",
+        "sound/mobs/non-humanoids/clown/hehe.ogg",
         "sound/items/weapons/jammed.ogg",
         "sound/items/weapons/throwtap.ogg",
         "modular_bandastation/weapon/sound/melee/electrostaff_on.ogg",
