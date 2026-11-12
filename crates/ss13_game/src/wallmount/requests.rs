@@ -557,7 +557,7 @@ fn acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<RequestsConso
                     client,
                     actor,
                     "Awaiting Input",
-                    &format!("Write a quick reply to {recipient}"),
+                    format!("Write a quick reply to {recipient}"),
                     PromptKind::Text {
                         default: String::new(),
                         max_length: MAX_MESSAGE_LEN as u32,

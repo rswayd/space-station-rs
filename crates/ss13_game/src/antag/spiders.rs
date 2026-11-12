@@ -257,9 +257,7 @@ fn web_of(path: &str) -> (f32, WebKind) {
     };
     let speed = if is_under(path, &format!("{GIANT}/tarantula")) {
         0.7
-    } else if is_under(path, &format!("{GIANT}/midwife")) || any(&["midwife"]) {
-        0.5
-    } else if is_under(path, &format!("{YOUNG}/nurse")) {
+    } else if any(&["midwife"]) || is_under(path, &format!("{YOUNG}/nurse")) {
         0.5
     } else if any(&["nurse", "tangle"]) || is_under(path, &format!("{GIANT}/breacher")) {
         0.25

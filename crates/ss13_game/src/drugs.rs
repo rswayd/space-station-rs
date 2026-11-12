@@ -619,7 +619,7 @@ fn life(world: &mut World, mob: Entity, path: &str, m: &Metabolized, secs: f32) 
         MAINT_SLUDGE => hurt(world, mob, DamageType::Tox, 0.125 * r * secs),
         MAINT_TAR => {
             // `-10` deciseconds.
-            immobility(world, mob, -1.0 * r * secs);
+            immobility(world, mob, -r * secs);
             organs::adjust_organ_loss(world, mob, Slot::Liver, 1.5 * r * secs);
         }
         MUSHROOM => {

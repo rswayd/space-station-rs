@@ -292,10 +292,10 @@ pub fn sm_pre_attack(world: &mut World, user: Entity, item: Entity, target: Enti
 
 /// `consume_everything(target)`.
 fn sm_consume(world: &mut World, user: Entity, sword: Entity, target: Entity) {
-    if target == user {
-        if let Some(at) = world.get::<TilePos>(user).copied() {
-            crate::inventory::put_down(world, sword, at);
-        }
+    if target == user
+        && let Some(at) = world.get::<TilePos>(user).copied()
+    {
+        crate::inventory::put_down(world, sword, at);
     }
     let Some(at) = crate::explosions::turf_of(world, target) else {
         return;
