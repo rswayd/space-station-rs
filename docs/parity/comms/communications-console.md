@@ -50,7 +50,7 @@
 Нинзя/антагонисты взламывают консоль: случайный эффект (пираты, ложная тревога, сообщение Синдикату).
 
 - **Код:** [`proc/hack_console()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L913), [`/obj/machinery/computer/communications/syndicate`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/machinery/computer/communications.dm#L62)
-- **Статус в ss13-rs:** ❌ нет — `hack_console` некому вызывать: нет ниндзя и других антагонистов со взломом консоли; емаг консоли — раздел «авторизация» (✅)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/raiders/ninja.rs` (`hack`, `HackJob::Comms`, `hack_console`): модуль хакера ниндзя взламывает консоль 30 с (`can_hack`, предупреждение ИИ), один раз; спящий агент (мидраунд-предатель или в очередь латджойна) с приоритетным оповещением, пираты (от 4 призраков) или беглецы (от 6, с оповещением) при шаттле в покое; засчитывает цель ниндзя. Запись была устаревшей. Нет потолка числа спящих агентов (`forced_max_cap`); емаг консоли — раздел «авторизация» (✅)
 
 ### Приоритетные объявления
 `priority_announce`, `minor_announce`, отчёт ЦК (`print_command_report`): крупный текст всем игрокам, звук диктора, печать в консоли связи.
