@@ -175,3 +175,58 @@ fn info_panel_lists_every_specialization() {
     assert_eq!(blood_text(12.5), "12.5");
     assert_eq!(blood_text(10.0), "10");
 }
+
+#[test]
+fn hemomancer_and_ancient_powers() {
+    let mut v = Vampire {
+        subclass: Some(Subclass::Hemomancer),
+        bloodtotal: 600.0,
+        powers: vec![
+            Power::Rejuvenate,
+            Power::Glare,
+            Power::Vision,
+            Power::Lair,
+            Power::Regen,
+            Power::VisionAdvanced,
+        ],
+        spent: vec![Power::UnlockSpecialization],
+        ..default()
+    };
+    assert_eq!(
+        v.pending_powers(),
+        [Power::BloodTendrils, Power::PredatorSenses]
+    );
+    v.bloodtotal = 800.0;
+    assert!(v.pending_powers().contains(&Power::BloodEruption));
+    // The ancient has every power at once, whatever the blood and victims.
+    v.subclass = Some(Subclass::Ancient);
+    v.bloodtotal = 0.0;
+    let pending = v.pending_powers();
+    for power in [
+        Power::Cloak,
+        Power::BloodRush,
+        Power::SwitchPlaces,
+        Power::BloodEruption,
+        Power::Full,
+        Power::VisionXray,
+    ] {
+        assert!(pending.contains(&power), "{power:?}");
+    }
+    assert!(Subclass::Ancient.improved_rejuv_healing());
+    assert_eq!(
+        Subclass::from_id("ancient"),
+        None,
+        "never picked in the panel"
+    );
+}
+
+#[test]
+fn tendrils_slow_for_six_seconds_once() {
+    let mut world = World::new();
+    world.insert_resource(Time::<()>::default());
+    let victim = world.spawn(MoveSpeedModifier(0.25)).id();
+    slow(&mut world, victim, 6.0);
+    slow(&mut world, victim, 7.0);
+    assert_eq!(world.get::<MoveSpeedModifier>(victim).unwrap().0, 0.75);
+    assert_eq!(world.get::<TendrilSlow>(victim).unwrap().until, 7.0);
+}

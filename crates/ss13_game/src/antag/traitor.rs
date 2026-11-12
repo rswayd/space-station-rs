@@ -565,8 +565,8 @@ fn announce_objectives(world: &mut World, client: Option<Entity>, mob: Entity) {
 }
 
 /// Dev and admins: `SS13_DEV_TRAITOR` makes a joining body a traitor; `unlocked` also unlocks
-/// and opens its uplink; `brother` makes it a blood brother instead, `vampire` a vampire,
-/// `changeling` a changeling.
+/// and opens its uplink; `brother` makes it a blood brother instead, `vampire` a vampire
+/// (`ancient` an ancient one), `changeling` a changeling.
 pub fn dev_traitor(world: &mut World, client: Entity, mob: Entity) {
     let dev = world
         .get_resource::<super::dynamic::DynamicConfig>()
@@ -578,6 +578,10 @@ pub fn dev_traitor(world: &mut World, client: Entity, mob: Entity) {
     }
     if dev == super::dynamic::DevTraitor::Vampire {
         super::vampire::server::add_vampire(world, mob);
+        return;
+    }
+    if dev == super::dynamic::DevTraitor::AncientVampire {
+        super::vampire::server::make_ancient_vampire(world, mob);
         return;
     }
     if dev == super::dynamic::DevTraitor::Changeling {

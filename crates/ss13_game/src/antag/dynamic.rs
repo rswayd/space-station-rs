@@ -87,6 +87,8 @@ pub enum DevTraitor {
     Unlocked,
     Brother,
     Vampire,
+    /// The admin "Ancient Vampire" outfit's vampire.
+    AncientVampire,
     Changeling,
     Nukeop,
     Cult,
@@ -102,6 +104,7 @@ impl Default for DynamicConfig {
             Ok("unlocked") => DevTraitor::Unlocked,
             Ok("brother") => DevTraitor::Brother,
             Ok("vampire") => DevTraitor::Vampire,
+            Ok("ancient") => DevTraitor::AncientVampire,
             Ok("changeling") => DevTraitor::Changeling,
             Ok("nukeop") => DevTraitor::Nukeop,
             Ok("cult") => DevTraitor::Cult,
