@@ -304,3 +304,35 @@ fn the_language_menu_sets_the_default_language() {
     s.run_until("B hears the tag", |s| s.heard(1, "(Draconic) "));
     assert!(!s.heard(1, "без ключа"), "{:?}", s.lines(1));
 }
+
+#[test]
+fn tongues_and_the_speech_filter_change_speech() {
+    let mut s = Station::start("tongues_and_the_speech_filter_change_speech");
+    let a = s.players[0].mob;
+    let lizard = Preset::of_path("/datum/language_holder/lizard").unwrap();
+    let world = s.server.world_mut();
+    world.entity_mut(a).insert((
+        LanguageHolder::from_preset(&lizard, LanguageSource::Species),
+        ss13_chat::accents::TongueSpeech::Lizard,
+    ));
+    world.insert_resource(
+        ss13_chat::speech_filter::SpeechFilter::new(&["скибиди".to_owned()], &[]).unwrap(),
+    );
+
+    // Common: the forked tongue hisses.
+    s.send(0, ClientIntent::Say("сосиска".into()));
+    s.run_until("B hears the hiss", |s| s.heard(1, "Сссосссиссска"));
+    // Draconic is native to it: no hiss.
+    s.send(0, ClientIntent::Say(",o сосиска".into()));
+    s.run_until("A hears itself", |s| s.heard(0, "Сосиска"));
+
+    // The filter: the words are replaced, the speaker is told off.
+    s.send(1, ClientIntent::Say("ну скибиди".into()));
+    s.run_until("A hears the flower", |s| s.heard(0, "Ну цветочек"));
+    assert!(!s.heard(0, "скибиди"));
+    s.run_until("B is told off", |s| {
+        ss13_chat::speech_filter::NOTIFICATIONS
+            .iter()
+            .any(|n| s.heard(1, n))
+    });
+}

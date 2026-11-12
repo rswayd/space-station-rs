@@ -58,21 +58,21 @@
 Заикание, невнятность (опьянение), акценты языков (язык-орган: шипение ящеров, жужжание и др.), компонент `speechmod` (акценты из файлов), заглушение маской.
 
 - **Код:** [`/datum/status_effect/speech`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L1), [`/datum/status_effect/speech/stutter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L62), [`/datum/status_effect/speech/slurring`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/status_effects/debuffs/speech_debuffs.dm#L211), [`/obj/item/organ/tongue/proc/modify_speech()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/surgery/organs/internal/tongue/_tongue.dm#L119), [`/datum/component/speechmod`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/speechmod.dm#L3)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — заикание, невнятность (общая, опьянение, культ, еретик), `derpspeech`, немота — `crates/ss13_chat/src/speech.rs` (`SpeechEffects`, `Impediments`, `slur`, `stutter`); заглушение маской — `muffle`; акценты мутаций (`speechmod` шведский, чав, Элвис, Халк и др.) — `crates/ss13_chat/src/accents.rs`; речь языков (`TongueSpeech`, `crates/ss13_chat/src/accents.rs`): шипение ящеров (с кириллицей BandaStation `с`/`ч`), жужжание мух (`з`/`с`), раскатистое «р» таяран и вульпканинов, растягивание улитки, крысиный язык; не на родном языке языка-органа (`should_modify_speech`); выдаётся с органом при спавне и вставке (`crates/ss13_game/src/medical/organs.rs`). Тесты: `accents.rs` (`tongues_change_speech`), `tests/it/languages.rs`. Нет: перевода зомби-языка, звука шипения ксеноморфа, спанов голоса скелета/робота, `speechmod` одежды (берет, маска гондолы, лучадор, усы, шапки-крабы) и еды
 
 ### Автошипение (BandaStation)
 Обновлённое авто-шипение и фразы у языков рас (например, приветствие крысиного языка).
 
 - **Код:** [`autohiss.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/autohiss/code/autohiss.dm#L3)
 - **BandaStation:** [`_autohiss.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/autohiss/_autohiss.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_chat/src/accents.rs` (`TongueSpeech::Rat`): «привет»/«привет.»/«привет?» крысиного языка заменяются фразами BandaStation (всегда, как в модпаке), английские фразы tg — с шансом 1%. Тест `tongues_change_speech`. `// shortcut:` в `whimsy_check` нет 1 апреля и личности «whimsical»
 
 ### Фильтр речи (BandaStation)
 Элемент на живых мобах заменяет запрещённые слова/«брейнрот» по регулярке из конфига; обход для списка ckey.
 
 - **Код:** [`/datum/element/speech_filter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/speech_filter/code/speech_filter.dm#L3), [`/datum/element/speech_filter/proc/filter_speech()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/speech_filter/code/speech_filter.dm#L30)
 - **BandaStation:** [`_speech_filter.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/speech_filter/_speech_filter.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_chat/src/speech_filter.rs` (`SpeechFilter`: регулярки `brainrot_filter` через `|`, без учёта регистра, замена на «цветочек», обход по ckey; эмоции `*` не трогаются), применение до акцентов в `crates/ss13_chat/src/server.rs` (`handle_say`), конфиг и последствия — `crates/ss13_game/src/speech.rs` (`load_speech_filter`: `SS13_SPEECH_FILTER=1` = `ENABLE_SPEECH_FILTER`, `SS13_SPEECH_FILTER_BYPASS`, `<SS13_CONFIG_DIR>/bandastation/brainrot_filter.json`; `speech_filtered`: слюни, сообщение админам и в лог), игроку — одна из четырёх фраз. Тесты: `speech_filter.rs`, `tests/it/languages.rs`. `// shortcut:` слюни сразу, а не через 0,3 с; фраза игроку в `BoldWarning` (нет спана `priorityalert`)
 
 ### Поддержка кириллицы (BandaStation)
 Перевод русской раскладки в английские клавиши для команд и префиксов, исправления регистра и ввода кириллицы.

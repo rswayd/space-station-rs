@@ -12,13 +12,15 @@ web-time = "1.1"
 ss13_shared.workspace = true
 ss13_net.workspace = true
 ss13_world = { workspace = true, optional = true }
+# BandaStation's speech filter: server-configured regexes.
+regex = { version = "1.13", optional = true }
 ss13_ui_kit = { workspace = true, optional = true }
 bevy = { workspace = true, features = ["std", "bevy_log"] }
 # Same version Bevy 0.20's text layout uses: chat lines are broken by the same engine that draws them.
 parley = { version = "0.11.1", default-features = false, features = ["std"], optional = true }
 
 [features]
-server = ["ss13_net/server", "dep:ss13_world"]
+server = ["ss13_net/server", "dep:ss13_world", "dep:regex"]
 client = ["ss13_net/client", "dep:ss13_ui_kit", "dep:parley", "bevy/ui"]
 
 [dev-dependencies]

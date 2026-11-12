@@ -6,6 +6,9 @@
 //! `TRAIT_SILICON_EMOTES_ALLOWED`) is kept here for `ss13_chat::emote`, and an emote that ran
 //! ([`Emoted`]) plays its sound (tg `playsound` in `run_emote`), sets the AI status displays'
 //! emotion (`apply_emote_display`) or a slime's face (`current_mood`).
+//!
+//! BandaStation's speech filter (`ss13_chat::speech_filter`): `load_speech_filter` reads its
+//! config, a filtered speaker drools and the admins are told (`speech_filtered`).
 // shortcut: no AI status display draws [`AiDisplayEmotion`] and no slime face overlay draws
 // [`SlimeMood`] yet (`docs/parity/comms/station-info.md`, xenobiology); `friendcomputer` does
 // not post to the evac displays.
@@ -15,6 +18,7 @@ use ss13_chat::emote::{EmoteMob, EmoteSpecies, EmoteUser};
 use ss13_chat::language::Tongue;
 use ss13_chat::server::Emoted;
 use ss13_chat::speech::SpeakerStat;
+use ss13_chat::speech_filter::{SpeechFilter, SpeechFiltered};
 use ss13_mapload::DmObj;
 use ss13_shared::TilePos;
 
@@ -39,12 +43,15 @@ impl Plugin for SpeechServerPlugin {
             .add_message::<PlaySound>()
             .init_resource::<AiDisplayEmotion>()
             .init_resource::<SoundRng>()
+            .add_message::<SpeechFiltered>()
+            .add_systems(Startup, load_speech_filter)
             .add_systems(
                 Update,
                 (
                     sync_speaker_stat.after(HealthSystems),
                     sync_emote_user,
                     emote_effects.after(ss13_chat::server::SaySystems),
+                    speech_filtered.after(ss13_chat::server::SaySystems),
                 ),
             )
             .add_observer(ghost_speaks_dead);
@@ -330,5 +337,79 @@ mod tests {
             false,
         );
         assert_eq!((carp.mob, carp.female), (EmoteMob::Basic, false));
+    }
+}
+
+/// BandaStation's speech filter config, as the environment gives it: `SS13_SPEECH_FILTER=1`
+/// (`ENABLE_SPEECH_FILTER`, off by default as in BandaStation's config),
+/// `SS13_SPEECH_FILTER_BYPASS=key,...` (`SPEECH_FILTER_BYPASS`) and the `brainrot_filter`
+/// regexes of `<SS13_CONFIG_DIR>/bandastation/brainrot_filter.json` (no file: no filter).
+fn load_speech_filter(mut commands: Commands) {
+    if !std::env::var("SS13_SPEECH_FILTER").is_ok_and(|v| v == "1") {
+        return;
+    }
+    let dir = std::env::var("SS13_CONFIG_DIR")
+        .ok()
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| "config".to_owned());
+    let path = std::path::Path::new(&dir).join("bandastation/brainrot_filter.json");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let json: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(json) => json,
+        Err(e) => {
+            warn!(
+                "speech filter: JSON parsing failure for {}: {e}",
+                path.display()
+            );
+            return;
+        }
+    };
+    let filters: Vec<String> = json["brainrot_filter"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .filter_map(|v| v.as_str().map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default();
+    let bypass: Vec<String> = std::env::var("SS13_SPEECH_FILTER_BYPASS")
+        .map(|v| {
+            v.split(',')
+                .map(str::trim)
+                .filter(|k| !k.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    match SpeechFilter::new(&filters, &bypass) {
+        Ok(filter) => commands.insert_resource(filter),
+        Err(e) => warn!("speech filter: {}: {e}", path.display()),
+    }
+}
+
+/// `filter_speech` after the words were replaced: the speaker drools, the admins and the game
+/// log get what was typed.
+// shortcut: the drool comes at once, not 0.3 s later.
+fn speech_filtered(mut filtered: MessageReader<SpeechFiltered>, mut commands: Commands) {
+    for event in filtered.read() {
+        let SpeechFiltered {
+            client,
+            speaker,
+            original,
+        } = event.clone();
+        commands.queue(move |world: &mut World| {
+            let name = crate::security::name_of(world, speaker);
+            let key = world
+                .get::<ss13_net::server::ClientToken>(client)
+                .map_or_else(String::new, |t| t.0.clone());
+            let text = format!(
+                "{name} ({key}) has attempted to say forbidden word. His message was: {original}"
+            );
+            info!(target: "game", "{text}");
+            crate::chem_machines::admin_notice(world, text);
+            crate::medical::diseases::emote(world, speaker, "drool");
+        });
     }
 }

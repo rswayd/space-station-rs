@@ -16,14 +16,15 @@
 //! a message that went to the radio is whispered locally (`REDUCE_RANGE`). A whisper is heard in
 //! full at 1 tile, starred at 2, and seen as "whispers something" up to 7.
 
+use crate::speech_filter::{NOTIFICATIONS as FILTER_NOTIFICATIONS, SpeechFilter, SpeechFiltered};
 use bevy::ecs::lifecycle::{Discard, Insert};
 use bevy::ecs::system::SystemParam;
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use ss13_net::chat::server::SendChat;
 use ss13_net::server::{
-    ClientDisconnected, ControlledEntity, IntentReceived, Invisibility, MaskId, SeeInvisible,
-    ViewMasks, VisibleToMobs,
+    ClientDisconnected, ClientToken, ControlledEntity, IntentReceived, Invisibility, MaskId,
+    SeeInvisible, ViewMasks, VisibleToMobs,
 };
 use ss13_shared::TilePos;
 use ss13_shared::chat::{
@@ -32,6 +33,7 @@ use ss13_shared::chat::{
 use ss13_shared::protocol::ClientIntent;
 use ss13_world::{SpatialIndex, WorldSystems};
 
+use crate::accents::TongueSpeech;
 use crate::emoji::{Emojis, emoji_parse};
 use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUser};
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
@@ -396,6 +398,7 @@ impl Plugin for ChatServerPlugin {
             .add_message::<Emoted>()
             .add_message::<AnxiousSpoke>()
             .add_message::<Overhead>()
+            .add_message::<SpeechFiltered>()
             .add_observer(on_control_inserted)
             .add_observer(on_control_discarded)
             .add_systems(
@@ -598,7 +601,20 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents, muffled): (
+    (
+        sight,
+        senses,
+        voices,
+        seed,
+        seen_by,
+        sixth_sense,
+        emojis,
+        accents,
+        muffled,
+        tongue_speech,
+        speech_filter,
+        tokens,
+    ): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
@@ -608,6 +624,9 @@ fn handle_say(
         Option<Res<Emojis>>,
         Query<&crate::accents::Accents>,
         Query<(), With<Muffled>>,
+        Query<&TongueSpeech>,
+        Option<Res<SpeechFilter>>,
+        Query<&ClientToken>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -615,11 +634,12 @@ fn handle_say(
     mut rng: ResMut<SpeechRng>,
     time: Res<Time<Real>>,
     mut chat: MessageWriter<SendChat>,
-    (mut rejected, mut emoted, mut anxious, mut overhead): (
+    (mut rejected, mut emoted, mut anxious, mut overhead, mut filtered): (
         MessageWriter<SayRejected>,
         MessageWriter<Emoted>,
         MessageWriter<AnxiousSpoke>,
         MessageWriter<Overhead>,
+        MessageWriter<SpeechFiltered>,
     ),
     mut spoke: MessageWriter<Spoke>,
     mut commands: Commands,
@@ -886,9 +906,30 @@ fn handle_say(
             });
             continue;
         }
+        let mut message = message;
+        // `COMSIG_MOB_SAY`: BandaStation's speech filter. It sees the words as typed, before any
+        // accent could hide them.
+        if let Some(filter) = speech_filter.as_deref()
+            && let Some(changed) =
+                filter.filter(tokens.get(client).map_or("", |t| t.0.as_str()), &message)
+        {
+            let i = (rng.percent() as usize * FILTER_NOTIFICATIONS.len()) / 100;
+            chat.write(SendChat {
+                clients: vec![client],
+                message: ChatMessage::simple(
+                    ChatChannel::Warning,
+                    Span::BoldWarning,
+                    FILTER_NOTIFICATIONS[i.min(FILTER_NOTIFICATIONS.len() - 1)],
+                ),
+            });
+            filtered.write(SpeechFiltered {
+                client,
+                speaker,
+                original: std::mem::replace(&mut message, changed),
+            });
+        }
         // `COMSIG_MOB_SAY`: Social Anxiety may swallow the message.
         // shortcut: no `TRAIT_FEARLESS` or sign language exemption.
-        let mut message = message;
         if let Some(anxiety) = anxiety {
             let outcome = anxiety.roll(|| rng.percent());
             let mut tell = |span: Span, text: &str| {
@@ -943,6 +984,12 @@ fn handle_say(
         // `COMSIG_MOB_SAY`: the speech mutations (`crate::accents`).
         if let Ok(accents) = accents.get(speaker) {
             message = crate::accents::apply_all(&accents.0, &message, || rng.percent());
+        }
+        // `COMSIG_MOB_SAY`: the tongue, unless the language is native to it.
+        if let Ok(&speech) = tongue_speech.get(speaker)
+            && !spoken_in.is_some_and(|l| speech.native().contains(&l))
+        {
+            message = speech.apply(&message, &mut || rng.percent());
         }
         // tg `treat_message`: `TRAIT_UNINTELLIGIBLE_SPEECH`, then the speech status effects.
         if impediments.unintelligible {

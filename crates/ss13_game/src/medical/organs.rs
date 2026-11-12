@@ -584,6 +584,13 @@ fn give_organs(
         for slot in Slot::ALL {
             if let Some(organ) = set.get(slot).and_then(|path| spawn_organ(world, path)) {
                 world.entity_mut(organ).insert(OrganOf(mob));
+                // The tongue's `speechmod` (tg registers it in `on_mob_insert`).
+                if let Some(speech) = world
+                    .get::<Organ>(organ)
+                    .and_then(|o| ss13_chat::accents::TongueSpeech::of_path(&o.path))
+                {
+                    world.entity_mut(mob).insert(speech);
+                }
             }
         }
     });
@@ -633,13 +640,24 @@ fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
         Slot::Zombie => crate::antag::zombie::infection_inserted(world, organ),
         Slot::Tongue => {
             use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
-            let tongue = world
-                .get::<Organ>(organ)
-                .map_or(Tongue::Organic(&[]), |o| Tongue::of_path(&o.path));
-            world
-                .entity_mut(mob)
-                .remove::<ss13_chat::speech::Tongueless>()
-                .insert(tongue);
+            let (tongue, speech) =
+                world
+                    .get::<Organ>(organ)
+                    .map_or((Tongue::Organic(&[]), None), |o| {
+                        (
+                            Tongue::of_path(&o.path),
+                            ss13_chat::accents::TongueSpeech::of_path(&o.path),
+                        )
+                    });
+            let mut body = world.entity_mut(mob);
+            body.remove::<(
+                ss13_chat::speech::Tongueless,
+                ss13_chat::accents::TongueSpeech,
+            )>()
+            .insert(tongue);
+            if let Some(speech) = speech {
+                body.insert(speech);
+            }
             // `/obj/item/organ/tongue/robot/on_mob_insert`: Encoded Audio Language.
             if tongue == Tongue::Robot {
                 let mut holder = world
@@ -694,7 +712,7 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
             use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
             world
                 .entity_mut(mob)
-                .remove::<Tongue>()
+                .remove::<(Tongue, ss13_chat::accents::TongueSpeech)>()
                 .insert(ss13_chat::speech::Tongueless);
             // `/obj/item/organ/tongue/robot/on_mob_remove`.
             if let Some(mut holder) = world.get_mut::<LanguageHolder>(mob) {
