@@ -1052,7 +1052,7 @@ fn turf_act(world: &mut World, pos: TilePos) -> f64 {
 
 /// tg `qdel` of an eaten object: off the power grid, its shields and fields cleaned up, what
 /// it holds gone with it.
-fn qdel(world: &mut World, thing: Entity) {
+pub(crate) fn qdel(world: &mut World, thing: Entity) {
     let Ok(entity) = world.get_entity(thing) else {
         return;
     };

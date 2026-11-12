@@ -197,6 +197,7 @@
 //! | ---- | ------- |
 //! | 3 | `modsuit::ninja` cloak (a cloaked wearer touching something living drops the cloak; never takes the click) |
 //! | 9 | `deployable_turrets::gunner_click` (a turret's gunner aims and fires) |
+//! | 11 | `power::supermatter_consume::hand_hit` (a hand or a cyborg's touch on the crystal dusts the mob) |
 //! | 13 | `antag::raiders::ninja::hack` (the hacker module's right click: drains, hacks, the electric touch) |
 //! | 95 | `shuttle_docker::interact` (a navigation computer: take, leave, rotate; its operator's clicks designate the landing spot) |
 //! | 97 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
@@ -229,7 +230,9 @@
 //! | 1900 | `power::chargers::interact` |
 //! | 1950 | `power::pacman::interact` |
 //! | 1960 | `power::smes::interact` |
+//! | 1961 | `power::smes_portable` (an empty hand on a connected bank opens its connector's window) |
 //! | 1970 | `power::shields::interact` |
+//! | 1971 | `power::monitor::interact` (the power monitoring console's window) |
 //! | 1979 | `eng_machines::atmos_shield::interact` (toggle; right click: lock) |
 //! | 1989 | `eng_machines::flatpacker::interact` (the `Flatpacker` window) |
 //! | 1999 | `eng_machines::modular_shield::interact` (`ModularShieldGen`, `ModularShieldConsole` windows) |
@@ -324,6 +327,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 3 | `modsuit::ninja` cloak (a cloaked wearer hitting something living drops the cloak; never takes the click) |
+//! | 21 | `power::supermatter_consume::attackby_hit` (an item on the crystal turns to dust; a cigarette lights) |
 //! | 43 | `embedding::item_interaction` (a hemostat or wirecutters pluck what is embedded in the aimed bodypart) |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction`, `fishing::mount::item_interaction` (a fish onto a trophy mount, its screwdriver), `fishing::catalog::analyze` (the fish analyzer) |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
@@ -339,6 +343,7 @@
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
+//! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |

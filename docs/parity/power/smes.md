@@ -30,13 +30,13 @@ tgui-окно: заряд, режимы ввода и вывода (вкл/ав�
 Банк энергии на колёсах (`smesbank`) подключается к коннектору в сети.
 
 - **Код:** [`/obj/machinery/power/smes/connector`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes_portable.dm#L3), [`/obj/machinery/smesbank`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/smes_portable.dm#L109)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/smes_portable.rs` (`connect`, `disconnect`, `item_interaction`, `complete`): коннектор — SMES ёмкостью 1 Дж, окно не открывается без банка, при подключённом банке отказывает ключу/отвёртке/лому; банк ключом подключается к коннектору на своей клетке (4 с, панель коннектора закрыта) и отключается (8 с), заряд переходит в коннектор и обратно, окна коннектора закрываются; лом разбирает только отключённый банк, заряд уходит в батареи; пустая рука на банке открывает окно коннектора; оверлеи `bp-*` коннектора и `smes-op/oc/og` банка; постройка из платы (`machine_frame::Family::SmesBank`, коннектор — семья `Smes`). Нет: ЭМИ-разряда банка, подсказок экрана
 
 ### Консоль мониторинга сети (power monitor)
 Показывает мощность и нагрузку подключённой сети, графики и список APC с их каналами. Программа ПДА — см. ../comms/.
 
 - **Код:** [`/obj/machinery/computer/monitor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/monitor.dm#L3), [`proc/record()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/monitor.dm#L62); tgui: [`PowerMonitor.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/PowerMonitor.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/power/monitor.rs` (`search`, `powernet`, `record`, `process_monitors`): сеть кабеля под консолью или APC зоны, активная/холостая нагрузка, запись supply/demand раз в 5 с (60 точек), список APC сети (заряд, нагрузка, каналы); окно `crates/ss13_tgui/src/interfaces/power_monitor.rs`; постройка из платы (`machine_frame::Family::PowerMonitor`), ИИ/киборг. Нет: графика (`Chart.Line` нет в ss13_ui_kit — поле пустое), сортировки списка в клиенте
 
 ### Аккумулятор энергии (energy_accumulator)
 База тесла-катушек и заземлителей: накапливает принятую энергию разряда и отдаёт её в сеть.

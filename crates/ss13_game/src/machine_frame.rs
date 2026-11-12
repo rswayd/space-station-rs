@@ -136,9 +136,13 @@ pub enum Family {
     ChemMachine,
     /// LTSRBT pads (`crate::cargo::black_market`).
     Ltsrbt,
+    /// Power monitoring consoles (`crate::power::monitor`).
+    PowerMonitor,
+    /// Portable SMES banks (`crate::power::smes_portable`).
+    SmesBank,
 }
 
-const FAMILIES: [(&str, Family); 49] = [
+const FAMILIES: [(&str, Family); 51] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -230,6 +234,8 @@ const FAMILIES: [(&str, Family); 49] = [
         Family::ChemMachine,
     ),
     (crate::cargo::black_market::LTSRBT, Family::Ltsrbt),
+    (crate::power::monitor::MONITOR, Family::PowerMonitor),
+    (crate::power::smes_portable::BANK, Family::SmesBank),
 ];
 
 /// The covered family of a machine type (`None`: not built or taken apart here).
@@ -469,7 +475,11 @@ pub fn rped_interaction(world: &mut World, client: Entity, rped: Entity, target:
     } else if let Some(fam) = buildable_machine(world, target) {
         if matches!(
             fam,
-            Family::RdConsole | Family::CargoConsole | Family::AtmosAlert | Family::ServerControl
+            Family::RdConsole
+                | Family::CargoConsole
+                | Family::AtmosAlert
+                | Family::ServerControl
+                | Family::PowerMonitor
         ) {
             // `istype(attacked_object, /obj/machinery/computer)`.
             return false;
@@ -542,6 +552,13 @@ fn machine_tool(
         ToolKind::Crowbar
             if fam == Family::Smes
                 && crate::power::smes::crowbar_refused(world, client, machine) =>
+        {
+            true
+        }
+        // `smesbank/crowbar_act`: not while on a connector.
+        ToolKind::Crowbar
+            if fam == Family::SmesBank
+                && crate::power::smes_portable::crowbar_refused(world, client, machine) =>
         {
             true
         }
@@ -1202,6 +1219,8 @@ pub fn setup_built(world: &mut World, machine: Entity) {
             crate::chem_machines::ensure(world, machine);
         }
         Family::Ltsrbt => crate::cargo::black_market::setup(world, machine),
+        Family::PowerMonitor => crate::power::monitor::setup(world, machine),
+        Family::SmesBank => crate::power::smes_portable::setup_bank(world, machine),
     }
 }
 
@@ -1244,6 +1263,7 @@ pub fn on_deconstruction(world: &mut World, machine: Entity, pos: TilePos, disas
     crate::science::autolathe::drop_sheets(world, machine, pos);
     crate::power::pacman::on_deconstruction(world, machine, pos);
     crate::power::smes::on_deconstruction(world, machine);
+    crate::power::smes_portable::on_deconstruction(world, machine);
     crate::eng_machines::manufactorio::on_destroy(world, machine);
     let Some(def) = board_def(world, &board) else {
         return;

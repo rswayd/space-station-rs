@@ -6,6 +6,9 @@
 //! A power machine joins the net of the first cable on its own tile that shares its layer
 //! (`get_cable_node`), else the net of a terminal on its tile (`connect_to_network`).
 //!
+//! A multi-z hub (`/obj/structure/cable/multilayer/multiz`) also links to the hub straight
+//! above and below it on the stacked levels (tg `multiz/get_cable_connections`).
+//!
 //! The graph is pure data (no ECS) so building and splitting are unit-tested directly.
 //! Build: union-find over all cables, O(cables). Changes: placing a cable merges the nets it
 //! touches into the largest one (O(smaller nets)), cutting one re-labels its old net by BFS
@@ -34,6 +37,9 @@ pub struct Powernet {
     pub netexcess: f64,
     /// Load applied between ticks.
     pub delayedload: f64,
+    /// Game time until which another light flicker cannot propagate (tg `flickering`, cleared
+    /// 9 s after a propagation).
+    pub flickering_until: f64,
 }
 
 impl Powernet {
@@ -100,6 +106,10 @@ pub struct Grid {
     nodes_by_tile: HashMap<TilePos, Vec<Entity>>,
     smes_tiles: HashSet<TilePos>,
     terminal_tiles: HashSet<TilePos>,
+    /// Cable ids of multi-z hubs.
+    multiz_hubs: HashSet<u32>,
+    /// `(below, above)` level pairs (`MapLoadReport::stacked_levels`).
+    levels: Vec<(u16, u16)>,
 }
 
 impl Grid {
@@ -195,11 +205,33 @@ impl Grid {
         }
     }
 
+    /// Level `above` stands over `below`: multi-z hubs link across them. Call before adding the
+    /// hubs.
+    pub fn link_levels(&mut self, below: u16, above: u16) {
+        if !self.levels.contains(&(below, above)) {
+            self.levels.push((below, above));
+        }
+    }
+
     /// A cable placed at runtime: joins the nets it links to, merged into the largest.
     pub fn add_cable(&mut self, entity: Entity, pos: TilePos, layer: u8) -> NetId {
+        self.add(entity, pos, layer, false)
+    }
+
+    /// A multi-z hub (map load, after [`Self::build`], or runtime): a cable that also links to
+    /// the hub straight above and below.
+    pub fn add_multiz_hub(&mut self, entity: Entity, pos: TilePos, layer: u8) -> NetId {
+        self.add(entity, pos, layer, true)
+    }
+
+    fn add(&mut self, entity: Entity, pos: TilePos, layer: u8, multiz: bool) -> NetId {
         let id = self.insert(entity, pos, layer, NetId::MAX);
+        if multiz {
+            self.multiz_hubs.insert(id);
+        }
         let mut touched: Vec<NetId> = self
-            .links_towards(id, &Dir::CARDINALS)
+            .links(id)
+            .into_iter()
             .map(|j| self.cable(j).net)
             .collect();
         touched.sort_unstable();
@@ -231,6 +263,7 @@ impl Grid {
         };
         let data = self.cables[id as usize].take().expect("indexed cable");
         self.free_cables.push(id);
+        self.multiz_hubs.remove(&id);
         if let Some(list) = self.by_tile.get_mut(&data.pos) {
             list.retain(|&c| c != id);
         }
@@ -246,7 +279,8 @@ impl Grid {
             while let Some(c) = stack.pop() {
                 self.set_net(c, net);
                 let next: Vec<u32> = self
-                    .links_towards(c, &Dir::CARDINALS)
+                    .links(c)
+                    .into_iter()
                     .filter(|j| left.remove(j))
                     .collect();
                 stack.extend(next);
@@ -337,6 +371,36 @@ impl Grid {
             .expect("live net")
             .cables
             .push(cable);
+    }
+
+    /// Every cable `id` links to: the four neighbours, and for a multi-z hub the hubs straight
+    /// above and below.
+    fn links(&self, id: u32) -> Vec<u32> {
+        let mut out: Vec<u32> = self.links_towards(id, &Dir::CARDINALS).collect();
+        if self.multiz_hubs.contains(&id) {
+            let pos = self.cable(id).pos;
+            let vertical = self.levels.iter().filter_map(|&(below, above)| {
+                if below == pos.z {
+                    Some(above)
+                } else if above == pos.z {
+                    Some(below)
+                } else {
+                    None
+                }
+            });
+            for z in vertical {
+                let other = TilePos { z, ..pos };
+                out.extend(
+                    self.by_tile
+                        .get(&other)
+                        .into_iter()
+                        .flatten()
+                        .copied()
+                        .filter(|j| self.multiz_hubs.contains(j)),
+                );
+            }
+        }
+        out
     }
 
     /// Cables `id` links to on the neighbours in `dirs`.
@@ -457,6 +521,27 @@ mod tests {
         assert_ne!(net(8, 2), net(8, 1));
         assert_eq!(g.node_net(apc), Some(net(1, 3)));
         assert_eq!(g.node_net(lonely), None);
+    }
+
+    #[test]
+    fn multiz_hubs_join_stacked_levels_and_split_when_cut() {
+        let mut g = Grid::default();
+        g.link_levels(1, 2);
+        let low = TilePos::new(1, 1, 1);
+        let high = TilePos::new(1, 1, 2);
+        let a = g.add_cable(e(0), TilePos::new(2, 1, 1), 2);
+        let b = g.add_cable(e(1), TilePos::new(2, 1, 2), 2);
+        assert_ne!(a, b);
+        g.add_multiz_hub(e(2), low, 7);
+        let net = g.add_multiz_hub(e(3), high, 7);
+        assert_eq!(g.cable_net(e(0)), Some(net));
+        assert_eq!(g.cable_net(e(1)), Some(net));
+        assert_eq!(g.components(), 1);
+        // A plain cable over a hub does not link across levels.
+        g.remove_cable(e(3));
+        assert_ne!(g.cable_net(e(0)), g.cable_net(e(1)));
+        g.add_cable(e(3), high, 7);
+        assert_ne!(g.cable_net(e(0)), g.cable_net(e(1)));
     }
 
     #[test]

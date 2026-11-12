@@ -43,7 +43,7 @@ tgui-окно: заряд ячейки, включение главного ру
 Переключатель в APC (и автоматический при низком заряде) приглушает лампы зоны.
 
 - **Код:** [`proc/toggle_nightshift_lights()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_power_proc.dm#L20), [`proc/set_nightshift()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_power_proc.dm#L142)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/mod.rs` (`set_nightshift`, `toggle_nightshift_lights`, `apply_low_power_nightshift`), `power/model.rs` (`Apc::late_process`): переключатель в окне APC с откатом 10 с и отказом при низком заряде (`disable_nightshift_toggle`), принудительное включение ниже порога оборудования и снятие при восстановлении (кроме идущего события Night Shift вне красной тревоги — `events/nightshift.rs`); нагрузка освещения остаётся полной (shortcut)
 
 ### Зарядка и разрядка эфириалов
 Эфириал правым кликом пустой рукой заряжает свой желудок от APC или отдаёт ему энергию.

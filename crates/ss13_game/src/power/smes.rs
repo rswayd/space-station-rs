@@ -61,15 +61,25 @@ pub struct SmesSprites {
     oc: [Option<IconStateId>; 2],
     og: [Option<IconStateId>; 5],
     emissive: Option<IconStateId>,
+    /// A connector's `bp-c`, `bp-o`, `bp-d` (`super::smes_portable`).
+    bp: [Option<IconStateId>; 3],
 }
 
 /// A timed step of the terminal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SmesJob {
     /// Cable on the SMES from the user's tile.
-    Lay { from: TilePos },
+    Lay {
+        from: TilePos,
+    },
     /// Wirecutters on the terminal (the job's target).
     Cut,
+    /// A wrench on a portable bank (the job's target): onto `connector`, or off its connector
+    /// (`super::smes_portable`).
+    BankConnect {
+        connector: Entity,
+    },
+    BankDisconnect,
 }
 
 pub struct SmesPlugin;
@@ -115,7 +125,20 @@ fn sprites_for(world: &World, e: Entity) -> SmesSprites {
         return SmesSprites::default();
     };
     let get = |s: &str| index.get(&icon, s);
+    let connector = world
+        .get::<DmPower>(e)
+        .is_some_and(|d| is_under(&d.path, super::smes_portable::CONNECTOR));
+    if connector {
+        // `show_display_lights = FALSE`: only its own state and the bank overlays.
+        return SmesSprites {
+            base: get("battery_port"),
+            open: get("battery_port-o"),
+            bp: [get("bp-c"), get("bp-o"), get("bp-d")],
+            ..SmesSprites::default()
+        };
+    }
     SmesSprites {
+        bp: [None; 3],
         base: get("smes"),
         open: get("smes-o"),
         op: [get("smes-op0"), get("smes-op1")],
@@ -131,6 +154,7 @@ fn init_sprites(world: &mut World) {
     for e in all {
         let sprites = sprites_for(world, e);
         world.entity_mut(e).insert(sprites);
+        super::smes_portable::setup_connector(world, e);
     }
 }
 
@@ -138,11 +162,17 @@ fn init_sprites(world: &mut World) {
 #[allow(clippy::type_complexity)]
 fn smes_looks(
     mut q: Query<
-        (&Smes, Option<&PanelOpen>, &SmesSprites, &mut Appearance),
+        (
+            &Smes,
+            Option<&PanelOpen>,
+            &SmesSprites,
+            &mut Appearance,
+            Option<&super::smes_portable::SmesConnector>,
+        ),
         Or<(Changed<Smes>, Changed<PanelOpen>, Added<SmesSprites>)>,
     >,
 ) {
-    for (s, panel, sprites, mut appearance) in &mut q {
+    for (s, panel, sprites, mut appearance, connector) in &mut q {
         let open = panel.is_some_and(|p| p.0);
         if let Some(state) = if open { sprites.open } else { sprites.base }
             && appearance.icon_state != state
@@ -165,6 +195,17 @@ fn smes_looks(
                 ..Overlay::new(state)
             }));
         }
+        // `connector/update_overlays`: a bank on it.
+        if connector.is_some_and(|c| c.bank.is_some()) {
+            let bp = if s.inputting {
+                sprites.bp[0]
+            } else if s.charge > 0.0 {
+                sprites.bp[1]
+            } else {
+                sprites.bp[2]
+            };
+            overlays.extend(bp.map(Overlay::new));
+        }
         if appearance.overlays != overlays {
             appearance.overlays = overlays;
         }
@@ -176,10 +217,10 @@ use crate::construction::panel_open;
 /// An empty hand opens the window of a SMES that works (a broken one, without a terminal,
 /// cannot be interacted with).
 pub fn interact(world: &mut World, client: Entity, mob: Entity, target: Entity) -> bool {
-    let Some(s) = world.get::<Smes>(target) else {
+    let Some(no_terminal) = world.get::<Smes>(target).map(|s| s.terminal.is_none()) else {
         return false;
     };
-    if s.terminal.is_none() {
+    if no_terminal || super::smes_portable::connector_refuses_ui(world, mob, target) {
         return true;
     }
     let title = crate::security::name_of(world, target);
@@ -406,6 +447,9 @@ pub fn complete(
             drop_terminal(world, terminal);
             tell(world, client, Span::Notice, "клемма разобрана");
         }
+        SmesJob::BankConnect { .. } | SmesJob::BankDisconnect => {
+            super::smes_portable::complete(world, mob, action, job);
+        }
     }
 }
 
@@ -508,6 +552,7 @@ pub fn setup(world: &mut World, e: Entity) {
     world
         .resource_mut::<Grid>()
         .add_node(e, pos, super::layer(&dm), NodeKind::Smes);
+    super::smes_portable::setup_connector(world, e);
 }
 
 /// Taken apart (`crate::machine_frame::on_deconstruction`): the charge back into its batteries

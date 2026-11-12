@@ -386,6 +386,57 @@ pub fn take_damage(world: &mut World, light: Entity, damage: f32) {
     }
 }
 
+/// tg `propagate_light_flicker` falloff default.
+pub const FLICKER_FALLOFF: i32 = 32;
+/// tg: "don't let another flicker propagation until our slowest area is done".
+const FLICKER_PROPAGATION_LOCK_SECS: f64 = 9.0;
+
+/// tg `/datum/powernet/proc/propagate_light_flicker(flicker_source, falloff_distance)`: the
+/// lights of every APC on `net` flicker once, each APC with 85% chance, 3% less per tile beyond
+/// `falloff` from `source`. Once per 9 s per net.
+pub fn propagate_light_flicker(
+    world: &mut World,
+    net: super::NetId,
+    source: Option<TilePos>,
+    falloff: i32,
+) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    {
+        let mut grid = world.resource_mut::<super::Grid>();
+        let Some(powernet) = grid.net_mut(net) else {
+            return;
+        };
+        if powernet.flickering_until > now {
+            return;
+        }
+        powernet.flickering_until = now + FLICKER_PROPAGATION_LOCK_SECS;
+    }
+    let mut query = world.query::<(Entity, &super::Apc, &TilePos)>();
+    let apcs: Vec<(Entity, Entity, TilePos)> = query
+        .iter(world)
+        .map(|(e, apc, &pos)| (e, apc.area, pos))
+        .collect();
+    for (apc, area, pos) in apcs {
+        if world.resource::<super::Grid>().node_net(apc) != Some(net) {
+            continue;
+        }
+        let chance = source.map_or(85.0, |source| {
+            let dist = source.chebyshev(pos).map_or(i64::MAX / 4, i64::from);
+            85.0 + (3 * (i64::from(falloff) - dist)).min(0) as f32
+        });
+        if !world.resource_mut::<CombatRng>().chance(chance) {
+            continue;
+        }
+        let lights = world
+            .get::<AreaMembers>(area)
+            .map(|m| m.lights.clone())
+            .unwrap_or_default();
+        for light in lights {
+            flicker(world, light, 1);
+        }
+    }
+}
+
 /// tg `flicker(amount)`: a lit working fixture dims and comes back `amount` times. False when it
 /// cannot flicker now.
 pub fn flicker(world: &mut World, light: Entity, amount: u32) -> bool {
@@ -1869,6 +1920,41 @@ mod tests {
         assert!(w.get::<Flicker>(e).is_none());
         assert!(!w.get::<LightFixture>(e).unwrap().flickering);
         assert_eq!(lit(&w, e).map(|l| l.range), Some(8.0));
+    }
+
+    #[test]
+    fn a_net_flicker_reaches_its_apcs_lights_once_per_lock() {
+        let (mut w, area, e) = lit_world();
+        w.init_resource::<CombatRng>();
+        w.entity_mut(area).insert(AreaMembers {
+            machines: Vec::new(),
+            lights: vec![e],
+        });
+        let mut grid = super::super::Grid::default();
+        let pos = TilePos::new(1, 1, 1);
+        let apc = w.spawn((super::super::Apc::new(area, None), pos)).id();
+        grid.add_node(apc, pos, 2, super::super::NodeKind::Machine);
+        let cable = w.spawn_empty().id();
+        let net = grid.add_cable(cable, pos, 2);
+        w.insert_resource(grid);
+        // Far beyond the falloff: 85 - 3 * 100 < 0, never.
+        propagate_light_flicker(&mut w, net, Some(TilePos::new(133, 1, 1)), FLICKER_FALLOFF);
+        assert!(w.get::<Flicker>(e).is_none());
+        // Locked for 9 s, even for a whole-net flicker.
+        propagate_light_flicker(&mut w, net, None, FLICKER_FALLOFF);
+        assert!(w.get::<Flicker>(e).is_none());
+        // After the lock a source on the APC flickers it (85%: try until it does).
+        let mut flickered = false;
+        for _ in 0..20 {
+            w.resource_mut::<Time>()
+                .advance_by(std::time::Duration::from_secs(10));
+            propagate_light_flicker(&mut w, net, Some(pos), FLICKER_FALLOFF);
+            if w.get::<Flicker>(e).is_some() {
+                flickered = true;
+                break;
+            }
+        }
+        assert!(flickered);
     }
 
     #[test]

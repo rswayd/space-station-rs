@@ -179,6 +179,14 @@ pub struct Apc {
     pub coverlocked: bool,
     pub emergency_lights: bool,
     pub nightshift_lights: bool,
+    /// tg `low_power_nightshift_lights`: night shift was forced on by a low cell; it cannot be
+    /// switched off until the cell recovers.
+    pub low_power_nightshift_lights: bool,
+    /// tg `last_nightshift_switch`, seconds of game time (the 10 s toggle cooldown).
+    pub last_nightshift_switch: f64,
+    /// What `late_process` asked `set_nightshift` to do (tg `INVOKE_ASYNC(set_nightshift)`);
+    /// the power tick applies it with the world (`super::apply_low_power_nightshift`).
+    pub nightshift_request: Option<bool>,
     /// tg `alarm_manager`'s `ALARM_POWER`: sent below the equipment threshold or without a
     /// cell, cleared above [`ALARM_THRESHOLD`] (`crate::silicon::alarms`).
     pub power_alarm: bool,
@@ -207,6 +215,9 @@ impl Apc {
             coverlocked: true,
             emergency_lights: false,
             nightshift_lights: false,
+            low_power_nightshift_lights: false,
+            last_nightshift_switch: f64::NEG_INFINITY,
+            nightshift_request: None,
             power_alarm: false,
         }
     }
@@ -351,6 +362,19 @@ impl Apc {
                 [ForceOff, ForceOff, ForceOff]
             }
         };
+        // tg: below the equipment threshold (or flat) night shift goes on and stays forced; once
+        // all channels may run again the forced night shift is released.
+        if self.cell.is_some() && !self.shorted {
+            if equip != On {
+                if !self.nightshift_lights || !self.low_power_nightshift_lights {
+                    self.low_power_nightshift_lights = true;
+                    self.nightshift_request = Some(true);
+                }
+            } else if self.nightshift_lights && self.low_power_nightshift_lights {
+                self.low_power_nightshift_lights = false;
+                self.nightshift_request = Some(false);
+            }
+        }
         for (ch, mode) in [
             (Channel::Equip, equip),
             (Channel::Light, light),
@@ -732,5 +756,24 @@ mod tests {
         a.power[Channel::Light as usize] = true;
         a.lightswitch = false;
         assert_eq!(light_mode(&a, Some(1200.0), 2.0), LightMode::Off);
+    }
+
+    #[test]
+    fn low_cell_forces_night_shift_and_recovery_releases_it() {
+        let mut a = area([0.0; 3]);
+        // Below the equipment threshold, no grid: night shift is asked for once.
+        let mut apc = apc(2.5e6 * 0.2);
+        let mut no_grid = None;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(apc.low_power_nightshift_lights);
+        assert_eq!(apc.nightshift_request.take(), Some(true));
+        apc.nightshift_lights = true;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert_eq!(apc.nightshift_request, None);
+        // Recovered: the forced night shift is released.
+        apc.cell.as_mut().unwrap().charge = 2.5e6;
+        tick(&mut apc, &mut a, &mut no_grid);
+        assert!(!apc.low_power_nightshift_lights);
+        assert_eq!(apc.nightshift_request, Some(false));
     }
 }
