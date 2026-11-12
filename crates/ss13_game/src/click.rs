@@ -91,6 +91,8 @@ pub struct ThrowClick {
     pub mob: Entity,
     pub target: Entity,
     pub target_pos: TilePos,
+    /// A right click (a tackle with tackle gloves, `crate::tackle`).
+    pub right: bool,
 }
 
 /// A middle click (without shift or ctrl): tg `MiddleClickOn` -> `cycle_hand`.
@@ -570,6 +572,7 @@ fn resolve_clicks(
                 mob,
                 target,
                 target_pos,
+                right: modifiers.right,
             });
             continue;
         }
