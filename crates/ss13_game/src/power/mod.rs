@@ -808,6 +808,11 @@ fn power_tick(
                         if apc.late_process(&mut area, net, dt) {
                             changed.write(AreaPowerChanged(apc.area));
                         }
+                        if let Some(on) = apc.nightshift_request.take() {
+                            commands.queue(move |world: &mut World| {
+                                apply_low_power_nightshift(world, e, on);
+                            });
+                        }
                     }
                 }
             }
@@ -1218,6 +1223,7 @@ pub fn set_area_fire(world: &mut World, area: Entity, fire: bool) -> bool {
 
 /// tg `/obj/machinery/power/apc/proc/set_nightshift(on)`: the APC's `nightshift_lights` and its
 /// area's fixtures' `nightshift_enabled` (dimmer and warmer while on).
+// Refused off while a low cell forces it (`low_power_nightshift_lights`).
 // shortcut: the lighting load stays the full bulb's (tg draws `nightshift_brightness *
 // nightshift_light_power`); a fixture's own `color` does not override the night colour; no
 // `nightshift_allowed` (no ported fixture turns it off).
@@ -1225,6 +1231,9 @@ pub fn set_nightshift(world: &mut World, apc: Entity, on: bool) {
     let Some(mut state) = world.get_mut::<model::Apc>(apc) else {
         return;
     };
+    if (state.low_power_nightshift_lights && !on) || state.nightshift_lights == on {
+        return;
+    }
     state.nightshift_lights = on;
     let area = state.area;
     let lights = world
@@ -1245,6 +1254,50 @@ pub fn set_nightshift(world: &mut World, apc: Entity, on: bool) {
         }
     }
 }
+
+/// `late_process`'s low-power night shift: on when the cell runs low; when it recovers, off
+/// unless the Night Shift event is running outside an emergency (tg checks `SSevents.running`
+/// and `SEC_LEVEL_RED`).
+fn apply_low_power_nightshift(world: &mut World, apc: Entity, on: bool) {
+    let keep = !on
+        && world
+            .get_resource::<crate::events::controller::Events>()
+            .is_some_and(|ev| ev.running().any(|n| n == crate::events::nightshift::NAME))
+        && !crate::events::nightshift::emergency(world);
+    if !keep {
+        set_nightshift(world, apc, on);
+    }
+}
+
+/// tg `/obj/machinery/power/apc/proc/toggle_nightshift_lights(user)`: refused while a low cell
+/// forces night shift, and within 10 s of the last switch.
+pub fn toggle_nightshift_lights(world: &mut World, user: Entity, apc: Entity) {
+    let now = world
+        .get_resource::<Time>()
+        .map_or(0.0, |t| t.elapsed_secs_f64());
+    let Some(state) = world.get::<model::Apc>(apc) else {
+        return;
+    };
+    let refusal = if state.low_power_nightshift_lights {
+        Some("слишком мало питания!")
+    } else if state.last_nightshift_switch > now - NIGHTSHIFT_TOGGLE_COOLDOWN {
+        Some("цикл освещения перезаряжается!")
+    } else {
+        None
+    };
+    let on = !state.nightshift_lights;
+    if let Some(text) = refusal {
+        crate::balloon::balloon_alert(world, user, apc, text);
+        return;
+    }
+    if let Some(mut state) = world.get_mut::<model::Apc>(apc) {
+        state.last_nightshift_switch = now;
+    }
+    set_nightshift(world, apc, on);
+}
+
+/// tg `toggle_nightshift_lights`: "~10 seconds between each toggle to prevent spamming".
+const NIGHTSHIFT_TOGGLE_COOLDOWN: f64 = 10.0;
 
 /// tg `/obj/machinery/light/proc/break_light_tube()`: the bulb breaks (`LIGHT_BROKEN`,
 /// `"[base_state]-broken"`) with glass and sparks, the fixture goes dark until a new bulb goes
@@ -1392,6 +1445,26 @@ mod nightshift_tests {
         set_nightshift(&mut w, apc, false);
         assert!(!w.get::<Apc>(apc).unwrap().nightshift_lights);
         assert_eq!(lit(&w), Some(1.0));
+    }
+
+    #[test]
+    fn toggle_is_refused_by_cooldown_and_low_power() {
+        let mut w = World::new();
+        let area = w.spawn(AreaMembers::default()).id();
+        let apc = w.spawn(Apc::new(area, None)).id();
+        let user = w.spawn_empty().id();
+        toggle_nightshift_lights(&mut w, user, apc);
+        assert!(w.get::<Apc>(apc).unwrap().nightshift_lights);
+        // Within 10 s of the last switch (no clock: time 0).
+        toggle_nightshift_lights(&mut w, user, apc);
+        assert!(w.get::<Apc>(apc).unwrap().nightshift_lights);
+        // A low cell keeps it on whatever asks.
+        let mut state = w.get_mut::<Apc>(apc).unwrap();
+        state.last_nightshift_switch = f64::NEG_INFINITY;
+        state.low_power_nightshift_lights = true;
+        toggle_nightshift_lights(&mut w, user, apc);
+        set_nightshift(&mut w, apc, false);
+        assert!(w.get::<Apc>(apc).unwrap().nightshift_lights);
     }
 
     #[test]

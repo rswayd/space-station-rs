@@ -147,7 +147,7 @@ impl ServerUi for ApcWindow {
             ),
             emergency_lights: !apc.emergency_lights,
             nightshift_lights: apc.nightshift_lights,
-            disable_nightshift_toggle: false,
+            disable_nightshift_toggle: apc.low_power_nightshift_lights,
             power_channels: vec![
                 channel("Оборудование", Channel::Equip, "eqp"),
                 channel("Освещение", Channel::Light, "lgt"),
@@ -333,12 +333,7 @@ pub fn apply_act(world: &mut World, client: Entity, actor: Entity, apc: Entity, 
             }
         }
         ApcAct::Breaker => crate::silicon::ai::toggle_breaker(world, client, apc),
-        ApcAct::Nightshift => {
-            // shortcut: no 10 s toggle cooldown or low-power refusal.
-            if let Some(on) = world.get::<Apc>(apc).map(|a| !a.nightshift_lights) {
-                super::set_nightshift(world, apc, on);
-            }
-        }
+        ApcAct::Nightshift => super::toggle_nightshift_lights(world, actor, apc),
         ApcAct::Charge => {
             if let Some(mut a) = world.get_mut::<Apc>(apc) {
                 a.chargemode = !a.chargemode;
