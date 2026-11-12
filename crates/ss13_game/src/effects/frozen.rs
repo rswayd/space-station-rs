@@ -6,7 +6,7 @@
 //! вдребезги!", gone without debris); moved onto an open tile at 0 °C or warmer it thaws.
 // shortcut: the freon colour matrix is a multiply tint; frozen organs do not stop decaying
 // (`ORGAN_FROZEN`); a shattered object is deleted without its `deconstruct` (tanks keep their
-// gas); cold mobs on the tile do not get the freon status (status effects).
+// gas). Cold mobs on the tile: `crate::freon`.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmItem, DmName, DmObj};

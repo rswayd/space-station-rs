@@ -339,6 +339,8 @@ pub mod footsteps;
 pub mod forensics;
 #[cfg(feature = "server")]
 pub mod fov;
+#[cfg(feature = "server")]
+pub mod freon;
 #[cfg(feature = "client")]
 pub mod fullscreen_client;
 #[cfg(feature = "server")]

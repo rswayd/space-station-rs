@@ -960,6 +960,8 @@ fn resist_intents(world: &mut World, mut intents: Local<MessageCursor<IntentRece
         world
             .entity_mut(mob)
             .insert(NextMove(now + CLICK_CD_RESIST));
+        // `COMSIG_LIVING_RESIST`: the ice cube's `owner_resist` (it does not block the rest).
+        crate::freon::resist(world, client, mob);
         if !traits.restrained && world.get::<PulledBy>(mob).is_some() {
             resist_grab(world, mob, false, now);
         } else if !traits.restrained && world.get::<crate::medical::surgery::Buckled>(mob).is_some()

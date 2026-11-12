@@ -665,7 +665,8 @@ impl Incapacitation {
                 || limbs.is_some_and(|l| l.immobilized)
                 || locked
                 || choked
-                || held.carried.is_some(),
+                || held.carried.is_some()
+                || held.frozen,
             floored: e(StatusEffects::floored)
                 || limbs.is_some_and(|l| l.floored)
                 || neck
@@ -686,6 +687,8 @@ impl Incapacitation {
 pub struct Held {
     pub grab: Option<crate::pull::GrabState>,
     pub carried: Option<bool>,
+    /// In an ice cube ([`crate::freon::Frozen`]).
+    pub frozen: bool,
 }
 
 /// The mob's [`Incapacitation`] (none for things without it).
@@ -1146,6 +1149,7 @@ pub struct StatusEffectsPlugin;
 
 impl Plugin for StatusEffectsPlugin {
     fn build(&self, app: &mut App) {
+        crate::freon::plugin(app);
         app.add_systems(
             Update,
             (
@@ -1558,6 +1562,7 @@ fn refresh_incapacitation(
             Added<crate::medical::stasis::InStasis>,
             Changed<crate::pull::Chokehold>,
             Changed<crate::pull::carry::Carried>,
+            Added<crate::freon::Frozen>,
         )>,
     >,
     mut removed_effects: RemovedComponents<StatusEffects>,
@@ -1565,9 +1570,10 @@ fn refresh_incapacitation(
     mut removed_jackets: RemovedComponents<crate::restraints::SuitRestrained>,
     mut removed_locks: RemovedComponents<crate::silicon::chassis::LockedDown>,
     mut removed_stasis: RemovedComponents<crate::medical::stasis::InStasis>,
-    (mut removed_chokes, mut removed_carries): (
+    (mut removed_chokes, mut removed_carries, mut removed_cubes): (
         RemovedComponents<crate::pull::Chokehold>,
         RemovedComponents<crate::pull::carry::Carried>,
+        RemovedComponents<crate::freon::Frozen>,
     ),
     mut mobs: Query<(
         Option<&StatusEffects>,
@@ -1579,6 +1585,7 @@ fn refresh_incapacitation(
         (
             Option<&crate::pull::Chokehold>,
             Option<&crate::pull::carry::Carried>,
+            Has<crate::freon::Frozen>,
         ),
         &mut Incapacitation,
     )>,
@@ -1591,6 +1598,7 @@ fn refresh_incapacitation(
         .chain(removed_stasis.read())
         .chain(removed_chokes.read())
         .chain(removed_carries.read())
+        .chain(removed_cubes.read())
         .collect();
     for mob in changed.iter().chain(removed) {
         if let Ok((
@@ -1600,7 +1608,7 @@ fn refresh_incapacitation(
             rest,
             locked,
             stasis,
-            (choke, carried),
+            (choke, carried, frozen),
             mut traits,
         )) = mobs.get_mut(mob)
         {
@@ -1610,6 +1618,7 @@ fn refresh_incapacitation(
             let held = Held {
                 grab: choke.map(|c| c.0),
                 carried: carried.map(|c| c.fireman),
+                frozen,
             };
             traits.set_if_neq(Incapacitation::of(
                 effects, cuffed, limbs, rest, locked, held,

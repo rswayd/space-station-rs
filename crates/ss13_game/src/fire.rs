@@ -22,8 +22,8 @@
 // shortcut: lighters are welders here; matches and cigarettes burn as flame sources in
 // `crate::smoking` (igniters and sparkers are `crate::wallmount::machines`, firelocks closing on
 // hot air `crate::wallmount::firelock`); no burning items or clothing (`burn_clothing`, ash):
-// add with their items. Wet stacks: no `TRAIT_WET_FOR_LONGER`, `TRAIT_SLIPPERY_WHEN_WET`, droplet
-// particles or freezing into the freon status (`WATER_VAPOR_DEPOSITION_POINT`); a negative
+// add with their items. Wet stacks: no `TRAIT_WET_FOR_LONGER`, `TRAIT_SLIPPERY_WHEN_WET` or droplet
+// particles (freezing into the freon status: `crate::freon`); a negative
 // `adjust_wet_stacks` on a dry mob does nothing (tg's `max(fire_stacks, stacks)` turns it into
 // positive wet stacks that douse a burning mob, an obvious accident).
 
@@ -481,13 +481,24 @@ fn wet_stacks_tick(world: &mut World) {
             .get_mut::<WetStacks>(mob)
             .expect("queried above")
             .next_tick += FIRE_TICK_SECS;
-        set_wet(
-            world,
-            mob,
-            stacks + WET_STACK_DECAY_RATE * FIRE_TICK_SECS as f32,
-        );
+        let stacks = stacks + WET_STACK_DECAY_RATE * FIRE_TICK_SECS as f32;
+        set_wet(world, mob, stacks);
+        // Below `WATER_VAPOR_DEPOSITION_POINT` the water freezes: an ice cube for as many
+        // seconds as there were stacks.
+        if stacks > 0.0
+            && world
+                .get::<Respiration>(mob)
+                .is_some_and(|r| r.bodytemperature <= WATER_VAPOR_DEPOSITION_POINT)
+            && !crate::breath::BodyLife::of(world, mob).resist_cold
+        {
+            crate::freon::freeze(world, mob, Some(stacks), true);
+            world.entity_mut(mob).remove::<WetStacks>();
+        }
     }
 }
+
+/// `WATER_VAPOR_DEPOSITION_POINT`, kelvin.
+const WATER_VAPOR_DEPOSITION_POINT: f64 = 200.0;
 
 /// `fire_stacks/get_examine_text` (not burning) and `wet_stacks/get_examine_text`.
 pub fn examine_text(world: &World, mob: Entity) -> Option<&'static str> {
