@@ -570,6 +570,47 @@ impl ClientUi for AntagInfoTraitorUi {
                 ]
             })
         });
+        let codewords = if info.has_codewords {
+            let (phrases, responses) = (info.phrases.clone(), info.responses.clone());
+            let blue = Color::hsl(224.1, 1.0, 0.565);
+            let red = Color::hsl(0.0, 1.0, 0.5);
+            EntityScene(bsn! {
+                Node { column_gap: px(8) }
+                Children [
+                    Node { flex_grow: 1.0, flex_basis: px(0), flex_direction: FlexDirection::Column }
+                    Children [
+                        Node Children [ Text("Ваш наниматель предоставил вам кодовые слова для идентификации других агентов. Используйте слова во время обычных разговора, если считаете, что говорите с агентом. Но будьте осторожны, так как каждый может быть потенциальным противником.") ]
+                        --
+                        Node
+                        Propagate::<TextColor>(TextColor(Color::srgb(1.0, 0.3, 0.3)))
+                        Children [ Text("Вы запомнили кодовые слова, позволяющие распозновать их, когда вы их услышите.") ]
+                    ]
+                    --
+                    Node { flex_grow: 1.0, flex_basis: px(0), flex_direction: FlexDirection::Column }
+                    Children [
+                        Node Children [ Text("Кодовые фразы:") ]
+                        --
+                        Node
+                        Propagate::<Bold>(Bold(true))
+                        Propagate::<TextColor>(TextColor(blue))
+                        Name("traitor info: phrases")
+                        Children [ Text(phrases) ]
+                        --
+                        Node Children [ Text("Кодовые ответы:") ]
+                        --
+                        Node
+                        Propagate::<Bold>(Bold(true))
+                        Propagate::<TextColor>(TextColor(red))
+                        Name("traitor info: responses")
+                        Children [ Text(responses) ]
+                    ]
+                ]
+            })
+        } else {
+            EntityScene(bsn! {
+                Node Children [ Text("Вам не были предоставлены кодовые слова. Вы должны использовать альтернативные способы поиска потенциальных союзников. Но будьте осторожны, так как каждый может быть потенциальным противником.") ]
+            })
+        };
         bsn! {
             @WindowContent
             Children [
@@ -625,9 +666,7 @@ impl ClientUi for AntagInfoTraitorUi {
                     @StackItem
                     Children [
                         @Section { @title: "Кодовые слова" }
-                        Children [
-                            Node Children [ Text("Вам не были предоставлены кодовые слова. Вы должны использовать альтернативные способы поиска потенциальных союзников. Но будьте осторожны, так как каждый может быть потенциальным противником.") ]
-                        ]
+                        Children [ {codewords} ]
                     ]
                 ]
             ]

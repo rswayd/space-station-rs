@@ -158,6 +158,8 @@ pub enum Kind {
     DnaLock {
         reinforced: bool,
     },
+    /// `demoralizer`: the wearer demoralises those around (`crate::syndie_spraycan`).
+    Demoralizer,
     Other,
 }
 
@@ -240,6 +242,8 @@ impl Kind {
             Self::Kinesis
         } else if under("pathfinder") {
             Self::Pathfinder
+        } else if under("demoralizer") {
+            Self::Demoralizer
         } else {
             Self::Other
         }
@@ -555,6 +559,15 @@ pub fn on_part_activation(world: &mut World, control: Entity, module: Entity) {
             }
         }
         Kind::AshAccretion => super::supply::ash_sealed(world, control, module),
+        Kind::Demoralizer => {
+            if let Some(wearer) = suit.wearer {
+                world
+                    .entity_mut(wearer)
+                    .insert(crate::syndie_spraycan::Demoraliser(
+                        &crate::syndie_spraycan::MODULE,
+                    ));
+            }
+        }
         Kind::WeaponRecall => {
             super::ninja::on_part_activation(world, control, module, Kind::WeaponRecall)
         }
@@ -588,6 +601,13 @@ pub fn on_part_deactivation(world: &mut World, control: Entity, module: Entity) 
         Kind::NoSlipWater => {
             if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
                 world.entity_mut(wearer).remove::<NoSlipWater>();
+            }
+        }
+        Kind::Demoralizer => {
+            if let Some(wearer) = suit.wearer.filter(|&w| world.get_entity(w).is_ok()) {
+                world
+                    .entity_mut(wearer)
+                    .remove::<crate::syndie_spraycan::Demoraliser>();
             }
         }
         Kind::Clamp { .. } => super::supply::drop_crates(world, control, module),

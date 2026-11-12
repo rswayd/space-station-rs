@@ -164,6 +164,13 @@ pub(super) fn cast(
                 switch_places(world, mob, target);
             }
         }
+        Spell::BloodTendrils => {
+            if let Some(&center) = target.and_then(|t| world.get::<TilePos>(t)) {
+                hemomancer::blood_tendrils(world, mob, center);
+            }
+        }
+        Spell::PredatorSenses => hemomancer::predator_senses(world, client, mob),
+        Spell::BloodEruption => hemomancer::blood_eruption(world, mob),
     }
     // `vampire_ability/after_cast`.
     if def.cost > 0 {

@@ -11,14 +11,19 @@
 //! replace the objectives with one they write (`renegotiate_objectives` ->
 //! `submit_player_objective`): the escape-type objectives stay, the custom one goes first and
 //! is reported without a verdict.
-// shortcut: no codewords (`should_give_codewords`), moodlets or stinger sound; the clown keeps
-// his clumsiness (no mutations here).
+//!
+//! Every traitor hears the round's code phrases and responses ([`SyndicateCodewords`], tg
+//! `SStraitor`) highlighted blue and red ([`Codewords`]); they are in the info panel and the
+//! report footer.
+// shortcut: no moodlets or stinger sound; the clown keeps his clumsiness (no mutations here).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
+use ss13_chat::server::Codewords;
 use ss13_mapload::IconIndex;
 use ss13_mapload::antag::TraitorFlavor;
 use ss13_mapload::spawner::Rng;
+use ss13_mapload::{Areas, DmName, DmPower};
 use ss13_net::chat::server::SendChat;
 use ss13_net::server::ClientToken;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
@@ -143,6 +148,164 @@ pub fn pick_employer(hijacker: bool, rng: &mut Rng) -> &'static str {
         .unwrap_or(HIJACK_EMPLOYERS[0])
 }
 
+/// `SStraitor.syndicate_code_phrase`, `syndicate_code_response`: made once, for the first
+/// traitor (tg at server start).
+#[derive(Resource, Clone, Debug, Default, PartialEq, Eq)]
+pub struct SyndicateCodewords {
+    pub phrases: Vec<String>,
+    pub responses: Vec<String>,
+}
+
+/// The word lists `generate_code_phrase` picks from.
+#[derive(Default)]
+struct PhrasePools {
+    /// `LOWER_TEXT(job_title_ru(job.title))` of `SSjob.joinable_occupations`.
+    jobs: Vec<String>,
+    /// `/area/space` and the station areas, `format_text`ed.
+    locations: Vec<String>,
+    ion: crate::events::ion_storm::IonWords,
+}
+
+fn pick_from(list: &[String], rng: &mut Rng) -> String {
+    if list.is_empty() {
+        return String::new();
+    }
+    list[rng.range(0, list.len() as i64 - 1) as usize].clone()
+}
+
+/// tg `generate_code_phrase(return_list = TRUE)`: 2-5 words, at most one name or job and one
+/// drink, food or place; the rest abstract nouns, objects, adjectives or threats. `name` is
+/// `generate_random_name()` (the manifest is empty when tg makes the codewords).
+fn generate_code_phrase(
+    pools: &PhrasePools,
+    rng: &mut Rng,
+    name: &mut impl FnMut(&mut Rng) -> String,
+) -> Vec<String> {
+    let ion = |key: &str, rng: &mut Rng| {
+        pick_from(pools.ion.0.get(key).map_or(&[][..], Vec::as_slice), rng).to_lowercase()
+    };
+    // `pick(50; 2, 200; 3, 50; 4, 25; 5)`.
+    let maxwords = match rng.range(1, 325) {
+        1..=50 => 2,
+        51..=250 => 3,
+        251..=300 => 4,
+        _ => 5,
+    };
+    let mut safety = vec![1, 2, 3];
+    let mut out = Vec::new();
+    for words in (1..=maxwords).rev() {
+        if words == 1 && safety.contains(&1) && safety.contains(&2) {
+            safety = vec![rng.range(1, 2)];
+        } else if words == 1 && maxwords == 2 {
+            safety = vec![3];
+        }
+        match safety[rng.range(0, safety.len() as i64 - 1) as usize] {
+            1 => {
+                if rng.range(1, 2) == 1 || pools.jobs.is_empty() {
+                    out.push(name(rng));
+                } else {
+                    out.push(pick_from(&pools.jobs, rng));
+                }
+                safety.retain(|&s| s != 1);
+            }
+            2 => {
+                out.push(match rng.range(1, 3) {
+                    1 => ion("iondrinks", rng),
+                    2 => ion("ionfood", rng),
+                    _ => pick_from(&pools.locations, rng).to_lowercase(),
+                });
+                safety.retain(|&s| s != 2);
+            }
+            _ => out.push(match rng.range(1, 4) {
+                1 => ion("ionabstract", rng),
+                2 => ion("ionobjects", rng),
+                3 => ion("ionadjectives", rng),
+                _ => ion("ionthreats", rng),
+            }),
+        }
+    }
+    out.retain(|w| !w.is_empty());
+    out
+}
+
+/// `format_text`: the name without its `\improper`/`\proper` macro.
+fn format_text(name: &str) -> String {
+    name.trim_start_matches("\\improper ")
+        .trim_start_matches("\\proper ")
+        .to_owned()
+}
+
+/// The round's [`SyndicateCodewords`], made on first use.
+pub fn syndicate_codewords(world: &mut World) -> SyndicateCodewords {
+    if let Some(words) = world.get_resource::<SyndicateCodewords>() {
+        return words.clone();
+    }
+    let jobs = world
+        .get_resource::<Jobs>()
+        .map(|j| {
+            j.data
+                .jobs
+                .iter()
+                .map(|job| {
+                    job_ru(&job.title)
+                        .unwrap_or(job.title.as_str())
+                        .to_lowercase()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut locations: Vec<String> = Vec::new();
+    if let Some(areas) = world.get_resource::<Areas>() {
+        for &area in areas.entities() {
+            let Some(power) = world.get::<DmPower>(area) else {
+                continue;
+            };
+            if power.path != "/area/space" && !power.path.starts_with("/area/station") {
+                continue;
+            }
+            if let Some(name) = world.get::<DmName>(area).map(|n| format_text(&n.name))
+                && !name.is_empty()
+                && !locations.contains(&name)
+            {
+                locations.push(name);
+            }
+        }
+    }
+    let pools = PhrasePools {
+        jobs,
+        locations,
+        ion: crate::events::ion_storm::IonWords::load(world),
+    };
+    let mut rng = world
+        .remove_resource::<DynamicRng>()
+        .map_or_else(|| Rng::new(0x5ec7e7), |r| r.0);
+    let mut name = |rng: &mut Rng| {
+        world
+            .get_resource_mut::<Jobs>()
+            .and_then(|mut j| j.random_name(&Default::default()))
+            .unwrap_or_else(|| format!("Агент {}", rng.range(1, 99)))
+    };
+    let words = SyndicateCodewords {
+        phrases: generate_code_phrase(&pools, &mut rng, &mut name),
+        responses: generate_code_phrase(&pools, &mut rng, &mut name),
+    };
+    world.insert_resource(DynamicRng(rng));
+    world.insert_resource(words.clone());
+    info!(
+        "syndicate code phrases: {:?}, responses: {:?}",
+        words.phrases, words.responses
+    );
+    words
+}
+
+/// `AddComponent(/datum/component/codeword_hearing, ..., "blue"/"red", src)`.
+fn codeword_hearing(words: &SyndicateCodewords) -> Codewords {
+    Codewords(vec![
+        (words.phrases.clone(), Span::Blue),
+        (words.responses.clone(), Span::Red),
+    ])
+}
+
 pub(super) fn chat(world: &mut World, client: Option<Entity>, span: Span, text: impl Into<String>) {
     if let Some(client) = client {
         world.write_message(SendChat {
@@ -229,6 +392,9 @@ fn gain(world: &mut World, mob: Entity, show_panel: bool) -> bool {
     if world.get::<PurchaseLog>(mob).is_none() {
         world.entity_mut(mob).insert(PurchaseLog::default());
     }
+    // `should_give_codewords` is TRUE for every traitor here.
+    let words = syndicate_codewords(world);
+    world.entity_mut(mob).insert(codeword_hearing(&words));
     // The base `on_gain` (`silent = FALSE`): `greet()`, the panel note, the panel itself.
     chat(world, client, Span::Bold, format!("Вы - {TRAITOR_NAME}."));
     chat(
@@ -395,8 +561,8 @@ fn announce_objectives(world: &mut World, client: Option<Entity>, mob: Entity) {
 }
 
 /// Dev and admins: `SS13_DEV_TRAITOR` makes a joining body a traitor; `unlocked` also unlocks
-/// and opens its uplink; `brother` makes it a blood brother instead, `vampire` a vampire,
-/// `changeling` a changeling.
+/// and opens its uplink; `brother` makes it a blood brother instead, `vampire` a vampire
+/// (`ancient` an ancient one), `changeling` a changeling.
 pub fn dev_traitor(world: &mut World, client: Entity, mob: Entity) {
     let dev = world
         .get_resource::<super::dynamic::DynamicConfig>()
@@ -408,6 +574,10 @@ pub fn dev_traitor(world: &mut World, client: Entity, mob: Entity) {
     }
     if dev == super::dynamic::DevTraitor::Vampire {
         super::vampire::server::add_vampire(world, mob);
+        return;
+    }
+    if dev == super::dynamic::DevTraitor::AncientVampire {
+        super::vampire::server::make_ancient_vampire(world, mob);
         return;
     }
     if dev == super::dynamic::DevTraitor::Changeling {
@@ -449,13 +619,21 @@ pub fn dev_traitor(world: &mut World, client: Entity, mob: Entity) {
 }
 
 impl ServerUi for AntagInfoTraitorUi {
-    type Source = &'static Traitor;
+    type Source = (&'static Traitor, Option<&'static Codewords>);
     type UserParam = ();
     type Act = ();
 
-    fn static_data(traitor: &Traitor) -> TraitorInfo {
+    fn static_data((traitor, codewords): (&Traitor, Option<&Codewords>)) -> TraitorInfo {
+        let joined = |i: usize| {
+            codewords
+                .and_then(|c| c.0.get(i))
+                .map(|(words, _)| words.join(", "))
+                .unwrap_or_default()
+        };
         TraitorInfo {
-            has_codewords: false,
+            has_codewords: codewords.is_some(),
+            phrases: joined(0),
+            responses: joined(1),
             failsafe_code: traitor.failsafe_code.clone(),
             theme: traitor.flavor.ui_theme.clone(),
             intro: traitor.flavor.introduction.clone(),
@@ -479,7 +657,7 @@ impl ServerUi for AntagInfoTraitorUi {
         }
     }
 
-    fn data(_: &Traitor, _: Entity, _: &()) {}
+    fn data(_: (&Traitor, Option<&Codewords>), _: Entity, _: &()) {}
 }
 
 /// `/datum/action/antag_info/Trigger`: the panel of the antagonist the button belongs to.
@@ -619,6 +797,17 @@ pub fn roundend_report(world: &mut World, end: RoundEnd) -> Vec<ChatMessage> {
             ChatSegment::new(Span::RedText, format!("{role} провалился!"))
         }]));
     }
+    // `roundend_report_footer`.
+    if let Some(words) = world.get_resource::<SyndicateCodewords>() {
+        out.push(line(vec![
+            ChatSegment::new(Span::Bold, "Кодовыми фразами были: "),
+            ChatSegment::new(Span::Blue, words.phrases.join(", ")),
+        ]));
+        out.push(line(vec![
+            ChatSegment::new(Span::Bold, "Кодовыми ответами были: "),
+            ChatSegment::new(Span::RedText, words.responses.join(", ")),
+        ]));
+    }
     out
 }
 
@@ -646,6 +835,70 @@ mod tests {
             names,
             [("DIRECTIVE АЛЬФА".to_owned(), "Сбегите".to_owned())]
         );
+    }
+
+    #[test]
+    fn code_phrases_have_two_to_five_words_and_one_name_at_most() {
+        let pools = PhrasePools {
+            jobs: vec!["капитан".into()],
+            locations: vec!["Мостик".into()],
+            ion: crate::events::ion_storm::IonWords(
+                [
+                    "ionabstract",
+                    "ionobjects",
+                    "ionadjectives",
+                    "ionthreats",
+                    "ionfood",
+                    "iondrinks",
+                ]
+                .iter()
+                .map(|k| (k.to_string(), vec![format!("{k}-СЛОВО")]))
+                .collect(),
+            ),
+        };
+        for seed in 0..200 {
+            let mut rng = Rng::new(seed);
+            let words = generate_code_phrase(&pools, &mut rng, &mut |_| "Имя Фамилия".into());
+            assert!((2..=5).contains(&words.len()), "{words:?}");
+            let named = words
+                .iter()
+                .filter(|w| *w == "Имя Фамилия" || *w == "капитан")
+                .count();
+            let places = words
+                .iter()
+                .filter(|w| {
+                    w.starts_with("ionfood") || w.starts_with("iondrinks") || *w == "мостик"
+                })
+                .count();
+            assert!(named <= 1 && places <= 1, "{words:?}");
+            // Two words always hold a name/job or a drink/food/place.
+            if words.len() == 2 {
+                assert!(named + places >= 1, "{words:?}");
+            }
+            assert!(
+                words.iter().all(|w| !w.contains("СЛОВО")),
+                "lowercased: {words:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn codewords_highlight_heard_speech() {
+        let words = codeword_hearing(&SyndicateCodewords {
+            phrases: vec!["водка".into()],
+            responses: vec!["красный шар".into()],
+        });
+        let message = ss13_chat::server::say_message("Боб", "Водка и КРАСНЫЙ ШАР!");
+        let lit = words.highlight(message.clone(), "Водка и КРАСНЫЙ ШАР!");
+        assert_eq!(lit.plain_text(), message.plain_text());
+        let spans: Vec<(Span, &str)> = lit
+            .segments
+            .iter()
+            .map(|s| (s.span, s.text.as_str()))
+            .collect();
+        assert!(spans.contains(&(Span::Blue, "Водка")), "{spans:?}");
+        assert!(spans.contains(&(Span::Red, "КРАСНЫЙ ШАР")), "{spans:?}");
+        assert!(spans.contains(&(Span::Say, " и ")), "{spans:?}");
     }
 
     #[test]

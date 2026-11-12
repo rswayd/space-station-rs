@@ -77,6 +77,22 @@ const FOLDED_FLAG: &str = "/obj/item/sign/flag";
 const POSTER_RIPPED: &str = "/obj/structure/sign/poster/ripped";
 const POSTER_OFFICIAL: &str = "/obj/structure/sign/poster/official";
 const POSTER_ITEM: &str = "/obj/item/poster";
+/// `/obj/item/poster/traitor`: its `poster_type` is the random seditious poster.
+pub const TRAITOR_POSTER_ITEM: &str = "/obj/item/poster/traitor";
+const POSTER_TRAITOR: &str = "/obj/structure/sign/poster/traitor";
+const POSTER_TRAITOR_RANDOM: &str = "/obj/structure/sign/poster/traitor/random";
+/// `random_basetype = /obj/structure/sign/poster/traitor`: its subtypes without `never_random`.
+pub const TRAITOR_POSTERS: [&str; 9] = [
+    "/obj/structure/sign/poster/traitor/small_brain",
+    "/obj/structure/sign/poster/traitor/lick_supermatter",
+    "/obj/structure/sign/poster/traitor/cloning",
+    "/obj/structure/sign/poster/traitor/ai_rights",
+    "/obj/structure/sign/poster/traitor/metroid",
+    "/obj/structure/sign/poster/traitor/low_pay",
+    "/obj/structure/sign/poster/traitor/look_up",
+    "/obj/structure/sign/poster/traitor/accidents",
+    "/obj/structure/sign/poster/traitor/starve",
+];
 const POSTER_RIP_SOUND: &str = "sound/items/poster/poster_ripped.ogg";
 const POSTER_HANG_SOUND: &str = "sound/items/poster/poster_being_created.ogg";
 const WIRECUTTER_SOUND: &str = "sound/items/tools/wirecutter.ogg";
@@ -231,7 +247,25 @@ impl Plugin for DecorPlugin {
                 crate::decor::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
         });
-        app.add_observer(add_decor);
+        app.add_observer(add_decor).add_observer(add_traitor_poster);
+    }
+}
+
+/// `/obj/item/poster/traitor`: a rolled random seditious poster.
+fn add_traitor_poster(
+    add: On<Add<ss13_mapload::DmItem>>,
+    items: Query<&ss13_mapload::DmItem>,
+    mut commands: Commands,
+) {
+    if items
+        .get(add.entity)
+        .is_ok_and(|i| i.path == TRAITOR_POSTER_ITEM)
+    {
+        commands.entity(add.entity).insert_if_new(RolledPoster {
+            structure: POSTER_TRAITOR_RANDOM.to_owned(),
+            icon_state: IconStateId(0),
+            name: DmName::default(),
+        });
     }
 }
 
@@ -816,6 +850,8 @@ fn roll_up(world: &mut World, mob: Entity, poster: Entity, path: &str) {
     let photo = world.get::<crate::service::Photo>(poster).cloned();
     let rolled_state = if is_under(path, POSTER_OFFICIAL) {
         "rolled_legit"
+    } else if is_under(path, POSTER_TRAITOR) {
+        "rolled_traitor"
     } else {
         "rolled_poster"
     };
@@ -926,17 +962,41 @@ fn finish_hanging(world: &mut World, mob: Entity, action: &DoAfter) {
     let Ok((dir, pos)) = hanging_dir(world, mob, wall) else {
         return;
     };
-    let Some(poster) = crate::construction::spawn_obj(world, &rolled.structure, pos) else {
+    // `poster_type`'s `random_basetype`: one of its subtypes, with its own look and name.
+    let random = rolled.structure == POSTER_TRAITOR_RANDOM;
+    let structure = if random {
+        let i = world
+            .get_resource_mut::<crate::combat::CombatRng>()
+            .map_or(0, |mut r| {
+                r.range(0, TRAITOR_POSTERS.len() as u32 - 1) as usize
+            });
+        TRAITOR_POSTERS[i].to_owned()
+    } else {
+        rolled.structure.clone()
+    };
+    let Some(poster) = crate::construction::spawn_obj(world, &structure, pos) else {
         return;
     };
     if let Some(mut appearance) = world.get_mut::<Appearance>(poster) {
-        appearance.icon_state = rolled.icon_state;
+        if !random {
+            appearance.icon_state = rolled.icon_state;
+        }
         appearance.pixel_offset = poster_offset(dir);
     }
-    if let Some(mut n) = world.get_mut::<Name>(poster) {
-        *n = Name::new(crate::obj_damage::strip(&rolled.name.name).to_owned());
+    if !random {
+        if let Some(mut n) = world.get_mut::<Name>(poster) {
+            *n = Name::new(crate::obj_damage::strip(&rolled.name.name).to_owned());
+        }
+        world.entity_mut(poster).insert(rolled.name);
     }
-    world.entity_mut(poster).insert(rolled.name);
+    // `traitor/on_placed_poster`.
+    if is_under(&structure, POSTER_TRAITOR) {
+        world
+            .entity_mut(poster)
+            .insert(crate::syndie_spraycan::Demoraliser(
+                &crate::syndie_spraycan::POSTER,
+            ));
+    }
     if let Some(photo) = world.get::<crate::service::Photo>(item).cloned() {
         world.entity_mut(poster).insert(photo);
     }

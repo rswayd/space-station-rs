@@ -22,7 +22,8 @@
 //!   nullification decays by 2.
 //! - [`roundend_report`]: the vampires, their objectives and the blood they drank.
 // shortcut: implemented spells are rejuvenate, glare, the lair, the umbrae cloak, the gargantua
-// blood rush and the dantalion subspace swap; the other specialization powers (thralls, blood
+// blood rush, the dantalion subspace swap and the hemomancer's tendrils, predator senses and
+// blood eruption ([`hemomancer`]); the other specialization powers (thralls, blood
 // magic, shadow snares, stomp, ...) are listed in the info panel but not granted, until their
 // systems (projectiles, beams, illusions, physiology multipliers) exist. Vision passives are
 // granted without the client's lighting cutoff or thermal/x-ray sight; no coffin regeneration
@@ -71,11 +72,13 @@ use crate::zone::BodyZone;
 
 mod bite;
 mod gain;
+mod hemomancer;
 mod life;
 mod spells;
 mod windows;
 pub use bite::*;
 pub use gain::*;
+pub use hemomancer::{TendrilSlow, TendrilStrike, report_prey, tendril_slow};
 use life::*;
 pub use spells::*;
 pub use windows::*;
@@ -141,6 +144,9 @@ pub enum Power {
     Cloak,
     BloodRush,
     SwitchPlaces,
+    BloodTendrils,
+    PredatorSenses,
+    BloodEruption,
 }
 
 impl Power {
@@ -152,6 +158,9 @@ impl Power {
             Self::Cloak => Spell::Cloak,
             Self::BloodRush => Spell::BloodRush,
             Self::SwitchPlaces => Spell::SwitchPlaces,
+            Self::BloodTendrils => Spell::BloodTendrils,
+            Self::PredatorSenses => Spell::PredatorSenses,
+            Self::BloodEruption => Spell::BloodEruption,
             _ => return None,
         })
     }
@@ -183,6 +192,14 @@ impl Power {
             }
             Self::BloodRush => "Вы обрели способность временно двигаться с высокой скоростью.",
             Self::SwitchPlaces => "Вы обрели способность меняться местами с выбранным существом.",
+            Self::BloodTendrils => {
+                "Вы обрели способность призывать кровавые щупальца, замедляющие людей в выбранной \
+                 области."
+            }
+            Self::PredatorSenses => "Ваши чувства обострились: теперь от вас никто не скроется.",
+            Self::BloodEruption => {
+                "Вы обрели способность превращать лужи крови в оружие против стоящих на них."
+            }
         }
     }
 }
@@ -207,6 +224,9 @@ pub enum Spell {
     Cloak,
     BloodRush,
     SwitchPlaces,
+    BloodTendrils,
+    PredatorSenses,
+    BloodEruption,
 }
 
 /// A spell's button and casting values (`add_vampire_ability(required_blood)`).
@@ -226,13 +246,16 @@ pub struct SpellDef {
 }
 
 impl Spell {
-    pub const ALL: [Spell; 6] = [
+    pub const ALL: [Spell; 9] = [
         Spell::Rejuvenate,
         Spell::Glare,
         Spell::Lair,
         Spell::Cloak,
         Spell::BloodRush,
         Spell::SwitchPlaces,
+        Spell::BloodTendrils,
+        Spell::PredatorSenses,
+        Spell::BloodEruption,
     ];
 
     pub fn def(self) -> SpellDef {
@@ -296,6 +319,33 @@ impl Spell {
                 true,
                 Some(7),
             ),
+            Self::BloodTendrils => def(
+                "vampire_blood_tendrils",
+                "Кровавые щупальца (10)",
+                "blood_tendrils",
+                10,
+                30.0,
+                true,
+                Some(7),
+            ),
+            Self::PredatorSenses => def(
+                "vampire_predator_senses",
+                "Чувства хищника",
+                "predator_sense",
+                0,
+                20.0,
+                true,
+                None,
+            ),
+            Self::BloodEruption => def(
+                "vampire_blood_eruption",
+                "Кровавое извержение (100)",
+                "blood_spikes",
+                100,
+                200.0,
+                true,
+                None,
+            ),
         }
     }
 
@@ -320,6 +370,8 @@ pub enum Subclass {
     Hemomancer,
     Gargantua,
     Dantalion,
+    /// The admin "Ancient Vampire" (`/datum/outfit/ancient_vampire`): never picked.
+    Ancient,
 }
 
 /// One row of a specialization's power list in the info panel (`get_power_ui_data`).
@@ -340,6 +392,7 @@ impl Subclass {
             Self::Hemomancer => "hemomancer",
             Self::Gargantua => "gargantua",
             Self::Dantalion => "dantalion",
+            Self::Ancient => "ancient",
         }
     }
 
@@ -353,6 +406,7 @@ impl Subclass {
             Self::Hemomancer => "Гемомант",
             Self::Gargantua => "Гаргантюа",
             Self::Dantalion => "Данталион",
+            Self::Ancient => "Древний",
         }
     }
 
@@ -362,6 +416,7 @@ impl Subclass {
             Self::Hemomancer => "Специализируется на магии крови и управлении окружающей кровью.",
             Self::Gargantua => "Специализируется на стойкости и уроне в ближнем бою.",
             Self::Dantalion => "Специализируется на порабощении и иллюзиях.",
+            Self::Ancient => "",
         }
     }
 
@@ -369,9 +424,25 @@ impl Subclass {
     pub fn standard_powers(self) -> &'static [(Power, f32)] {
         match self {
             Self::Umbrae => &[(Power::Cloak, 150.0)],
-            Self::Hemomancer => &[],
+            Self::Hemomancer => &[
+                (Power::BloodTendrils, 250.0),
+                (Power::PredatorSenses, 600.0),
+                (Power::BloodEruption, 800.0),
+            ],
             Self::Gargantua => &[(Power::BloodRush, 250.0)],
             Self::Dantalion => &[(Power::SwitchPlaces, 250.0)],
+            // tg lists them without blood: `bloodtotal >= null` always holds.
+            Self::Ancient => &[
+                (Power::Cloak, 0.0),
+                (Power::BloodTendrils, 0.0),
+                (Power::BloodRush, 0.0),
+                (Power::SwitchPlaces, 0.0),
+                (Power::PredatorSenses, 0.0),
+                (Power::BloodEruption, 0.0),
+                (Power::Full, 0.0),
+                (Power::VisionFull, 0.0),
+                (Power::VisionXray, 0.0),
+            ],
         }
     }
 
@@ -379,13 +450,14 @@ impl Subclass {
     pub fn full_powers(self) -> &'static [Power] {
         match self {
             Self::Umbrae => &[Power::Full, Power::VisionFull, Power::VisionXray],
+            Self::Ancient => &[],
             _ => &[Power::Full, Power::VisionFull],
         }
     }
 
     /// `improved_rejuv_healing`.
     pub fn improved_rejuv_healing(self) -> bool {
-        self == Self::Gargantua
+        matches!(self, Self::Gargantua | Self::Ancient)
     }
 
     fn unique_objectives(self) -> &'static [&'static str] {
@@ -412,6 +484,9 @@ impl Subclass {
                 "Подчиняйте только сотрудников %DEPARTMENT. Их опыт поможет вашему повелителю.",
                 "Управляйте станцией из теней.",
             ],
+            Self::Ancient => {
+                &["Ваши ряды редеют. Позаботьтесь, чтобы ваши рабы оставались здоровы."]
+            }
         }
     }
 
@@ -652,6 +727,7 @@ impl Subclass {
                     ),
                 ],
             ),
+            Self::Ancient => (&[], &[]),
         }
     }
 
@@ -985,6 +1061,7 @@ impl Plugin for VampirePlugin {
                     .before(crate::health::HealthSystems)
                     .before(UiSystems::Open),
             );
+        hemomancer::plugin(app);
     }
 }
 

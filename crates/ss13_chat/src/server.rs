@@ -269,6 +269,95 @@ pub fn tagged(mut message: ChatMessage, tag: Option<String>) -> ChatMessage {
     message
 }
 
+/// tg `/datum/component/codeword_hearing` on a hearer's body: each list of words (tg one regex
+/// `(a|b|c)`, case-insensitive) is highlighted with its span in the speech it hears.
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct Codewords(pub Vec<(Vec<String>, Span)>);
+
+impl Codewords {
+    /// `replace_regex.Replace(message, "<span class='[span_class]'>$1</span>")`: every
+    /// segment whose text is the heard `text` is split around the matches.
+    pub fn highlight(&self, message: ChatMessage, text: &str) -> ChatMessage {
+        let mut segments = Vec::with_capacity(message.segments.len());
+        for segment in message.segments {
+            if segment.text != text {
+                segments.push(segment);
+                continue;
+            }
+            let mut plain_from = 0;
+            let mut at = 0;
+            while at < text.len() {
+                let found = self.0.iter().find_map(|(words, span)| {
+                    words
+                        .iter()
+                        .find_map(|w| match_ci(&text[at..], w))
+                        .map(|len| (len, *span))
+                });
+                if let Some((len, span)) = found {
+                    if plain_from < at {
+                        segments.push(ChatSegment::new(segment.span, &text[plain_from..at]));
+                    }
+                    segments.push(ChatSegment::new(span, &text[at..at + len]));
+                    at += len;
+                    plain_from = at;
+                } else {
+                    at += text[at..].chars().next().map_or(1, char::len_utf8);
+                }
+            }
+            if plain_from < text.len() {
+                segments.push(ChatSegment::new(segment.span, &text[plain_from..]));
+            }
+        }
+        ChatMessage {
+            channel: message.channel,
+            segments,
+        }
+    }
+}
+
+/// The byte length of `word` at the start of `text`, compared ignoring case.
+fn match_ci(text: &str, word: &str) -> Option<usize> {
+    if word.is_empty() {
+        return None;
+    }
+    let mut chars = text.char_indices();
+    for w in word.chars() {
+        let (_, c) = chars.next()?;
+        if !c.to_lowercase().eq(w.to_lowercase()) {
+            return None;
+        }
+    }
+    Some(chars.next().map_or(text.len(), |(i, _)| i))
+}
+
+/// Writes heard speech `message` (holding the heard `text` of the `said` words) to `clients`;
+/// a hearer whose body has [`Codewords`] and understood the words (tg `has_language`: the
+/// heard text is the said one) gets its own copy with them highlighted.
+pub fn write_heard<'a>(
+    chat: &mut MessageWriter<SendChat>,
+    mut clients: Vec<Entity>,
+    message: ChatMessage,
+    text: &str,
+    said: &str,
+    codewords_of: impl Fn(Entity) -> Option<&'a Codewords>,
+) {
+    if text == said {
+        clients.retain(|&client| match codewords_of(client) {
+            Some(words) => {
+                chat.write(SendChat {
+                    clients: vec![client],
+                    message: words.highlight(message.clone(), text),
+                });
+                false
+            }
+            None => true,
+        });
+    }
+    if !clients.is_empty() {
+        chat.write(SendChat { clients, message });
+    }
+}
+
 /// How listening clients understand a language: the [`LanguageHolder`] of the body each
 /// controls (none: Galactic Common only; dead bodies and ghosts: everything).
 #[derive(SystemParam)]
@@ -598,7 +687,7 @@ fn handle_say(
     bodies: Query<Body>,
     stats: Query<(Entity, &SpeakerStat)>,
     mut emotes_used: Query<&mut EmotesUsed>,
-    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents, muffled): (
+    (sight, senses, voices, seed, seen_by, sixth_sense, emojis, accents, muffled, codewords): (
         Query<&SeeInvisible>,
         Senses,
         Query<&VoiceSpan>,
@@ -608,6 +697,7 @@ fn handle_say(
         Option<Res<Emojis>>,
         Query<&crate::accents::Accents>,
         Query<(), With<Muffled>>,
+        Query<&Codewords>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -1041,6 +1131,12 @@ fn handle_say(
         });
         let whisper = whisper || target.is_some();
         info!(target: "say", "{client} {name} at {pos:?}: {message}");
+        let codewords_of = |client: Entity| {
+            controls
+                .get(client)
+                .ok()
+                .and_then(|body| codewords.get(body.0).ok())
+        };
         if !whisper {
             let hearers = hearers_within(HEARING_RANGE)
                 .into_iter()
@@ -1057,10 +1153,14 @@ fn handle_say(
                         kind: OverheadKind::Say,
                     });
                 }
-                chat.write(SendChat {
-                    clients: heard.clients,
-                    message: tagged(quote_message(&name, verb, &heard.text, span), heard.tag),
-                });
+                write_heard(
+                    &mut chat,
+                    heard.clients,
+                    tagged(quote_message(&name, verb, &heard.text, span), heard.tag),
+                    &heard.text,
+                    &message,
+                    codewords_of,
+                );
             }
             continue;
         }
@@ -1082,10 +1182,14 @@ fn handle_say(
                     kind: OverheadKind::Whisper,
                 });
             }
-            chat.write(SendChat {
-                clients: heard.clients,
-                message: tagged(whisper_message(&name, &heard.text), heard.tag),
-            });
+            write_heard(
+                &mut chat,
+                heard.clients,
+                tagged(whisper_message(&name, &heard.text), heard.tag),
+                &heard.text,
+                &message,
+                codewords_of,
+            );
         }
         // Eavesdroppers hear the translated words starred (`/mob/living/Hear`).
         for heard in split_heard(seed, spoken_in, &message, starred) {

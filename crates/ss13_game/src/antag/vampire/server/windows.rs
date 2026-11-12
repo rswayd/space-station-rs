@@ -97,6 +97,11 @@ pub(super) fn pick_subclass(
 /// `add_subclass` after the pick: the unlock power is spent, the specialization's powers
 /// granted and its objective written.
 pub fn add_subclass(world: &mut World, mob: Entity, subclass: Subclass) {
+    add_subclass_announced(world, mob, subclass, true);
+}
+
+/// `add_subclass(subclass, announce)`.
+fn add_subclass_announced(world: &mut World, mob: Entity, subclass: Subclass, announce: bool) {
     let mut rng = rng_of(world, mob.to_bits());
     let departments = [
         "службу безопасности",
@@ -122,9 +127,26 @@ pub fn add_subclass(world: &mut World, mob: Entity, subclass: Subclass) {
         }
     }
     info!("{mob} chose the {subclass:?} specialization (vampire)");
-    check_upgrades(world, mob, true);
-    announce_objectives(world, mob);
+    check_upgrades(world, mob, announce);
+    if announce {
+        announce_objectives(world, mob);
+    }
     refresh(world, mob);
+}
+
+/// `/datum/outfit/ancient_vampire/post_equip`: a vampire (unless it already is one) with 9999
+/// blood and the ancient's every power. False when `mob` cannot be one.
+pub fn make_ancient_vampire(world: &mut World, mob: Entity) -> bool {
+    if world.get::<Vampire>(mob).is_some() || !add_vampire(world, mob) {
+        return false;
+    }
+    if let Some(mut vampire) = world.get_mut::<Vampire>(mob) {
+        vampire.bloodusable = 9999.0;
+        vampire.bloodtotal = 9999.0;
+    }
+    add_subclass_announced(world, mob, Subclass::Ancient, false);
+    info!("{mob} is an ancient vampire");
+    true
 }
 
 // ---------------------------------------------------------------------------------------------

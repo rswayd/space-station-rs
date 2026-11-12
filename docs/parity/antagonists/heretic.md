@@ -66,7 +66,7 @@
 Призванные монстры — `/datum/antagonist/heretic_monster`, гули плоти (`ghoul`), лунатики Луны с мастером, пойманная душа еретика (`soultrapped_heretic`).
 
 - **Код:** [`/datum/antagonist/heretic_monster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/heretic_monsters.dm#L2), [`ghoul.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/status_effects/ghoul.dm#L1), [`/datum/antagonist/lunatic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/moon_lunatic.dm#L2), [`/datum/antagonist/soultrapped_heretic`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/heretic/soultrapped_heretic.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/heretic/server/summon.rs` (`HereticMonster`, `finish_summon`, `is_heretic_or_monster`): призванный ритуалом монстр с игроком-призраком служит еретику — цель «Помогайте своему хозяину», приветствие (труп/создание), иконка HUD `heretic_beast`, считается своим для предметов и заклинаний еретика; `// shortcut:` нет мудлета, крика при суициде и сообщений при снятии датума. Гули — в «Путь Плоти» (`heretic-paths.md`), лунатики — в «Путь Луны» (`heretic-paths.md`), пойманная душа еретика (`soultrapped_heretic`, жертва культа в мече) — в «Камни душ, шейды и конструкты» (`cult.md`)
 
 ### Правки баланса BandaStation
 Стартовый клинок может самоуничтожиться-взорваться ограниченное число раз и не ближе 10 тайлов.

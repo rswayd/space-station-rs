@@ -36,7 +36,7 @@
 Кровь: вампирские когти, кровавые щупальца, барьер, кровавая лужа, чувства хищника, извержение, ритуал несущего кровь.
 
 - **Код:** [`/datum/vampire_subclass/hemomancer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/vampire/code/vampire_subclasses.dm#L76), [`hemomancer_powers.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/vampire/code/vampire_powers/hemomancer_powers.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — выбирается в окне (`Subclass::Hemomancer`, полная сила), но ни одна способность не выдаётся
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/vampire/server/hemomancer.rs` (`blood_tendrils`, `predator_senses`, `blood_eruption`): кровавые щупальца (250 крови, 10, 30 с, до 7 клеток: через 0.5 с замедление +0.5 на 6 с в радиусе 1), чувства хищника (600, выбор добычи списком, зона/направление/«Цель ранена» с перепроверкой после ответа), кровавое извержение (800, 100, 200 с: 50 brute в грудь стоящим на крови в радиусе 4); `// shortcut:` нет когтей, барьера, кровавой лужи и ритуала несущего кровь (нужны абстрактное двуручное оружие, проходимая структура, джаунт, аура)
 
 ### Специализация Gargantua
 Сила: кровавое усиление, сейсмический топот, подавляющая сила, кровавый рывок, демоническая хватка, таран, осквернённая дуэль.
@@ -54,7 +54,7 @@
 Админский/особый вариант с полным набором способностей и своим аутфитом.
 
 - **Код:** [`/datum/vampire_subclass/ancient`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/vampire/code/vampire_subclasses.dm#L133), [`/datum/outfit/ancient_vampire`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/vampire/code/ancient_vampire_outfit.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/vampire/server/windows.rs` (`make_ancient_vampire`), `Subclass::Ancient` в `crates/ss13_game/src/antag/vampire/server/mod.rs`: вампир с 9999 крови и всеми реализованными способностями сразу (без порогов и жертв), улучшенное лечение омоложением, своя цель, без объявлений; в окне не выбирается; для разработки `SS13_DEV_TRAITOR=ancient`. Сам админский аутфит (`/datum/outfit/ancient_vampire`, выдача снаряжения) — в группе админки (нет «Select equipment»)
 
 ### Святая вода и статус-эффекты
 Святая вода жжёт и снимает способности; статус-эффекты вампира (жажда, ожоги на свету, ослабление в часовне и т.п.).

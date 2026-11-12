@@ -25,13 +25,13 @@
 TGUI `AntagInfoTraitor`: вступление, работодатель, цели, код аплинка и как его открыть, кодовые слова; тема окна зависит от работодателя.
 
 - **Код:** [`/datum/antagonist/traitor/ui_static_data()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/datum_traitor.dm#L223); tgui: [`AntagInfoTraitor.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AntagInfoTraitor.tsx)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/mod.rs`, `crates/ss13_game/src/antag/client.rs`: нет тем окна (`syndicate`, `ntos`) и кодовых слов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/mod.rs`, `crates/ss13_game/src/antag/client.rs`: кодовые слова есть; нет тем окна (`syndicate`, `ntos`)
 
 ### Кодовые слова Синдиката
 `SStraitor` генерирует фразы и ответы; у предателя они подсвечиваются в услышанной речи (синим и красным).
 
 - **Код:** [`SUBSYSTEM_DEF(traitor)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/traitor.dm#L1), [`/datum/antagonist/traitor/apply_innate_effects()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/datum_traitor.dm#L201), [`/datum/component/codeword_hearing`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/components/codeword_hearing.dm#L11)
-- **Статус в ss13-rs:** ❌ нет — `has_codewords: false` в `crates/ss13_game/src/antag/traitor.rs`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/antag/traitor.rs` (`syndicate_codewords`, `generate_code_phrase`, `codeword_hearing`): фразы и ответы генерируются один раз за раунд по `generate_code_phrase` (2–5 слов из `ion_laws.json`, должностей, зон станции, случайных имён), у предателя компонент `Codewords` (`crates/ss13_chat/src/server.rs`, `write_heard`) подсвечивает их синим/красным в услышанной речи, шёпоте и радио, если слова поняты; в окне `AntagInfoTraitor` и в подвале отчёта; снимается с датумом. `// shortcut:` подслушанный звёздочками шёпот не подсвечивается
 
 ### Собственные цели
 Предатель (или админ) может заменить цели своими (`submit_player_objective`), если это разрешено.
@@ -43,7 +43,7 @@ TGUI `AntagInfoTraitor`: вступление, работодатель, цел�
 Секция отчёта: цели с отметками выполнения, список покупок и потраченные ТК, «лучший предатель» без аплинка, итоги контрактов, кодовые слова в подвале.
 
 - **Код:** [`/datum/antagonist/traitor/roundend_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/datum_traitor.dm#L244), [`/datum/antagonist/traitor/roundend_report_footer()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/datum_traitor.dm#L313)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/traitor.rs` (`roundend_report`): нет итогов контрактора и кодовых слов
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/traitor.rs` (`roundend_report`): кодовые слова в подвале; нет итогов контрактора
 
 ### Контрактор
 Набор «Contract Kit» из аплинка: хаб контрактов (похищение целей с эвакуацией капсулой, выкуп ТК), пинпоинтер, дубинка контрактора, напарник-подкрепление.
@@ -55,4 +55,4 @@ TGUI `AntagInfoTraitor`: вступление, работодатель, цел�
 Плакаты, граффити и модуль Синдиката вызывают мудлеты у экипажа и антагов в зоне видимости.
 
 - **Код:** [`/datum/proximity_monitor/advanced/demoraliser`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/components/demoraliser.dm#L8), [`/datum/demoralise_moods`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/antagonists/traitor/components/demoraliser.dm#L81)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/syndie_spraycan.rs` (`Demoraliser`, `GRAFFITI`/`POSTER`/`MODULE`, `near_demoralisers`, `examined`, `demoralise`): законченная руна Синдиката, повешенный плакат (`crates/ss13_game/src/decor.rs`: `/obj/item/poster/traitor` вешается случайным из `TRAITOR_POSTERS`, снимается кусачками вместе с монитором) и носитель активного модуля `demoralizer` (`crates/ss13_game/src/modsuit/modules.rs`) дают мудлет вошедшему в поле зрения (7 тайлов) или осмотревшему: в сознании, не слепой, на освещённом тайле, грамотный (для плакатов), без этого мудлета; антаг/командование и СБ/экипаж; `// shortcut:` нет ночного зрения в проверке света, «авторитет» — глава или майндщилд вместо битфлагов отделов, нет праздничного плаката

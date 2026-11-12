@@ -676,6 +676,7 @@ fn transmit_speech(
         understanding,
         mut server_logs,
         implant_radios,
+        (controls, codewords),
     ): (
         Res<TelecommsOutage>,
         Res<Time>,
@@ -685,6 +686,10 @@ fn transmit_speech(
         ss13_chat::server::Understanding,
         Query<&mut crate::telecomms_config::ServerLog>,
         Query<&ImplantRadio>,
+        (
+            Query<&ss13_net::server::ControlledEntity>,
+            Query<&ss13_chat::server::Codewords>,
+        ),
     ),
 ) {
     let now = time.elapsed_secs_f64();
@@ -953,10 +958,19 @@ fn transmit_speech(
                     ss13_shared::chat::ChatSegment::new(ss13_shared::chat::Span::Plain, tag),
                 );
             }
-            chat.write(SendChat {
-                clients: heard.clients,
+            ss13_chat::server::write_heard(
+                &mut chat,
+                heard.clients,
                 message,
-            });
+                &heard.text,
+                &reach.text,
+                |client| {
+                    controls
+                        .get(client)
+                        .ok()
+                        .and_then(|body| codewords.get(body.0).ok())
+                },
+            );
         }
     }
 }

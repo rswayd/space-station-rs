@@ -10,7 +10,7 @@
 // abilities: no raw prophet telepathic link and far sight, no flesh stalker disguise, no maid's
 // mirror walk or void chill, no rust walker rusting, no ash spirit jaunt/cascade, no fire shark
 // phlogiston, no Armsy segments (the Flesh ascension) or Star Gazer (the Cosmic ascension). No
-// `heretic_summon` objective, no "heretic_beast" HUD icon, no fade-in animation.
+// `heretic_summon` objective, no fade-in animation, moodlet or suicide cry.
 
 use super::*;
 use crate::ghost_poll::{self, PollSpec};
@@ -160,10 +160,18 @@ fn finish_summon(
     {
         world.despawn(c.mob);
     }
+    // `antag_hud_name = "heretic_beast"`.
+    let hud_icon = icon(world, ANTAG_HUD_DMI, "heretic_beast");
     world
         .entity_mut(summoned)
         .remove::<PendingSummon>()
-        .insert(HereticMonster { master: user });
+        .insert((
+            HereticMonster { master: user },
+            AntagHudData {
+                hud_icon,
+                ..default()
+            },
+        ));
     if let Some(mut appearance) = world.get_mut::<ss13_shared::Appearance>(summoned) {
         if let Some(color) = appearance.color.as_mut() {
             color[3] = 255;
