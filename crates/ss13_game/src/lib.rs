@@ -563,6 +563,9 @@ pub mod recycling;
 pub mod reinforced;
 #[cfg(feature = "server")]
 pub mod reinforced_floor;
+pub mod requests_console;
+#[cfg(feature = "client")]
+pub mod requests_console_client;
 #[cfg(feature = "server")]
 pub mod rest;
 #[cfg(feature = "server")]

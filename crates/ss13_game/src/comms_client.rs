@@ -33,6 +33,7 @@ impl Plugin for CommsClientPlugin {
         app.register_ui_view::<CommsConsoleUi>()
             .register_ui_view::<crate::newscaster::NewscasterUi>()
             .register_ui_view::<crate::radio_ui::RadioUi>()
+            .register_ui_view::<crate::requests_console::RequestsConsoleUi>()
             .add_observer(submit_local);
     }
 }

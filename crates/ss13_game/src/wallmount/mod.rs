@@ -16,6 +16,8 @@
 //! - [`machines`]: mass drivers, igniters and sparkers the buttons drive.
 //! - [`cabinets`]: extinguisher and fire axe cabinets.
 //! - [`frames`]: wall frames mounting those onto walls.
+//! - [`requests`]: requests consoles (messages between departments, emergencies,
+//!   announcements).
 //! - The light switch, here: it flips its area's `lightswitch`.
 //!
 //! Cost: nothing per tick but the firelocks with something pending, a pass over the fire alarms
@@ -33,13 +35,14 @@ pub mod fire_alarm;
 pub mod firelock;
 pub mod frames;
 pub mod machines;
+pub mod requests;
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::{IconIndex, is_under};
 use ss13_mapload::light::{DmLight, MINIMUM_USEFUL_LIGHT_RANGE, source};
 use ss13_mapload::wallmount::{
     BUTTON_ROOT, EXTINGUISHER_CABINET_ROOT, FIREALARM_ROOT, FIREAXE_CABINET_ROOT, FLASHER_ROOT,
-    IGNITER_ROOT, LIGHT_SWITCH_ROOT, MASS_DRIVER_ROOT, SPARKER_ROOT,
+    IGNITER_ROOT, LIGHT_SWITCH_ROOT, MASS_DRIVER_ROOT, REQUESTS_CONSOLE_ROOT, SPARKER_ROOT,
 };
 use ss13_mapload::{Areas, DmAtom, DmWallMount};
 use ss13_shared::protocol::ClickModifiers;
@@ -97,6 +100,7 @@ impl Plugin for WallMountPlugin {
             c.held
                 .is_some_and(|h| frames::item_interaction(w, c.client, c.mob, h, c.target))
         });
+        requests::build(app);
         app.init_resource::<controls::Links>()
             // After doors (`Door`) and power (`AreaPower`, `PowerMachine`) are built.
             .add_systems(
@@ -132,6 +136,7 @@ fn init_wallmounts(world: &mut World) {
         .collect();
     firelock::init_firelocks(world);
     controls::init_links(world);
+    let mut request_helpers = Vec::new();
     for (e, dm, pos) in mounts {
         let area = world.resource::<Areas>().area_at(pos);
         let path = dm.path.as_str();
@@ -158,9 +163,14 @@ fn init_wallmounts(world: &mut World) {
             machines::add_igniter(world, e, &dm);
         } else if is_under(path, SPARKER_ROOT) {
             machines::add_sparker(world, e, &dm);
+        } else if is_under(path, REQUESTS_CONSOLE_ROOT) {
+            requests::add_console(world, e, &dm, pos);
+        } else if requests::is_helper(path) {
+            request_helpers.push((dm.path.clone(), pos));
         }
         refresh_look(world, e);
     }
+    requests::finish_init(world, &request_helpers);
 }
 
 /// tg `attack_hand` / `attack_hand_secondary` of a wall mount with an empty hand. True when the
@@ -172,6 +182,9 @@ pub fn interact(
     target: Entity,
     modifiers: ClickModifiers,
 ) -> bool {
+    if requests::interact(world, client, mob, target) {
+        return true;
+    }
     if world.get::<fire_alarm::FireAlarm>(target).is_some() {
         if !modifiers.right {
             fire_alarm::alarm(world, target, Some(client));
@@ -204,7 +217,8 @@ pub fn item_interaction(
     target: Entity,
     modifiers: ClickModifiers,
 ) -> bool {
-    controls::item_interaction(world, client, mob, held, target)
+    requests::item_interaction(world, client, held, target)
+        || controls::item_interaction(world, client, mob, held, target)
         || cabinets::item_interaction(world, client, mob, held, target, modifiers)
 }
 
@@ -223,6 +237,7 @@ pub fn complete(world: &mut World, client: Entity, mob: Entity, target: Entity, 
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::examine::Line>) {
     fire_alarm::examine_lines(world, target, lines);
     firelock::examine_lines(world, target, lines);
+    requests::examine_lines(world, target, lines);
 }
 
 /// tg `light_switch/interact`: the sound, then `set_lights(!area.lightswitch)`.
@@ -324,6 +339,9 @@ fn look_of(world: &World, e: Entity) -> Option<Look> {
                 light: None,
             }
         });
+    }
+    if let Some(console) = world.get::<requests::RequestsConsole>(e) {
+        return Some(requests::look(world, e, console, powered));
     }
     if let Some(button) = world.get::<controls::Button>(e) {
         return Some(controls::button_look(world, e, button, powered));
