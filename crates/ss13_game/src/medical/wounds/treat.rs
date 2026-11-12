@@ -322,10 +322,46 @@ pub fn finish_treatment(
     }
 }
 
+/// `/datum/quirk/glass_jaw/punch_out`: 5 or more brute to the head knocks its owner out for
+/// 3 s with a chance of the damage in percent (a sharp hit 65% of it).
+fn glass_jaw(world: &mut World, victim: Entity, zone: BodyZone, hit: &Hit) {
+    if zone != BodyZone::Head
+        || hit.kind != crate::health::DamageType::Brute
+        || hit.damage < 5.0
+        || !crate::quirks::has(world, victim, crate::quirks::Quirk::GlassJaw)
+    {
+        return;
+    }
+    let chance = (hit.damage * if hit.sharpness != 0 { 0.65 } else { 1.0 }).ceil();
+    if !world
+        .resource_mut::<crate::combat::CombatRng>()
+        .chance(chance)
+    {
+        return;
+    }
+    if world.get::<Stat>(victim) == Some(&Stat::Conscious) {
+        let name = crate::security::name_of(world, victim);
+        crate::chem::visible(
+            world,
+            victim,
+            "Вы отправлены в нокаут!",
+            &format!("{name} отправляется в нокаут!"),
+            ss13_shared::chat::Span::Warning,
+        );
+    }
+    crate::status_effects::apply(
+        world,
+        victim,
+        crate::status_effects::Incap::Unconscious,
+        3.0,
+    );
+}
+
 /// tg `receive_damage`'s wound handling after a hit landed on `victim`'s `zone` (melee, thrown
 /// items): the roll, the existing wounds' reactions, the messages, blood lost at once and a
 /// dropped item.
 pub fn after_hit(world: &mut World, victim: Entity, zone: BodyZone, hit: Hit) {
+    glass_jaw(world, victim, zone, &hit);
     let Some(mut limbs) = world.get::<Limbs>(victim).cloned() else {
         return;
     };

@@ -1261,16 +1261,23 @@ fn refresh_limits(
         Has<surgery::Buckled>,
         Has<crate::furniture::Seated>,
         &mut LimbLimits,
+        Option<&crate::quirks::Quirks>,
     )>,
 ) {
     let gone: Vec<Entity> = unbuckled.read().collect();
     for mob in changed.iter().chain(gone) {
-        let Ok((limbs, health, buckled, seated, mut out)) = mobs.get_mut(mob) else {
+        let Ok((limbs, health, buckled, seated, mut out, quirks)) = mobs.get_mut(mob) else {
             continue;
         };
         let limits = limbs.limits(health);
+        // `/datum/status_effect/limp/quirk`: the left leg (the right without it) limps like a
+        // compound fracture, 7 ds on 70% of its steps.
+        let legs = [crate::zone::BodyZone::LLeg, crate::zone::BodyZone::RLeg];
+        let limper = quirks.is_some_and(|q| q.has(crate::quirks::Quirk::Limper))
+            && legs.iter().any(|&z| !limbs.limb(z).missing);
+        let limp = if limper { 7.0 * 0.7 / 2.0 } else { 0.0 };
         out.set_if_neq(LimbLimits {
-            slowdown: limits.slowdown,
+            slowdown: limits.slowdown + limp,
             // A chair seats its mob upright (`buckle_lying = 0`).
             floored: limits.floored || (buckled && !seated),
             immobilized: buckled,

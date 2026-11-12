@@ -33,7 +33,8 @@ impl WoundTraits {
         Self {
             easy_dismember: has_trait(world, mob, Trait::EasyDismember),
             no_dismember: has_trait(world, mob, Trait::NoDismember),
-            easily_wounded: super::super::bioware::easily_wounded(world, mob),
+            easily_wounded: super::super::bioware::easily_wounded(world, mob)
+                || crate::quirks::has(world, mob, crate::quirks::Quirk::Frail),
             hardly_wounded: has_trait(world, mob, Trait::HardlyWounded),
             worn_wound_armor: 0.0,
         }

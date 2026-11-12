@@ -24,7 +24,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 46] = [
+pub const QUIRKS: [QuirkDef; 52] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -411,6 +411,79 @@ pub const QUIRKS: [QuirkDef; 46] = [
         Some((
             Span::Notice,
             "Вы начинаете видеть вещи на далеком расстоянии как обычно.",
+        )),
+    ),
+    q(
+        Quirk::Frail,
+        "/datum/quirk/frail",
+        "Frail",
+        "У вас кожа из бумаги и кости из стекла! Вы получаете раны гораздо легче, чем остальные.",
+        "skull",
+        -6,
+        Some((Span::Danger, "Вы чувствуете себя хрупким.")),
+        Some((Span::Notice, "Вы снова чувствуете себя крепким.")),
+    ),
+    q(
+        Quirk::GlassJaw,
+        "/datum/quirk/glass_jaw",
+        "Glass Jaw",
+        "У вас очень хрупкая челюсть. Любой достаточно сильный удар по голове может лишить вас \
+         сознания.",
+        "hand-fist",
+        -4,
+        Some((Span::Danger, "Ваша челюсть кажется расшатанной.")),
+        Some((
+            Span::Notice,
+            "Ваша челюсть, кажется, вновь встала на место.",
+        )),
+    ),
+    q(
+        Quirk::Pushover,
+        "/datum/quirk/pushover",
+        "Pushover",
+        "Ваше мышление заключается в том, чтобы всегда позволять людям манипулировать вами и \
+         делать из вас ведомого. Сопротивление из захвата потребует особых усилий.",
+        "handshake",
+        -8,
+        Some((Span::Danger, "Вы чувствуете себя податливо.")),
+        Some((Span::Notice, "Вы чувствуете себя уверенно.")),
+    ),
+    q(
+        Quirk::Limper,
+        "/datum/quirk/item_quirk/limper",
+        "Limper",
+        "У вас выраженная хромота, она значительно замедляет передвижение. Хорошо, что вы взяли \
+         с собой трость.",
+        "person-cane",
+        -6,
+        Some((Span::Danger, "У вас немного подкашиваются ноги.")),
+        Some((Span::Notice, "Ваши ноги снова в норме.")),
+    ),
+    q(
+        Quirk::PoorAim,
+        "/datum/quirk/poor_aim",
+        "Stormtrooper Aim",
+        "На конкурсе лучшего стрелка вы всегда занимали первое место... с конца.",
+        "bullseye",
+        -4,
+        None,
+        None,
+    ),
+    q(
+        Quirk::Clumsy,
+        "/datum/quirk/clumsy",
+        "Clumsy",
+        "Вы неуклюжий, глупый чувак. Вы большой и всеми любимый недотепа! Надеюсь, вы не \
+         собирались использовать свои руки для чего-либо, требующего хоть малейшей ловкости рук.",
+        "face-dizzy",
+        -8,
+        Some((
+            Span::Danger,
+            "Вы чувствуете, как ваш IQ опускается, словно ваш мозг становится жидким.",
+        )),
+        Some((
+            Span::Notice,
+            "Вы чувствуете, что ваш IQ вырос как минимум до среднего уровня.",
         )),
     ),
     q(

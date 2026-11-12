@@ -968,6 +968,7 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/clothing/glasses/blindfold/white",
     "/obj/item/clothing/glasses/regular",
     "/obj/item/clothing/accessory/deaf_pin",
+    "/obj/item/cane",
     // The addict quirks' drugs (`ss13_game::quirks`).
     "/obj/item/storage/pill_bottle",
     "/obj/item/reagent_containers/applicator/pill",

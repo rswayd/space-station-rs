@@ -203,6 +203,9 @@ pub fn add_quirk(
             Quirk::Deaf => {
                 give_item(world, mob, DEAF_PIN, &[Location::Backpack, Location::Hands]);
             }
+            Quirk::Limper => {
+                give_item(world, mob, CANE, &[Location::Hands, Location::Backpack]);
+            }
             Quirk::TinMan => tin_man(world, mob),
             Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_items(world, mob, quirk),
             Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_items(world, mob, quirk),

@@ -859,7 +859,13 @@ fn resist_grab(world: &mut World, mob: Entity, moving: bool, now: f64) -> bool {
     }
     let grab = world.get::<GrabState>(puller).copied().unwrap_or_default();
     let lying = world.get::<BodyPosition>(mob).is_some_and(|b| b.lying());
-    let modifier = crate::martial::grab_state_modifier(world, puller);
+    // `TRAIT_GRABWEAKNESS` (the Pushover quirk): the grab counts one state higher.
+    let modifier = crate::martial::grab_state_modifier(world, puller)
+        + u32::from(crate::quirks::has(
+            world,
+            mob,
+            crate::quirks::Quirk::Pushover,
+        ));
     let Some(chance) = resist_chance_with(grab, lying, modifier) else {
         world.entity_mut(puller).remove::<Pulling>();
         return true;

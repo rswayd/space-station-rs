@@ -1028,10 +1028,11 @@ pub fn has_effect(world: &World, mob: Entity, effect: Effect) -> bool {
         .is_some_and(|d| d.mutations.iter().any(|m| MUTATIONS[m.id].effect == effect))
 }
 
-/// `HAS_TRAIT(mob, TRAIT_CLUMSY)`: the clumsiness mutation.
-// shortcut: no Clumsy quirk, hunger curse or drug source of the trait yet.
+/// `HAS_TRAIT(mob, TRAIT_CLUMSY)`: the clumsiness mutation or the Clumsy quirk.
+// shortcut: no hunger curse or drug source of the trait yet.
 pub fn is_clumsy(world: &World, mob: Entity) -> bool {
     has_effect(world, mob, Effect::Clumsy)
+        || crate::quirks::has(world, mob, crate::quirks::Quirk::Clumsy)
 }
 
 /// `/datum/outfit/job/clown/post_equip`: `add_mutation(/datum/mutation/clumsy,

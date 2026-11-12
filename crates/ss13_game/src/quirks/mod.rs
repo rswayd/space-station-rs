@@ -85,6 +85,7 @@ const BLINDFOLD: &str = "/obj/item/clothing/glasses/blindfold/white";
 const GLASSES: &str = "/obj/item/clothing/glasses/regular";
 const MANNITOL_BOTTLE: &str = "/obj/item/storage/pill_bottle/mannitol/braintumor";
 const DEAF_PIN: &str = "/obj/item/clothing/accessory/deaf_pin";
+const CANE: &str = "/obj/item/cane";
 /// `MEAT`, `PINEAPPLE` (`crate::food` foodtype bits).
 const MEAT: u32 = 1 << 0;
 const PINEAPPLE: u32 = 1 << 12;
@@ -375,6 +376,18 @@ pub enum Quirk {
     Mute,
     Nearsighted,
     Pacifist,
+    /// Stormtrooper Aim: every shot spreads 10 to 35 degrees more (`crate::guns`).
+    PoorAim,
+    /// `TRAIT_CLUMSY` (`crate::genetics::is_clumsy`).
+    Clumsy,
+    /// `TRAIT_EASILY_WOUNDED` (`crate::medical::wounds`).
+    Frail,
+    /// A brute hit to the head may knock out (`crate::medical::wounds::after_hit`).
+    GlassJaw,
+    /// `TRAIT_GRABWEAKNESS`: a grab counts one state higher when resisted (`crate::pull`).
+    Pushover,
+    /// `/datum/status_effect/limp/quirk`: one leg limps (`crate::medical`).
+    Limper,
     Paraplegic,
     Unstable,
     Monochromacy,

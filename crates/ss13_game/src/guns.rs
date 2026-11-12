@@ -1060,9 +1060,16 @@ fn process_fire(world: &mut World, mob: Entity, gun_entity: Entity, aim: Aim, bo
         } else {
             0.0
         };
+    let poor_aim = crate::quirks::has(world, mob, crate::quirks::Quirk::PoorAim);
     let (total, spread_mult) = {
         let rng = &mut world.resource_mut::<CombatRng>();
-        let bonus = rng.range(0, bonus.max(0.0) as u32) as f32;
+        // `/datum/quirk/poor_aim/on_mob_fired_gun`: `bonus_spread_values` 10 to 35 more.
+        let (low, high) = if poor_aim {
+            (10, bonus.max(0.0) as u32 + 35)
+        } else {
+            (0, bonus.max(0.0) as u32)
+        };
+        let bonus = rng.range(low, high) as f32;
         let spread = own_spread(&dm, &gun);
         let own = if spread > 0.0 {
             rng.range(0, spread as u32) as f32
