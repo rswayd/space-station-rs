@@ -208,3 +208,56 @@ fn boxing_gloves_teach_while_worn() {
         s.try_get::<MartialArts>(a).is_none()
     });
 }
+
+/// Kaza Ruk's neck chop button readies the next punch: 10 brute to the head, 20 s of silence,
+/// the readied move used up.
+#[test]
+fn kaza_ruk_neck_chop_silences() {
+    let mut s = Station::start("kaza_ruk_neck_chop_silences");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    assert!(martial::teach(
+        s.server.world_mut(),
+        a,
+        Style::KazaRuk,
+        Origin::Learned
+    ));
+    s.server.world_mut().get_mut::<MartialArts>(a).unwrap().0[0].streak = "neck_chop".into();
+    s.punch();
+    s.run_until("the neck chop silences B", |s| {
+        s.try_get::<StatusEffects>(b)
+            .is_some_and(|e| e.silence > 0.0)
+    });
+    assert!(s.get::<Health>(b).brute >= 10.0);
+    assert!(s.get::<MartialArts>(a).0[0].streak.is_empty());
+}
+
+/// Plasma fist: punch, punch, shove is the tornado sweep, which throws B away from A.
+#[test]
+fn plasma_fist_tornado_throws_back() {
+    let mut s = Station::start("plasma_fist_tornado_throws_back");
+    let (a, b) = (s.players[0].mob, s.players[1].mob);
+    assert!(martial::teach(
+        s.server.world_mut(),
+        a,
+        Style::PlasmaFist,
+        Origin::Learned
+    ));
+    s.punch();
+    s.punch();
+    s.run_until("two punches in the streak", |s| {
+        s.get::<MartialArts>(a).0[0].streak == "HH"
+    });
+    s.run_until("off cooldown", |s| {
+        s.server.world().resource::<Time>().elapsed_secs_f64() >= s.get::<NextMove>(a).0
+    });
+    s.0.click_with(
+        0,
+        b,
+        ss13_shared::protocol::ClickModifiers {
+            right: true,
+            ..Default::default()
+        },
+    );
+    s.run_until("the tornado throws B", |s| s.get::<TilePos>(b).x > 3);
+    assert!(s.get::<MartialArts>(a).0[0].streak.is_empty());
+}

@@ -35,13 +35,13 @@
 Стиль волшебника: торнадо, отбрасывание, взрывной финальный приём.
 
 - **Код:** [`/datum/martial_art/plasma_fist`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/martial/plasma_fist.dm#L5)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/martial/plasma_fist.rs`: свиток (и новичковый `nobomb`) учит стилю, торнадо (repulse радиуса 7, `spells::effects::repulse`), отброс, плазменный кулак (гиб, рост силы Апофеоза до 12 только за цели с клиентом), Апофеоз (плазмамен, всё снято, душа выбита, взрыв `p/2p/4p` без капа, смерть через 6 с). `// shortcut:` нет танца, луча плазменной души и вспышки цвета; иммунитет к взрыву — защищённый эпицентр
 
 ### Каза Рук
 Стиль ящеров (перчатки): удар в шею, подсечка, удар в лёгкие. Также даётся имплантом Kaza Ruk (перенесено из ../security/implants.md).
 
 - **Код:** [`/datum/martial_art/kaza_ruk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/martial/kaza_ruk.dm#L1), [`/obj/item/implant/kaza_ruk`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/implants/implant_kaza_ruk.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — вместе со стилем добавить имплант Kaza Ruk по образцу CQC-импланта (`crates/ss13_game/src/implants/mod.rs`: `ImplantKind::Cqc`, кнопка `activate_cqc` → `crate::martial::teach`/`unlearn` с `Origin::Implant`), имплантер и футляр `kaza_ruk`
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/martial/kaza_ruk.rs`: перчатки `kaza_ruk` (слот перчаток), три кнопки-стойки (удар в шею: 10 brute в голову и 20 с немоты; подсечка: 5 brute и 6 с нокдауна, не по лежащему без сознания/парализованному; удар в лёгкие: +5 `losebreath` до 10 и 10 oxy), толчок отбирает предмет в 60%, у половины попавших ударов — добивающий удар в 1/3 урона через 0,25 с (`combat.rs` → `on_punched`); имплант/имплантер/футляр — `ImplantKind::KazaRuk` (`implants/mod.rs`, кнопка учит/забывает). `// shortcut:` хвостовые варианты по виду (органа хвоста нет), нет `grab_damage_modifier`/`grab_escape_chance_modifier`, `TRAIT_FAST_CUFFING` перчаток и рескинов
 
 ### Прочие стили
 Психотический мордобой (случайные эффекты, от наркотиков), грибной удар (гриболюди), укус паука, искусство джунглей.

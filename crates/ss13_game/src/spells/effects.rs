@@ -278,7 +278,7 @@ pub(super) fn cast(
             true
         }
         (Spell::Repulse, _) => {
-            repulse(world, mob, pos);
+            repulse(world, mob, pos, 5);
             true
         }
         (Spell::Smoke, _) => {
@@ -730,12 +730,13 @@ fn blind(world: &mut World, mob: Entity, target: Entity) {
     crate::vision::set_eye_blur_if_lower(world, target, 40.0);
 }
 
-/// `aoe/repulse/cast_on_thing_in_aoe` over the unanchored items and mobs within 5 tiles.
-fn repulse(world: &mut World, mob: Entity, center: TilePos) {
+/// `aoe/repulse/cast_on_thing_in_aoe` over the unanchored items and mobs within `radius` tiles
+/// (`aoe_radius`: 5 for the wizard's spell, 7 for the plasma fist's tornado).
+pub(crate) fn repulse(world: &mut World, mob: Entity, center: TilePos, radius: u32) {
     const MAX_THROW: i32 = 5;
     let mut things: Vec<Entity> = world
         .resource::<SpatialIndex>()
-        .in_radius(center, 5)
+        .in_radius(center, radius)
         .filter(|&e| {
             e != mob
                 && world.get::<Projectile>(e).is_none()

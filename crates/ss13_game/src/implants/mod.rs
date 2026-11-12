@@ -87,6 +87,7 @@ pub const WEAPONS_AUTH: &str = "/obj/item/implant/weapons_auth";
 pub const SAD_TROMBONE: &str = "/obj/item/implant/sad_trombone";
 /// BandaStation `modular_bandastation/implants/code/implant_cqc.dm`.
 pub const CQC: &str = "/obj/item/implant/cqc";
+pub const KAZA_RUK: &str = "/obj/item/implant/kaza_ruk";
 /// BandaStation `modular_bandastation/objects/code/items/implants/death_alarm.dm`.
 pub const DEATH_ALARM: &str = "/obj/item/implant/death_alarm";
 /// BandaStation `modular_bandastation/objects/code/items/implants/empprotection.dm`.
@@ -187,6 +188,8 @@ pub enum ImplantKind {
     SadTrombone,
     /// BandaStation `cqc`: its button teaches or forgets CQC.
     Cqc,
+    /// `kaza_ruk`: its button teaches or forgets Kaza Ruk.
+    KazaRuk,
     /// BandaStation `death_alarm`: the host's death on the command, medical and security
     /// channels.
     DeathAlarm,
@@ -229,6 +232,7 @@ impl ImplantKind {
             (WEAPONS_AUTH, Self::WeaponsAuth),
             (SAD_TROMBONE, Self::SadTrombone),
             (CQC, Self::Cqc),
+            (KAZA_RUK, Self::KazaRuk),
             (DEATH_ALARM, Self::DeathAlarm),
             (EMP_PROTECTION, Self::EmpProtection),
             (MOD_PATHFINDER, Self::ModPathfinder),
@@ -262,6 +266,7 @@ impl ImplantKind {
                 | Self::Emp
                 | Self::Freedom
                 | Self::Cqc
+                | Self::KazaRuk
                 | Self::ModPathfinder
                 | Self::Abductor
                 | Self::Smoke
@@ -309,6 +314,9 @@ impl ImplantKind {
             Self::Cqc => {
                 "Обучает даже самого безнадёжного носителя навыкам боевого искусства Close \
                  Quarters Combat."
+            }
+            Self::KazaRuk => {
+                "Активируется вручную. Обучает тизирианскому боевому искусству Каза Рук."
             }
             Self::DeathAlarm => {
                 "Автоматически отправляет сигнал тревоги в случае фатального состояния \
@@ -428,6 +436,7 @@ impl Implant {
             ImplantKind::WeaponsAuth => ("имплант авторизации оружия", -1),
             ImplantKind::SadTrombone => ("имплант грустного тромбона", -1),
             ImplantKind::Cqc => ("CQC имплант", -1),
+            ImplantKind::KazaRuk => ("имплант Каза Рук", -1),
             ImplantKind::DeathAlarm => ("имплант оповещения о смерти", -1),
             ImplantKind::EmpProtection => ("поглотитель ЭМИ", -1),
             ImplantKind::ModPathfinder => ("имплант МОД-навигатора", -1),
@@ -657,6 +666,8 @@ pub fn imp_type(path: &str) -> Option<&'static str> {
         ("/obj/item/implantcase/sad_trombone", SAD_TROMBONE),
         ("/obj/item/implanter/cqc", CQC),
         ("/obj/item/implantcase/cqc", CQC),
+        ("/obj/item/implanter/kaza_ruk", KAZA_RUK),
+        ("/obj/item/implantcase/kaza_ruk", KAZA_RUK),
         ("/obj/item/implanter/death_alarm", DEATH_ALARM),
         ("/obj/item/implantcase/death_alarm", DEATH_ALARM),
         ("/obj/item/implanter/empprotection", EMP_PROTECTION),
@@ -1088,7 +1099,7 @@ pub fn remove_implant(world: &mut World, mob: Entity, id: u32, silent: bool) -> 
     }
     // The CQC implant's style goes with it (BandaStation keeps it until the removed implant is
     // destroyed; here the removed implant is gone at once).
-    if imp.kind == ImplantKind::Cqc {
+    if matches!(imp.kind, ImplantKind::Cqc | ImplantKind::KazaRuk) {
         crate::martial::unlearn(world, mob, crate::martial::Origin::Implant(imp.id));
     }
     // `exile/noteleport/removed`: the trait goes unless another such implant stays.
@@ -1302,7 +1313,7 @@ fn button(world: &World, imp: &Implant) -> (ActionButton, f64) {
         // The recall implant's own `icon`/`icon_state`.
         ImplantKind::Abductor => ("icons/obj/antags/abductor.dmi", "implant"),
         // The CQC implant's own `icon`/`icon_state`.
-        ImplantKind::Cqc => ("icons/obj/scrolls.dmi", "scroll2"),
+        ImplantKind::Cqc | ImplantKind::KazaRuk => ("icons/obj/scrolls.dmi", "scroll2"),
         // `/datum/action/item_action/mod_recall`.
         ImplantKind::ModPathfinder => ("icons/mob/actions/actions_mod.dmi", "recall"),
         ImplantKind::Storage => (IMPLANTS_DMI, "storage"),
@@ -1398,7 +1409,10 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
             ImplantKind::Explosive => ask_bomb(world, client, actor, &imp),
             ImplantKind::Emp => activate_emp(world, actor, id),
             ImplantKind::Freedom => activate_freedom(world, actor, id),
-            ImplantKind::Cqc => activate_cqc(world, actor, id),
+            ImplantKind::Cqc => activate_style(world, actor, id, crate::martial::Style::Cqc),
+            ImplantKind::KazaRuk => {
+                activate_style(world, actor, id, crate::martial::Style::KazaRuk)
+            }
             ImplantKind::ModPathfinder => {
                 crate::modsuit::pathfinder::recall_action(world, actor, id)
             }
@@ -1580,13 +1594,14 @@ fn activate_freedom(world: &mut World, mob: Entity, id: u32) {
     }
 }
 
-/// BandaStation `cqc/activate`: forgets the implant's CQC if the host knows it, else teaches it.
-fn activate_cqc(world: &mut World, mob: Entity, id: u32) {
+/// BandaStation `cqc/activate` and `kaza_ruk/activate`: forgets the implant's style if the host
+/// knows it, else teaches it.
+fn activate_style(world: &mut World, mob: Entity, id: u32, style: crate::martial::Style) {
     let origin = crate::martial::Origin::Implant(id);
     if crate::martial::unlearn(world, mob, origin) {
         return;
     }
-    crate::martial::teach(world, mob, crate::martial::Style::Cqc, origin);
+    crate::martial::teach(world, mob, style, origin);
 }
 
 /// `explosive/activate("action_button")`: asks first (one prompt at a time, tg `popup`).
@@ -2337,11 +2352,11 @@ mod tests {
         implant(&mut world, target, None, Implant::new(CQC, 5).unwrap()).unwrap();
         let cqc = |w: &World| crate::martial::active_style(w, target);
         assert_eq!(cqc(&world), None);
-        activate_cqc(&mut world, target, 5);
+        activate_style(&mut world, target, 5, crate::martial::Style::Cqc);
         assert_eq!(cqc(&world), Some(crate::martial::Style::Cqc));
-        activate_cqc(&mut world, target, 5);
+        activate_style(&mut world, target, 5, crate::martial::Style::Cqc);
         assert_eq!(cqc(&world), None);
-        activate_cqc(&mut world, target, 5);
+        activate_style(&mut world, target, 5, crate::martial::Style::Cqc);
         remove_implant(&mut world, target, 5, true).unwrap();
         assert_eq!(cqc(&world), None);
     }
