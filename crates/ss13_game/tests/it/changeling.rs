@@ -500,10 +500,9 @@ fn roundstart_changeling_absorbs_transforms_and_evolves() {
     let (shop, st) = s.wait_window(a, CellularEmporiumUi::NAME);
     let st: EmporiumStatic = ss13_tgui::decode(&st).unwrap();
     let names: Vec<&str> = st.abilities.iter().map(|x| x.name.as_str()).collect();
-    assert_eq!(
-        names,
-        ["Arm Blade", "Chitinous Armor", "Fleshmend", "Gene Stim"]
-    );
+    for power in ["Arm Blade", "Chitinous Armor", "Fleshmend", "Gene Stim", "Blind Sting"] {
+        assert!(names.contains(&power), "{power} in {names:?}");
+    }
     let data: EmporiumData = s.latest_data(a, shop);
     assert_eq!((data.genetic_points_count, data.can_readapt), (10, 1));
     // A forged path buys nothing.

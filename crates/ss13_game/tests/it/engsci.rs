@@ -63,6 +63,21 @@ const TYPES: &str = r##"{
         "name": "foamed metal", "icon_state": "metalfoam", "density": 1, "opacity": 1,
         "max_integrity": 20 } },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
+    "/mob/living": { "parent": "/mob" },
+    "/mob/living/carbon": { "parent": "/mob/living" },
+    "/mob/living/carbon/human": { "parent": "/mob/living/carbon", "declared_vars": {
+        "icon": { "resource": "h.dmi" }, "icon_state": "human_basic" } },
+    "/obj/item/card": { "parent": "/obj/item" },
+    "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
+        "access": { "list": [] }, "slot_flags": 256 } },
+    "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
+    "/obj/item/clothing": { "parent": "/obj/item" },
+    "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2 } },
+    "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
+    "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
+    "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
+    "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
+    "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" },
         "blocks_air": 0, "can_atmos_pass": 0, "initial_gas_mix": "o2=22;n2=82;TEMP=293.15",
         "temperature": 293.15, "baseturfs": { "path": "/turf/baseturf_bottom" } } },
@@ -110,7 +125,8 @@ wwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 12] = [
+const STATES: [(&str, &str); 13] = [
+    ("h.dmi", "human_basic"),
     ("t.dmi", "floor"),
     ("t.dmi", "plating"),
     ("t.dmi", "wall"),

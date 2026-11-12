@@ -77,14 +77,14 @@ fn purchase_and_readapt_rules() {
     assert!(c.purchased.is_empty());
     assert_eq!(c.genetic_points, GENETIC_POINTS);
     assert_eq!((c.chem_recharge_slowdown, c.chem_charges), (0.0, 75.0));
-    // The emporium lists the four powers by name with their costs.
+    // The emporium lists the powers by name with their costs, the first four as before the stings.
     let names: Vec<(&str, Option<u32>)> = Power::ALL
         .into_iter()
         .filter(|p| !p.innate())
         .map(|p| (p.def().name, p.def().dna_cost))
         .collect();
     assert_eq!(
-        names,
+        names[..4],
         [
             ("Gene Stim", Some(2)),
             ("Fleshmend", Some(2)),

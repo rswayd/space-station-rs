@@ -479,7 +479,8 @@ fn examine_speech_emotes_and_deadchat() {
         )
     });
     assert!(!s.said(3, "мне"), "too far to hear words");
-    // Examine sees the crit.
+    // Examine sees the crit (past `EXAMINE_MORE_WINDOW`, so not the closer look).
+    s.run_for(1.1);
     let mob0 = s.mob(0);
     s.click_with(
         1,
