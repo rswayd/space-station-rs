@@ -247,6 +247,136 @@ pub fn healthscan(world: &World, target: Entity) -> Option<ChatMessage> {
     Some(lines.into_message())
 }
 
+/// tg `/obj/item/autopsy_scanner/scan_cadaver`: the autopsy report's text (Markdown), like
+/// `healthscan` with every limb, wound sources left out, the chemicals with their descriptions
+/// and the diseases.
+// shortcut: no embedded objects, organ table, cybernetics, genetic stability or husk cause
+// lines (organs and those sources are not modelled here); BandaStation leaves the report in
+// English, it is printed in the Russian of the health analyzer's lines.
+pub fn autopsy_report(world: &World, coroner: &str, target: Entity) -> String {
+    let mut out = format!(
+        "## Отчёт о вскрытии\n**Время вскрытия:** {}\n\n---\n\nКоронер — {coroner}\n\n",
+        timestamp(world)
+    );
+    out.push_str(&format!(
+        "Анализ результатов для **{}**:\n\n",
+        name_of(world, target)
+    ));
+    if let Some(died) = world.get::<crate::death::TimeOfDeath>(target) {
+        let now = world.resource::<Time>().elapsed_secs_f64();
+        out.push_str(&format!(
+            "Время смерти — **{}**\n\nСубъект мёртв уже **{}**.\n\n",
+            timestamp_at(world, died.0),
+            crate::jobs::display_time_text(now - died.0)
+        ));
+    }
+    out.push_str("---\n\n**Данные тела:** Ушибы / Ожоги / Токсины / Удушье\n\n");
+    let health = world.get::<Health>(target);
+    let limbs = world.get::<crate::medical::wounds::Limbs>(target);
+    let (tox, oxy) = health.map_or((0.0, 0.0), |h| (h.tox, h.oxy));
+    for zone in BodyZone::SCAN_ORDER {
+        let name = capitalize(zone.ru().0);
+        if limbs.is_some_and(|l| l.limb(zone).missing) {
+            out.push_str(&format!(
+                "- **{name}:** -\n  - ↳ Физическая травма: __Расчленение__\n"
+            ));
+            continue;
+        }
+        let part = health.map(|h| h.part(zone)).unwrap_or_default();
+        let mut row = format!("- **{name}:** {} / {}", ceil(part.brute), ceil(part.burn));
+        // tg keeps toxin and oxygen damage on the chest's row.
+        if zone == BodyZone::Chest {
+            row.push_str(&format!(" / {} / {}", ceil(tox), ceil(oxy)));
+        }
+        out.push_str(&row);
+        out.push('\n');
+        for wound in limbs
+            .map(|l| l.limb(zone).wounds.clone())
+            .unwrap_or_default()
+        {
+            let def = wound.def();
+            out.push_str(&format!(
+                "  - ↳ Физическая травма: {} ({})\n",
+                def.name,
+                crate::medical::wounds::severity_text(def.severity)
+            ));
+        }
+    }
+    if let Some(h) = health {
+        out.push_str(&format!(
+            "- **Общий:** {} / {} / {} / {}\n",
+            ceil(h.brute),
+            ceil(h.burn),
+            ceil(h.tox),
+            ceil(h.oxy)
+        ));
+    }
+    out.push_str("\n---\n\n");
+    if world.get::<crate::species::Species>(target).is_some() {
+        out.push_str(&format!(
+            "**Вид:** {}\n\n",
+            crate::species::def_of(world, target).name
+        ));
+    }
+    if let Some(body) = world.get::<Respiration>(target) {
+        let line = |label: &str, kelvin: f64| {
+            format!(
+                "**{label}:** {} °C ({} °F)\n\n",
+                dm_tenths(kelvin - T0C),
+                dm_tenths(kelvin * 1.8 - 459.67)
+            )
+        };
+        out.push_str(&line("Внутренняя температура тела", body.coretemperature));
+        out.push_str(&line("Температура тела", body.bodytemperature));
+    }
+    if world.get::<crate::human::Husk>(target).is_some() {
+        out.push_str("Субъект превращён в хаска.\n\n");
+    }
+    if let Some(blood) = world.get::<crate::medical::blood::Blood>(target) {
+        use crate::medical::blood::{BLOOD_VOLUME_NORMAL, BLOOD_VOLUME_OKAY, BLOOD_VOLUME_SAFE};
+        let volume = blood.volume;
+        let percent = (volume / BLOOD_VOLUME_NORMAL * 100.0).round();
+        let shown = dm_tenths(f64::from(volume));
+        let level = if volume <= BLOOD_VOLUME_SAFE && volume > BLOOD_VOLUME_OKAY {
+            format!("НИЗКИЙ {percent}%, {shown} сл")
+        } else if volume <= BLOOD_VOLUME_OKAY {
+            format!("__КРИТИЧЕСКИЙ {percent}%__, {shown} сл")
+        } else {
+            format!("{percent}%, {shown} сл")
+        };
+        out.push_str(&format!(
+            "**Уровень крови:** {level}, группа: {}\n\n",
+            blood.blood_type.name()
+        ));
+    }
+    out.push_str("---\n\n__Химические данные:__\n\n");
+    if let (Some(reagents), Some(chem)) = (
+        world.get::<crate::chem::MobReagents>(target),
+        world.get_resource::<crate::chem::Chem>(),
+    ) {
+        for r in &reagents.blood.reagents {
+            let def = chem.0.def(r.id);
+            // `REAGENT_INVISIBLE`.
+            if def.chemical_flags & (1 << 1) != 0 {
+                continue;
+            }
+            out.push_str(&format!(
+                "**{}:** {} ед. в крови.\n\n_↳ {}_\n\n",
+                def.name,
+                dm_tenths(f64::from(r.volume)),
+                def.description
+            ));
+        }
+    }
+    out.push_str("---\n\n__Данные о болезнях:__\n\n");
+    for (_, text) in crate::medical::diseases::scan_lines(world, target) {
+        out.push_str(&text);
+        out.push_str("\n\n");
+    }
+    out.push_str("---\n\n**Заметки коронера:**\n");
+    out
+}
+
 /// tg `woundscan`: every wound by bodypart (`simple_scan`: the wound analyzer's wording), or
 /// the analyzer's happy face when there are none.
 pub fn woundscan(

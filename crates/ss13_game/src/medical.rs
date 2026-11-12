@@ -235,6 +235,15 @@ impl Plugin for MedicalServerPlugin {
                 crate::medical::item_interaction(w, c.client, c.mob, h, c.target, c.modifiers)
             })
         });
+        // Research notes onto research notes (on the floor or in the other hand).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 3809, |w, c| {
+            c.held
+                .is_some_and(|h| surgery::notes_interaction(w, h, c.target))
+        });
+        app.add_click_handler(ClickPhase::OtherHand, 409, |w, c| {
+            c.held
+                .is_some_and(|h| surgery::notes_interaction(w, h, c.target))
+        });
         app.init_resource::<MedicalHandled>()
             .add_observer(give_body)
             .add_observer(give_drip)
@@ -471,6 +480,10 @@ pub fn item_interaction(
             let zone = selected_zone(world, mob);
             tourniquet::begin(world, actor, target, zone);
         }
+        return true;
+    }
+    if is_under(&path, surgery::AUTOPSY_SCANNER) {
+        surgery::scan_corpse(world, actor, target);
         return true;
     }
     if is_under(&path, ANALYZER_ROOT) {

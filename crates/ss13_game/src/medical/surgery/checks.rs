@@ -612,6 +612,12 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::Debride => limb.wound(Series::Burn).is_some_and(|w| w.infection > 0.0),
         // `filter/state_check`: not a husk.
         Op::FilterBlood => body == BodyZone::Chest && !p.husk,
+        // `autopsy/state_check`: the chest of a corpse not autopsied yet.
+        Op::Autopsy | Op::AutopsyMechanic => {
+            body == BodyZone::Chest && p.dead && world.get::<Autopsied>(mob).is_none()
+        }
+        // `dissection/state_check`: a corpse not dissected yet.
+        Op::Dissection => p.dead && world.get::<Dissected>(mob).is_none(),
         // `bioware/state_check`: its zone, no bioware of the same kind yet.
         Op::Bioware(kind) => {
             body == kind.zone().check_zone() && super::super::bioware::can_gain(world, mob, kind)

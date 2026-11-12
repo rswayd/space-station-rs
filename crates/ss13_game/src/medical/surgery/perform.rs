@@ -352,6 +352,16 @@ pub(super) fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: 
             let [own, others, _, _, hurt, _] = bioware_lines(kind, &target, &user);
             (own, others, hurt)
         }
+        Op::Autopsy | Op::AutopsyMechanic => (
+            format!("Вы начинаете проводить вскрытие у {target}..."),
+            format!("{user} использует {tool} для проведения вскрытия у {target}."),
+            String::new(),
+        ),
+        Op::Dissection => (
+            format!("Вы начинаете вскрывать {target}..."),
+            format!("{user} начинает вскрывать {target}."),
+            String::new(),
+        ),
         Op::FilterBlood => (
             format!("Вы начинаете оперировать {target}..."),
             format!("{user} начинает оперировать {target}."),

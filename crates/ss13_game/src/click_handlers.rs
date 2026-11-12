@@ -139,6 +139,7 @@
 //! | 200 | `bots::construction::item_interaction` |
 //! | 300 | `forensics::server::item_interaction` (scanner, evidence bag, forensics spoofer) |
 //! | 400 | `medical::cyberimps::item_interaction` |
+//! | 409 | `medical::surgery::notes_interaction` (research notes onto the notes in the other hand) |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
@@ -499,6 +500,7 @@
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |
 //! | 3800 | `medical::item_interaction` |
+//! | 3809 | `medical::surgery::notes_interaction` (research notes onto research notes) |
 //! | 3900 | `multiz::interact` (out of combat mode) |
 //! | 3985 | `atmos_machinery::space_heater::item_interaction` |
 //! | 3995 | `power::cable_coil::held_on_target` (laying, cutting, the multitool readout, robotic limb repair) |

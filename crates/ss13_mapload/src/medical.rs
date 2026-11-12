@@ -64,7 +64,9 @@ pub const DEFIB_COMPONENT: &str = "dm_defib";
 pub const SURGICAL_TOOL: u32 = 1 << 10;
 
 /// Types spawned at runtime by medicine: defibrillator paddles (`paddle_type`).
-pub const MEDICAL_RUNTIME_TYPES: [&str; 3] = [
+pub const MEDICAL_RUNTIME_TYPES: [&str; 4] = [
+    // Dissection's notes (`crate::medical::surgery::autopsy` in `ss13_game`).
+    "/obj/item/research_notes",
     "/obj/item/shockpaddles",
     "/obj/item/shockpaddles/syndicate",
     "/obj/item/shockpaddles/syndicate/nanotrasen",

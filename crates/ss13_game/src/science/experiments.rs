@@ -14,7 +14,7 @@
 //! Ordnance experiments (`/datum/experiment/ordnance`, [`super::scipaper`]) are added like the
 //! others but only complete when a paper on them is published.
 // shortcut: experiments of the unsupported kinds (people, plants, materials, mechs, cytology,
-// fish, autopsies, physical events, exploration: `ExperimentKind::Unsupported`) are never
+// fish, physical events, exploration: `ExperimentKind::Unsupported`) are never
 // added to the techweb, and a node that requires one counts it as done; port each with the system
 // its checks read.
 
@@ -167,8 +167,12 @@ impl Experiment {
 
     /// tg `is_complete()`.
     pub fn is_complete(&self, def: &ExperimentDef) -> bool {
-        // `ordnance/is_complete`: `completed`, set only by publishing (which removes it).
-        if super::scipaper::is_ordnance(&def.id) {
+        // `ordnance/is_complete`: `completed`, set only by publishing (which removes it); the
+        // autopsies' too, set by the autopsy that completes them
+        // (`crate::medical::surgery::autopsy`).
+        if super::scipaper::is_ordnance(&def.id)
+            || matches!(def.kind, ExperimentKind::Autopsy { .. })
+        {
             return false;
         }
         if is_points(def) {

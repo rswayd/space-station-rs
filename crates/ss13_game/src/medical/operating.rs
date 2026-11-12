@@ -13,7 +13,8 @@
 //!   "change_zone" picks the zone the window shows and sets the user's zone selector.
 //! - The window closes without power, for an unconscious user and for the patient on the table;
 //!   it is read-only for anyone lying elsewhere, incapacitated or over 2 tiles away.
-// shortcut: no experiments tab (autopsy experiments), no multitool relinking to another
+// shortcut: no experiments tab (the autopsy experiments complete without it,
+// `super::surgery::autopsy`), no multitool relinking to another
 // techweb, the zone selector is not reverted on close, and tgui's pinning, tool filter and
 // search of the catalog are client-side only (not ported).
 
@@ -51,7 +52,11 @@ pub struct OperatingComputer {
 }
 
 /// The research designs that unlock ported operations (`/datum/design/surgery` `surgery`).
-const DESIGNS: [(&str, &str); 7] = [
+const DESIGNS: [(&str, &str); 8] = [
+    (
+        "/datum/design/surgery/experimental_dissection",
+        "/datum/surgery_operation/basic/dissection",
+    ),
     (
         "/datum/design/surgery/lobotomy",
         "/datum/surgery_operation/organ/lobotomy",
