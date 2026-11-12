@@ -120,7 +120,7 @@ pub fn ex_act_movable(world: &mut World, thing: Entity, severity: Severity) {
 }
 
 /// `/obj/ex_act`'s damage roll.
-fn bomb_damage(world: &mut World, severity: Severity) -> f32 {
+pub(crate) fn bomb_damage(world: &mut World, severity: Severity) -> f32 {
     let mut rng = world.resource_mut::<CombatRng>();
     match severity {
         Severity::Devastate => f32::INFINITY,
@@ -162,6 +162,9 @@ fn ex_act_obj(world: &mut World, obj: Entity, severity: Severity) {
         }
         let damage = bomb_damage(world, severity);
         crate::mecha::core::take_damage(world, obj, damage, DamageType::Brute, "bomb", None);
+        return;
+    }
+    if crate::power::cable_coil::ex_act(world, obj, &dm, severity) {
         return;
     }
     // `/obj/machinery/light` `take_damage`: the tube may break, the fixture may come apart.

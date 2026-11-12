@@ -59,7 +59,7 @@
 Скачки в сети заставляют мерцать лампы вдоль кабеля; powernet передаёт данные для устройств с сетевым портом.
 
 - **Код:** [`proc/propagate_light_flicker()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/powernet.dm#L108), [`proc/data_transmission()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/powernet.dm#L99)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/lighting.rs` (`propagate_light_flicker`: лампы зон APC сети мигают с шансом 85% и спадом 3%/тайл за 32 тайла, блокировка 9 с на сеть), `power/cable_coil.rs` (`ex_act`: кабель получает урон от взрыва, ×0.25 под плиткой, при разрушении — мерцание сети и отрезок кабеля). Передача данных по сети — компоненты wirenet, см. ../science/wiremod.md
 
 ### Декоративные «трубочисты» (pipe cleaners)
 Цветные проволочки, которые укладываются как кабели, но не проводят ток (поделки, украшения).

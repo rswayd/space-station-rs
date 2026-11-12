@@ -38,6 +38,8 @@ const BURN_HEAL: f32 = 15.0;
 const SELF_REPAIR_DS: f32 = 50.0;
 /// `UNDERFLOOR_INTERACTABLE`.
 const UNDERFLOOR_INTERACTABLE: u8 = 2;
+/// `/obj/structure/cable` `max_integrity`.
+const CABLE_MAX_INTEGRITY: f32 = 50.0;
 
 const MENU: [(&str, u8, [u8; 4]); 3] = [
     ("Слой 1", 1, [0xFF, 0x00, 0x00, 0xFF]),
@@ -257,6 +259,66 @@ fn cut(world: &mut World, client: Entity, cable: Entity, pos: TilePos) -> bool {
     crate::construction::spawn_stack(world, COIL, pos, 1);
     rhd::relink_around(world, pos);
     tell(world, client, Span::Notice, "Вы перерезаете кабель.");
+    true
+}
+
+/// `/obj/structure/cable` `ex_act` (`take_damage(BOMB)`): a quarter of the damage under a floor
+/// tile (`run_atom_armor` with `TRAIT_UNDERFLOOR`); destroyed (`atom_destruction(BOMB)`), it
+/// makes the lights of its powernet flicker and drops one length. False when `obj` is not a
+/// laid cable.
+pub fn ex_act(
+    world: &mut World,
+    obj: Entity,
+    dm: &ss13_mapload::DmObj,
+    severity: crate::explosions::Severity,
+) -> bool {
+    let Some(net) = world
+        .get_resource::<crate::power::grid::Grid>()
+        .and_then(|g| g.cable_net(obj))
+    else {
+        return false;
+    };
+    let Some(&pos) = world.get::<TilePos>(obj) else {
+        return true;
+    };
+    let mut damage = crate::explosions::ex_act::through_armor(
+        crate::explosions::ex_act::bomb_damage(world, severity),
+        dm.armor_bomb,
+    );
+    if ss13_mapload::undertile::accessibility(world, pos) < UNDERFLOOR_INTERACTABLE {
+        damage *= 0.25;
+    }
+    if damage < crate::obj_damage::DAMAGE_PRECISION {
+        return true;
+    }
+    let mut integrity = world
+        .get::<crate::obj_damage::Integrity>(obj)
+        .copied()
+        .unwrap_or(crate::obj_damage::Integrity {
+            current: if dm.max_integrity > 0.0 {
+                dm.max_integrity
+            } else {
+                CABLE_MAX_INTEGRITY
+            },
+            broken: false,
+        });
+    integrity.current -= damage;
+    if integrity.current > 0.0 {
+        world.entity_mut(obj).insert(integrity);
+        return true;
+    }
+    super::lighting::propagate_light_flicker(
+        world,
+        net,
+        Some(pos),
+        super::lighting::FLICKER_FALLOFF,
+    );
+    if let Some(mut grid) = world.get_resource_mut::<crate::power::grid::Grid>() {
+        grid.remove_cable(obj);
+    }
+    world.despawn(obj);
+    crate::construction::spawn_stack(world, COIL, pos, 1);
+    rhd::relink_around(world, pos);
     true
 }
 

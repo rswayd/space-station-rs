@@ -34,6 +34,9 @@ pub struct Powernet {
     pub netexcess: f64,
     /// Load applied between ticks.
     pub delayedload: f64,
+    /// Game time until which another light flicker cannot propagate (tg `flickering`, cleared
+    /// 9 s after a propagation).
+    pub flickering_until: f64,
 }
 
 impl Powernet {
