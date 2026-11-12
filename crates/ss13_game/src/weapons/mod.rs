@@ -34,6 +34,10 @@ impl Plugin for WeaponsPlugin {
             c.held
                 .is_some_and(|h| item_interaction(w, c.client, c.mob, h, c.target))
         });
+        // A right click with a shield or a pillow shoves (`/datum/element/disarm_attack`).
+        app.add_click_handler(ClickPhase::HeldOnTarget, 247, |w, c| {
+            c.modifiers.right && c.held.is_some_and(|h| disarm_attack(w, c.mob, h, c.target))
+        });
         // A wielded sledgehammer on a wall (`rip_and_tear`, `COMSIG_ITEM_PRE_ATTACK`).
         app.add_click_handler(ClickPhase::HeldOnTarget, 4491, |w, c| {
             c.held
@@ -71,4 +75,51 @@ fn item_interaction(
     tool != target
         && (sharpener::item_interaction(world, client, mob, tool, target)
             || block::bash(world, mob, tool, target))
+}
+
+/// `/datum/element/disarm_attack` (`secondary_attack`): a shield or a pillow shoves like an
+/// empty hand's right click. True when the click is taken.
+// shortcut: the energy and telescopic shields are always out here (they do not fold), so
+// their "activate it first" refusal never happens.
+pub fn disarm_attack(world: &mut World, user: Entity, item: Entity, victim: Entity) -> bool {
+    use ss13_mapload::fidelity::is_under;
+    let Some(dm) = world.get::<ss13_mapload::DmItem>(item).cloned() else {
+        return false;
+    };
+    let pillow = is_under(&dm.path, "/obj/item/pillow");
+    if !(pillow || is_under(&dm.path, "/obj/item/shield"))
+        || user == victim
+        || world.get::<crate::health::Health>(victim).is_none()
+    {
+        return false;
+    }
+    // `/obj/item/pillow/can_disarm_attack`: a pillow smothers whoever it could.
+    if pillow {
+        let lying = world
+            .get::<crate::health::BodyPosition>(victim)
+            .is_some_and(|b| b.lying());
+        let grabbed = world.get::<crate::pull::Pulling>(user).map(|p| p.0) == Some(victim)
+            && world
+                .get::<crate::pull::GrabState>(user)
+                .is_some_and(|g| *g >= crate::pull::GrabState::Aggressive);
+        if lying || grabbed {
+            return false;
+        }
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    world.entity_mut(user).insert(crate::combat::NextMove(
+        now + f64::from(dm.attack_speed) / 10.0,
+    ));
+    let name = crate::security::name_of(world, item);
+    if !crate::martial::check_block(
+        world,
+        victim,
+        Some(user),
+        crate::martial::AttackKind::Melee,
+        0.0,
+        &name,
+    ) {
+        crate::security::shove(world, user, victim);
+    }
+    true
 }

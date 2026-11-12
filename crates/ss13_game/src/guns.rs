@@ -323,6 +323,18 @@ impl Plugin for GunsServerPlugin {
         app.add_click_handler(ClickPhase::AttackSelf, 1000, |w, c| {
             crate::guns::attack_self(w, c.client, c.mob, c.target)
         });
+        // A loose box or magazine: a round out of it, rounds into it.
+        app.add_click_handler(ClickPhase::AttackSelf, 997, |w, c| {
+            crate::guns::box_attack_self(w, c.client, c.mob, c.target)
+        });
+        app.add_click_handler(ClickPhase::OtherHand, 1497, |w, c| {
+            c.held
+                .is_some_and(|h| crate::guns::box_interaction(w, c.client, h, c.target))
+        });
+        app.add_click_handler(ClickPhase::HeldOnTarget, 1497, |w, c| {
+            c.held
+                .is_some_and(|h| crate::guns::box_interaction(w, c.client, h, c.target))
+        });
         // A magazine or rounds into the other hand's gun.
         app.add_click_handler(ClickPhase::OtherHand, 1500, |w, c| {
             c.held
@@ -1513,17 +1525,125 @@ fn handle_chamber(world: &mut World, dm: &DmGun, gun: &mut Gun, at: TilePos, fro
 }
 
 /// A casing onto `at`: a live one keeps its round.
-fn drop_casing(world: &mut World, round: &Round, at: TilePos) {
+fn drop_casing(world: &mut World, round: &Round, at: TilePos) -> Option<Entity> {
     if round.casing.path.is_empty() {
-        return;
+        return None;
     }
-    if let Some(casing) = crate::construction::spawn_obj(world, &round.casing.path, at)
-        && !round.live
+    let casing = crate::construction::spawn_obj(world, &round.casing.path, at)?;
+    if !round.live
         && let Some(mut dm) = world.get_mut::<ss13_mapload::DmCasing>(casing)
     {
         // tg: a fired casing has no `loaded_projectile`.
         dm.data.projectile = default();
     }
+    Some(casing)
+}
+
+/// `AMMO_BOX_MULTILOAD_IN` and `_OUT` of a loose box: a magazine only takes several rounds at
+/// once, a speedloader gives several only to a loaded gun's cylinder, a box does both.
+fn multiload(path: &str) -> (bool, bool) {
+    if is_under(path, "/obj/item/ammo_box/magazine")
+        || is_under(path, "/obj/item/ammo_box/speedloader")
+    {
+        (true, false)
+    } else {
+        (true, true)
+    }
+}
+
+const BULLET_INSERT_SOUND: &str = "sound/items/weapons/gun/general/mag_bullet_insert.ogg";
+
+/// `/obj/item/ammo_box/try_load` of a box or magazine that is in no gun: rounds of its caliber
+/// from another box (one, or all that fit when the two `ammo_box_multiload` allow it) or a
+/// loose casing. True when the click is taken.
+pub fn box_interaction(world: &mut World, client: Entity, held: Entity, target: Entity) -> bool {
+    let Some(mut mag) = world.get::<Magazine>(target).cloned() else {
+        return false;
+    };
+    let mut loaded = 0;
+    if let Some(mut other) = world.get::<Magazine>(held).cloned() {
+        let many = multiload(&mag.data.path).0 && multiload(&other.data.path).1;
+        while let Some(i) = other
+            .rounds
+            .iter()
+            .rposition(|r| !r.is_empty() && r.casing.caliber == mag.data.caliber)
+        {
+            let round = other.rounds.remove(i);
+            if mag.give_round(round.clone()).is_none() {
+                other.rounds.insert(i, round);
+                break;
+            }
+            loaded += 1;
+            if !many {
+                break;
+            }
+        }
+        if loaded > 0 {
+            world.entity_mut(held).insert(other);
+        }
+    } else if let Some(casing) = world
+        .get::<ss13_mapload::DmCasing>(held)
+        .map(|c| c.data.clone())
+    {
+        let round = Round {
+            live: !casing.projectile.path.is_empty(),
+            casing,
+        };
+        if mag.give_round(round).is_some() {
+            loaded = 1;
+            if let Some(holder) = world.get::<crate::inventory::CarriedBy>(held).map(|c| c.0)
+                && let Some(mut inventory) = world.get_mut::<Inventory>(holder)
+            {
+                for hand in &mut inventory.hands {
+                    if *hand == Some(held) {
+                        *hand = None;
+                    }
+                }
+            }
+            world.entity_mut(held).despawn();
+        }
+    } else {
+        return false;
+    }
+    if loaded > 0 {
+        let name = name_of(world, target);
+        world.entity_mut(target).insert(mag);
+        tell(
+            world,
+            client,
+            Span::Notice,
+            format!("Вы заряжаете {loaded} {} в {name}!", patron(loaded)),
+        );
+        gun_sound(world, target, BULLET_INSERT_SOUND, 60.0, true);
+    }
+    true
+}
+
+/// `/obj/item/ammo_box/attack_self`: the top round comes out into the other hand.
+pub fn box_attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    let Some(mut mag) = world.get::<Magazine>(item).cloned() else {
+        return false;
+    };
+    let Some(i) = mag.rounds.iter().rposition(|r| !r.is_empty()) else {
+        return true;
+    };
+    let round = mag.rounds.remove(i);
+    let name = name_of(world, item);
+    world.entity_mut(item).insert(mag);
+    if let Some(&at) = world.get::<TilePos>(mob)
+        && let Some(casing) = drop_casing(world, &round, at)
+        && let Some(inventory) = world.get::<Inventory>(mob).cloned()
+    {
+        crate::storage::put_in_hands(world, mob, &inventory, casing);
+    }
+    gun_sound(world, item, BULLET_INSERT_SOUND, 60.0, true);
+    tell(
+        world,
+        client,
+        Span::Notice,
+        format!("Вы извлекаете патрон из {name}!"),
+    );
+    true
 }
 
 /// tg `shoot_live_shot` messages.
