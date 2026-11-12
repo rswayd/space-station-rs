@@ -36,7 +36,8 @@
 // trait, manual cauterizing of yourself, ring accessories on gloves, wound scanning; no external
 // organs or dummy organs from food (cybernetic implants go in and out like organs,
 // [`super::cyberimps`]); no arbitrary items as prosthetics or Frankenstein (other species')
-// rejection damage; no abductor, robotic shell, thick-skin or skull operations; brainwashing
+// rejection damage; no abductor, thick-skin or skull operations (robotic limbs: the screwdriver,
+// hatch, multitool and wrench operations, `Op::required_robotic`); brainwashing
 // only on organic brains (`crate::antag::brainwashed`; no `mechanic` reprogramming). Amputation takes the head too (with its organs); robotic limbs come apart with a
 // wrench instead (`amputate/mechanic`). Lobotomy, pacification and brain surgery work on the brain's traumas
 // ([`super::traumas`]).
@@ -309,6 +310,13 @@ pub enum Op {
     FixBones,
     DrillBones,
     InciseOrgans,
+    /// The mechanical equivalents (`operation_generic_mechanic.dm`) on robotic limbs.
+    MechanicalIncision,
+    MechanicalOpen,
+    MechanicalClose,
+    PrepareElectronics,
+    MechanicUnwrench,
+    MechanicWrench,
     TendWounds(Tend, Heal),
     RepairDislocation,
     RepairHairline,

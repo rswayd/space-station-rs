@@ -314,6 +314,27 @@ pub(super) fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone
             });
             damage_limb(world, mob, body, DamageType::Brute, 10.0);
         }
+        Op::MechanicalIncision => with_limbs(world, mob, |l| {
+            l.limb_mut(body).add_surgery(state::SKIN_CUT);
+        }),
+        // Skin and vessels at once.
+        Op::MechanicalOpen => with_limbs(world, mob, |l| {
+            let limb = l.limb_mut(body);
+            limb.add_surgery(state::SKIN_OPEN | state::VESSELS_CLAMPED);
+            limb.remove_surgery(state::SKIN_CUT);
+        }),
+        Op::MechanicalClose => with_limbs(world, mob, |l| {
+            l.limb_mut(body).remove_surgery(state::UNSET_ON_CLOSE);
+        }),
+        Op::PrepareElectronics => with_limbs(world, mob, |l| {
+            l.limb_mut(body).add_surgery(state::ORGANS_CUT);
+        }),
+        Op::MechanicUnwrench => with_limbs(world, mob, |l| {
+            l.limb_mut(body).add_surgery(state::BONE_SAWED);
+        }),
+        Op::MechanicWrench => with_limbs(world, mob, |l| {
+            l.limb_mut(body).remove_surgery(state::BONE_SAWED);
+        }),
         Op::TendWounds(tend, heal) => {
             let (brute, burn) = tend_amounts(world, mob, tend, heal);
             if let Some(mut health) = world.get::<Health>(mob).cloned() {

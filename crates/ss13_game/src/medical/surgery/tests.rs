@@ -266,7 +266,8 @@ fn requirements_read_like_tg() {
         blocked,
         [
             "кожа должна быть целой",
-            "рабочая область не должна быть закрыта одеждой"
+            "рабочая область не должна быть закрыта одеждой",
+            "конечность не должна быть кибернетической"
         ]
     );
     let [all, ..] = Op::Revival.requirements();
@@ -295,4 +296,46 @@ fn a_moved_bed_takes_its_patient_along() {
     world.run_system_once(carry_buckled).unwrap();
     assert_eq!(world.get::<TilePos>(patient), Some(&to));
     assert_eq!(world.get::<TilePos>(bystander), Some(&from));
+}
+
+#[test]
+fn robotic_limbs_take_the_mechanical_operations() {
+    let mut world = World::new();
+    let mut limbs = Limbs::default();
+    for zone in [BodyZone::LArm, BodyZone::RArm] {
+        limbs.limb_mut(zone).prepped = true;
+    }
+    limbs.limb_mut(BodyZone::RArm).robotic = true;
+    let mob = world
+        .spawn((
+            Health::default(),
+            Stat::Conscious,
+            limbs,
+            BodyPosition::default(),
+        ))
+        .id();
+    let (flesh, metal) = (TargetZone::LArm, TargetZone::RArm);
+    assert!(is_available(&world, Op::InciseSkin, mob, flesh));
+    assert!(!is_available(&world, Op::MechanicalIncision, mob, flesh));
+    assert!(!is_available(&world, Op::InciseSkin, mob, metal));
+    assert!(is_available(&world, Op::MechanicalIncision, mob, metal));
+    // Unscrewed, then the hatch: skin open and vessels clamped at once.
+    with_limbs(&mut world, mob, |l| {
+        l.limb_mut(BodyZone::RArm).add_surgery(state::SKIN_CUT)
+    });
+    assert!(is_available(&world, Op::MechanicalOpen, mob, metal));
+    assert!(!is_available(&world, Op::PrepareElectronics, mob, metal));
+    with_limbs(&mut world, mob, |l| {
+        let limb = l.limb_mut(BodyZone::RArm);
+        limb.add_surgery(state::SKIN_OPEN | state::VESSELS_CLAMPED);
+        limb.remove_surgery(state::SKIN_CUT);
+    });
+    for op in [
+        Op::PrepareElectronics,
+        Op::MechanicUnwrench,
+        Op::MechanicalClose,
+    ] {
+        assert!(is_available(&world, op, mob, metal), "{op:?}");
+    }
+    assert!(!is_available(&world, Op::MechanicWrench, mob, metal));
 }

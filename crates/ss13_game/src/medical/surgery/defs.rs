@@ -13,6 +13,16 @@ pub(super) const INCISE: &[(Implement, f32)] = &[
     (Path("/obj/item/pen"), 5.0),
     (Path("/obj/item"), 3.33),
 ];
+/// The screwdriver operations of `operation_generic_mechanic.dm`.
+pub(super) const MECHANIC_SCREW: &[(Implement, f32)] = &[
+    (Tool("screwdriver"), 1.0),
+    (Tool("scalpel"), 1.33),
+    (Path("/obj/item/knife"), 2.0),
+    (Path("/obj/item"), 10.0),
+];
+/// The wrench operations of `operation_generic_mechanic.dm`.
+pub(super) const MECHANIC_WRENCH: &[(Implement, f32)] =
+    &[(Tool("wrench"), 1.0), (Tool("retractor"), 1.33)];
 pub(super) const CLAMP: &[(Implement, f32)] = &[
     (Tool("hemostat"), 1.0),
     (Tool("cutters"), 1.67),
@@ -71,6 +81,12 @@ impl Op {
             Self::FixBones,
             Self::DrillBones,
             Self::InciseOrgans,
+            Self::MechanicalIncision,
+            Self::MechanicalOpen,
+            Self::MechanicalClose,
+            Self::PrepareElectronics,
+            Self::MechanicUnwrench,
+            Self::MechanicWrench,
         ];
         for tend in Tend::ALL {
             if tend.combo() {
@@ -113,6 +129,33 @@ impl Op {
         ]);
         ops.extend(Bioware::ALL.map(Self::Bioware));
         ops
+    }
+
+    /// `required_bodytype` of a limb operation: `Some(true)` only robotic limbs
+    /// (`BODYTYPE_ROBOTIC`), `Some(false)` only the others (`~BODYTYPE_ROBOTIC`).
+    // shortcut: the other `mechanic` variants (organ manipulation, bioware, organ repairs) are
+    // not split off; those operations take any limb.
+    pub fn required_robotic(self) -> Option<bool> {
+        match self {
+            Self::MechanicalIncision
+            | Self::MechanicalOpen
+            | Self::MechanicalClose
+            | Self::PrepareElectronics
+            | Self::MechanicUnwrench
+            | Self::MechanicWrench
+            | Self::AmputateMechanic => Some(true),
+            Self::InciseSkin
+            | Self::RetractSkin
+            | Self::CloseSkin
+            | Self::ClampBleeders
+            | Self::UnclampBleeders
+            | Self::SawBones
+            | Self::FixBones
+            | Self::DrillBones
+            | Self::InciseOrgans
+            | Self::Amputate => Some(false),
+            _ => None,
+        }
     }
 
     /// One operation per tg type (the operating computer's catalog).
@@ -503,6 +546,90 @@ impl Op {
                 ],
                 verb: "разбирать",
                 tool_rec: "wrench",
+                ..base
+            },
+            Self::MechanicalIncision => OpDef {
+                path: "/datum/surgery_operation/limb/mechanical_incision",
+                name: "Отвинтите корпус",
+                desc: "Отвинтите корпус механического пациента, чтобы получить доступ к его \
+                       внутренним компонентам. Вызывает хирургическое состояние \"кожа \
+                       разрезана\".",
+                time: 24.0,
+                flags: flags::SELF_OPERABLE,
+                any_blocked: ALL_SKIN,
+                implements: MECHANIC_SCREW,
+                verb: "отвинчивать корпус в",
+                tool_rec: "Любой острый предмет",
+                ..base
+            },
+            Self::MechanicalOpen => OpDef {
+                path: "/datum/surgery_operation/limb/mechanical_open",
+                name: "Открыть люк",
+                desc: "Откройте люк механического пациента, чтобы получить доступ к его \
+                       внутренним компонентам. Вызывает хирургическое состояние \"кожа \
+                       раздвинута\" и \"сосуды зажаты\".",
+                time: 10.0,
+                flags: flags::SELF_OPERABLE,
+                all_required: SKIN_CUT,
+                implements: &[(Hand, 1.0), (Tool("crowbar"), 1.0)],
+                verb: "открывать фиксаторы люка в",
+                tool_rec: "crowbar",
+                ..base
+            },
+            Self::MechanicalClose => OpDef {
+                path: "/datum/surgery_operation/limb/mechanical_close",
+                name: "Закрутить корпус",
+                desc: "Привинтите корпус механического пациента обратно на место. Устраняет \
+                       большинство хирургических состояний.",
+                time: 24.0,
+                flags: flags::SELF_OPERABLE,
+                any_required: ALL_SKIN,
+                implements: MECHANIC_SCREW,
+                verb: "завинчивать корпус в",
+                tool_rec: "Любой острый предмет",
+                ..base
+            },
+            Self::PrepareElectronics => OpDef {
+                path: "/datum/surgery_operation/limb/prepare_electronics",
+                name: "Подготовьте электронику",
+                desc: "Подготовьте внутреннюю электронику механического пациента к операции. \
+                       Вызывает хирургическое состояние \"орган разрезан\".",
+                time: 24.0,
+                flags: flags::SELF_OPERABLE,
+                all_required: SKIN_OPEN,
+                any_blocked: ORGANS_CUT,
+                implements: &[(Tool("multitool"), 1.0), (Tool("hemostat"), 1.33)],
+                verb: "подготавливать электронику в",
+                tool_rec: "multitool",
+                ..base
+            },
+            Self::MechanicUnwrench => OpDef {
+                path: "/datum/surgery_operation/limb/mechanic_unwrench",
+                name: "Открутить эндоскелет",
+                desc: "Открутите эндоскелет механического пациента, чтобы получить доступ к его \
+                       внутренним элементам. Вызывает хирургическое состояние \"кость \
+                       распилена\".",
+                time: 24.0,
+                flags: flags::SELF_OPERABLE,
+                all_required: SKIN_OPEN,
+                any_blocked: BONE_SAWED | BONE_DRILLED,
+                implements: MECHANIC_WRENCH,
+                verb: "откручивать несколько болтов в",
+                tool_rec: "wrench",
+                ..base
+            },
+            Self::MechanicWrench => OpDef {
+                path: "/datum/surgery_operation/limb/mechanic_wrench",
+                name: "Закрутить эндоскелет",
+                desc: "Закрутите обратно эндоскелет механического пациента. Убирает \
+                       хирургические состояния \"кость распилена\".",
+                time: 24.0,
+                flags: flags::SELF_OPERABLE,
+                all_required: SKIN_OPEN | BONE_SAWED,
+                implements: MECHANIC_WRENCH,
+                verb: "закручивать несколько болтов в",
+                tool_rec: "wrench",
+                required: &["конечность должна иметь кости"],
                 ..base
             },
             Self::AttachLimb => OpDef {

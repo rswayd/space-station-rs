@@ -68,6 +68,12 @@ impl Op {
         if def.flags & flags::IGNORE_CLOTHES == 0 {
             blocked.push("рабочая область не должна быть закрыта одеждой".into());
         }
+        // `limb/all_blocked_strings`.
+        match self.required_robotic() {
+            Some(true) => blocked.push("конечность не должна быть органической".into()),
+            Some(false) => blocked.push("конечность не должна быть кибернетической".into()),
+            None => {}
+        }
         [all, any, optional, blocked]
     }
 }
@@ -260,6 +266,8 @@ pub(super) fn tool_check(op: Op, tool: &ToolInfo) -> bool {
                 || tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST
         }
         Op::SealVeins => tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST,
+        // Any sharpness or a listed tool behaviour.
+        Op::MechanicalIncision | Op::MechanicalClose => tool.sharpness != 0 || listed,
         Op::Gastrectomy | Op::Lobotomy => {
             tool.sharpness & super::super::wounds::SHARP_EDGED != 0 || listed
         }
@@ -276,7 +284,7 @@ pub(super) fn tool_check(op: Op, tool: &ToolInfo) -> bool {
 /// A `&'static str` view for comparing with [`Implement::Tool`] (only the listed behaviours
 /// can match, so unknown ones become "").
 pub(super) fn leak(behaviour: &str) -> &'static str {
-    const KNOWN: [&str; 12] = [
+    const KNOWN: [&str; 14] = [
         "scalpel",
         "hemostat",
         "retractor",
@@ -289,6 +297,8 @@ pub(super) fn leak(behaviour: &str) -> &'static str {
         "crowbar",
         "welder",
         "knife",
+        "wrench",
+        "multitool",
     ];
     KNOWN.into_iter().find(|k| *k == behaviour).unwrap_or("")
 }
@@ -529,6 +539,13 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
     if limb.missing != (op == Op::AttachLimb) {
         return false;
     }
+    // `required_bodytype`.
+    if op
+        .required_robotic()
+        .is_some_and(|robotic| limb.robotic != robotic)
+    {
+        return false;
+    }
     if def.all_required != 0 && !limb.has_state(def.all_required) {
         return false;
     }
@@ -565,12 +582,10 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         Op::RepairCompound => limb
             .wound(Series::Bone)
             .is_some_and(|w| w.kind == WoundKind::Compound && w.reset),
-        // `amputate/state_check` and `required_bodytype`: not the chest, not
-        // `TRAIT_NODISMEMBER`; flesh limbs are cut off, robotic ones taken apart.
+        // `amputate/state_check`: not the chest, not `TRAIT_NODISMEMBER`.
         Op::Amputate | Op::AmputateMechanic => {
             body != BodyZone::Chest
                 && !crate::species::has_trait(world, mob, crate::species::Trait::NoDismember)
-                && limb.robotic == (op == Op::AmputateMechanic)
         }
         Op::RemoveOrgan(slot) => {
             zone == slot.spec().zone
