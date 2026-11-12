@@ -134,15 +134,15 @@ pub fn try_tackle(
         crate::tools::tell(world, client, Span::Warning, text);
     };
     let held = world.get::<Inventory>(mob).and_then(Inventory::active_item);
-    let incap = crate::status_effects::incapacitation(world, mob);
+    let state = crate::status_effects::incapacitation(world, mob);
     if held.is_some()
         || world.get::<crate::pull::Pulling>(mob).is_some()
         || world.get::<crate::medical::surgery::Buckled>(mob).is_some()
-        || incap.incapacitated
+        || state.incapacitated
     {
         return false;
     }
-    if incap.hands_blocked {
+    if state.hands_blocked {
         tell(world, "Для захвата нужны свободные руки!");
         return true;
     }
