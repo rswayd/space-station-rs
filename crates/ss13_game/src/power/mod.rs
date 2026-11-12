@@ -29,6 +29,7 @@ pub mod pacman;
 pub mod shields;
 pub mod singularity;
 pub mod smes;
+pub mod smes_portable;
 pub mod solar;
 pub mod supermatter;
 pub mod supermatter_consume;
@@ -381,6 +382,7 @@ impl Plugin for PowerServerPlugin {
             .add_plugins((
                 monitor::PowerMonitorPlugin,
                 supermatter_consume::SupermatterConsumePlugin,
+                smes_portable::SmesPortablePlugin,
             ))
             .add_systems(
                 MapInit,

@@ -227,6 +227,7 @@
 //! | 1900 | `power::chargers::interact` |
 //! | 1950 | `power::pacman::interact` |
 //! | 1960 | `power::smes::interact` |
+//! | 1961 | `power::smes_portable` (an empty hand on a connected bank opens its connector's window) |
 //! | 1970 | `power::shields::interact` |
 //! | 1971 | `power::monitor::interact` (the power monitoring console's window) |
 //! | 1979 | `eng_machines::atmos_shield::interact` (toggle; right click: lock) |
@@ -339,6 +340,7 @@
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
+//! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
