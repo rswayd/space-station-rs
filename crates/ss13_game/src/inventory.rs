@@ -259,10 +259,36 @@ pub fn get_id(world: &World, item: Entity) -> Option<Entity> {
     if world.get::<IdCard>(item).is_some() {
         return Some(item);
     }
+    // `/obj/item/storage/wallet/GetID`: its `front_id`.
+    if let Some(card) = wallet_id(world, item) {
+        return Some(card);
+    }
     world
         .get::<crate::modpc::pda::ModularComputer>(item)?
         .stored_id
         .filter(|&card| world.get::<IdCard>(card).is_some())
+}
+
+/// `/obj/item/storage/wallet`.
+const WALLET: &str = "/obj/item/storage/wallet";
+
+/// A wallet's `front_id`: the first ID card in it.
+// shortcut: tg puts a magnetic (agent) card or the card with the most command access in
+// front and gives the wallet the combined access of all its cards; here the first card
+// alone counts.
+fn wallet_id(world: &World, item: Entity) -> Option<Entity> {
+    if !world
+        .get::<DmItem>(item)
+        .is_some_and(|i| ss13_mapload::fidelity::is_under(&i.path, WALLET))
+    {
+        return None;
+    }
+    world
+        .get::<crate::storage::Stored>(item)?
+        .items()
+        .iter()
+        .copied()
+        .find(|&e| world.get::<IdCard>(e).is_some())
 }
 
 /// [`get_id`] for systems.
@@ -270,6 +296,7 @@ pub fn get_id(world: &World, item: Entity) -> Option<Entity> {
 pub struct IdCards<'w, 's> {
     cards: Query<'w, 's, &'static IdCard>,
     computers: Query<'w, 's, &'static crate::modpc::pda::ModularComputer>,
+    wallets: Query<'w, 's, (&'static DmItem, &'static crate::storage::Stored)>,
 }
 
 impl IdCards<'_, '_> {
@@ -277,6 +304,17 @@ impl IdCards<'_, '_> {
     pub fn id_of(&self, item: Entity) -> Option<Entity> {
         if self.cards.contains(item) {
             return Some(item);
+        }
+        // A wallet's `front_id` (see [`get_id`]).
+        if let Ok((dm, stored)) = self.wallets.get(item)
+            && ss13_mapload::fidelity::is_under(&dm.path, WALLET)
+            && let Some(card) = stored
+                .items()
+                .iter()
+                .copied()
+                .find(|&e| self.cards.contains(e))
+        {
+            return Some(card);
         }
         self.computers
             .get(item)

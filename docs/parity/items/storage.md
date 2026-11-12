@@ -45,7 +45,7 @@
 
 - **Код:** [`/obj/item/storage/belt/holster`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/holsters.dm#L2), [`/obj/item/storage/belt/holster/detective`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/holsters.dm#L56)
 - **BandaStation:** [`holsters.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/clothing/accessories/holsters.dm) — кобуры переделаны в аксессуары униформы (см. [bandastation-clothing.md](bandastation-clothing.md))
-- **Статус в ss13-rs:** ❌ нет — кобуры не ограничивают содержимое, оружия нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/clothing/holsters.rs` (`SPECS`): кобуры BandaStation как аксессуары униформы со своим хранилищем — лимиты `/datum/storage` и списки `set_holdable` по видам (обычная, энергетическая, детектива с револьвером и спидлоадерами, нюкера и др.), открываются в руке и через комбинезон, одна на комбинезон, вес комбинезона по аксессуару; отказ хранилища — `storage.rs` (`Refusal::CantHold`). `// shortcut:` нет быстрого выхвата клавишей, звуков кобуры
 
 ### Специализированные сумки
 Мешок для мусора (блюспейс-вариант), сумка для руды (собирает руду при ходьбе), для растений и семян, для листов материалов, для книг, для гильз, химическая и био-сумки, сумки для одежды глав.
@@ -84,7 +84,7 @@
 
 - **Код:** [`/obj/item/storage/wallet`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/storage/wallets.dm#L1)
 - **BandaStation:** [`wallets.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/wallets.dm) — варианты кошельков форка
-- **Статус в ss13-rs:** ❌ нет — `crates/ss13_game/src/inventory.rs`: доступ берётся только из `IdCard` в руках/слоте ID, кошелёк не передаёт доступ
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/inventory.rs` (`wallet_id`, `get_id`, `IdCards::id_of`): кошелёк носится в слоте ID и в руках, доступ и имя берутся из первой ID-карты внутри; нет выбора «передней» карты (магнитная/агентская, больше командных допусков), суммарного доступа всех карт, карты на спрайте и в названии, alt-клика для извлечения ID
 
 ### Прочие контейнеры
 Аптечки (наборы медицины — содержимое см. медицинский раздел), баночки для таблеток, упаковки банок (шестибанка), корзины, наборы аплинка.
