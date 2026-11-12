@@ -140,6 +140,23 @@ pub(crate) fn electrocute_from_node(
     electrocute_mob(world, victim, Some((node, None, true)), source, 1.0)
 }
 
+/// tg `electrocute_mob(user, cable, source, 1, TRUE)`: from the net of a `cable`, with the
+/// sparks of the callers' `shock` procs. True when the shock went through.
+pub(crate) fn electrocute_from_cable(
+    world: &mut World,
+    victim: Entity,
+    cable: Entity,
+    source: Entity,
+) -> bool {
+    if !electrocute_mob(world, victim, Some((cable, None, true)), source, 1.0) {
+        return false;
+    }
+    if let Some(pos) = crate::explosions::turf_of(world, source) {
+        crate::effects::particles::do_sparks(world, 5, true, pos);
+    }
+    true
+}
+
 /// tg `electrocute_mob(user, get_area(source), source, siemens)`: from the APC of `source`'s
 /// area.
 pub(crate) fn electrocute_from_area(
@@ -186,8 +203,12 @@ pub(super) fn electrocute_mob(
     let Some((apc, cell, net)) = power else {
         return false;
     };
+    // A power node (an APC's terminal, a SMES) or a cable itself.
     let net_id = net
-        .then(|| world.resource::<Grid>().node_net(apc))
+        .then(|| {
+            let grid = world.resource::<Grid>();
+            grid.node_net(apc).or_else(|| grid.cable_net(apc))
+        })
         .flatten();
     let avail = net_id
         .and_then(|n| world.resource::<Grid>().net(n))

@@ -53,7 +53,7 @@
 Урон от сети по её мощности при касании кабеля, решётки под током, электрифицированной двери; изолированные перчатки защищают.
 
 - **Код:** [`/proc/electrocute_mob()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/power.dm#L478), [`proc/get_electrocute_damage()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/powernet.dm#L95), [`cable/shock()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/cable.dm#L282)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/wires.rs`: удар от электрифицированных шлюзов, APC и вендоматов по ячейке и сети; нет ударов от кабелей и решёток (`crates/ss13_game/src/construction.rs`: shortcut)
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/wires/shock.rs` (`electrocute_mob`, `ELECTROCUTE_DAMAGE` по мощности сети или ячейке, перчатки по `siemens_coefficient`, проверка расстояния): электрифицированные шлюзы, APC, вендоматы и машины, терминал SMES, решётки над кабелем (`construction::grille_shock`), кабель при перерезании (50%, `power/cable_coil.rs`)
 
 ### Мерцание света по сети и передача данных
 Скачки в сети заставляют мерцать лампы вдоль кабеля; powernet передаёт данные для устройств с сетевым портом.

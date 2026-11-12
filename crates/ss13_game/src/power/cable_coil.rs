@@ -196,7 +196,17 @@ fn held_on_target(world: &mut World, c: &ClickCtx) -> bool {
         && reachable(world, c.pos)
     {
         match kind {
-            ToolKind::Wirecutters => return cut(world, c.client, c.target, c.pos),
+            ToolKind::Wirecutters => {
+                // `/obj/structure/cable/wirecutter_act`: `if(shock(user, 50)) return`.
+                if world
+                    .resource_mut::<crate::combat::CombatRng>()
+                    .chance(50.0)
+                    && crate::wires::electrocute_from_cable(world, c.mob, c.target, c.target)
+                {
+                    return true;
+                }
+                return cut(world, c.client, c.target, c.pos);
+            }
             ToolKind::Multitool => return power_info(world, c.client, c.target),
             _ => {}
         }

@@ -33,6 +33,8 @@ pub const INDESTRUCTIBLE: u32 = 1 << 6;
 const ALIEN_STRUCTURE: &str = "/obj/structure/alien";
 /// `CAN_BE_HIT` (`obj_flags`).
 pub const CAN_BE_HIT: u32 = 1 << 1;
+/// `CONDUCTS_ELECTRICITY` (`obj_flags`).
+pub const CONDUCTS_ELECTRICITY: u32 = 1 << 12;
 /// `DAMAGE_PRECISION`.
 pub const DAMAGE_PRECISION: f32 = 0.1;
 /// `WINDOW_OUT_OF_FRAME`, `WINDOW_IN_FRAME`, `WINDOW_SCREWED_TO_FRAME`, `RWINDOW_SECURE`.
@@ -256,6 +258,15 @@ pub fn attackby(world: &mut World, actor: Actor, target: Entity) -> bool {
     let Some(dm) = world.get::<DmItem>(item).cloned() else {
         return false;
     };
+    // `/obj/structure/grille/item_interaction`: a conductive item on a live grille.
+    if is_under(&obj.path, GRILLE)
+        && world
+            .get::<DmObj>(item)
+            .is_some_and(|o| o.obj_flags & CONDUCTS_ELECTRICITY != 0)
+        && crate::construction::grille_shock(world, target, actor.mob, 70.0)
+    {
+        return true;
+    }
     // `attack_atom`: the item's click cooldown, even for a forceless item.
     let now = world.resource::<Time>().elapsed_secs_f64();
     if let Some(mut next) = world.get_mut::<NextMove>(actor.mob) {

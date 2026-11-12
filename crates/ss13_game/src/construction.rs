@@ -608,6 +608,9 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     }
     if is_under(&path, GRILLE) && kind == ToolKind::Screwdriver {
         // `/obj/structure/grille/screwdriver_act`: `use_tool` without delay.
+        if grille_shock(world, target, actor.mob, 90.0) {
+            return Interact::Done;
+        }
         let now = !anchored(world, target);
         crate::obj_damage::set_anchored(world, target, now);
         let text = if now {
@@ -659,6 +662,37 @@ fn tool_act(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> 
     Interact::None
 }
 
+/// `/obj/structure/grille/proc/shock(user, prb)`: an anchored, unbroken grille over a cable
+/// that is not under a floor tile shocks who touches it from that cable's net. True when the
+/// shock went through (what the user was doing does not happen).
+pub fn grille_shock(world: &mut World, grille: Entity, user: Entity, chance: f32) -> bool {
+    if !anchored(world, grille) || world.get::<Integrity>(grille).is_some_and(|i| i.broken) {
+        return false;
+    }
+    if !world
+        .resource_mut::<crate::combat::CombatRng>()
+        .chance(chance)
+    {
+        return false;
+    }
+    let Some(&pos) = world.get::<TilePos>(grille) else {
+        return false;
+    };
+    // `T.overfloor_placed`: a cable under a tile does not reach the grille.
+    let cable = world
+        .resource::<ss13_world::SpatialIndex>()
+        .on_tile(pos)
+        .iter()
+        .copied()
+        .find(|&e| {
+            world.get::<ss13_mapload::DmCable>(e).is_some()
+                && world
+                    .get::<ss13_mapload::undertile::HiddenUnderTile>(e)
+                    .is_none()
+        });
+    cable.is_some_and(|cable| crate::wires::electrocute_from_cable(world, user, cable, grille))
+}
+
 /// tg `*_act_secondary` (right click).
 fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: Entity) -> Interact {
     let Some(path) = path_of(world, target) else {
@@ -666,7 +700,9 @@ fn tool_act_secondary(world: &mut World, actor: Actor, kind: ToolKind, target: E
     };
     if is_under(&path, GRILLE) && kind == ToolKind::Wirecutters {
         // `/obj/structure/grille/wirecutter_act_secondary`.
-        // shortcut: no shocks from powered grilles yet.
+        if grille_shock(world, target, actor.mob, 100.0) {
+            return Interact::Done;
+        }
         crate::obj_damage::deconstruct(world, target, true);
         tell(
             world,
@@ -999,6 +1035,9 @@ fn target_interaction(world: &mut World, actor: Actor, target: Entity) -> Intera
     if is_under(&path, GRILLE) {
         let broken = world.get::<Integrity>(target).is_some_and(|i| i.broken);
         if broken && stack_of(world, held, RODS) {
+            if grille_shock(world, target, actor.mob, 90.0) {
+                return Interact::Done;
+            }
             do_after(world, actor, target, 10.0, 1, Job::GrilleRepair);
             return Interact::Done;
         }
