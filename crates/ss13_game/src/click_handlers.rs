@@ -35,7 +35,9 @@
 //! | 900 | `security::attack_self` (baton toggles, the electrostaff's wield, the gun cane's safety, flashes) |
 //! | 989 | `service::burden` pray refill (the chaplain's revolver) |
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
+//! | 997 | `guns::box_attack_self` (a round out of a held ammo box or magazine) |
 //! | 1000 | `guns::attack_self` |
+//! | 1093 | `food::open_can` (a canned food's tab) |
 //! | 1097 | `sprays::attack_self` (stream or spray mode; lets `chem::attack_self` run) |
 //! | 1100 | `chem::attack_self` |
 //! | 1200 | `medical::attack_self` |
@@ -179,6 +181,7 @@
 //! | 1195 | `modpc::programs::station` (a program disk into the computer in the other hand) |
 //! | 1489 | `service::burden` refuses manual reloads of the chaplain's revolver |
 //! | 1487 | `gun_pins` (a firing pin into a gun, the DNA pin keyed on a carbon; in the other hand also the tools that take a pin out) |
+//! | 1497 | `guns::box_interaction` (rounds into the other hand's ammo box or magazine) |
 //! | 1500 | `guns::item_interaction` |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |
@@ -324,6 +327,7 @@
 //! | 53 | `holodeck::item_interaction` (holo floors take no items, ready buttons, the holodeck conveyor) |
 //! | 100 | `antag::uplink::item_interaction` |
 //! | 200 | `antag::syndie_items::item_interaction` |
+//! | 247 | `weapons::disarm_attack` (a right click with a shield or a pillow shoves) |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
 //! | 229 | `smoking::held_on_target` (lighters and matches on mobs, lighting someone's cigarette, smokables, matchboxes, vapes, dipping) |
@@ -362,6 +366,8 @@
 //! | 1425 | `silicon::pai::cable_interaction` (the door jack cable into an airlock) |
 //! | 1450 | `silicon::mmi::item_interaction` |
 //! | 1460 | `silicon::ai_core::item_interaction` |
+//! | 1497 | `guns::box_interaction` (rounds into an ammo box or a magazine that is in no gun) |
+//! | 1487 | `gun_pins::pin_interaction` (a firing pin into a gun, the DNA pin keyed on a carbon) |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1505 | `extinguisher::refill_click` (a tank refills it) |
 //! | 1527 | `science::ordnance_machines::item_interaction` (data disks into the doppler array and tank compressor, tanks into the compressor, doppler wrench) |
@@ -408,6 +414,7 @@
 //! | 1809 | `kitchen_ware::held_on_target` (tank taps, tongs, plates, pizza boxes) |
 //! | 1813 | `antag::abductor::server::gear` (science tool, silencer, mental interface device on a mob; far clicks: `RangedClick`) |
 //! | 1850 | `restaurant::item_interaction` |
+//! | 1893 | `food::crack_egg` (a right click with an egg on a griddle) |
 //! | 1900 | `cooking::item_interaction` |
 //! | 2000 | `smartfridge::item_interaction` |
 //! | 2100 | `coffee::item_interaction` |
