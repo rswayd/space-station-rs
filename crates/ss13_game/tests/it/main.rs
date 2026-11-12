@@ -114,6 +114,7 @@ mod radiation;
 mod radio;
 mod records;
 mod religion;
+mod requests_console;
 mod revolution;
 mod runtime_types;
 mod science;

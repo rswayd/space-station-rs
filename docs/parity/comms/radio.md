@@ -50,7 +50,7 @@ EMP временно выключает радио; глушилка радио�
 
 - **Код:** [`radio.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L68)
 - **BandaStation:** [`radio.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/radio/radio.dm#L453) — удалённый блок
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/radio.rs` (`radio_noise`): живой говорящий в рацию (кроме суперпространства ЦК) слышит `radio_talk.ogg` с низкой случайной частотой (`get_rand_frequency_low_range`), не чаще раза в 0,5 с на рацию, глухой не слышит, развлекательные рации (`radio_noise = FALSE`) молчат; на всех частотах, звуки приёма убраны — как в BandaStation. Нет настройки громкости `sound_radio_noise` (громкость 100) и приглушённой речи динамиков развлекательного ТВ (нет самих динамиков)
 
 ### Электропак
 Ошейник-шокер на спину, срабатывает по сигналу сигнализатора на своей частоте.

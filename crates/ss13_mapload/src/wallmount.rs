@@ -4,12 +4,13 @@
 //! flashers (`flasher.dm`), extinguisher cabinets (`code/game/objects/structures/extinguisher.dm`)
 //! and fire axe cabinets (`fireaxe.dm`), and the machines buttons drive on the floor and walls:
 //! mass drivers (`mass_driver.dm`), igniters and sparkers (`igniter.dm`), and brig cell timers
-//! (`brigdoors.dm`, `ss13_game::brig`). Only those families get
+//! (`brigdoors.dm`, `ss13_game::brig`), and requests consoles with their mapping helpers
+//! (`requests_console.dm`, `ss13_game::wallmount::requests`). Only those families get
 //! [`DmWallMount`]; the game (`ss13_game::wallmount`) builds their live state from it once.
 //!
 //! Map var edits of `id`, `req_access`, `req_one_access`, `normaldoorcontrol`,
-//! `specialfunctions`, `sync_doors`, `skin`, `flash_range`, `locked`, `on` and `power` are
-//! supported.
+//! `specialfunctions`, `sync_doors`, `skin`, `flash_range`, `locked`, `on`, `power` and a
+//! requests console's `department` are supported.
 
 use bevy::prelude::*;
 use serde_json::Value;
@@ -37,12 +38,16 @@ pub const SPARKER_ROOT: &str = "/obj/machinery/sparker";
 pub const TURRETID_ROOT: &str = "/obj/machinery/turretid";
 /// `/obj/machinery/status_display/door_timer`, the brig cell timer: its `id` and access.
 pub const DOOR_TIMER_ROOT: &str = "/obj/machinery/status_display/door_timer";
+/// `/obj/machinery/requests_console` and its mapping helpers (`announcement`, `assistance`,
+/// `supplies`, `information`, `ore_update`), which only carry their path.
+pub const REQUESTS_CONSOLE_ROOT: &str = "/obj/machinery/requests_console";
+pub const REQUESTS_HELPER_ROOT: &str = "/obj/effect/mapping_helpers/requests_console";
 /// What the cabinets create in `Initialize(mapload)` (`new /obj/item/extinguisher(src)`, a fire
 /// axe cabinet's default `item_path`).
 pub const WALLMOUNT_RUNTIME_TYPES: [&str; 2] = ["/obj/item/extinguisher", "/obj/item/fireaxe"];
 
 const COMPONENT: &str = "dm_wallmount";
-const ROOTS: [&str; 11] = [
+const ROOTS: [&str; 13] = [
     FIREALARM_ROOT,
     BUTTON_ROOT,
     LIGHT_SWITCH_ROOT,
@@ -54,6 +59,8 @@ const ROOTS: [&str; 11] = [
     SPARKER_ROOT,
     TURRETID_ROOT,
     DOOR_TIMER_ROOT,
+    REQUESTS_CONSOLE_ROOT,
+    REQUESTS_HELPER_ROOT,
 ];
 
 /// The vars of a wall mount (type defaults + map edits). Prototype data like
@@ -104,6 +111,9 @@ pub struct DmWallMount {
     pub shoot_cyborgs: bool,
     pub ailock: bool,
     pub control_area: String,
+    /// Requests consoles: `department` and `auto_name` (the area's name instead).
+    pub department: String,
+    pub auto_name: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -121,7 +131,7 @@ enum Kind {
 }
 
 /// Wall-mount vars, their [`DmWallMount`] field (same name) and kind.
-const VARS: [(&str, Kind); 24] = [
+const VARS: [(&str, Kind); 26] = [
     ("id", Kind::Id),
     ("req_access", Kind::List),
     ("req_one_access", Kind::List),
@@ -146,9 +156,11 @@ const VARS: [(&str, Kind); 24] = [
     ("shoot_cyborgs", Kind::Flag),
     ("ailock", Kind::Flag),
     ("control_area", Kind::AnyPath),
+    ("department", Kind::Text),
+    ("auto_name", Kind::Flag),
 ];
 /// Vars a map may edit (the rest are type data).
-const MAP_VARS: [&str; 16] = [
+const MAP_VARS: [&str; 17] = [
     "id",
     "req_access",
     "req_one_access",
@@ -165,6 +177,7 @@ const MAP_VARS: [&str; 16] = [
     "shoot_cyborgs",
     "ailock",
     "control_area",
+    "department",
 ];
 
 pub fn is_wallmount(path: &str) -> bool {

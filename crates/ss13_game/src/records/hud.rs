@@ -5,13 +5,16 @@
 //! bar (`med_hud_set_health`, `RoundHealth`) and the status (`med_hud_set_status`). The images
 //! go to the wearer only, as the headless `DataHud` interface keyed by its net ids.
 //!
+//! Silicon sensors (`silicon_huds`, toggled by `toggle_sensors`, [`SensorsOff`]): a cyborg has
+//! both full HUDs; the AI, through its eye, the lesser ones: only the job icon, and health only
+//! over humans whose suit sensors are on tracking (`TRAIT_BASIC_HEALTH_HUD_VISIBLE`).
+//!
 //! Cost: every [`REFRESH_SECS`], per wearer, one pass over the humans (an interest lookup
 //! each): wearers × humans; a few wearers among 100 players is a few hundred lookups per
 //! refresh.
 // shortcut: glasses give their HUD by type (`/obj/item/clothing/glasses/hud/security`,
 // `.../health`, `.../medsechud` and subtypes), not by `clothing_traits` (no toggling HUD
-// glasses; HUD implants come from `crate::medical::cyberimps`); the AI's and cyborgs' sensor
-// HUDs belong to the silicon group; no second implant slot offset;
+// glasses; HUD implants come from `crate::medical::cyberimps`); no second implant slot offset;
 // refreshed every 0.5 s rather than on each change. The record is the one of [`perp_name`]
 // (tg `get_face_name(get_id_name(""))`).
 
@@ -124,8 +127,40 @@ pub fn perp_name(world: &World, mob: Entity) -> Option<String> {
     }
 }
 
+/// On an AI core or a cyborg whose sensor HUDs are switched off (tg `sensors_on = FALSE`,
+/// `toggle_sensors`); they start on (`add_sensors` in `Initialize`).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SensorsOff;
+
+/// A cyborg's `silicon_huds` with its sensors on: the full security and medical HUDs.
+fn borg_sensors(world: &World, mob: Entity) -> bool {
+    world.get::<crate::silicon::cyborg::Cyborg>(mob).is_some()
+        && world.get::<SensorsOff>(mob).is_none()
+}
+
+/// The AI's `silicon_huds` with its sensors on, seen from its eye: the lesser HUDs
+/// (`TRAIT_MEDICAL_HUD_SENSOR_ONLY`, `TRAIT_SECURITY_HUD_ID_ONLY`).
+pub fn ai_sensors(world: &World, mob: Entity) -> bool {
+    world
+        .get::<crate::silicon::ai::AiEye>(mob)
+        .is_some_and(|eye| world.get::<SensorsOff>(eye.ai).is_none())
+}
+
+/// `TRAIT_BASIC_HEALTH_HUD_VISIBLE` (`update_wearer_status`): worn suit sensors past
+/// `SENSOR_VITALS`, what the lesser medical HUD shows.
+pub fn basic_health_visible(world: &World, inventory: Option<&Inventory>) -> bool {
+    use crate::clothing::sensors::{NO_SENSORS, SENSOR_VITALS, SuitSensor};
+    inventory
+        .and_then(|i| i.uniform)
+        .and_then(|u| world.get::<SuitSensor>(u))
+        .is_some_and(|s| s.has > NO_SENSORS && s.mode > SENSOR_VITALS)
+}
+
 /// The data HUDs `mob` has (`TRAIT_SECURITY_HUD`, `TRAIT_MEDICAL_HUD`): (security, medical).
 pub fn wearer_huds(world: &World, mob: Entity) -> (bool, bool) {
+    if borg_sensors(world, mob) {
+        return (true, true);
+    }
     let Some(inventory) = world.get::<Inventory>(mob) else {
         return (false, false);
     };
@@ -207,6 +242,18 @@ pub fn virus_state(diseases: &[crate::medical::diseases::Disease]) -> Option<&'s
     })
 }
 
+/// What one human shows on each HUD.
+struct Shown {
+    mob: Entity,
+    /// `DATA_HUD_SECURITY_ADVANCED`: the job, implants and wanted status.
+    sec: Vec<crate::hud::HudIcon>,
+    /// `DATA_HUD_SECURITY_BASIC`: the job only.
+    id_only: Vec<crate::hud::HudIcon>,
+    med: Vec<crate::hud::HudIcon>,
+    /// Seen on `DATA_HUD_MEDICAL_BASIC` too.
+    basic_med: bool,
+}
+
 fn refresh(world: &mut World, mut next: Local<f64>) {
     let now = world.resource::<Time>().elapsed_secs_f64();
     if now < *next {
@@ -236,7 +283,7 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
     };
     let manifest = world.resource::<Manifest>();
     // What each human shows on each HUD, computed once for all wearers.
-    let shown: Vec<(Entity, Vec<crate::hud::HudIcon>, Vec<crate::hud::HudIcon>)> = humans
+    let shown: Vec<Shown> = humans
         .iter(world)
         .map(|(e, inventory, health, stat)| {
             let job = inventory
@@ -247,6 +294,7 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
                 .map(|t| t.sechud_icon_state.as_str())
                 .filter(|s| !s.is_empty());
             let mut sec: Vec<_> = icon(job.unwrap_or("hudno_id")).into_iter().collect();
+            let id_only = sec.clone();
             // `sec_hud_set_implants`: the security implants, then the mindshield.
             for imp in crate::implants::implants_of(world, e) {
                 match imp.kind {
@@ -279,7 +327,13 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
                     icon(&bar).into_iter().chain(icon(status)).collect()
                 })
                 .unwrap_or_default();
-            (e, sec, med)
+            Shown {
+                mob: e,
+                sec,
+                id_only,
+                med,
+                basic_med: basic_health_visible(world, inventory),
+            }
         })
         .collect();
     let Some(interest) = world.get_resource::<Interest>() else {
@@ -288,19 +342,22 @@ fn refresh(world: &mut World, mut next: Local<f64>) {
     let mut updates = Vec::new();
     for (mob, player, old) in wearers.iter(world) {
         let (sec, med) = wearer_huds(world, mob);
-        if !sec && !med && old.is_none_or(|d| d.entries.is_empty()) {
+        let lesser = ai_sensors(world, mob);
+        if !sec && !med && !lesser && old.is_none_or(|d| d.entries.is_empty()) {
             continue;
         }
         let entries: Vec<DataHudEntry> = shown
             .iter()
-            .filter_map(|(e, s, m)| {
-                let id = interest.net_id(player.client, *e)?;
+            .filter_map(|h| {
+                let id = interest.net_id(player.client, h.mob)?;
                 let mut icons = Vec::new();
-                if med {
-                    icons.extend(m.iter().copied());
+                if med || (lesser && h.basic_med) {
+                    icons.extend(h.med.iter().copied());
                 }
                 if sec {
-                    icons.extend(s.iter().copied());
+                    icons.extend(h.sec.iter().copied());
+                } else if lesser {
+                    icons.extend(h.id_only.iter().copied());
                 }
                 (!icons.is_empty()).then_some(DataHudEntry {
                     net_id: id.0,
@@ -368,6 +425,27 @@ mod tests {
             ]),
             Some("hudbuff")
         );
+    }
+
+    /// `update_wearer_status`: only tracking sensors show on the AI's lesser medical HUD.
+    #[test]
+    fn basic_health_needs_tracking_sensors() {
+        use crate::clothing::sensors::{
+            BROKEN_SENSORS, HAS_SENSORS, SENSOR_COORDS, SENSOR_VITALS, SuitSensor,
+        };
+        let mut world = World::new();
+        let mut shown = |has, mode| {
+            let suit = world.spawn(SuitSensor { has, mode }).id();
+            let inventory = Inventory {
+                uniform: Some(suit),
+                ..default()
+            };
+            basic_health_visible(&world, Some(&inventory))
+        };
+        assert!(shown(HAS_SENSORS, SENSOR_COORDS));
+        assert!(!shown(HAS_SENSORS, SENSOR_VITALS));
+        assert!(!shown(BROKEN_SENSORS, SENSOR_COORDS));
+        assert!(!basic_health_visible(&World::new(), None));
     }
 
     #[test]
