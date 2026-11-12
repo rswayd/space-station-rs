@@ -7,7 +7,7 @@
 //! ([`crate::atmos_exposure`]).
 // shortcut: no projectile catching (`projectile_stuck_chance`), no `Shake` animation, no web
 // weaving into cloth (`TRAIT_WEB_WEAVER`), no genetic webs (`allowed_mob`), no `play_attack_sound`
-// muting, no web cocoons, passages or spikes (no spider antagonists).
+// muting, no web passages or spikes (cocoons: `crate::antag::spiders`).
 //
 // Cost: per step, one look at the target tile's contents.
 

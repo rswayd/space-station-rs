@@ -261,7 +261,7 @@ fn web_of(path: &str) -> (f32, WebKind) {
         0.5
     } else if is_under(path, &format!("{YOUNG}/nurse")) {
         0.5
-    } else if any(&["nurse", "tangle", "breacher"]) {
+    } else if any(&["nurse", "tangle"]) || is_under(path, &format!("{GIANT}/breacher")) {
         0.25
     } else {
         1.0
