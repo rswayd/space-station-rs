@@ -35,8 +35,8 @@ use ss13_mapload::radio::{HEADSET_ROOT, INTERCOM_ROOT};
 use ss13_mapload::{Areas, DmRadio};
 use ss13_net::chat::server::SendChat;
 use ss13_net::sound::server::SendSound;
-use ss13_shared::protocol::SoundEvent;
 use ss13_shared::TilePos;
+use ss13_shared::protocol::SoundEvent;
 use ss13_tgui::server::{
     AlwaysState, AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
 };
@@ -327,9 +327,7 @@ fn radio_noise(world: &mut World, mut ready_at: Local<std::collections::HashMap<
     let can_send = world.contains_resource::<Messages<SendSound>>();
     for RadioTalked { speaker, radio } in talked {
         if ready_at.contains_key(&radio)
-            || world
-                .get::<Radio>(radio)
-                .is_none()
+            || world.get::<Radio>(radio).is_none()
             || world
                 .get::<DmRadio>(radio)
                 .is_some_and(|d| is_under(&d.path, ENTERTAINMENT_ROOT))
@@ -337,7 +335,10 @@ fn radio_noise(world: &mut World, mut ready_at: Local<std::collections::HashMap<
         {
             continue;
         }
-        let Some(client) = world.get::<crate::server::PlayerMob>(speaker).map(|p| p.client) else {
+        let Some(client) = world
+            .get::<crate::server::PlayerMob>(speaker)
+            .map(|p| p.client)
+        else {
             continue;
         };
         ready_at.insert(radio, now + NOISE_COOLDOWN);
@@ -761,7 +762,7 @@ fn transmit_speech(
             Query<&ss13_net::server::ControlledEntity>,
             Query<&ss13_chat::server::Codewords>,
         ),
-        mut talked: MessageWriter<RadioTalked>,
+        MessageWriter<RadioTalked>,
     ),
 ) {
     let now = time.elapsed_secs_f64();

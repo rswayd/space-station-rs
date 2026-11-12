@@ -203,7 +203,13 @@ pub(crate) fn give_ai_buttons(world: &mut World, eye: Entity) {
             "call_shuttle",
         ),
         button(world, CORE_DISPLAY, "Change Core Display", AI_DMI, "ai"),
-        button(world, SENSORS, "Sensor Augmentation", SCREEN_AI, "ai_sensor"),
+        button(
+            world,
+            SENSORS,
+            "Sensor Augmentation",
+            SCREEN_AI,
+            "ai_sensor",
+        ),
     ];
     world.entity_mut(eye).insert(LastAnnouncement::default());
     set_buttons(world, eye, buttons);
