@@ -296,13 +296,14 @@ fn offer(world: &mut World, nest: Entity, nest_pos: TilePos, mob: Entity) -> boo
     if world.get::<Ashwalker>(mob).is_some()
         && crate::medical::brainmob::mind_of(world, mob).is_some()
     {
+        let nest_name = crate::medical::name_of(world, nest);
         crate::medical::visible(
             world,
             nest,
             "",
             &format!(
-                "Serrated tendrils carefully pull {name} to {}, absorbing the body and creating it anew.",
-                crate::medical::name_of(world, nest)
+                "Serrated tendrils carefully pull {name} to {nest_name}, absorbing the body and \
+                 creating it anew."
             ),
             Span::Warning,
         );

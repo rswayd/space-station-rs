@@ -925,12 +925,13 @@ fn stare_into_skull(world: &mut World, mob: Entity, skull: Entity) {
 // ---------------------------------------------------------------------------------------------
 // The curse
 
-/// `/datum/brain_trauma/voided/on_life`: 2% to vomit nebula and fall.
-pub fn voided_life(world: &mut World, mob: Entity, stable: bool, rng: &mut CombatRng) {
-    if stable || !rng.chance(VOMIT_CHANCE) {
+/// `/datum/brain_trauma/voided/on_life`: `prob(2)` per `Life()` (2 s) to vomit nebula and
+/// fall, as a per-second chance over `secs`.
+pub fn voided_life(world: &mut World, mob: Entity, stable: bool, rng: &mut CombatRng, secs: f32) {
+    if stable || !crate::medical::wounds::spt_prob(rng, VOMIT_CHANCE / 2.0, secs) {
         return;
     }
-    crate::medical::diseases::effects::vomit(world, mob, 10.0, true, false, 0);
+    crate::medical::diseases::vomit(world, mob, 10.0, true, false, 0);
     crate::status_effects::knockdown(world, mob, 2.0, 0.0);
     if let Some(&pos) = world.get::<TilePos>(mob) {
         crate::construction::spawn_obj(world, NEBULA_VOMIT, pos);
