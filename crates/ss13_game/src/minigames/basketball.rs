@@ -377,7 +377,7 @@ pub struct PickupRestriction {
     pub until: f64,
 }
 
-fn now(world: &World) -> f64 {
+pub(super) fn now(world: &World) -> f64 {
     world.resource::<Time>().elapsed_secs_f64()
 }
 
@@ -395,17 +395,17 @@ pub fn is_ball(world: &World, e: Entity) -> bool {
         .is_some_and(|i| is_under(&i.path, BALL))
 }
 
-fn key_of(world: &World, client: Entity) -> Option<String> {
+pub(super) fn key_of(world: &World, client: Entity) -> Option<String> {
     world.get::<ClientToken>(client).map(|t| t.0.clone())
 }
 
-fn client_of(world: &mut World, key: &str) -> Option<Entity> {
+pub(super) fn client_of(world: &mut World, key: &str) -> Option<Entity> {
     let mut q = world.query::<(Entity, &ClientToken)>();
     q.iter(world).find(|(_, t)| t.0 == key).map(|(e, _)| e)
 }
 
 /// `isobserver(client.mob)`.
-fn is_observer(world: &World, client: Entity) -> bool {
+pub(super) fn is_observer(world: &World, client: Entity) -> bool {
     world
         .resource::<Players>()
         .mob(client)
@@ -708,7 +708,7 @@ fn load_stadium(world: &mut World, team: &Team) -> Option<(Vec<u16>, Marks)> {
     Some((levels, marks))
 }
 
-fn rand_index(world: &mut World, len: usize) -> usize {
+pub(super) fn rand_index(world: &mut World, len: usize) -> usize {
     world.resource_mut::<CombatRng>().range(0, len as u32 - 1) as usize
 }
 
@@ -1044,7 +1044,7 @@ pub fn end_game(world: &mut World, lobby: Entity) {
             crate::health::despawn_all(world, items);
             world.try_despawn(p.mob).ok();
         }
-        return_mind(world, p, &mobs);
+        return_mind(world, p.client, p.old_body, &mobs);
     }
     crate::science::bitrunning::server::scrub_levels(world, &game.levels);
     info!("basketball: game over, levels {:?} scrubbed", game.levels);
@@ -1052,11 +1052,16 @@ pub fn end_game(world: &mut World, lobby: Entity) {
 
 /// `temporary_body/return_mind`: the client's ghost (body-less, or left in a minigame body)
 /// may re-enter the body it had before, when that still has no mind.
-fn return_mind(world: &mut World, p: &GamePlayer, mobs: &[Entity]) {
-    let Some(ghost) = world.resource::<Players>().mob(p.client) else {
+pub(super) fn return_mind(
+    world: &mut World,
+    client: Entity,
+    old_body: Option<Entity>,
+    mobs: &[Entity],
+) {
+    let Some(ghost) = world.resource::<Players>().mob(client) else {
         return;
     };
-    let Some(body) = p.old_body.filter(|&b| world.get_entity(b).is_ok()) else {
+    let Some(body) = old_body.filter(|&b| world.get_entity(b).is_ok()) else {
         return;
     };
     if world.get::<PlayerMob>(body).is_some() {

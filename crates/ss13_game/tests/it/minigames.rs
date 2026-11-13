@@ -1,7 +1,9 @@
 //! The ghosts' basketball (`ss13_game::minigames::basketball`): two ghosts sign up and start
 //! a game; a stadium loads, each gets a pacifist body on a team; a team scores only on the other
 //! team's hoop; at the end the losers turn to dust, and after the victory lap the bodies go and
-//! the ghosts may re-enter the bodies they had left.
+//! the ghosts may re-enter the bodies they had left. Deathmatch
+//! (`ss13_game::minigames::deathmatch`): a ghost hosts, another joins, both get ready; the arena
+//! loads, they fight, the one who leaves the fight loses and the lobby closes.
 
 use std::path::{Path, PathBuf};
 
@@ -11,6 +13,7 @@ use ss13_game::medical::traumas::Pacifist;
 use ss13_game::minigames::basketball::{
     self, Baller, BasketballLobby, Hoop, LobbyAct, PickupRestriction, Side,
 };
+use ss13_game::minigames::deathmatch::{self, DeathmatchLobby, PanelAct, Playing};
 use ss13_game::server::Players;
 use ss13_game::testing::{Station, fixture_map, write_fixture};
 use ss13_mapload::DmItem;
@@ -57,9 +60,20 @@ hfffa
 "}
 "##;
 
+/// Two deathmatch spawns.
+const ARENA: &str = r##""f" = (/turf/open/floor,/area/centcom/basketball)
+"s" = (/obj/effect/landmark/deathmatch_player_spawn,/turf/open/floor,/area/centcom/basketball)
+
+(1,1,1) = {"
+sfffs
+fffff
+"}
+"##;
+
 fn fixture() -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("minigames_fixture");
     std::fs::create_dir_all(dir.join(basketball::MAPS_DIR)).unwrap();
+    std::fs::create_dir_all(dir.join(deathmatch::MAPS_DIR)).unwrap();
     let types = crate::power::TYPES.replacen(r#"    "/mob": {"#, MINIGAME_TYPES, 1);
     let used = [
         "/obj/effect/landmark/start/assistant",
@@ -87,8 +101,13 @@ fn fixture() -> PathBuf {
         .iter()
         .map(|t| (format!("{}/{}.dmm", basketball::MAPS_DIR, t.map), STADIUM))
         .collect();
+    let arenas: Vec<(String, &str)> = deathmatch::MAPS
+        .iter()
+        .map(|m| (format!("{}/{}.dmm", deathmatch::MAPS_DIR, m.file), ARENA))
+        .collect();
     let mut files: Vec<(&str, &str)> = vec![("map.dmm", MAP)];
     files.extend(stadiums.iter().map(|(p, m)| (p.as_str(), *m)));
+    files.extend(arenas.iter().map(|(p, m)| (p.as_str(), *m)));
     write_fixture(&dir, &types, &used, &states, &files)
 }
 
@@ -207,6 +226,98 @@ fn ghosts_play_basketball_and_the_losers_turn_to_dust() {
     assert!(game(world, lobby).is_none());
     assert!(world.get_entity(home.mob).is_err());
     assert!(world.get_entity(ball).is_err());
+    for (client, body) in [(c0, body0), (c1, body1)] {
+        let ghost = world.resource::<Players>().mob(client).unwrap();
+        assert_eq!(world.get::<Ghost>(ghost).and_then(|g| g.body), Some(body));
+    }
+}
+
+fn dm_lobby(world: &mut World) -> Option<Entity> {
+    let mut q = world.query_filtered::<Entity, With<DeathmatchLobby>>();
+    q.iter(world).next()
+}
+
+#[test]
+fn ghosts_fight_a_deathmatch_until_one_is_left() {
+    let mut st = Station::start(fixture_map(&fixture(), &["map.dmm"]), |_| {});
+    let p0 = st.join("p0", |_| {});
+    let p1 = st.join("p1", |_| {});
+    let (c0, body0) = (st.players[p0].link, st.players[p0].mob);
+    let (c1, body1) = (st.players[p1].link, st.players[p1].mob);
+    let world = st.server.world_mut();
+    let g0 = ss13_game::ghost::ghostize_client(world, c0).expect("a ghost");
+    let g1 = ss13_game::ghost::ghostize_client(world, c1).expect("a ghost");
+
+    // p0 hosts; p1 joins by the host's key.
+    deathmatch::panel_act(world, c0, g0, PanelAct::Host);
+    let lobby = dm_lobby(world).expect("a lobby");
+    deathmatch::panel_act(world, c1, g1, PanelAct::Join("p0".into()));
+    let l = world.get::<DeathmatchLobby>(lobby).unwrap();
+    assert_eq!(l.host, "p0");
+    assert_eq!(l.players.len(), 2);
+
+    // Only the host starts; everyone ready starts it too.
+    deathmatch::lobby_act(world, c1, g1, lobby, deathmatch::LobbyAct::Start);
+    assert_eq!(
+        world.get::<DeathmatchLobby>(lobby).unwrap().playing,
+        Playing::Not
+    );
+    deathmatch::lobby_act(world, c0, g0, lobby, deathmatch::LobbyAct::Ready);
+    assert_eq!(
+        world.get::<DeathmatchLobby>(lobby).unwrap().playing,
+        Playing::Not
+    );
+    deathmatch::lobby_act(world, c1, g1, lobby, deathmatch::LobbyAct::Ready);
+    assert_eq!(
+        world.get::<DeathmatchLobby>(lobby).unwrap().playing,
+        Playing::Pre
+    );
+
+    // After the pause both fight in the arena.
+    world
+        .get_mut::<DeathmatchLobby>(lobby)
+        .unwrap()
+        .arena
+        .as_mut()
+        .unwrap()
+        .start_at = 0.0;
+    run(&mut st.server, 3);
+    let world = st.server.world_mut();
+    let arena = world
+        .get::<DeathmatchLobby>(lobby)
+        .unwrap()
+        .arena
+        .clone()
+        .expect("an arena");
+    assert_eq!(arena.fighters.len(), 2);
+    for f in &arena.fighters {
+        assert_eq!(world.resource::<Players>().mob(f.client), Some(f.mob));
+        assert!(
+            arena
+                .levels
+                .contains(&world.get::<TilePos>(f.mob).unwrap().z)
+        );
+    }
+    let loser = arena
+        .fighters
+        .iter()
+        .find(|f| f.client == c1)
+        .unwrap()
+        .clone();
+    let winner = arena
+        .fighters
+        .iter()
+        .find(|f| f.client == c0)
+        .unwrap()
+        .clone();
+
+    // p1 ghosts out of a living body: it turns to ash, p0 is the last one, the game ends.
+    ss13_game::ghost::ghostize_client(world, c1).expect("a ghost");
+    run(&mut st.server, 3);
+    let world = st.server.world_mut();
+    assert!(world.get_entity(lobby).is_err());
+    assert!(world.get_entity(loser.mob).is_err());
+    assert!(world.get_entity(winner.mob).is_err());
     for (client, body) in [(c0, body0), (c1, body1)] {
         let ghost = world.resource::<Players>().mob(client).unwrap();
         assert_eq!(world.get::<Ghost>(ghost).and_then(|g| g.body), Some(body));
