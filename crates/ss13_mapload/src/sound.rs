@@ -327,7 +327,16 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 396] = [
+    pub const GAME_CODE: [&str; 405] = [
+        "sound/effects/node_drilling.ogg",
+        "sound/effects/node_victory.ogg",
+        "sound/items/tools/jaws_cut.ogg",
+        "sound/items/weapons/parry.ogg",
+        "sound/machines/mining/auto_teleport.ogg",
+        "sound/machines/mining/manual_teleport.ogg",
+        "sound/machines/mining/refinery.ogg",
+        "sound/machines/mining/smelter.ogg",
+        "sound/vehicles/mecha/mech_shield_raise.ogg",
         "sound/machines/terminal/terminal_success.ogg",
         "sound/items/tools/welderdeactivate.ogg",
         "sound/machines/wewewew.ogg",

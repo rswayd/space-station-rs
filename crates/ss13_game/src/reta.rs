@@ -145,7 +145,7 @@ fn card_in_department(world: &World, card: Entity, dept: &str) -> bool {
     else {
         return false;
     };
-    job_departments(world, index).iter().any(|d| *d == dept)
+    job_departments(world, index).contains(&dept)
 }
 
 /// `GLOB.reta_cooldown` and `GLOB.reta_active_grants`.

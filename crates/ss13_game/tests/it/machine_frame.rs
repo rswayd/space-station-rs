@@ -597,7 +597,7 @@ fn metastation_families() {
         "covered families on MetaStation: {:?}",
         picked.iter().map(|p| p.0).collect::<Vec<_>>()
     );
-    assert_eq!(picked.len(), 24, "every family is mapped: {picked:?}");
+    assert_eq!(picked.len(), 25, "every family is mapped: {picked:?}");
     for (fam, machine, path, pos) in picked {
         let board = world.get::<DmMachine>(machine).unwrap().circuit.clone();
         let def = world
@@ -700,6 +700,10 @@ fn metastation_families() {
                 e.contains::<ss13_game::science::server_control::ServerControl>()
             }
             Family::Pacman => e.contains::<ss13_game::power::pacman::Pacman>(),
+            Family::Bouldertech => {
+                e.contains::<ss13_game::mining::boulders::Bouldertech>()
+                    || e.contains::<ss13_game::mining::boulders::Brm>()
+            }
             Family::PowerMonitor => e.contains::<ss13_game::power::monitor::PowerMonitor>(),
             Family::SmesBank => e.contains::<ss13_game::power::smes_portable::SmesBank>(),
             Family::Smes => e.contains::<ss13_game::power::Smes>(),

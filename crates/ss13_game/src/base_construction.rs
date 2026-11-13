@@ -282,8 +282,7 @@ fn rcd_target(world: &World, rcd: Entity, pos: TilePos) -> Option<Entity> {
     on_tile
         .iter()
         .copied()
-        .filter(|&e| rcd_on(e))
-        .last()
+        .rfind(|&e| rcd_on(e))
         .or_else(|| crate::construction::turf_at(world, pos))
 }
 
