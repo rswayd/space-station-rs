@@ -284,6 +284,7 @@
 //! | 2500 | `disposals::interact` |
 //! | 2600 | `genetics::console::interact` |
 //! | 2605 | `genetics::cloner::interact` (experimental cloner: scanner door, console window) |
+//! | 2615 | `genetics::infuser::interact` (DNA infuser: door, start the infusion) |
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
 //! | 2651 | `skill_station::interact` (the occupant's window, else open or close) |
 //! | 2653 | `cryosleep::interact` (the cryo console's window) |
@@ -468,6 +469,7 @@
 //! | 1599 | `eng_machines::sheetifier::item_interaction` (meat in, wrench) |
 //! | 1600 | `machine_frame::item_interaction` |
 //! | 1605 | `genetics::cloner::multitool_act` (experimental cloner scanner and pod into the buffer, linked to the console) |
+//! | 1615 | `genetics::infuser::item_interaction` (an item of creature DNA into the DNA infuser) |
 //! | 1650 | `radiation::geiger_interact` |
 //! | 1680 | `service::barber::item_interaction` (razor, lipstick, paper on lips, dye spray, mirror frames) |
 //! | 1690 | `service::stationery::cabinet_wrench` (right click) |

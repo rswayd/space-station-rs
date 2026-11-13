@@ -17,6 +17,7 @@ pub mod cloner;
 pub mod console;
 pub mod dna_vault;
 pub mod effects;
+pub mod infuser;
 pub mod mutation_toxin;
 
 use std::sync::Arc;
@@ -767,6 +768,7 @@ impl Plugin for GeneticsServerPlugin {
             );
         console::build(app);
         cloner::build(app);
+        infuser::build(app);
     }
 }
 
