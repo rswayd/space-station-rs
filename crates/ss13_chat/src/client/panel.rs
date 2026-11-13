@@ -655,7 +655,7 @@ fn run_scene(
         .map(|(span, text, mark)| {
             let shine = super::donor::shine_patch(span);
             // `.Chat__highlight`: the highlight color over a 15% wash of it.
-            let wash = mark.map(|c| bsn! { TextBackgroundColor(c.with_alpha(0.15)) });
+            let wash = mark.map(|c| bsn! { TextBackgroundColor({c.with_alpha(0.15)}) });
             bsn! { TextSpan(text) @span_font(span, outer, size, mark) @{shine} @{wash} }
         })
         .collect();
@@ -743,7 +743,7 @@ fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
     let whole = whole.map(|c| {
         bsn! {
             Node { border: UiRect::left(px(2)) }
-            BackgroundColor(c.with_alpha(0.08))
+            BackgroundColor({c.with_alpha(0.08)})
             BorderColor::all(c)
         }
     });
