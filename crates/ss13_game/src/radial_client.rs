@@ -127,6 +127,8 @@ fn image(atlas: &mut Option<ResMut<IconAtlas>>, id: Option<IconStateId>) -> Opti
 fn font(size: f32) -> TextFont {
     TextFont {
         font_size: FontSize::Px(size),
+        // Bevy's default font has no Cyrillic: the bundled UI face (DejaVu Sans) does.
+        font: bevy::text::FontSource::Family(ss13_ui_kit::theme::FONT_FAMILY.into()),
         ..default()
     }
 }

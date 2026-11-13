@@ -3,7 +3,7 @@
 //! newest at the bottom, and a new line shortens the older ones' lives (`CHAT_MESSAGE_EXP_DECAY`,
 //! `CHAT_MESSAGE_HEIGHT_DECAY`).
 // shortcut: a UI text node projected onto the map every frame, as `crate::balloon_client`, with
-// Bevy's default font (no bold for `yell`, no italics: the server already darkens the color);
+// The UI's DejaVu Sans (no bold for `yell`, no italics: the server already darkens the color);
 // the prefix `[LOOC]` is in the line's own color.
 
 use bevy::platform::collections::HashMap;
@@ -139,6 +139,8 @@ fn spawn_lines(
             Text::new(shown),
             TextFont {
                 font_size: FontSize::Px(FONT_PX * 2.0),
+                // Bevy's default font has no Cyrillic: the bundled UI face (DejaVu Sans) does.
+                font: bevy::text::FontSource::Family(ss13_ui_kit::theme::FONT_FAMILY.into()),
                 ..default()
             },
             TextColor(Color::srgba_u8(r, g, b, 0)),

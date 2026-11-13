@@ -3,7 +3,7 @@
 //! `animate` chain (`pixel_y` over the whole lifetime with `SINE_EASING|EASE_OUT`; alpha in over
 //! 0.2 s `CUBIC|EASE_OUT`, out over 0.7 s × length `CUBIC|EASE_IN`).
 // shortcut: a UI text node projected onto the map every frame instead of a maptext image on the
-// balloon plane; Bevy's default font with a drop shadow instead of the 1px `#0005` outline.
+// balloon plane; DejaVu Sans with a drop shadow instead of the 1px `#0005` outline.
 
 use bevy::prelude::*;
 use bevy::text::{FontSize, Justify, TextLayout};
@@ -98,6 +98,8 @@ fn spawn_balloons(
             Text::new(text.clone()),
             TextFont {
                 font_size: FontSize::Px(FONT_PX * 2.0),
+                // Bevy's default font has no Cyrillic: the bundled UI face (DejaVu Sans) does.
+                font: bevy::text::FontSource::Family(ss13_ui_kit::theme::FONT_FAMILY.into()),
                 ..default()
             },
             TextColor(Color::srgba(1.0, 1.0, 1.0, 0.0)),
