@@ -51,7 +51,8 @@ test three_sacrifice_the_target
   wait 1
   alice click 6,3 /obj/effect/rune
   until alice.chat ~ "This is the one I desire! You have done well."
-  # The body is gibbed (its ghost stays on the tile); its items may step to a neighbouring tile
-  # (tg `gib`, DROP_ITEMS), its organs fly off.
+  # The body is gibbed; its items may step to a neighbouring tile (tg `gib`, DROP_ITEMS), its
+  # organs fly off. The soul goes into a soulstone left on the rune, as a shade.
   until tile(6,3).entities[].path !~ "/mob/living/carbon/human"
-  expect tile(6,3).entities[].path ~ "/mob/dead/observer"
+  expect tile(6,3).entities[].path ~ "/obj/item/soulstone"
+  until carol.chat ~ "Вы - Тень культа."
