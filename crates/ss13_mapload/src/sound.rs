@@ -164,7 +164,7 @@ pub mod files {
     /// Station bots (`ss13_game::bots`): the voiced lines of the kinds (`generate_speak_list`),
     /// the MULEbot's `buzz`, the stun, cuff and honk sounds of the secbots and honkbots, the
     /// ED-209's shot, the dedbot's blades, the cleanbot's acid spray.
-    pub const BOTS: [&str; 62] = [
+    pub const BOTS: [&str; 70] = [
         "sound/machines/buzz/buzz-sigh.ogg",
         "sound/machines/buzz/buzz-two.ogg",
         "sound/machines/ping.ogg",
@@ -227,6 +227,14 @@ pub mod files {
         "sound/mobs/non-humanoids/hygienebot/finally.ogg",
         "sound/mobs/non-humanoids/hygienebot/thankgod.ogg",
         "sound/mobs/non-humanoids/hygienebot/degenerate.ogg",
+        "sound/mobs/non-humanoids/repairbot/brick.ogg",
+        "sound/mobs/non-humanoids/repairbot/entropy.ogg",
+        "sound/mobs/non-humanoids/repairbot/fixit.ogg",
+        "sound/mobs/non-humanoids/repairbot/fixtouch.ogg",
+        "sound/mobs/non-humanoids/repairbot/patchingholes.ogg",
+        "sound/mobs/non-humanoids/repairbot/pay.ogg",
+        "sound/mobs/non-humanoids/repairbot/strings.ogg",
+        "sound/mobs/non-humanoids/repairbot/passionproject.ogg",
     ];
     /// `SSexplosions.shake_the_room`: the far and distant explosion sounds (the near one, the
     /// creaking and the hull creaking are SFX keys).

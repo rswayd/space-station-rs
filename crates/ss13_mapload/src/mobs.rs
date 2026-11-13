@@ -38,12 +38,24 @@ const ALIEN_MAX_TEMP: f32 = 360.15;
 
 /// Types the game spawns by itself: the carp of the migration event (tg `carp_type`,
 /// `boss_type`), round-start vermin (tg `SSminor_mapping`), and the dead mouse a mouse leaves.
-pub const MOB_RUNTIME_TYPES: [&str; 5] = [
+pub const MOB_RUNTIME_TYPES: [&str; 16] = [
     "/mob/living/basic/carp",
     "/mob/living/basic/carp/mega",
     "/mob/living/basic/mouse",
     "/mob/living/basic/cockroach",
     "/obj/item/food/deadmouse",
+    // Guardians a creator summons (`ss13_game::mobs::guardian`).
+    "/mob/living/basic/guardian/assassin",
+    "/mob/living/basic/guardian/charger",
+    "/mob/living/basic/guardian/dextrous",
+    "/mob/living/basic/guardian/explosive",
+    "/mob/living/basic/guardian/gaseous",
+    "/mob/living/basic/guardian/gravitokinetic",
+    "/mob/living/basic/guardian/lightning",
+    "/mob/living/basic/guardian/protector",
+    "/mob/living/basic/guardian/ranged",
+    "/mob/living/basic/guardian/standard",
+    "/mob/living/basic/guardian/support",
 ];
 
 /// Lavaland fauna the game spawns by itself (`ss13_game::mobs::lavaland`): the cave population

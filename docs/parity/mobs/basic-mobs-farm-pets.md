@@ -95,7 +95,7 @@
 Голографический питомец из КПК-приложения NtosVirtualPet: выходит в мир, повышает уровень, получает способности.
 
 - **Код:** [`/mob/living/basic/orbie`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/pets/orbie/orbie.dm#L3); tgui: [`NtosVirtualPet.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/NtosVirtualPet.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — Орби создаётся только программой КПК `virtual_pet` (622 строки DM: уровни, опыт за кормление и шаги, вызов, сообщения КПК, фото, трюки), а её нет (`crates/ss13_game/src/modpc/programs/`, запись «Развлекательные и утилитарные программы» в [../comms/ntos-apps.md](../comms/ntos-apps.md)); есть только эмоции силиконов у Орби (`crates/ss13_game/src/speech.rs`)
 
 ### Культистские питомцы
 Питомец, обращённый культом, ищет мёртвых культистов и активирует руны оживления.

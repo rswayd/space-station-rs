@@ -1,6 +1,7 @@
 //! The `SimpleBot` window (client), after `SimpleBot.tsx`: the lock, hack and rename buttons,
 //! the settings (power, airplane mode, patrol, maintenance hatch) and the kind's controls
-//! (toggles; the medbot's threshold steps by 5). The `Mule` window, after `Mule.tsx`: status
+//! (toggles; the medbot's threshold steps by 5), the repairbot's sheets and tiles (a click hands
+//! them back, `RepairBot.tsx`). The `Mule` window, after `Mule.tsx`: status
 //! (rename, power, the cell, mode, load), then unless locked the controls (unload, ID, home,
 //! destination), go/stop/home and the delivery settings.
 // shortcut: buttons instead of tgui's icon toggles, slider and checkboxes; no pAI or personality
@@ -11,7 +12,7 @@ use ss13_tgui::client::{AppTguiClientExt, ClientUi};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::{ActParams, UiColor};
 
-use super::{HEAL_THRESHOLD, MuleData, MuleUi, SimpleBotData, SimpleBotUi};
+use super::{BotMaterial, HEAL_THRESHOLD, MuleData, MuleUi, SimpleBotData, SimpleBotUi};
 
 pub struct BotsClientPlugin;
 
@@ -82,6 +83,20 @@ fn control(name: &str, value: i32) -> Box<dyn SceneList> {
     }))
 }
 
+/// A repairbot stack: "remove_item" hands it back.
+fn material(m: &BotMaterial) -> Box<dyn SceneList> {
+    let text = format!("{} ({})", m.name, m.amount);
+    let params = ActParams(vec![("item_reference".to_owned(), m.key.clone())]);
+    Box::new(EntityScene(bsn! {
+        Node { margin: UiRect::bottom(px(2)) }
+        Children [
+            @Button { @icon: "eject", @content: text }
+            Act("remove_item")
+            params
+        ]
+    }))
+}
+
 impl ClientUi for SimpleBotUi {
     const WIDTH: f32 = 450.0;
     const HEIGHT: f32 = 300.0;
@@ -108,11 +123,12 @@ impl ClientUi for SimpleBotUi {
                 toggle("Maintenance Lock", s.maintenance_lock, "maintenance"),
             ],
         };
-        let controls: Vec<Box<dyn SceneList>> = data
+        let mut controls: Vec<Box<dyn SceneList>> = data
             .custom_controls
             .iter()
             .map(|(name, value)| control(name, *value))
             .collect();
+        controls.extend(data.materials.iter().map(material));
         let danger = UiColor::Bad;
         bsn! {
             @WindowContent

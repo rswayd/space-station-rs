@@ -65,6 +65,7 @@
 //! | 1767 | `clothing::gear::toggle_magboots` |
 //! | 1773 | `devices::door_remote::attack_self` (the next mode) |
 //! | 1777 | `devices::jammer::attack_self` (the disruptor wave) |
+//! | 1787 | `mobs::guardian::attack_self` (a guardian creator: the type menu and the ghost poll) |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
 //! | 1900 | `assemblies::server::attack_self` |

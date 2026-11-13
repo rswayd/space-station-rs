@@ -90,13 +90,18 @@ pub fn bot_opens(world: &World, mob: Entity, blocker: Entity) -> bool {
         .map_or(blocker, |f| f.0);
     let powered = world.get::<crate::power::Unpowered>(door).is_none();
     world.get::<crate::doors::Door>(door).is_some_and(|d| {
-        matches!(
+        let opens = matches!(
             d.kind,
             DoorKind::Basic | DoorKind::Airlock | DoorKind::Windoor
         ) && !d.locked
             && !d.welded
             && d.has_power(powered)
-            && d.allows(Some(&bot.access))
+            && d.allows(Some(&bot.access));
+        // `TRAIT_FIREDOOR_OPENER`: the repairbot crowbars firelocks open (`crate::bots::repair`).
+        opens
+            || (d.kind == DoorKind::Firedoor
+                && !d.welded
+                && bot.kind == crate::bots::BotKind::Repair)
     })
 }
 /// Steps without progress before the movement fails (tg `max_pathing_attempts`).

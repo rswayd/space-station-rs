@@ -17,7 +17,7 @@ const COMPONENT: &str = "dm_navbeacon";
 
 /// Built by bot construction or dropped by dying bots, and what MULEbots, ED-209s, honkbots and
 /// hygienebots use at runtime (cells, cuffs, the clown box a honkbot starts from).
-pub const BOT_RUNTIME_TYPES: [&str; 38] = [
+pub const BOT_RUNTIME_TYPES: [&str; 41] = [
     "/mob/living/basic/bot/cleanbot",
     "/mob/living/basic/bot/medbot",
     "/mob/living/basic/bot/secbot",
@@ -56,6 +56,10 @@ pub const BOT_RUNTIME_TYPES: [&str; 38] = [
     "/obj/item/stack/sheet/iron",
     "/obj/item/melee/energy/sword/saber",
     "/obj/item/toy/sword",
+    // The repairbot's toolbox, the glass it hands back, the floor tiles it holds.
+    "/obj/item/storage/toolbox/mechanical",
+    "/obj/item/stack/sheet/glass",
+    "/obj/item/stack/tile/iron",
 ];
 
 /// `/obj/machinery/navbeacon` `location` and `codes_txt` ("patrol;next_patrol=X").

@@ -155,6 +155,8 @@ pub enum BotLeaf {
     AcquireAcidVictim,
     /// The emagged cleanbot's `execute_clean` on it.
     AcidSpray,
+    /// The repairbot's leaves ([`super::repair`]).
+    Repair(super::repair::RepairLeaf),
 }
 
 const fn perform(delay: bool, outcome: Option<bool>) -> Perform {
@@ -179,6 +181,7 @@ impl BotLeaf {
             Self::FindDeliveryBeacon { .. } => 2.0,
             Self::HandleDelivery => 1.0,
             Self::Sec(leaf) => leaf.cooldown(),
+            Self::Repair(leaf) => leaf.cooldown(),
             Self::AcquireAcidVictim => super::cleanbot::ACID_SEARCH_SECS,
             // `melee_attack_cooldown` of bots (`/mob/living/basic` 2 s).
             Self::SecAttack => 2.0,
@@ -259,6 +262,7 @@ impl BotLeaf {
                 DELAY_SUCCEED
             }
             Self::Sec(leaf) => leaf.perform(ctx),
+            Self::Repair(leaf) => leaf.perform(ctx),
             Self::AcquireAcidVictim => super::cleanbot::acquire_victim(ctx),
             Self::AcidSpray => super::cleanbot::spray(ctx),
             Self::FirebotSpeech => {
@@ -284,6 +288,7 @@ impl BotLeaf {
     pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
         match self {
             Self::Sec(leaf) => leaf.finish(ctx, succeeded),
+            Self::Repair(leaf) => leaf.finish(ctx, succeeded),
             Self::Wait { waited, .. } => *waited = false,
             Self::Clean => {
                 ctx.bb.set(
@@ -1386,6 +1391,7 @@ pub fn task_done(world: &mut World, mob: Entity, task: BotTask) {
         }
         BotJob::Tend => medicate(world, mob, task.target),
         BotJob::Cuff => cuff(world, mob, task.target),
+        BotJob::Repair(job) => super::repair::complete(world, mob, task.target, job),
     }
 }
 
@@ -1811,11 +1817,13 @@ pub fn tree(path: &str) -> Built {
         firebot()
     } else if is_under(path, &root("/mulebot")) {
         mulebot()
+    } else if is_under(path, &root("/repairbot")) {
+        super::repair::tree()
     } else if let Some(tree) = super::sec::tree(path) {
         tree
     } else {
-        // shortcut: the repairbot, honkbot, hygienebot, vibebot, ED-209 and dedbot trees are
-        // not ported; they summon, salute and patrol like the base bot.
+        // shortcut: the vibebot tree is not ported; it summons, salutes and patrols like the
+        // base bot.
         base()
     };
     Built {

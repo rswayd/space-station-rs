@@ -22,7 +22,8 @@
 //!   cases; bots are `DEL_ON_DEATH`.
 //! - [`BotTask`]: the bot's own `do_after` (cleaning, tending, cuffing); the AI pauses while it
 //!   runs (tg pauses controllers during `do_after`), and it ends if either side moves.
-//! - [`construction`]: bot assemblies built from items; [`cleanbot`]: its knife, titles and acid.
+//! - [`construction`]: bot assemblies built from items; [`cleanbot`]: its knife, titles and acid;
+//!   [`repair`]: the repairbot's stock, repairs and girders.
 //!
 //! The `SimpleBot` and `Mule` windows' data is here (both halves); [`client`] draws them.
 // shortcut: no pAI cards, ghost possession (so no `BotAnnouncement` action), path HUD,
@@ -41,6 +42,8 @@ pub mod construction;
 mod core;
 #[cfg(feature = "server")]
 pub mod mule;
+#[cfg(feature = "server")]
+pub mod repair;
 #[cfg(feature = "server")]
 pub mod sec;
 #[cfg(feature = "server")]
@@ -74,6 +77,16 @@ pub struct SimpleBotData {
     pub settings: Option<BotSettings>,
     /// `custom_controls` in tg's order: a toggle's 0/1, or the medbot's `heal_threshold`.
     pub custom_controls: Vec<(String, i32)>,
+    /// The repairbot's `repairbot_materials`: what `remove_item` hands back.
+    pub materials: Vec<BotMaterial>,
+}
+
+/// A stack the repairbot holds: `remove_item`'s `item_reference`, its name and amount.
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+pub struct BotMaterial {
+    pub key: String,
+    pub name: String,
+    pub amount: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]

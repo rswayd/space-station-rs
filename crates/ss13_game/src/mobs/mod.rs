@@ -33,6 +33,7 @@ pub mod defense;
 pub mod eating;
 pub mod farm;
 pub mod gorilla;
+pub mod guardian;
 pub mod illusion;
 pub mod jungle;
 pub mod lavaland;
@@ -186,6 +187,7 @@ impl Plugin for MobsServerPlugin {
         swarming::build(app);
         riding::build(app);
         oozes::build(app);
+        guardian::build(app);
     }
 }
 
@@ -601,6 +603,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     space_fauna::on_death(world, def, pos);
     bees::on_death(world, mob, pos);
     cult_pets::on_death(world, mob, pos);
+    guardian::on_death(world, mob);
     oozes::on_death(world, mob);
     crate::antag::slaughter::on_death(world, mob, def, pos);
     crate::antag::voidwalker::on_death(world, mob, pos);
