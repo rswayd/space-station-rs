@@ -147,6 +147,7 @@ fn human_states() -> Vec<(String, String)> {
                     missing: 0,
                     robotic: 0,
                     eyeless: false,
+                    tail: None,
                 };
                 for part in parts(&look).unwrap() {
                     out.push((part.dmi.to_owned(), part.state));

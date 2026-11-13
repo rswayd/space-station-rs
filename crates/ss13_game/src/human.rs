@@ -24,6 +24,8 @@ use crate::species::{LimbColor, SpeciesId};
 /// tg standing overlay layers (`code/__DEFINES/mobs.dm`). They are applied as `-layer`, so a
 /// higher number draws further below.
 pub mod layers {
+    /// `BODY_BEHIND_LAYER`: the `BEHIND` sprites of external organs (a tail).
+    pub const BODY_BEHIND_LAYER: f32 = 23.2;
     /// The far leg when facing east or west (`handle_masking`).
     pub const BODYPARTS_LOW_LAYER: f32 = 23.1;
     pub const BODYPARTS_LAYER: f32 = 23.0;
@@ -48,6 +50,8 @@ pub mod layers {
     pub const HEAD_LAYER: f32 = 6.0;
     /// Held items.
     pub const HANDS_LAYER: f32 = 3.0;
+    /// `BODY_FRONT_LAYER`: the `FRONT` sprites of external organs.
+    pub const BODY_FRONT_LAYER: f32 = 2.5;
 }
 use layers::*;
 
@@ -68,6 +72,26 @@ pub const ROBOTIC_LIMB_DMI: &str = "icons/mob/augmentation/augments.dmi";
 const HUSK_SKIN: [u8; 3] = [62, 57, 52];
 /// `BLOOD_COLOR_RED` of the husk blood overlays.
 const HUSK_BLOOD: [u8; 3] = [0xa1, 0x08, 0x08];
+
+/// `/datum/sprite_accessory/tails/{lizard,tajaran,vulpkanin}::icon`.
+pub const TAIL_DMIS: [&str; 3] = [
+    "icons/mob/human/species/lizard/lizard_tails.dmi",
+    "icons/bandastation/mob/species/tajaran/sprite_accessories/tails.dmi",
+    "icons/bandastation/mob/species/vulpkanin/sprite_accessories/tails.dmi",
+];
+
+/// A tail organ's `/datum/bodypart_overlay/mutant/tail`: drawn from `dmi` as
+/// `m_[key]_[wagging_][style]_{BEHIND,FRONT}` (`build_icon_state`), in the limbs' color
+/// (`ORGAN_COLOR_INHERIT`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TailLook {
+    pub dmi: &'static str,
+    /// `feature_key`.
+    pub key: &'static str,
+    /// The sprite accessory's `icon_state`.
+    pub style: &'static str,
+    pub wagging: bool,
+}
 
 /// tg `TRAIT_HUSK`: a husked body (a changeling's drained victim). Its look draws husked limbs
 /// without hair or eyes ([`HumanLook::husk`]).
@@ -257,6 +281,8 @@ pub struct HumanLook {
     pub robotic: u8,
     /// No eyes organ (tg `update_body_parts` draws eyes only from the organ).
     pub eyeless: bool,
+    /// The tail organ's look (`crate::medical::organs` keeps it in step with the organ).
+    pub tail: Option<TailLook>,
 }
 
 impl HumanLook {
@@ -349,6 +375,7 @@ impl AppearancePrefs {
             missing: 0,
             robotic: 0,
             eyeless: false,
+            tail: None,
         }
     }
 }
@@ -549,6 +576,21 @@ pub fn parts(look: &HumanLook) -> Result<Vec<Part>, LookError> {
             });
         }
     }
+    // The tail sits on the groin, drawn with the chest (`ENTIRE_BODY` offset).
+    // shortcut: a suit with `HIDEJUMPSUIT` does not hide the tail (`can_draw_on_bodypart`),
+    // no tail spines or tajaran/vulpkanin tail markings overlays.
+    if let Some(tail) = look.tail.filter(|_| has(BodyZone::Chest)) {
+        let wagging = if tail.wagging { "wagging_" } else { "" };
+        for (layer, side) in [(BODY_BEHIND_LAYER, "BEHIND"), (BODY_FRONT_LAYER, "FRONT")] {
+            parts.push(Part {
+                layer,
+                dmi: tail.dmi,
+                state: format!("m_{}_{wagging}{}_{side}", tail.key, tail.style),
+                color: skin,
+                only_dirs: 0,
+            });
+        }
+    }
     for item in [&look.uniform, &look.shoes].into_iter().flatten() {
         let Some((_, layer, sprites)) = WORN.iter().find(|(ty, ..)| ty == item) else {
             errors.push(format!("no worn sprites for {item}"));
@@ -614,6 +656,7 @@ pub struct HumanAppearances {
 impl HumanAppearances {
     pub fn new(manifest: &AssetManifest, base: Appearance) -> Self {
         let mut dmis: HashSet<&str> = [BASE.0, BODYPARTS_DMI, EYES_DMI, HAIR_DMI, HUSK_DMI].into();
+        dmis.extend(TAIL_DMIS);
         dmis.extend(crate::species::LIMB_DMIS);
         dmis.extend(
             WORN.iter()
@@ -702,7 +745,16 @@ impl HumanAppearances {
             id.unwrap_or(IconStateId(0))
         };
         let base = id(BASE.0, BASE.1);
-        let overlays = parts
+        // An external organ's sprite may be missing (a style or a layer the `.dmi` lacks, like
+        // tg's empty `FRONT` of some tails): that overlay is skipped, the body still drawn.
+        let drawn: Vec<&Part> = parts
+            .iter()
+            .filter(|p| {
+                !TAIL_DMIS.contains(&p.dmi)
+                    || self.ids.contains_key(&(p.dmi.to_owned(), p.state.clone()))
+            })
+            .collect();
+        let overlays = drawn
             .iter()
             .map(|p| Overlay {
                 // Turning is a `Facing` change only; every part has 4 dirs.
@@ -720,7 +772,7 @@ impl HumanAppearances {
             overlays,
             ..self.base.clone()
         };
-        Ok((appearance, parts.iter().map(|p| p.layer).collect()))
+        Ok((appearance, drawn.iter().map(|p| p.layer).collect()))
     }
 }
 
@@ -912,6 +964,37 @@ mod tests {
         l.skin_tone = "green-ish".into();
         l.shoes = Some("/obj/item/clothing/shoes/clown_shoes".into());
         assert_eq!(parts(&l).unwrap_err().0.len(), 2);
+    }
+
+    #[test]
+    fn a_tail_is_drawn_behind_and_in_front_and_a_missing_sprite_is_skipped() {
+        let mut l = look(13);
+        l.tail = Some(TailLook {
+            dmi: TAIL_DMIS[0],
+            key: "tail_lizard",
+            style: "smooth",
+            wagging: true,
+        });
+        let all = parts(&l).unwrap();
+        let tail: Vec<&Part> = all.iter().filter(|p| p.dmi == TAIL_DMIS[0]).collect();
+        assert_eq!(tail.len(), 2);
+        assert_eq!(tail[0].state, "m_tail_lizard_wagging_smooth_BEHIND");
+        assert_eq!(tail[0].layer, BODY_BEHIND_LAYER);
+        assert_eq!(all.first().unwrap().state, tail[0].state, "under the limbs");
+        assert_eq!(
+            all.last().unwrap().state,
+            "m_tail_lizard_wagging_smooth_FRONT"
+        );
+        // The manifest lacks the FRONT sprite: the body is still drawn, without it.
+        let mut manifest = manifest_for(std::slice::from_ref(&l));
+        manifest.states.retain(|s| !s.state.ends_with("_FRONT"));
+        let mut humans = HumanAppearances::new(&manifest, base());
+        let built = humans.get(&l).unwrap();
+        assert_eq!(built.overlays.len(), all.len() - 1);
+        // A body sprite missing is still an error.
+        let mut manifest = manifest_for(std::slice::from_ref(&l));
+        manifest.states.retain(|s| s.state != "human_chest_m");
+        assert!(HumanAppearances::new(&manifest, base()).get(&l).is_err());
     }
 
     #[test]

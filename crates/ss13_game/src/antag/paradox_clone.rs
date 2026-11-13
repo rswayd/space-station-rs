@@ -268,6 +268,7 @@ pub fn spawn_clone(world: &mut World, client: Entity, original: Entity, pos: Til
             missing: 0,
             robotic: 0,
             eyeless: false,
+            tail: None,
             ..look
         };
     }
