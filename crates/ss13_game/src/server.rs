@@ -322,6 +322,7 @@ impl Plugin for GameServerPlugin {
         ))
         .add_plugins((
             crate::ssd::SsdPlugin,
+            crate::typing::TypingPlugin,
             crate::dreams::DreamsPlugin,
             crate::emojis::EmojisPlugin,
             crate::locked_pickup::LockedPickupPlugin,

@@ -774,6 +774,8 @@ pub mod transport_ui_client;
 pub mod traps;
 #[cfg(feature = "server")]
 pub mod turf_damage;
+#[cfg(feature = "server")]
+pub mod typing;
 #[cfg(feature = "client")]
 pub mod ui_sprites;
 #[cfg(feature = "server")]

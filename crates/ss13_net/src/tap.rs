@@ -74,6 +74,7 @@ impl NetPacket {
             ServerMessage::Sound(s) => ("Sound".into(), bounded(s)),
             ServerMessage::Animation(a) => ("Animation".into(), bounded(a)),
             ServerMessage::ChannelSound(s) => ("ChannelSound".into(), bounded(s)),
+            ServerMessage::CloseSay => ("CloseSay".into(), String::new()),
         };
         Self {
             outgoing: false,

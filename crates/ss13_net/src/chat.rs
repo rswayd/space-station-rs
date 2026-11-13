@@ -17,9 +17,27 @@ pub mod server {
         pub message: ChatMessage,
     }
 
+    /// Write to close one client's say line (tgui-say `close` after a forced say).
+    #[derive(Message, Clone, Copy, Debug)]
+    pub struct SendCloseSay {
+        pub client: Entity,
+    }
+
     pub(crate) fn plugin(app: &mut App) {
         app.add_message::<SendChat>()
-            .add_systems(PostUpdate, send.in_set(NetServerSystems::Send));
+            .add_message::<SendCloseSay>()
+            .add_systems(
+                PostUpdate,
+                (send, send_close_say).in_set(NetServerSystems::Send),
+            );
+    }
+
+    fn send_close_say(mut outgoing: MessageReader<SendCloseSay>, clients: Query<&ClientLink>) {
+        for SendCloseSay { client } in outgoing.read() {
+            if let Ok(link) = clients.get(*client) {
+                link.send(&ServerMessage::CloseSay);
+            }
+        }
     }
 
     fn send(mut outgoing: MessageReader<SendChat>, clients: Query<&ClientLink>) {
@@ -51,7 +69,12 @@ pub mod client {
     #[derive(Message, Clone, Debug)]
     pub struct ChatReceived(pub ChatMessage);
 
+    /// The server forced the say line's text out: the line closes.
+    #[derive(Message, Clone, Copy, Debug)]
+    pub struct CloseSayReceived;
+
     pub(crate) fn plugin(app: &mut App) {
-        app.add_message::<ChatReceived>();
+        app.add_message::<ChatReceived>()
+            .add_message::<CloseSayReceived>();
     }
 }

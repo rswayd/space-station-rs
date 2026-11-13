@@ -296,6 +296,10 @@ pub struct MobDef {
     /// `pass_flags` (`PASSTABLE`, `PASSMOB`, ...): what it walks through.
     #[serde(default)]
     pub pass_flags: u32,
+    /// `bubble_icon`: the `talk.dmi` state prefix of its speech and typing bubbles (empty in
+    /// data converted before it: `"default"`).
+    #[serde(default)]
+    pub bubble_icon: String,
 }
 
 /// What a mob says at random: a `/datum/bt_node/ai_behavior/random_speech` type's vars, or a
@@ -732,6 +736,7 @@ fn mob_def(
         move_resist: Some(num("move_resist", MOVE_RESIST_DEFAULT))
             .filter(|&r| r != MOVE_RESIST_DEFAULT),
         pass_flags: num("pass_flags", 0.0) as u32,
+        bubble_icon: s("bubble_icon"),
     }
 }
 
@@ -791,7 +796,7 @@ mod tests {
         "types": {
             "/atom": { "parent": null },
             "/mob": { "parent": "/atom", "declared_vars": { "faction": { "expr": "list(FACTION_NEUTRAL)" } } },
-            "/mob/living": { "parent": "/mob", "declared_vars": { "maxHealth": 100, "health": 100 } },
+            "/mob/living": { "parent": "/mob", "declared_vars": { "maxHealth": 100, "health": 100, "bubble_icon": "default" } },
             "/mob/living/basic": { "parent": "/mob/living", "declared_vars": {
                 "maxHealth": 20, "health": 20, "speed": 1, "melee_attack_cooldown": 20,
                 "attack_verb_continuous": "атакует", "response_help_continuous": "тычет",
@@ -818,7 +823,7 @@ mod tests {
                 "name": "colossus", "maxHealth": 2500, "health": 2500, "del_on_death": 1, "speed": 10 } },
             "/mob/living/carbon": { "parent": "/mob/living" },
             "/mob/living/carbon/alien": { "parent": "/mob/living/carbon",
-                "declared_vars": { "name": "alien", "icon": { "resource": "icons/mob/nonhuman-player/alien.dmi" } } },
+                "declared_vars": { "name": "alien", "bubble_icon": "alien", "icon": { "resource": "icons/mob/nonhuman-player/alien.dmi" } } },
             "/mob/living/carbon/alien/larva": { "parent": "/mob/living/carbon/alien",
                 "declared_vars": { "name": "alien larva", "icon_state": "larva0", "maxHealth": 25, "health": 25 } },
             "/datum/ai_controller/basic_controller/carp": { "parent": null, "declared_vars": {
@@ -857,6 +862,11 @@ mod tests {
         // Only `[attack_verbs]` translates attacks: "bites" stays (it is an eat verb there).
         assert_eq!(carp.attack_verb_continuous, "bites");
         assert_eq!(carp.speak_emote, ["пищит"]);
+        assert_eq!(carp.bubble_icon, "default", "inherited from /mob/living");
+        assert_eq!(
+            data.mobs["/mob/living/carbon/alien/larva"].bubble_icon,
+            "alien"
+        );
         assert_eq!(carp.faction, ["carp"]);
         assert_eq!(carp.habitable_atmos, None, "space carp breathe nothing");
         assert_eq!(carp.minimum_survivable_temperature, 0.0);

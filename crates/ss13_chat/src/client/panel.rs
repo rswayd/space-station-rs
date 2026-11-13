@@ -1,6 +1,11 @@
 //! The docked chat panel: tgui-panel's tabs + message list + "scroll to bottom", with tgui-say's
 //! input line under it.
 //!
+//! The say line is tgui-say (`tgui/packages/tgui-say`): the channel button and Tab cycle the
+//! channels, a radio prefix typed first (`:h `) moves onto the button, Up/Down walk the last
+//! five sent lines, and the line tells the server when the player thinks or types
+//! ([`TypingTracker`], tg `start_thinking`/`start_typing`).
+//!
 //! Messages are broken into visual lines once (on arrival, on a combine, on a width change) and
 //! every line is one fixed-height [`VirtualList`] row, so only the rows in view exist as
 //! entities whatever the history length. A row is drawn without wrapping from the pieces of its
@@ -16,10 +21,14 @@ use bevy::text::{
     EditableText, FontCx, FontSize, FontSourceTemplate, FontStyle, FontWeight, LayoutCx,
 };
 use bevy::ui::ComputedNode;
+use ss13_net::admin::client::{AdminResponseReceived, SendAdminRequest};
+use ss13_net::chat::client::CloseSayReceived;
 use ss13_net::client::SendIntent;
 use ss13_shared::IconStateId;
+use ss13_shared::admin::rights::R_ADMIN;
+use ss13_shared::admin::{AdminRequest, AdminResponse};
 use ss13_shared::chat::{ChatChannel, MAX_MESSAGE_LEN, Span};
-use ss13_shared::protocol::ClientIntent;
+use ss13_shared::protocol::{ClientIntent, TypingState};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::scroll::{SCROLLBAR_WIDTH, ScrollContent};
 use ss13_ui_kit::theme::{self, root_text_style};
@@ -213,23 +222,40 @@ pub enum SayChannel {
     Looc,
     LoocWallpierce,
     Pray,
+    /// tgui-say `Admin` (asay), opened by its key only (F5) and only by an admin.
+    Admin,
 }
 
 impl SayChannel {
-    /// tgui-say's Tab order (the button); pray has only its key.
-    const CYCLE: [SayChannel; 7] = [
+    /// tgui-say's `ChannelIterator` order (the button, Tab), without its blacklisted `Admin`
+    /// and `Mentor`. BandaStation's "LOOC (Wallpierce)" verb has no tgui-say channel; it
+    /// follows LOOC here.
+    const CYCLE: [SayChannel; 8] = [
         SayChannel::Say,
-        SayChannel::Radio,
         SayChannel::Whisper,
-        SayChannel::Me,
+        SayChannel::Radio,
         SayChannel::Ooc,
         SayChannel::Looc,
         SayChannel::LoocWallpierce,
+        SayChannel::Me,
+        SayChannel::Pray,
     ];
 
+    /// `ChannelIterator.next`: a blacklisted channel (admin) stays.
     pub fn next(self) -> Self {
-        let i = Self::CYCLE.iter().position(|c| *c == self).unwrap_or(0);
+        let Some(i) = Self::CYCLE.iter().position(|c| *c == self) else {
+            return self;
+        };
         Self::CYCLE[(i + 1) % Self::CYCLE.len()]
+    }
+
+    /// `ChannelIterator.isVisible`: not one of tgui-say's `quiet` channels, so the mob shows
+    /// the typing indicator.
+    pub fn in_character(self) -> bool {
+        matches!(
+            self,
+            SayChannel::Say | SayChannel::Radio | SayChannel::Whisper | SayChannel::Me
+        )
     }
 
     pub fn label(self) -> &'static str {
@@ -242,13 +268,15 @@ impl SayChannel {
             SayChannel::Looc => "LOOC",
             SayChannel::LoocWallpierce => "LOOC (сквозь стены)",
             SayChannel::Pray => "Молитва",
+            SayChannel::Admin => "Админ",
         }
     }
 
-    /// tg `tgui_say/delegate_speech`: the intent of a line sent in this channel.
-    pub fn intent(self, text: &str) -> ClientIntent {
+    /// tg `tgui_say/delegate_speech`: the intent of a line sent in this channel; `None` for
+    /// admin chat, which goes as an [`AdminRequest::Asay`].
+    pub fn intent(self, text: &str) -> Option<ClientIntent> {
         let text = text.to_string();
-        match self {
+        Some(match self {
             SayChannel::Say => ClientIntent::Say(text),
             SayChannel::Radio => ClientIntent::Say(format!("; {text}")),
             SayChannel::Whisper => ClientIntent::Say(format!("#{text}")),
@@ -263,12 +291,243 @@ impl SayChannel {
                 wall_pierce: true,
             },
             SayChannel::Pray => ClientIntent::Pray(text),
-        }
+            SayChannel::Admin => return None,
+        })
     }
 }
 
-/// tg's `/datum/keybinding/client/communication` defaults (with BandaStation's edits).
-pub const CHANNEL_KEYS: [(KeyCode, SayChannel); 8] = [
+/// tgui-say `RADIO_PREFIXES`: a prefix typed first moves onto the channel button.
+pub const RADIO_PREFIXES: [(&str, &str); 30] = [
+    (":a ", "Рой"),
+    (":b ", "Бин"),
+    (":c ", "Ком"),
+    (":e ", "Инж"),
+    (":g ", "Генка"),
+    (":m ", "Мед"),
+    (":n ", "Иссл"),
+    (":o ", "ИИ"),
+    (":p ", "Развл"),
+    (":s ", "Безоп"),
+    (":l ", "Юр"),
+    (":t ", "Синд"),
+    (":u ", "Снаб"),
+    (":v ", "Обсл"),
+    (":y ", "ЦК"),
+    (":ф ", "Рой"),
+    (":и ", "Бин"),
+    (":с ", "Ком"),
+    (":у ", "Инж"),
+    (":п ", "Генка"),
+    (":ь ", "Мед"),
+    (":т ", "Иссл"),
+    (":щ ", "ИИ"),
+    (":з ", "Развл"),
+    (":ы ", "Безоп"),
+    (":д ", "Юр"),
+    (":е ", "Синд"),
+    (":г ", "Снаб"),
+    (":м ", "Обсл"),
+    (":н ", "ЦК"),
+];
+
+/// The binary prefixes: speech to silicons shows no indicator (tgui-say sends `thinking` off).
+const BINARY_PREFIXES: [&str; 2] = [":b ", ":и "];
+
+/// tgui-say `getPrefix`: the radio prefix `value` starts with (`/^[:.][\wА-Яа-яёЁ]\s/`, the
+/// dot read as a colon, case-insensitive), as its [`RADIO_PREFIXES`] key.
+pub fn radio_prefix(value: &str) -> Option<&'static str> {
+    let mut chars = value.chars();
+    let (mark, key, space) = (chars.next()?, chars.next()?, chars.next()?);
+    if !matches!(mark, ':' | '.') || space != ' ' {
+        return None;
+    }
+    let wanted: String = std::iter::once(':')
+        .chain(key.to_lowercase())
+        .chain([' '])
+        .collect();
+    RADIO_PREFIXES
+        .iter()
+        .find(|(prefix, _)| *prefix == wanted)
+        .map(|&(prefix, _)| prefix)
+}
+
+/// tgui-say `ChatHistory`: the last five sent lines, newest first, walked with Up/Down; the
+/// draft is kept while walking.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SayHistory {
+    messages: Vec<String>,
+    /// `-1` in tgui-say: at the draft, not on a sent line.
+    index: Option<usize>,
+    temp: Option<String>,
+}
+
+impl SayHistory {
+    const MAX: usize = 5;
+
+    pub fn add(&mut self, message: &str) {
+        self.messages.insert(0, message.to_string());
+        self.messages.truncate(Self::MAX);
+        self.index = None;
+    }
+
+    /// The button's number while on a sent line (1 = the newest).
+    pub fn position(&self) -> Option<usize> {
+        self.index.map(|i| i + 1)
+    }
+
+    pub fn is_at_latest(&self) -> bool {
+        self.index.is_none()
+    }
+
+    pub fn older(&mut self) -> Option<&str> {
+        let next = self.index.map_or(0, |i| i + 1);
+        if next >= self.messages.len() {
+            return None;
+        }
+        self.index = Some(next);
+        Some(&self.messages[next])
+    }
+
+    pub fn newer(&mut self) -> Option<&str> {
+        match self.index {
+            None | Some(0) => {
+                self.index = None;
+                None
+            }
+            Some(i) => {
+                self.index = Some(i - 1);
+                Some(&self.messages[i - 1])
+            }
+        }
+    }
+
+    pub fn save_temp(&mut self, draft: &str) {
+        self.temp = Some(draft.to_string());
+    }
+
+    pub fn take_temp(&mut self) -> Option<String> {
+        self.temp.take()
+    }
+
+    pub fn reset(&mut self) {
+        self.index = None;
+        self.temp = None;
+    }
+}
+
+/// The say line's state besides its text and channel.
+#[derive(Resource, Clone, Debug, Default, PartialEq)]
+pub struct SayLine {
+    /// tgui-say `currentPrefix`: a [`RADIO_PREFIXES`] key taken off the text.
+    pub prefix: Option<&'static str>,
+    pub history: SayHistory,
+}
+
+impl SayLine {
+    /// The channel button's text (tgui-say `buttonContent`).
+    pub fn button_label(&self, channel: SayChannel) -> String {
+        if let Some(n) = self.history.position() {
+            return n.to_string();
+        }
+        if let Some(prefix) = self.prefix
+            && let Some((_, name)) = RADIO_PREFIXES.iter().find(|(p, _)| *p == prefix)
+        {
+            return (*name).to_string();
+        }
+        channel.label().to_string()
+    }
+
+    /// Whether the mob shows the typing indicator for what is being written.
+    pub fn visible(&self, channel: SayChannel) -> bool {
+        channel.in_character() && !self.prefix.is_some_and(|p| BINARY_PREFIXES.contains(&p))
+    }
+
+    /// tgui-say `handleEnter`'s entry: the prefix before the text in the say channel.
+    pub fn compose(&self, channel: SayChannel, text: &str) -> String {
+        match self.prefix {
+            Some(prefix) if channel == SayChannel::Say && !text.is_empty() => {
+                format!("{prefix}{text}")
+            }
+            _ => text.to_string(),
+        }
+    }
+
+    /// tgui-say `handleClose`'s reset.
+    fn reset(&mut self) {
+        self.prefix = None;
+        self.history.reset();
+    }
+}
+
+/// tg `stop_typing` timer: typing falls back to thinking 5 s after the last key.
+pub const TYPING_TIMEOUT_SECS: f64 = 5.0;
+
+/// tgui-say `saveText` throttle.
+pub const DRAFT_INTERVAL_SECS: f64 = 1.0;
+
+/// What the say line last told the server ([`ClientIntent::Typing`], [`ClientIntent::SayDraft`]).
+#[derive(Resource, Clone, Debug, Default, PartialEq)]
+pub struct TypingTracker {
+    sent: TypingState,
+    last_key: Option<f64>,
+    draft: String,
+    draft_at: Option<f64>,
+}
+
+impl TypingTracker {
+    /// A key changed the text of a visible line (tgui-say `typingMsg`).
+    pub fn edited(&mut self, now: f64) {
+        self.last_key = Some(now);
+    }
+
+    /// The state to send now, when it differs from the last one sent: off while the line is
+    /// closed or in a quiet channel, typing within [`TYPING_TIMEOUT_SECS`] of a key, else
+    /// thinking.
+    pub fn update(&mut self, open: bool, visible: bool, now: f64) -> Option<TypingState> {
+        if !open {
+            self.last_key = None;
+        }
+        let state = if !open || !visible {
+            TypingState::Off
+        } else if self.last_key.is_some_and(|t| now - t < TYPING_TIMEOUT_SECS) {
+            TypingState::Typing
+        } else {
+            TypingState::Thinking
+        };
+        (state != self.sent).then(|| {
+            self.sent = state;
+            state
+        })
+    }
+
+    /// The draft to send now (tgui-say `saveText`, at most once per [`DRAFT_INTERVAL_SECS`],
+    /// the latest text winning), when it differs from the last one sent. A closed line forgets
+    /// it (the server drops it with the indicator).
+    pub fn draft(&mut self, open: bool, text: &str, now: f64) -> Option<String> {
+        if !open {
+            self.draft.clear();
+            return None;
+        }
+        if text == self.draft || self.draft_at.is_some_and(|t| now - t < DRAFT_INTERVAL_SECS) {
+            return None;
+        }
+        self.draft = text.to_string();
+        self.draft_at = Some(now);
+        Some(self.draft.clone())
+    }
+}
+
+/// The say line's text field (the [`SayInput`]'s `EditableText` child).
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct SayField(pub Option<Entity>);
+
+/// The client's admin rights (`AdminResponse::Rights`), for the admin channel's key.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct AdminRights(pub u32);
+
+/// tg's `/datum/keybinding/client/communication` defaults (with BandaStation's edits), and
+/// BandaStation's `admin_say` (F5).
+pub const CHANNEL_KEYS: [(KeyCode, SayChannel); 9] = [
     (KeyCode::KeyT, SayChannel::Say),
     (KeyCode::F3, SayChannel::Say),
     (KeyCode::KeyY, SayChannel::Radio),
@@ -277,25 +536,37 @@ pub const CHANNEL_KEYS: [(KeyCode, SayChannel); 8] = [
     (KeyCode::KeyM, SayChannel::Me),
     (KeyCode::KeyP, SayChannel::Pray),
     (KeyCode::KeyL, SayChannel::Looc),
+    (KeyCode::F5, SayChannel::Admin),
 ];
 
 pub(crate) fn plugin(app: &mut App) {
     app.init_resource::<ChatView>()
         .init_resource::<SayChannel>()
+        .init_resource::<SayLine>()
+        .init_resource::<TypingTracker>()
+        .init_resource::<SayField>()
+        .init_resource::<AdminRights>()
+        .add_message::<AdminResponseReceived>()
+        .add_message::<SendAdminRequest>()
+        .add_message::<CloseSayReceived>()
         .add_systems(Startup, spawn_panel)
         .add_systems(
             Update,
             (
                 sync_view,
                 show_jump_button,
+                attach_say_keys,
+                close_say,
+                admin_rights,
                 channel_keys,
-                show_channel.run_if(resource_changed::<SayChannel>),
+                show_channel.run_if(resource_changed::<SayChannel>.or(resource_changed::<SayLine>)),
+                send_typing,
             )
                 .chain(),
         )
         .add_observer(on_act)
         .add_observer(on_say_submitted)
-        .add_observer(on_say_escape);
+        .add_observer(on_say_changed);
 }
 
 /// `TextFont` of a span, as a scene patch (`TextFont` holds asset handles and is a template).
@@ -708,6 +979,7 @@ fn on_act(
     mut tabs: Query<(&mut TabsTab, &Act)>,
     mut view: ResMut<ChatView>,
     mut channel: ResMut<SayChannel>,
+    mut line: ResMut<SayLine>,
     mut intents: MessageWriter<SendIntent>,
 ) {
     if !panels.contains(act.scope) {
@@ -715,7 +987,11 @@ fn on_act(
     }
     match act.action.as_str() {
         "scroll_bottom" => view.autoscroll.jump_to_bottom(),
-        "cycle_channel" => *channel = channel.next(),
+        // tgui-say `handleIncrementChannel`.
+        "cycle_channel" => {
+            *channel = channel.next();
+            line.prefix = None;
+        }
         action if action.starts_with("link:") => {
             if let Ok(id) = action["link:".len()..].parse() {
                 intents.write(SendIntent(ClientIntent::ChatLink(id)));
@@ -738,11 +1014,15 @@ fn on_act(
     }
 }
 
+/// tgui-say `handleEnter`: the line goes out (a prefix before it in the say channel), into the
+/// history, and the line closes.
 fn on_say_submitted(
     submitted: On<InputSubmitted>,
     inputs: Query<(), With<SayInput>>,
     mut intents: MessageWriter<SendIntent>,
+    mut admin: MessageWriter<SendAdminRequest>,
     mut channel: ResMut<SayChannel>,
+    mut line: ResMut<SayLine>,
     mut focus: ResMut<InputFocus>,
 ) {
     if !inputs.contains(submitted.entity) {
@@ -751,10 +1031,217 @@ fn on_say_submitted(
     // The server checks everything again; this only avoids sending nothing.
     let text = submitted.value.trim();
     if !text.is_empty() {
-        intents.write(SendIntent(channel.intent(text)));
+        line.history.add(&submitted.value);
+        let text = line.compose(*channel, text);
+        match channel.intent(&text) {
+            Some(intent) => {
+                intents.write(SendIntent(intent));
+            }
+            None => {
+                admin.write(SendAdminRequest(AdminRequest::Asay(text)));
+            }
+        }
     }
     *channel = SayChannel::Say;
+    line.reset();
     focus.clear();
+}
+
+/// The say line's text field gets its keys (an entity observer runs after the text widget's
+/// global ones, so its own edits win).
+fn attach_say_keys(
+    fields: Query<(Entity, &ChildOf), Added<EditableText>>,
+    inputs: Query<(), With<SayInput>>,
+    mut field: ResMut<SayField>,
+    mut commands: Commands,
+) {
+    for (entity, parent) in &fields {
+        if inputs.contains(parent.parent()) {
+            field.0 = Some(entity);
+            commands.entity(entity).observe(on_say_key);
+        }
+    }
+}
+
+/// Replaces the text of the focused field (the edit is not reported as typed).
+fn set_line(editable: &mut EditableText, input: &mut Input, text: &str) {
+    input.value = text.to_string();
+    editable.clear();
+    editable.editor_mut().set_text(text);
+    editable.queue_edit(bevy::text::TextEdit::TextEnd(false));
+}
+
+/// tgui-say `handleKeyDown`: Up/Down walk the history, Backspace/Delete leave it or drop an
+/// empty line's prefix, Tab cycles the channel, Escape drops the draft and closes the line.
+fn on_say_key(
+    mut key: On<FocusedInput<KeyboardInput>>,
+    mut fields: Query<(&mut EditableText, &ChildOf)>,
+    mut inputs: Query<&mut Input, With<SayInput>>,
+    mut focus: ResMut<InputFocus>,
+    mut channel: ResMut<SayChannel>,
+    mut line: ResMut<SayLine>,
+) {
+    if key.input.state != ButtonState::Pressed {
+        return;
+    }
+    let Ok((mut editable, parent)) = fields.get_mut(key.focused_entity) else {
+        return;
+    };
+    let Ok(mut input) = inputs.get_mut(parent.parent()) else {
+        return;
+    };
+    if editable.is_composing() {
+        return;
+    }
+    match key.input.key_code {
+        KeyCode::ArrowUp => {
+            let value = input.value.clone();
+            if line.history.is_at_latest() && !value.is_empty() {
+                line.history.save_temp(&value);
+            }
+            if let Some(older) = line.history.older().map(str::to_string) {
+                set_line(&mut editable, &mut input, &older);
+            }
+        }
+        // tgui-say also empties a line never walked back; here Down only walks forward.
+        KeyCode::ArrowDown if !line.history.is_at_latest() => {
+            let newer = line
+                .history
+                .newer()
+                .map(str::to_string)
+                .or_else(|| line.history.take_temp())
+                .unwrap_or_default();
+            set_line(&mut editable, &mut input, &newer);
+        }
+        KeyCode::Backspace | KeyCode::Delete => {
+            if !line.history.is_at_latest() {
+                line.history.reset();
+            } else if line.prefix.is_some() && *channel == SayChannel::Say && input.value.is_empty()
+            {
+                line.prefix = None;
+            }
+            return;
+        }
+        KeyCode::Tab => {
+            *channel = channel.next();
+            line.prefix = None;
+        }
+        KeyCode::Escape => {
+            input.value.clear();
+            editable.clear();
+            focus.clear();
+            *channel = SayChannel::Say;
+            line.reset();
+        }
+        _ => return,
+    }
+    key.propagate(false);
+}
+
+/// tgui-say `handleInput`: a radio prefix typed first moves onto the button (the say channel
+/// again), and a key in a visible channel is typing.
+fn on_say_changed(
+    changed: On<InputChanged>,
+    mut inputs: Query<&mut Input, With<SayInput>>,
+    mut fields: Query<&mut EditableText>,
+    field: Res<SayField>,
+    mut channel: ResMut<SayChannel>,
+    mut line: ResMut<SayLine>,
+    mut typing: ResMut<TypingTracker>,
+    time: Res<Time>,
+) {
+    let Ok(mut input) = inputs.get_mut(changed.entity) else {
+        return;
+    };
+    if let Some(prefix) = radio_prefix(&changed.value)
+        && line.prefix != Some(prefix)
+    {
+        line.prefix = Some(prefix);
+        *channel = SayChannel::Say;
+        let rest = changed
+            .value
+            .char_indices()
+            .nth(3)
+            .map_or("", |(i, _)| &changed.value[i..]);
+        if let Some(mut editable) = field.0.and_then(|f| fields.get_mut(f).ok()) {
+            set_line(&mut editable, &mut input, rest);
+        }
+    }
+    if line.visible(*channel) {
+        typing.edited(time.elapsed_secs_f64());
+    }
+}
+
+/// The client's admin rights, for the admin channel's key.
+fn admin_rights(
+    mut responses: MessageReader<AdminResponseReceived>,
+    mut rights: ResMut<AdminRights>,
+) {
+    for AdminResponseReceived(response) in responses.read() {
+        if let AdminResponse::Rights { rights: r, .. } = response {
+            rights.0 = *r;
+        }
+    }
+}
+
+/// tgui-say `open`/`close`/`thinking`: the line's state to the server, on a change only.
+fn send_typing(
+    focus: Res<InputFocus>,
+    field: Res<SayField>,
+    channel: Res<SayChannel>,
+    line: Res<SayLine>,
+    inputs: Query<&Input, With<SayInput>>,
+    time: Res<Time>,
+    mut typing: ResMut<TypingTracker>,
+    mut intents: MessageWriter<SendIntent>,
+) {
+    let now = time.elapsed_secs_f64();
+    let open = field.0.is_some() && focus.get() == field.0;
+    let visible = line.visible(*channel);
+    // tgui-say `save` (`handle_entry`: only say and radio text is kept; whisper here too, as a
+    // forced whisper keeps its channel): the text as it would be said.
+    let draft = inputs
+        .iter()
+        .next()
+        .filter(|_| visible && *channel != SayChannel::Me)
+        .map(|input| line.compose(*channel, input.value.trim()))
+        .and_then(|text| match channel.intent(&text) {
+            Some(ClientIntent::Say(said)) if !text.is_empty() => Some(said),
+            _ => None,
+        })
+        .unwrap_or_default();
+    if let Some(draft) = typing.draft(open, &draft, now) {
+        intents.write(SendIntent(ClientIntent::SayDraft(draft)));
+    }
+    if let Some(state) = typing.update(open, visible, now) {
+        intents.write(SendIntent(ClientIntent::Typing(state)));
+    }
+}
+
+/// tgui-say `close` from the server (a forced say): the line drops its text and closes.
+fn close_say(
+    mut closes: MessageReader<CloseSayReceived>,
+    field: Res<SayField>,
+    mut fields: Query<&mut EditableText>,
+    mut inputs: Query<&mut Input, With<SayInput>>,
+    mut focus: ResMut<InputFocus>,
+    mut channel: ResMut<SayChannel>,
+    mut line: ResMut<SayLine>,
+) {
+    if closes.read().count() == 0 {
+        return;
+    }
+    for mut input in &mut inputs {
+        input.value.clear();
+    }
+    if let Some(mut editable) = field.0.and_then(|f| fields.get_mut(f).ok()) {
+        editable.clear();
+    }
+    if focus.get().is_some() && focus.get() == field.0 {
+        focus.clear();
+    }
+    *channel = SayChannel::Say;
+    line.reset();
 }
 
 /// tg `keybinding/client/communication`: the key picks the channel and opens the say line.
@@ -764,6 +1251,8 @@ fn channel_keys(
     fields: Query<(Entity, &ChildOf), With<EditableText>>,
     inputs: Query<(), With<SayInput>>,
     mut channel: ResMut<SayChannel>,
+    mut line: ResMut<SayLine>,
+    rights: Res<AdminRights>,
 ) {
     if focus.get().is_some()
         || keys.any_pressed([
@@ -783,50 +1272,34 @@ fn channel_keys(
     else {
         return;
     };
+    // `required_permissions = R_ADMIN`.
+    if picked == SayChannel::Admin && rights.0 & R_ADMIN == 0 {
+        return;
+    }
     let Some((field, _)) = fields.iter().find(|(_, p)| inputs.contains(p.parent())) else {
         return;
     };
     *channel = picked;
+    line.prefix = None;
     focus.set(field, bevy::input_focus::FocusCause::Navigated);
 }
 
 fn show_channel(
     channel: Res<SayChannel>,
+    line: Res<SayLine>,
     buttons: Query<&Children, With<ChannelButton>>,
     mut texts: Query<&mut Text>,
 ) {
+    let label = line.button_label(*channel);
     for children in &buttons {
         for &child in children {
             if let Ok(mut text) = texts.get_mut(child)
-                && text.0 != channel.label()
+                && text.0 != label
             {
-                text.0 = channel.label().to_string();
+                text.0.clone_from(&label);
             }
         }
     }
-}
-
-/// tgui-say: Escape drops the draft and leaves the field.
-fn on_say_escape(
-    key: On<FocusedInput<KeyboardInput>>,
-    mut fields: Query<(&mut EditableText, &ChildOf)>,
-    mut inputs: Query<&mut Input, With<SayInput>>,
-    mut focus: ResMut<InputFocus>,
-    mut channel: ResMut<SayChannel>,
-) {
-    if key.input.state != ButtonState::Pressed || key.input.key_code != KeyCode::Escape {
-        return;
-    }
-    let Ok((mut editable, parent)) = fields.get_mut(key.focused_entity) else {
-        return;
-    };
-    let Ok(mut input) = inputs.get_mut(parent.parent()) else {
-        return;
-    };
-    input.value.clear();
-    editable.clear();
-    focus.clear();
-    *channel = SayChannel::Say;
 }
 
 #[cfg(test)]
@@ -837,35 +1310,158 @@ mod tests {
 
     #[test]
     fn channels_send_their_intents() {
-        assert_eq!(SayChannel::Say.intent("да"), ClientIntent::Say("да".into()));
+        let say = |c: SayChannel, text: &str| c.intent(text);
         assert_eq!(
-            SayChannel::Radio.intent("да"),
-            ClientIntent::Say("; да".into())
+            say(SayChannel::Say, "да"),
+            Some(ClientIntent::Say("да".into()))
         );
         assert_eq!(
-            SayChannel::Whisper.intent("да"),
-            ClientIntent::Say("#да".into())
+            say(SayChannel::Radio, "да"),
+            Some(ClientIntent::Say("; да".into()))
         );
         assert_eq!(
-            SayChannel::Me.intent("кивает"),
-            ClientIntent::Say("*me кивает".into())
+            say(SayChannel::Whisper, "да"),
+            Some(ClientIntent::Say("#да".into()))
         );
-        assert_eq!(SayChannel::Ooc.intent("да"), ClientIntent::Ooc("да".into()));
         assert_eq!(
-            SayChannel::LoocWallpierce.intent("да"),
-            ClientIntent::Looc {
+            say(SayChannel::Me, "кивает"),
+            Some(ClientIntent::Say("*me кивает".into()))
+        );
+        assert_eq!(
+            say(SayChannel::Ooc, "да"),
+            Some(ClientIntent::Ooc("да".into()))
+        );
+        assert_eq!(
+            say(SayChannel::LoocWallpierce, "да"),
+            Some(ClientIntent::Looc {
                 text: "да".into(),
                 wall_pierce: true
-            }
+            })
         );
-        // The button walks every channel but pray and comes back.
+        assert_eq!(
+            say(SayChannel::Admin, "да"),
+            None,
+            "asay is an admin request"
+        );
+        // tgui-say's order, every channel once, back to say; admin chat is never cycled into
+        // nor out of.
         let mut c = SayChannel::Say;
-        for _ in 0..7 {
+        let mut seen = Vec::new();
+        for _ in 0..8 {
             c = c.next();
-            assert_ne!(c, SayChannel::Pray);
+            assert_ne!(c, SayChannel::Admin);
+            seen.push(c);
         }
         assert_eq!(c, SayChannel::Say);
-        assert_eq!(SayChannel::Pray.next(), SayChannel::Radio);
+        assert_eq!(
+            &seen[..3],
+            [SayChannel::Whisper, SayChannel::Radio, SayChannel::Ooc]
+        );
+        assert_eq!(SayChannel::Pray.next(), SayChannel::Say);
+        assert_eq!(SayChannel::Admin.next(), SayChannel::Admin);
+    }
+
+    #[test]
+    fn radio_prefixes_are_read_like_tgui_say() {
+        assert_eq!(radio_prefix(":h привет"), None, "no :h in tgui-say's list");
+        assert_eq!(radio_prefix(":e привет"), Some(":e "));
+        assert_eq!(radio_prefix(".E привет"), Some(":e "));
+        assert_eq!(radio_prefix(":у привет"), Some(":у "));
+        assert_eq!(radio_prefix(":У привет"), Some(":у "));
+        assert_eq!(radio_prefix(":e"), None);
+        assert_eq!(radio_prefix(":eпривет"), None);
+        assert_eq!(radio_prefix("e: привет"), None);
+        let mut line = SayLine::default();
+        assert!(line.visible(SayChannel::Say));
+        assert!(!line.visible(SayChannel::Ooc));
+        assert!(!line.visible(SayChannel::Looc));
+        assert!(!line.visible(SayChannel::Pray));
+        line.prefix = Some(":и ");
+        assert!(
+            !line.visible(SayChannel::Say),
+            "binary speech shows no bubble"
+        );
+        assert_eq!(line.button_label(SayChannel::Say), "Бин");
+    }
+
+    #[test]
+    fn history_keeps_five_lines_and_the_draft() {
+        let mut h = SayHistory::default();
+        assert_eq!(h.older(), None);
+        for i in 1..=6 {
+            h.add(&format!("l{i}"));
+        }
+        h.save_temp("черновик");
+        assert_eq!(h.older(), Some("l6"));
+        assert_eq!(h.position(), Some(1));
+        for want in ["l5", "l4", "l3", "l2"] {
+            assert_eq!(h.older(), Some(want));
+        }
+        assert_eq!(h.older(), None, "five kept: l1 is gone");
+        assert_eq!(h.position(), Some(5));
+        assert_eq!(h.newer(), Some("l3"));
+        h.newer();
+        h.newer();
+        assert_eq!(h.newer(), Some("l6"));
+        assert_eq!(h.newer(), None);
+        assert!(h.is_at_latest());
+        assert_eq!(h.take_temp().as_deref(), Some("черновик"));
+    }
+
+    #[test]
+    fn drafts_are_throttled_and_forgotten_on_close() {
+        let mut t = TypingTracker::default();
+        assert_eq!(t.draft(true, "", 0.0), None, "nothing typed, nothing sent");
+        assert_eq!(t.draft(true, "п", 0.1), Some("п".into()));
+        assert_eq!(t.draft(true, "пр", 0.5), None, "within a second");
+        assert_eq!(
+            t.draft(true, "при", 1.1),
+            Some("при".into()),
+            "the latest text"
+        );
+        assert_eq!(t.draft(true, "при", 3.0), None, "unchanged");
+        assert_eq!(t.draft(false, "при", 3.5), None);
+        assert_eq!(
+            t.draft(true, "при", 4.0),
+            Some("при".into()),
+            "reopened: sent again"
+        );
+        let line = SayLine {
+            prefix: Some(":e "),
+            ..default()
+        };
+        assert_eq!(line.compose(SayChannel::Say, "да"), ":e да");
+        assert_eq!(line.compose(SayChannel::Say, ""), "");
+    }
+
+    #[test]
+    fn typing_state_is_sent_only_on_a_change() {
+        let mut t = TypingTracker::default();
+        assert_eq!(
+            t.update(false, true, 0.0),
+            None,
+            "closed: off, already sent"
+        );
+        assert_eq!(t.update(true, true, 1.0), Some(TypingState::Thinking));
+        assert_eq!(t.update(true, true, 1.1), None);
+        t.edited(2.0);
+        assert_eq!(t.update(true, true, 2.0), Some(TypingState::Typing));
+        t.edited(3.0);
+        assert_eq!(t.update(true, true, 3.0), None, "more keys: no resend");
+        assert_eq!(t.update(true, true, 7.9), None);
+        assert_eq!(
+            t.update(true, true, 8.0),
+            Some(TypingState::Thinking),
+            "5 s without a key"
+        );
+        // A quiet channel (OOC) is off; back in say, thinking.
+        assert_eq!(t.update(true, false, 8.1), Some(TypingState::Off));
+        assert_eq!(t.update(true, true, 8.2), Some(TypingState::Thinking));
+        t.edited(9.0);
+        assert_eq!(t.update(true, true, 9.0), Some(TypingState::Typing));
+        // Sent or closed: off, and the next opening thinks again.
+        assert_eq!(t.update(false, true, 9.5), Some(TypingState::Off));
+        assert_eq!(t.update(true, true, 10.0), Some(TypingState::Thinking));
     }
 
     #[test]
