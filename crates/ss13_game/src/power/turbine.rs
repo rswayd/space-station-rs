@@ -1466,8 +1466,10 @@ mod tests {
         assert_eq!(failure_explosion(10_000.0), Some((0, 1, 4)));
         assert_eq!(failure_explosion(100_000.0), Some((0, 2, 6)));
         assert_eq!(failure_explosion(1_000_000.0), None);
-        let mut r = TurbineRotor::default();
-        r.damage = 250.0;
+        let mut r = TurbineRotor {
+            damage: 250.0,
+            ..default()
+        };
         assert_eq!(r.integrity(), 50.0);
         r.damage = 600.0;
         assert_eq!(r.integrity(), 0.0);
