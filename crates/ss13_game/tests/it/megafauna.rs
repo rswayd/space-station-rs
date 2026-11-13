@@ -594,13 +594,10 @@ fn hierophant_blasts_its_target_and_leaves_its_club() {
     let boss = s.mob_of(HIEROPHANT);
     assert!(s.try_get::<Megafauna>(boss).is_some(), "a megafauna");
     let start = s.pos(boss);
+    // The beacon is an effect (no `DmObj`): found through the boss's own reference.
     let beacon_at = |s: &mut Station| {
-        let world = s.0.server.world_mut();
-        world
-            .query::<(&DmObj, &TilePos)>()
-            .iter(world)
-            .find(|(o, _)| o.path == BEACON)
-            .map(|(_, p)| *p)
+        let beacon = s.try_get::<Megafauna>(boss)?.hierophant.beacon?;
+        s.try_get::<TilePos>(beacon).copied()
     };
     assert_eq!(beacon_at(&mut s), Some(start), "its home beacon");
     let p = s.join("p0", |_| {});
