@@ -50,6 +50,8 @@ pub mod sensors;
 #[cfg(feature = "server")]
 pub mod slowdown;
 #[cfg(feature = "server")]
+pub mod special_helmets;
+#[cfg(feature = "server")]
 pub mod toggles;
 #[cfg(feature = "server")]
 pub mod traits;
@@ -189,6 +191,7 @@ mod server {
             reskin::build(app);
             super::laces::build(app);
             super::polymorph_belt::build(app);
+            super::special_helmets::build(app);
         }
     }
 
@@ -244,6 +247,7 @@ mod server {
             return;
         }
         damage::examine_lines(world, item, lines);
+        super::special_helmets::examine_lines(world, item, lines);
         toggles::examine_lines(world, item, lines);
         if accessories::is_jumpsuit(world, item) {
             sensors::examine_lines(world, item, lines);

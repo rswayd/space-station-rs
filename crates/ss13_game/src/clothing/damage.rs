@@ -92,6 +92,8 @@ pub enum ClothingJob {
     },
     /// The polymorph belt's core, scan and channel (`crate::clothing::polymorph_belt`).
     Belt(super::polymorph_belt::BeltJob),
+    /// An anomaly core into the perceptomatrix (`crate::clothing::special_helmets`).
+    Helmet(super::special_helmets::HelmetJob),
 }
 
 /// `body_zone2cover_flags`.
@@ -498,6 +500,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         }
         ClothingJob::Belt(job) => {
             super::polymorph_belt::complete(world, mob, action, job);
+            return;
+        }
+        ClothingJob::Helmet(job) => {
+            super::special_helmets::complete(world, mob, action, job);
             return;
         }
     };
