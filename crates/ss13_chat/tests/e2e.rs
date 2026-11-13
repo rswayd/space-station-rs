@@ -218,7 +218,9 @@ fn say_reaches_exactly_the_hearers_and_hostile_says_are_dropped() {
         !said(&apps[c(SPEAKER)]).is_empty() && !said(&apps[c(NEAR)]).is_empty()
     });
     run_for(&mut apps, Duration::from_millis(300));
-    let expected = "Привет <b>всем</b> [i]x[/i] <span class='danger'>!</span>";
+    // BandaStation's IC filter (`sanitize(apply_ic_filter = TRUE)`) cuts the markup characters;
+    // what is left stays plain text.
+    let expected = "Привет bвсем/b ix/i span class'danger'!/span";
     for slot in [SPEAKER, NEAR] {
         let got = messages(&apps[c(slot)], ChatChannel::Local);
         assert_eq!(got.len(), 1, "slot {slot}");

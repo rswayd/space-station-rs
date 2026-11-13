@@ -148,7 +148,9 @@ impl Station {
 #[test]
 fn walls_stop_speech_but_not_the_dead() {
     let assets = fixture_assets("walls_stop_speech_but_not_the_dead");
-    let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+    let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |app| {
+        app.add_plugins(ss13_chat::server::ChatServerPlugin);
+    });
     s.join_all(3, |app| {
         app.init_resource::<Received>().add_systems(Update, record);
     });
@@ -190,7 +192,9 @@ fn walls_stop_speech_but_not_the_dead() {
 fn saymodes_reach_their_listeners_only() {
     use ss13_chat::speech::AlienHivemind;
     let assets = fixture_assets("saymodes_reach_their_listeners_only");
-    let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+    let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |app| {
+        app.add_plugins(ss13_chat::server::ChatServerPlugin);
+    });
     s.join_all(3, |app| {
         app.init_resource::<Received>().add_systems(Update, record);
     });
@@ -210,12 +214,12 @@ fn saymodes_reach_their_listeners_only() {
     });
     s.send(0, ClientIntent::Say(":ф охота начинается".into()));
     s.run_until("C reads the hive through the wall", |s| {
-        s.heard(2, "Связь улья") && s.heard(2, "охота начинается")
+        s.heard(2, "Связь улья") && s.heard(2, "Охота начинается")
     });
     // tg's vocal cords saymode: a human without voice cords says nothing.
     s.send(0, ClientIntent::Say(":ч тайные слова".into()));
     s.send(0, ClientIntent::Say("Обычные слова".into()));
     s.run_until("B hears the plain words", |s| s.heard(1, "Обычные слова"));
-    assert!(!s.heard(1, "охота"), "the hive is not said aloud");
-    assert!(!s.heard(1, "тайные"), "nor the vocal cords' words");
+    assert!(!s.heard(1, "Охота"), "the hive is not said aloud");
+    assert!(!s.heard(1, "Тайные"), "nor the vocal cords' words");
 }

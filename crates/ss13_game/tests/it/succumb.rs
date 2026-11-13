@@ -158,7 +158,9 @@ ss13_game::drive_station!(Station, 0);
 impl Station {
     fn start(test: &str) -> Self {
         let assets = fixture_assets(test);
-        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |app| {
+            app.add_plugins(ss13_chat::server::ChatServerPlugin);
+        });
         s.join_all(2, |app| {
             app.init_resource::<Received>().add_systems(Update, record);
         });

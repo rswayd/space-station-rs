@@ -759,9 +759,11 @@ mod tests {
 
     #[test]
     fn settings_round_trip_through_the_settings_file() {
-        let mut prefs = ChatPrefs::default();
-        prefs.font_size = 17.0;
-        prefs.line_height = 1.55;
+        let mut prefs = ChatPrefs {
+            font_size: 17.0,
+            line_height: 1.55,
+            ..ChatPrefs::default()
+        };
         prefs.pages.add();
         prefs.pages.current_mut().name = "Рация; | %20 = #1".into();
         prefs
