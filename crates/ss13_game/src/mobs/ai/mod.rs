@@ -137,6 +137,10 @@ pub enum Key {
     VendingLastHit,
     /// The bee's `BB_TARGET_HYDRO` (`crate::mobs::bees`).
     TargetHydro,
+    /// The bee's `BB_TARGET_HOME` (a habitable apiary it flies to) and `BB_CURRENT_HOME` while
+    /// it wants into its home (`BB_WANTS_TO_TRANSITION_HIVE`).
+    TargetHome,
+    CurrentHome,
 }
 
 #[derive(Clone, Debug, PartialEq)]

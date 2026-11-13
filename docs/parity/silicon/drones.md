@@ -6,7 +6,7 @@
 
 - **Код:** [`/mob/living/basic/drone`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/drone/_drone.dm#L16), [`drone_tools.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/drone/drone_tools.dm#L1), [`interaction.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/drone/interaction.dm#L3), [`drone_say.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/drone/drone_say.dm#L51)
 - **BandaStation:** [`drone_say.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/basic/drone/drone_say.dm#L33) — TTS в речи дронов
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — нужен «ловкий» базовый моб (`dextrous`: руки, внутреннее хранилище и слот головы у basic mob, HUD не человека); в порту такого механизма нет, это отдельная задача
 
 ### Оболочки дронов и раздатчик
 Оболочка-спавнер для призрака; раздатчик дронов печатает новые оболочки из материалов.

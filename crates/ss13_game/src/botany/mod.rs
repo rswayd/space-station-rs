@@ -22,13 +22,18 @@
 //!   wake up as mobs.
 //! - Gene shears cut a removable gene off a tray's plant, picked from a list ([`shears`]).
 //! - Fermenting barrels turn grown food into wine ([`barrel`]).
+//! - Apiaries, honey frames and honeycombs, the queen bee item and the bee smoker
+//!   ([`beekeeping`]).
+//! - The biogenerator turns food into biomass and prints its designs ([`biogenerator`]).
 //! - `SS13_HYDRO_SPEED` (dev): every hydroponics timer runs this many times faster (tests use
 //!   [`HydroSpeed`]), so a cycle keeps tg's ratios.
-// shortcut: no plant bags, seed storage in the extractor (its tgui), biogenerator, sprays
+// shortcut: no plant bags, seed storage in the extractor (its tgui), sprays
 // or right click nutrient emptying; the analyzer prints to chat instead of its
 // tgui; invasive spreading ignores windows between trays (tg `Adjacent`).
 
 pub mod barrel;
+pub mod beekeeping;
+pub mod biogenerator;
 pub mod crafts;
 pub mod genes;
 pub mod grafts;
@@ -213,6 +218,8 @@ impl Plugin for BotanyServerPlugin {
         unique::build(app);
         shears::build(app);
         barrel::build(app);
+        beekeeping::build(app);
+        biogenerator::build(app);
     }
 
     /// After every plugin's `build`: the map plugin's assets dir is known by now.
@@ -976,6 +983,13 @@ pub fn item_interaction(
     target: Entity,
     modifiers: ClickModifiers,
 ) -> bool {
+    if beekeeping::item_interaction(world, client, mob, held, target)
+        || biogenerator::item_interaction(world, client, mob, held, target)
+        || beekeeping::smoker_use(world, mob, held, target)
+        || beekeeping::smoker_refuel(world, mob, held, target)
+    {
+        return true;
+    }
     if !world.contains_resource::<Botany>() {
         return false;
     }
@@ -1019,9 +1033,10 @@ pub fn grown_interaction(
     held: Entity,
     target: Entity,
 ) -> bool {
-    world.contains_resource::<Botany>()
-        && (produce::battery_interaction(world, client, mob, held, target)
-            || produce::log_interaction(world, client, mob, held, target))
+    beekeeping::smoker_refuel(world, mob, held, target)
+        || (world.contains_resource::<Botany>()
+            && (produce::battery_interaction(world, client, mob, held, target)
+                || produce::log_interaction(world, client, mob, held, target)))
 }
 
 /// `/obj/machinery/hydroponics/bullet_act` of a floral somatoray shot on a planted tray. True
@@ -1072,6 +1087,12 @@ pub fn interact(
     if barrel::attack_hand(world, client, target, right) {
         return true;
     }
+    if !right
+        && (beekeeping::attack_hand(world, client, mob, target)
+            || biogenerator::interact(world, client, mob, target))
+    {
+        return true;
+    }
     if right || world.get::<Tray>(target).is_none() {
         return false;
     }
@@ -1081,10 +1102,11 @@ pub fn interact(
 
 /// tg `attack_self` of a held plant (squeezing liquid contents). False for other items.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
-    world.contains_resource::<Botany>()
-        && (unique::attack_self(world, client, mob, item)
-            || produce::attack_self(world, client, mob, item)
-            || crafts::attack_self(world, client, mob, item))
+    beekeeping::smoker_attack_self(world, mob, item)
+        || (world.contains_resource::<Botany>()
+            && (unique::attack_self(world, client, mob, item)
+                || produce::attack_self(world, client, mob, item)
+                || crafts::attack_self(world, client, mob, item)))
 }
 
 /// The end of a [`BotanyJob`].
@@ -1104,6 +1126,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
 pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
     produce::examine_lines(world, target, lines);
     barrel::examine_lines(world, target, lines);
+    beekeeping::examine_lines(world, target, lines);
     soil::examine_lines(world, target, lines);
     let Some(state) = world.get::<Tray>(target) else {
         return;
