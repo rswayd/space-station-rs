@@ -1431,7 +1431,8 @@ mod tests {
             Slot::of_path("/obj/item/organ/tongue/lizard"),
             Some(Slot::Tongue)
         );
-        assert_eq!(Slot::of_path("/obj/item/organ/tail"), None);
+        // The tail is an external organ with its own slot (`ORGAN_SLOT_EXTERNAL_TAIL`).
+        assert_eq!(Slot::of_path("/obj/item/organ/tail"), Some(Slot::Tail));
         assert_eq!(Slot::Eyes.bodypart(), BodyZone::Head);
         assert_eq!(Slot::Appendix.bodypart(), BodyZone::Chest);
     }
