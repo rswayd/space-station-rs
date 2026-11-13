@@ -167,7 +167,11 @@ fn header(data: &RequestsData) -> impl Scene + use<> {
         }))
     } else {
         Box::new(EntityScene(notice(
-            format!("{} called!", data.emergency),
+            // BandaStation's RETA notice (`RequestsConsoleHeader.tsx`).
+            format!(
+                "{} called! RETA may open doors in area to them.",
+                data.emergency
+            ),
             true,
         )))
     };

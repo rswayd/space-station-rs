@@ -120,6 +120,8 @@ struct DoorSprites {
     /// Airlock panel fill (`fill_*` or `<material>_*`).
     fills: [Option<IconStateId>; 4],
     bolt_lights: Option<IconStateId>,
+    /// BandaStation `lights_reta` (`crate::reta`).
+    reta_lights: Option<IconStateId>,
     opening_lights: Option<IconStateId>,
     closing_lights: Option<IconStateId>,
     welded: Option<IconStateId>,
@@ -177,6 +179,9 @@ pub struct Door {
     pub unres_latch: bool,
     /// tg `emergency`: emergency access, anyone opens it (`allowed()`).
     pub emergency: bool,
+    /// BandaStation `has_active_reta_access()`: a RETA grant covers its access (`crate::reta`),
+    /// the closed airlock shows its RETA lights.
+    pub reta: bool,
     /// tg `red_alert_access` (the `red_alert_access` mapping helper): at red alert and above
     /// the door takes any access (`check_access_list`).
     pub red_alert_access: bool,
@@ -380,6 +385,7 @@ impl Door {
         let lights = match self.state {
             DoorState::Closed if self.locked => s.bolt_lights,
             DoorState::Closed if deny.is_some() => deny,
+            DoorState::Closed if self.reta => s.reta_lights,
             DoorState::Opening { .. } => s.opening_lights,
             DoorState::Closing { .. } => s.closing_lights,
             _ => None,
@@ -615,6 +621,7 @@ fn door_from(
         shock_ready_at: 0.0,
         unres_latch: false,
         emergency: false,
+        reta: false,
         red_alert_access: false,
         red_alert: false,
         ai_disabled_id_scanner: false,
@@ -858,6 +865,7 @@ fn resolve_sprites(
         frames,
         fills,
         bolt_lights: get(overlays, "lights_bolts"),
+        reta_lights: get(overlays, "lights_reta"),
         opening_lights: get(overlays, "lights_opening"),
         closing_lights: get(overlays, "lights_closing"),
         welded: get(overlays, "welded"),
@@ -2178,6 +2186,7 @@ pub(crate) fn test_airlock(req_access: &[&str]) -> Door {
         shock_ready_at: 0.0,
         unres_latch: false,
         emergency: false,
+        reta: false,
         red_alert_access: false,
         red_alert: false,
         ai_disabled_id_scanner: false,

@@ -15,20 +15,22 @@
 //!   bridge, medbay, science, engineering, security, cargo bay or mining go out on that radio
 //!   channel through the announcement system.
 //! - The emergency buttons call security, engineering or medical through the announcement
-//!   system for 5 minutes; announcements (authenticated, every 30 s) go to every player and the
+//!   system for 5 minutes; from a console of a department BandaStation's RETA knows, the call
+//!   grants the called department temporary access (`crate::reta`), never from the caller's own
+//!   department and once per 15 s per department pair; announcements (authenticated, every 30 s) go to every player and the
 //!   station announcements news channel.
 //! - Every act is checked here at the moment of effect, and the quick reply again when it is
 //!   answered: power, panel, the actor's reach and consciousness, the hack for extreme priority,
 //!   known departments and request types.
-// shortcut: no RETA (`code/modules/reta`, BandaStation's temporary emergency access: the calls
-// use tg's path without it), ore updates (no ore redemption reports), speech filters on
+// shortcut: no ore updates (no ore redemption reports), speech filters on
 // announcements (`treat_message`), silicon or ghost use, wall frames or damage; the texts are
 // typed in the window's fields, cut to the act limits.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
 use ss13_chat::radio::{
-    FREQ_COMMAND, FREQ_ENGINEERING, FREQ_MEDICAL, FREQ_SCIENCE, FREQ_SECURITY, FREQ_SUPPLY,
+    FREQ_COMMAND, FREQ_ENGINEERING, FREQ_MEDICAL, FREQ_SCIENCE, FREQ_SECURITY, FREQ_SERVICE,
+    FREQ_SUPPLY,
 };
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::wallmount::REQUESTS_HELPER_ROOT;
@@ -637,12 +639,13 @@ fn clear_message_status(world: &mut World, console: Entity) {
     }
 }
 
-/// `set_emergency` without RETA: the call on its department's channel, for 5 minutes.
+/// `set_emergency`: the call on its department's channel for 5 minutes, with RETA from a
+/// console of a known department.
 fn set_emergency(world: &mut World, actor: Entity, console: Entity, kind: &str) {
-    let freq = match kind {
-        EMERGENCY_SECURITY => FREQ_SECURITY,
-        EMERGENCY_ENGINEERING => FREQ_ENGINEERING,
-        EMERGENCY_MEDICAL => FREQ_MEDICAL,
+    let (freq, target) = match kind {
+        EMERGENCY_SECURITY => (FREQ_SECURITY, "Security"),
+        EMERGENCY_ENGINEERING => (FREQ_ENGINEERING, "Engineering"),
+        EMERGENCY_MEDICAL => (FREQ_MEDICAL, "Medical"),
         _ => return,
     };
     let state = world
@@ -650,6 +653,31 @@ fn set_emergency(world: &mut World, actor: Entity, console: Entity, kind: &str) 
         .cloned()
         .expect("checked");
     if state.emergency.is_some() {
+        return;
+    }
+    let origin = crate::reta::department_by_name(&state.department);
+    if crate::reta::user_department(world, actor) == Some(target) {
+        crate::tools::tell_mob(
+            world,
+            actor,
+            Span::Warning,
+            "You cannot call your own department for emergency assistance.",
+        );
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let cooling = origin.is_some_and(|o| {
+        world
+            .get_resource::<crate::reta::Reta>()
+            .is_some_and(|r| r.on_cooldown(o, target, now))
+    });
+    if cooling {
+        crate::tools::tell_mob(
+            world,
+            actor,
+            Span::Warning,
+            format!("Emergency calls to {target} are on cooldown."),
+        );
         return;
     }
     let card = world
@@ -665,19 +693,72 @@ fn set_emergency(world: &mut World, actor: Entity, console: Entity, kind: &str) 
         }
         None => "(Identification not provided)".to_owned(),
     };
-    let now = world.resource::<Time>().elapsed_secs_f64();
     let mut c = world.get_mut::<RequestsConsole>(console).expect("checked");
     if used_swipe {
         c.message_stamped_by.clear();
         c.message_verified_by.clear();
     }
+    // RETA's `duration_ds` and tg's 5 minutes are the same.
     c.emergency = Some((kind.to_owned(), now + EMERGENCY_SECS));
-    let text = emergency_line(kind, &state.department, &caller);
-    crate::arrivals::aas_announce_on(world, freq, &text);
+    let reta = origin.filter(|_| world.contains_resource::<crate::reta::Reta>());
+    match reta {
+        Some(origin) => {
+            world.resource_mut::<crate::reta::Reta>().set_cooldown(
+                origin,
+                target,
+                now + crate::reta::COOLDOWN_SECS,
+            );
+            let granted =
+                crate::reta::find_and_grant(world, target, origin, crate::reta::DURATION_SECS);
+            let text = reta_emergency_line(kind, &state.department, &caller, granted > 0);
+            crate::arrivals::aas_announce_on(world, freq, &text);
+            if granted > 0
+                && let Some(home) = origin_frequency(origin)
+            {
+                let text = format!(
+                    "RETA activated {caller}. {target} personnel now have temporary access to your \
+                     areas."
+                );
+                crate::arrivals::aas_announce_on(world, home, &text);
+            }
+        }
+        None => {
+            let text = emergency_line(kind, &state.department, &caller);
+            crate::arrivals::aas_announce_on(world, freq, &text);
+        }
+    }
     refresh_look(world, console);
 }
 
-/// `/datum/aas_config_entry/rc_emergency` without RETA.
+/// The calling department's channel for RETA's confirmation.
+fn origin_frequency(origin: &str) -> Option<u16> {
+    Some(match origin {
+        "Security" => FREQ_SECURITY,
+        "Engineering" => FREQ_ENGINEERING,
+        "Medical" => FREQ_MEDICAL,
+        "Science" => FREQ_SCIENCE,
+        "Service" => FREQ_SERVICE,
+        "Command" => FREQ_COMMAND,
+        "Cargo" | "Mining" => FREQ_SUPPLY,
+        _ => return None,
+    })
+}
+
+/// BandaStation's `/datum/aas_config_entry/rc_emergency` with RETA enabled.
+pub fn reta_emergency_line(kind: &str, location: &str, caller: &str, granted: bool) -> String {
+    let reta = if granted {
+        "- RETA door access granted to responders"
+    } else {
+        "- no RETA access provided"
+    };
+    match kind {
+        EMERGENCY_SECURITY => format!("SECURITY EMERGENCY in {location} {caller} {reta}!!!"),
+        EMERGENCY_ENGINEERING => format!("ENGINEERING EMERGENCY in {location} {caller} {reta}!!!"),
+        _ => format!("MEDICAL EMERGENCY in {location} {caller}, {reta}!!!"),
+    }
+}
+
+/// `/datum/aas_config_entry/rc_emergency` without RETA (a console of no RETA department).
 pub fn emergency_line(kind: &str, location: &str, caller: &str) -> String {
     let what = match kind {
         EMERGENCY_SECURITY => "SECURITY",
