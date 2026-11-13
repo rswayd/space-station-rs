@@ -79,6 +79,7 @@ mod kitchen;
 mod kitchen_machines;
 mod labor;
 mod languages;
+mod lava_elites;
 mod lava_fauna;
 mod lavaland;
 mod lazarus;

@@ -121,6 +121,9 @@ pub struct Tentacle {
     stage: TentacleStage,
     next: f64,
     held: Vec<Entity>,
+    /// `min_damage`/`max_damage` and `grapple_time` (the broodmother's are its own).
+    damage: (u32, u32),
+    grapple: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -483,6 +486,18 @@ pub fn unleash_tentacles(world: &mut World, goliath: Entity, target: Entity) -> 
 
 /// `new /obj/effect/goliath_tentacle(pos, owner)`: none off open ground or on another.
 fn spawn_tentacle(world: &mut World, pos: TilePos, owner: Option<Entity>) {
+    spawn_tentacle_with(world, pos, owner, TENTACLE_DAMAGE, TENTACLE_GRAPPLE);
+}
+
+/// A tentacle subtype with its `min_damage`/`max_damage` and `grapple_time`
+/// (`goliath_tentacle/broodmother`).
+pub(crate) fn spawn_tentacle_with(
+    world: &mut World,
+    pos: TilePos,
+    owner: Option<Entity>,
+    damage: (u32, u32),
+    grapple: f64,
+) {
     if !open_ground(world, pos) {
         return;
     }
@@ -506,6 +521,8 @@ fn spawn_tentacle(world: &mut World, pos: TilePos, owner: Option<Entity>) {
             stage: TentacleStage::Rising,
             next,
             held: Vec::new(),
+            damage,
+            grapple,
         },
     );
 }
@@ -620,13 +637,14 @@ fn grab(world: &mut World, tentacle: Entity, t: &Tentacle, now: f64) {
             .owner
             .is_some_and(|o| crate::mobs::same_faction(world, o, victim));
         // `TRAIT_TENTACLE_IMMUNE` (goliaths), already held.
-        let immune =
-            world.get::<Tentacles>(victim).is_some() || world.get::<Grabbed>(victim).is_some();
+        let immune = world.get::<Tentacles>(victim).is_some()
+            || world.get::<Grabbed>(victim).is_some()
+            || crate::mobs::megafauna::elites::tentacle_immune(world, victim);
         if world.get::<Stat>(victim) == Some(&Stat::Dead) || friendly || immune {
             continue;
         }
         let mut rng = CombatRng(world.resource::<CombatRng>().0);
-        let damage = rng.range(TENTACLE_DAMAGE.0, TENTACLE_DAMAGE.1) as f32;
+        let damage = rng.range(t.damage.0, t.damage.1) as f32;
         let leg = if rng.chance(50.0) {
             BodyZone::LLeg
         } else {
@@ -646,7 +664,7 @@ fn grab(world: &mut World, tentacle: Entity, t: &Tentacle, now: f64) {
     }
     if let Some(mut t) = world.get_mut::<Tentacle>(tentacle) {
         t.stage = TentacleStage::Holding;
-        t.next = now + TENTACLE_GRAPPLE;
+        t.next = now + t.grapple;
         t.held = held;
     }
 }

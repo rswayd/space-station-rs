@@ -1913,6 +1913,8 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(mobs::MEGAFAUNA_RUNTIME_TYPES);
     // Jungle fauna's summons, bubbles, projectiles and snares (`ss13_game::mobs::jungle`).
     out.extend(mobs::JUNGLE_RUNTIME_TYPES);
+    // The elite tumor's elites, babies, shard and trophies (`ss13_game::mobs::megafauna::elites`).
+    out.extend(mobs::ELITE_RUNTIME_TYPES);
     // Catches and the prefilled aquarium's fish (`ss13_game::fishing`).
     out.extend(crate::fishing::runtime_types());
     // What the stack crafting menus make (`ss13_game::stack_recipes`).

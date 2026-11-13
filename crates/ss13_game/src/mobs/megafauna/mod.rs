@@ -27,6 +27,7 @@
 pub mod bubblegum;
 pub mod colossus;
 pub mod drake;
+pub mod elites;
 pub mod hierophant;
 pub mod legion;
 pub mod placement;
@@ -94,6 +95,8 @@ pub enum Kind {
     Legion,
     ClockworkDefender,
     Hierophant,
+    /// A lavaland elite (`/mob/living/simple_animal/hostile/asteroid/elite`, [`elites`]).
+    Elite,
 }
 
 impl Kind {
@@ -110,6 +113,8 @@ impl Kind {
             Some(Self::ClockworkDefender)
         } else if is_under(path, hierophant::HIEROPHANT) {
             Some(Self::Hierophant)
+        } else if elites::EliteKind::of(path).is_some() {
+            Some(Self::Elite)
         } else {
             None
         }
@@ -142,6 +147,7 @@ pub struct Megafauna {
     pub drake: drake::State,
     pub legion: legion::State,
     pub hierophant: hierophant::State,
+    pub elite: elites::State,
 }
 
 impl Megafauna {
@@ -162,6 +168,7 @@ impl Megafauna {
             drake: drake::State::default(),
             legion: legion::State::default(),
             hierophant: hierophant::State::default(),
+            elite: elites::State::default(),
         }
     }
 
@@ -197,6 +204,7 @@ pub enum Step {
     Drake(drake::Step),
     Legion(legion::Step),
     Hierophant(hierophant::Step),
+    Elite(elites::Step),
 }
 
 /// tg `/datum/status_effect/gutted`: devoured; while dead, never a target again.
@@ -237,6 +245,7 @@ impl Visual {
 
 pub(super) fn build(app: &mut App) {
     hierophant::build(app);
+    elites::build(app);
     app.add_systems(PostStartup, placement::place).add_systems(
         Update,
         (
@@ -272,6 +281,9 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     world.entity_mut(mob).insert((brain, controller));
     if kind == Kind::Hierophant {
         hierophant::attach(world, mob);
+    }
+    if kind == Kind::Elite {
+        elites::attach(world, mob, &def.path);
     }
 }
 
@@ -318,6 +330,10 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
     };
     if stat != Stat::Conscious {
         stop_moving(world, mob);
+        return;
+    }
+    // A sentient boss is its player's (tg's hostile AI is off with a client).
+    if world.get::<PlayerMob>(mob).is_some() {
         return;
     }
     let Some(m) = world.get::<Megafauna>(mob) else {
@@ -393,6 +409,7 @@ fn vision(kind: Kind) -> (u32, u32) {
         Kind::ClockworkDefender => (9, 9),
         // `aggro_vision_range = 21`: one side of its arena to the other.
         Kind::Hierophant => (VISION_RANGE, 21),
+        Kind::Elite => (elites::VISION_RANGE, AGGRO_VISION_RANGE),
         _ => (VISION_RANGE, AGGRO_VISION_RANGE),
     }
 }
@@ -417,6 +434,8 @@ pub fn valid_target(world: &World, mob: Entity, target: Entity) -> bool {
         && !e.contains::<crate::ghost::Ghost>()
         && !e.contains::<crate::closets::InCloset>()
         && !(e.contains::<Gutted>() && e.get::<Stat>() == Some(&Stat::Dead))
+        // Elites' `stat_attack = HARD_CRIT`: never the dead.
+        && !(kind_of(world, mob) == Some(Kind::Elite) && e.get::<Stat>() == Some(&Stat::Dead))
         && !super::same_faction(world, mob, target)
 }
 
@@ -468,6 +487,7 @@ fn open_fire(world: &mut World, mob: Entity, target: Entity) {
         Kind::Drake => drake::open_fire(world, mob, target, now),
         Kind::Legion => legion::open_fire(world, mob, target, now),
         Kind::Hierophant => hierophant::open_fire(world, mob, target, now),
+        Kind::Elite => elites::open_fire(world, mob, target, now),
         // `clockwork_defender/OpenFire`: nothing.
         Kind::ClockworkDefender => {}
     }
@@ -523,7 +543,10 @@ fn attacking_target(world: &mut World, mob: Entity, target: Entity) {
     if kind_of(world, mob) == Some(Kind::Legion) {
         legion::after_attack(world, mob, target);
     }
-    open_fire(world, mob, target);
+    // Elites strike as plain hostile mobs (`hostile/AttackingTarget`).
+    if kind_of(world, mob) != Some(Kind::Elite) {
+        open_fire(world, mob, target);
+    }
 }
 
 /// `devour` -> `celebrate_kill`.
@@ -594,6 +617,7 @@ fn run_queues(world: &mut World) {
                 Step::Drake(step) => drake::run(world, mob, at, step),
                 Step::Legion(step) => legion::run(world, mob, at, step),
                 Step::Hierophant(step) => hierophant::run(world, mob, at, step),
+                Step::Elite(step) => elites::run(world, mob, at, step),
             }
         }
     }
@@ -725,7 +749,7 @@ pub(super) fn roll<T>(world: &mut World, f: impl FnOnce(&mut CombatRng) -> T) ->
 /// `bubblegum/ex_act` too and takes harder ones as light): fixed brute, never gibbed. False for
 /// other mobs.
 pub fn ex_act(world: &mut World, mob: Entity, severity: Severity) -> bool {
-    let Some(kind) = kind_of(world, mob) else {
+    let Some(kind) = kind_of(world, mob).filter(|&k| k != Kind::Elite) else {
         return false;
     };
     let amount = match severity {
@@ -788,6 +812,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
     match kind {
         Kind::Legion => return legion::on_death(world, mob, pos),
         Kind::Hierophant => return hierophant::on_death(world, mob, pos),
+        Kind::Elite => return elites::on_death(world, mob, pos),
         Kind::ClockworkDefender => {
             crate::construction::spawn_obj(world, CLOCKWORK_ALLOY, pos);
             return;
@@ -802,7 +827,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
         Kind::Bubblegum => (bubblegum::CHEST, bubblegum::loot(world)),
         Kind::Colossus => (colossus::CHEST, colossus::loot(world)),
         Kind::Drake => (drake::CHEST, drake::loot(world)),
-        Kind::Legion | Kind::ClockworkDefender | Kind::Hierophant => return,
+        Kind::Legion | Kind::ClockworkDefender | Kind::Hierophant | Kind::Elite => return,
     };
     let Some(chest) = crate::construction::spawn_obj(world, chest, pos) else {
         return;
