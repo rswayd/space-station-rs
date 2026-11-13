@@ -28,7 +28,11 @@
 // `emergency_away` placed where the template put the shuttle, and the transit dock is a fixed
 // space level made at round start (tg reserves one per flight with hyperspace turfs). Both have
 // the shuttle's own direction, so the emergency shuttle never rotates there (tg turns it at
-// CentCom and in transit); a dock of another direction turns `Facing` only.
+// CentCom and in transit).
+//! - Rotation: a dock of another direction turns the shuttle by the difference of the two
+//!   ports' directions (tg `initiate_docking`): tile `i` of one port's ordered turfs lands on
+//!   tile `i` of the other's, and every carried turf and movable turns its dir, border edge,
+//!   light and pixel offsets (`shuttle_rotate`); the landed tiles resmooth.
 //! - Hyperspace sounds ([`hyperspace_sound`]): the engines rev up 5 s before the launch, the
 //!   launch, and the arrival half a second before the shuttle docks at CentCom.
 //! - A station map whose json names no emergency shuttle (or a missing one) gets tg's backup
@@ -56,10 +60,10 @@ use ss13_mapload::dock::{
 };
 use ss13_mapload::spawner::Rng;
 use ss13_mapload::{
-    Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmObj, DmPower,
+    Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmObj, DmPower, IconIndex,
     MapLoadPlugin, MapLoadReport, MapSeed, ShuttleTemplates, Turf,
 };
-use ss13_shared::{Dir, Facing, TilePos};
+use ss13_shared::{Appearance, Dir, Facing, LightSource, TilePos};
 use ss13_world::SpatialIndex;
 
 use crate::announce::{
@@ -1576,6 +1580,9 @@ fn move_shuttle(world: &mut World, port: Entity, dock: Entity) -> Result<MoveRep
             world
                 .entity_mut(turf)
                 .insert((Baseturfs(new_stack), plan.new));
+            if rotation != 0 {
+                shuttle_rotate(world, turf, rotation);
+            }
             move_air(world, turf, plan.new, old_air);
             origins.push((plan.old, under));
         }
@@ -1600,12 +1607,9 @@ fn move_shuttle(world: &mut World, port: Entity, dock: Entity) -> Result<MoveRep
                 {
                     continue;
                 }
-                let mut entity = world.entity_mut(e);
-                entity.insert(plan.new);
-                if rotation != 0
-                    && let Some(mut facing) = entity.get_mut::<Facing>()
-                {
-                    facing.0 = angle_dir(angle(facing.0) + rotation);
+                world.entity_mut(e).insert(plan.new);
+                if rotation != 0 {
+                    shuttle_rotate(world, e, rotation);
                 }
                 movables += 1;
             }
@@ -1625,6 +1629,16 @@ fn move_shuttle(world: &mut World, port: Entity, dock: Entity) -> Result<MoveRep
             atmos.blocker_changed(pos, false);
         }
     }
+    // tg `QUEUE_SMOOTH` of rotated atoms and the smoothing of the turfs it lands on: junctions
+    // are world directions, so a turned wall corner or window needs its new neighbors.
+    if world.contains_resource::<IconIndex>() {
+        let landed: Vec<TilePos> = plans
+            .iter()
+            .filter(|p| p.turf.is_some())
+            .map(|p| p.new)
+            .collect();
+        ss13_mapload::smooth::resmooth_tiles(world, &landed);
+    }
     relight(world, &old_turfs);
     relight(world, &new_turfs);
     // tg airlock `afterShuttleMove`.
@@ -1638,6 +1652,58 @@ fn move_shuttle(world: &mut World, port: Entity, dock: Entity) -> Result<MoveRep
         crushed,
         elapsed: start.elapsed(),
     })
+}
+
+/// tg `shuttleRotate(rotation, ALL)` of a turf or movable the shuttle carried, `rotation`
+/// degrees clockwise: its dir (with the border edge it blocks and its light's cone) and, but for
+/// mobs, its pixel offsets.
+// shortcut: no multitile bounds, atmos pipe nodes or disposal `dpdir` rotation; no mapped
+// shuttle has a multitile atom, pipes or disposals on a dock of another direction yet.
+fn shuttle_rotate(world: &mut World, e: Entity, rotation: i32) {
+    let path = crate::construction::path_of(world, e).unwrap_or_default();
+    if is_under(&path, "/obj/machinery/gateway") {
+        return;
+    }
+    let dir = world
+        .get::<Facing>(e)
+        .map(|f| f.0)
+        .or_else(|| world.get::<DmAtom>(e).and_then(|a| Dir::from_bits(a.dir)))
+        .unwrap_or(Dir::South);
+    crate::door_structures::face(world, e, angle_dir(angle(dir) + rotation));
+    let turns = rotation.rem_euclid(360) / 90;
+    if let Some(mut light) = world.get_mut::<LightSource>(e) {
+        light.dir = angle_dir(angle(light.dir) + rotation);
+        let [x, y] = turn_offset([light.offset[0].into(), light.offset[1].into()], turns);
+        light.offset = [x as i8, y as i8];
+    }
+    let mob = world.get::<Health>(e).is_some() || world.get::<crate::ghost::Ghost>(e).is_some();
+    if mob
+        || is_under(&path, "/turf/closed/mineral")
+        || is_under(&path, "/obj/structure/alien/weeds")
+    {
+        return;
+    }
+    if let Some(mut appearance) = world.get_mut::<Appearance>(e)
+        && appearance.pixel_offset != [0, 0]
+    {
+        let offset = turn_offset(appearance.pixel_offset, turns);
+        appearance.pixel_offset = offset;
+    }
+    if let Some(mut atom) = world.get_mut::<DmAtom>(e)
+        && (atom.pixel_x, atom.pixel_y) != (0, 0)
+    {
+        let [x, y] = turn_offset([atom.pixel_x, atom.pixel_y], turns);
+        atom.pixel_x = x;
+        atom.pixel_y = y;
+    }
+}
+
+/// tg's pixel offset turn, `turns` times 90 degrees clockwise.
+fn turn_offset(mut offset: [i16; 2], turns: i32) -> [i16; 2] {
+    for _ in 0..turns {
+        offset = [offset[1], offset[0].saturating_neg()];
+    }
+    offset
 }
 
 /// Not touched by a landing shuttle: its ripples (removed after), turfs, docking ports, atmos
