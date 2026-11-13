@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use bevy::prelude::*;
 use ss13_net::sound::server::{SendChannelSound, SendSound};
 use ss13_shared::TilePos;
-use ss13_shared::protocol::{ChannelSound, SoundEvent};
+use ss13_shared::protocol::{ChannelSound, SoundCategory, SoundEvent, SoundFx};
 
 use crate::combat::CombatRng;
 use crate::server::PlayerMob;
@@ -64,6 +64,15 @@ pub struct LoopDef {
     pub ignore_walls: bool,
     pub use_sound_tokens: bool,
     pub never_native_repeat: bool,
+    /// `sound_channel`: a `direct` loop plays on this reserved channel, and stopping it cuts
+    /// the sound playing there (`stop_current`).
+    pub sound_channel: Option<u16>,
+    /// The volume preference a `direct` loop's sounds take (the elevator music's ambience
+    /// slider, tg `volume *= pref_volume/100`).
+    pub category: SoundCategory,
+    /// Per-file waits before the next mid sound, overriding `mid_length` (the snowstorm's
+    /// `sound_to_length`).
+    pub clip_lengths: &'static [(&'static str, f64)],
 }
 
 /// `/datum/looping_sound`'s defaults (a `null` falloff is `playsound`'s default).
@@ -89,6 +98,9 @@ pub const BASE: LoopDef = LoopDef {
     ignore_walls: true,
     use_sound_tokens: false,
     never_native_repeat: false,
+    sound_channel: None,
+    category: SoundCategory::Game,
+    clip_lengths: &[],
 };
 
 impl LoopDef {
@@ -107,6 +119,8 @@ impl LoopDef {
 /// tg's subtypes that have a machine here, with BandaStation's volumes
 /// (`modular_bandastation/sounds/code/looping_sound.dm`, `supermatter.dm`).
 pub mod defs {
+    use ss13_shared::protocol::{CHANNEL_ELEVATOR, CHANNEL_WEATHER, SoundCategory};
+
     use super::{BASE, LoopDef};
     use crate::sound::MEDIUM_RANGE_SOUND_EXTRARANGE;
 
@@ -375,6 +389,256 @@ pub mod defs {
         volume: 5.0,
         ..BASE
     };
+    /// `/datum/looping_sound/geiger` by `PERCEIVED_RADIATION_DANGER_*` (its `get_sound` picks
+    /// the danger's list): low, medium, high, extreme. `mid_length = 2` (deciseconds).
+    pub static GEIGER: [LoopDef; 4] = [
+        geiger(&[
+            ("sound/items/geiger/low1.ogg", 1),
+            ("sound/items/geiger/low2.ogg", 1),
+            ("sound/items/geiger/low3.ogg", 1),
+            ("sound/items/geiger/low4.ogg", 1),
+        ]),
+        geiger(&[
+            ("sound/items/geiger/med1.ogg", 1),
+            ("sound/items/geiger/med2.ogg", 1),
+            ("sound/items/geiger/med3.ogg", 1),
+            ("sound/items/geiger/med4.ogg", 1),
+        ]),
+        geiger(&[
+            ("sound/items/geiger/high1.ogg", 1),
+            ("sound/items/geiger/high2.ogg", 1),
+            ("sound/items/geiger/high3.ogg", 1),
+            ("sound/items/geiger/high4.ogg", 1),
+        ]),
+        geiger(&[
+            ("sound/items/geiger/ext1.ogg", 1),
+            ("sound/items/geiger/ext2.ogg", 1),
+            ("sound/items/geiger/ext3.ogg", 1),
+            ("sound/items/geiger/ext4.ogg", 1),
+        ]),
+    ];
+    const fn geiger(mid_sounds: &'static [(&'static str, u32)]) -> LoopDef {
+        LoopDef {
+            path: "/datum/looping_sound/geiger",
+            mid_sounds,
+            mid_length: 0.2,
+            volume: 25.0,
+            ..BASE
+        }
+    }
+    pub const ACTIVE_OUTSIDE_ASHSTORM: LoopDef = LoopDef {
+        path: "/datum/looping_sound/active_outside_ashstorm",
+        mid_sounds: &[("sound/ambience/weather/ashstorm/outside/active_mid1.ogg", 1)],
+        mid_length: 8.0,
+        start_sound: Some("sound/ambience/weather/ashstorm/outside/active_start.ogg"),
+        start_length: 13.0,
+        end_sound: Some("sound/ambience/weather/ashstorm/outside/active_end.ogg"),
+        volume: 80.0,
+        ..BASE
+    };
+    pub const ACTIVE_INSIDE_ASHSTORM: LoopDef = LoopDef {
+        path: "/datum/looping_sound/active_inside_ashstorm",
+        mid_sounds: &[
+            ("sound/ambience/weather/ashstorm/inside/active_mid1.ogg", 1),
+            ("sound/ambience/weather/ashstorm/inside/active_mid2.ogg", 1),
+            ("sound/ambience/weather/ashstorm/inside/active_mid3.ogg", 1),
+        ],
+        mid_length: 8.0,
+        start_sound: Some("sound/ambience/weather/ashstorm/inside/active_start.ogg"),
+        start_length: 13.0,
+        end_sound: Some("sound/ambience/weather/ashstorm/inside/active_end.ogg"),
+        volume: 60.0,
+        ..BASE
+    };
+    pub const WEAK_OUTSIDE_ASHSTORM: LoopDef = LoopDef {
+        path: "/datum/looping_sound/weak_outside_ashstorm",
+        mid_sounds: &[
+            ("sound/ambience/weather/ashstorm/outside/weak_mid1.ogg", 1),
+            ("sound/ambience/weather/ashstorm/outside/weak_mid2.ogg", 1),
+            ("sound/ambience/weather/ashstorm/outside/weak_mid3.ogg", 1),
+        ],
+        mid_length: 8.0,
+        start_sound: Some("sound/ambience/weather/ashstorm/outside/weak_start.ogg"),
+        start_length: 13.0,
+        end_sound: Some("sound/ambience/weather/ashstorm/outside/weak_end.ogg"),
+        volume: 50.0,
+        ..BASE
+    };
+    pub const WEAK_INSIDE_ASHSTORM: LoopDef = LoopDef {
+        path: "/datum/looping_sound/weak_inside_ashstorm",
+        mid_sounds: &[
+            ("sound/ambience/weather/ashstorm/inside/weak_mid1.ogg", 1),
+            ("sound/ambience/weather/ashstorm/inside/weak_mid2.ogg", 1),
+            ("sound/ambience/weather/ashstorm/inside/weak_mid3.ogg", 1),
+        ],
+        mid_length: 8.0,
+        start_sound: Some("sound/ambience/weather/ashstorm/inside/weak_start.ogg"),
+        start_length: 13.0,
+        end_sound: Some("sound/ambience/weather/ashstorm/inside/weak_end.ogg"),
+        volume: 30.0,
+        ..BASE
+    };
+    /// Each clip waits its own length (`sound_to_length`) before the next.
+    pub const SNOWSTORM: LoopDef = LoopDef {
+        path: "/datum/looping_sound/snowstorm",
+        mid_sounds: &[
+            ("sound/ambience/weather/snowstorm/snow1.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow2.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow3.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow4.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow5.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow6.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow7.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow8.ogg", 1),
+            ("sound/ambience/weather/snowstorm/snow9.ogg", 1),
+        ],
+        mid_length: 10.0,
+        volume: 30.0,
+        sound_channel: Some(CHANNEL_WEATHER),
+        clip_lengths: &[
+            ("sound/ambience/weather/snowstorm/snow1.ogg", 11.3),
+            ("sound/ambience/weather/snowstorm/snow2.ogg", 9.7),
+            ("sound/ambience/weather/snowstorm/snow3.ogg", 9.7),
+            ("sound/ambience/weather/snowstorm/snow4.ogg", 7.3),
+            ("sound/ambience/weather/snowstorm/snow5.ogg", 7.3),
+            ("sound/ambience/weather/snowstorm/snow6.ogg", 8.8),
+            ("sound/ambience/weather/snowstorm/snow7.ogg", 11.6),
+            ("sound/ambience/weather/snowstorm/snow8.ogg", 11.6),
+            ("sound/ambience/weather/snowstorm/snow9.ogg", 7.3),
+        ],
+        ..BASE
+    };
+    const RAIN: LoopDef = LoopDef {
+        path: "/datum/looping_sound/rain",
+        start_sound: Some("sound/ambience/weather/rain/rain_start.ogg"),
+        start_length: 12.5,
+        mid_sounds: &[("sound/ambience/weather/rain/rain_mid.ogg", 1)],
+        mid_length: 15.0,
+        end_sound: Some("sound/ambience/weather/rain/rain_end.ogg"),
+        volume: 70.0,
+        sound_channel: Some(CHANNEL_WEATHER),
+        ..BASE
+    };
+    pub const RAIN_START: LoopDef = LoopDef {
+        path: "/datum/looping_sound/rain/start",
+        mid_sounds: &[("sound/ambience/weather/rain/rain_start.ogg", 1)],
+        mid_length: 12.5,
+        ..RAIN
+    };
+    pub const RAIN_MIDDLE: LoopDef = LoopDef {
+        path: "/datum/looping_sound/rain/middle",
+        ..RAIN
+    };
+    pub const RAIN_END: LoopDef = LoopDef {
+        path: "/datum/looping_sound/rain/end",
+        mid_sounds: &[("sound/ambience/weather/rain/rain_end.ogg", 1)],
+        mid_length: 17.0,
+        ..RAIN
+    };
+    pub const TRAM: LoopDef = LoopDef {
+        path: "/datum/looping_sound/tram",
+        start_sound: Some("sound/machines/tram/tram_start.ogg"),
+        start_length: 2.219,
+        mid_sounds: &[("sound/machines/tram/tram_loop.ogg", 1)],
+        mid_length: 2.219,
+        use_sound_tokens: true,
+        extra_range: 10.0,
+        ..BASE
+    };
+    /// Elevator music, at the listener's ambience volume (`pref_volume`).
+    pub const LOCAL_FORECAST: LoopDef = LoopDef {
+        path: "/datum/looping_sound/local_forecast",
+        mid_sounds: &[("sound/music/elevator/robocop-short.ogg", 1)],
+        mid_length: 61.0,
+        volume: 20.0,
+        sound_channel: Some(CHANNEL_ELEVATOR),
+        category: SoundCategory::Ambience,
+        ..BASE
+    };
+    /// A carbon's `breathing_loop` on internals.
+    pub const BREATHING: LoopDef = LoopDef {
+        path: "/datum/looping_sound/breathing",
+        mid_sounds: &[
+            ("sound/mobs/humanoids/breathing/internals_breathing1.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing2.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing3.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing4.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing5.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing6.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing7.ogg", 1),
+            ("sound/mobs/humanoids/breathing/internals_breathing8.ogg", 1),
+        ],
+        mid_length: 7.0,
+        mid_length_vary: 0.7,
+        volume: 7.0,
+        pressure_affected: false,
+        vary: true,
+        ..BASE
+    };
+    /// The panic attack's own `breath_loop` (`/datum/terror_handler/panic`), apart from the
+    /// internals one on the same mob.
+    pub const PANIC_BREATHING: LoopDef = LoopDef {
+        path: "/datum/terror_handler/panic/breath_loop",
+        ..BREATHING
+    };
+    pub const CHOKING: LoopDef = LoopDef {
+        path: "/datum/looping_sound/choking",
+        mid_sounds: &[
+            ("sound/mobs/humanoids/human/gag_vomit/gag1.ogg", 1),
+            ("sound/mobs/humanoids/human/gag_vomit/gag2.ogg", 1),
+            ("sound/mobs/humanoids/human/gag_vomit/gag3.ogg", 1),
+            ("sound/mobs/humanoids/human/gag_vomit/gag4.ogg", 1),
+            ("sound/mobs/humanoids/human/gag_vomit/gag5.ogg", 1),
+        ],
+        mid_length: 1.6,
+        mid_length_vary: 0.3,
+        each_once: true,
+        volume: 90.0,
+        falloff_exponent: 12.0,
+        vary: true,
+        ignore_walls: false,
+        use_sound_tokens: true,
+        ..BASE
+    };
+    pub const CHANGELING_ABSORB: LoopDef = LoopDef {
+        path: "/datum/looping_sound/changeling_absorb",
+        mid_sounds: &[
+            ("sound/effects/changeling_absorb/changeling_absorb1.ogg", 1),
+            ("sound/effects/changeling_absorb/changeling_absorb2.ogg", 1),
+            ("sound/effects/changeling_absorb/changeling_absorb3.ogg", 1),
+            ("sound/effects/changeling_absorb/changeling_absorb4.ogg", 1),
+            ("sound/effects/changeling_absorb/changeling_absorb5.ogg", 1),
+            ("sound/effects/changeling_absorb/changeling_absorb6.ogg", 1),
+            ("sound/effects/changeling_absorb/changeling_absorb7.ogg", 1),
+        ],
+        each_once: true,
+        mid_length: 3.0,
+        volume: 80.0,
+        ignore_walls: false,
+        use_sound_tokens: true,
+        ..BASE
+    };
+    /// The Void ascension's theme (`void_final`).
+    pub const VOID_LOOP: LoopDef = LoopDef {
+        path: "/datum/looping_sound/void_loop",
+        mid_sounds: &[("sound/music/antag/heretic/VoidsEmbrace.ogg", 1)],
+        mid_length: 166.9,
+        volume: 100.0,
+        extra_range: 30.0,
+        pressure_affected: false,
+        use_sound_tokens: true,
+        never_native_repeat: true,
+        ..BASE
+    };
+    /// A tendril's `/datum/looping_sound/heartbeat` (`pressure_affected = FALSE`), its
+    /// `mid_length` set by `update_heartbeat` (`HEARTBEAT_NORMAL` at first).
+    pub const TENDRIL_HEARTBEAT: LoopDef = LoopDef {
+        path: "/datum/looping_sound/heartbeat",
+        mid_sounds: &[("sound/effects/singlebeat.ogg", 1)],
+        mid_length: 1.8,
+        pressure_affected: false,
+        ..BASE
+    };
     /// `/datum/looping_sound/fire` of a hot group (`crate::fire`).
     pub const FIRE: LoopDef = LoopDef {
         path: "/datum/looping_sound/fire",
@@ -423,6 +687,8 @@ struct LoopState {
     /// `mid_sounds` set at runtime (the supermatter's calm/delamming).
     mids: &'static [(&'static str, u32)],
     direct: bool,
+    /// `mid_length`, changed at runtime by [`set_mid_length`].
+    mid_length: f64,
     /// `loop_started`: the mid sounds play.
     looping: bool,
     native: bool,
@@ -495,6 +761,7 @@ pub fn start_with(
         def,
         mids: def.mid_sounds,
         direct,
+        mid_length: def.mid_length,
         looping: false,
         native: false,
         next: None,
@@ -536,14 +803,53 @@ pub fn stop(world: &mut World, parent: Entity, path: &str) {
     };
     let def = state.def;
     let direct = state.direct;
-    if let Some(token) = state.token {
-        silence(world, &token);
-    }
+    stop_current(world, parent, &state);
     if state.looping
         && let Some(end) = def.end_sound
     {
         play_once(world, parent, def, direct, end, def.end_volume);
     }
+}
+
+/// `QDEL_NULL(soundloop)`: the loop ends without its `end_sound` (tg nulls the parent first).
+/// `cut` also stops a `direct` loop's sound on its `sound_channel`; without it the sound
+/// playing now finishes (an area sound manager handing over to the next loop).
+pub fn cancel(world: &mut World, parent: Entity, path: &str, cut: bool) {
+    let Some(mut state) = world.get_mut::<SoundLoops>(parent).and_then(|mut loops| {
+        let i = loops.0.iter().position(|l| l.def.path == path)?;
+        Some(loops.0.remove(i))
+    }) else {
+        return;
+    };
+    if !cut {
+        state.direct = false;
+    }
+    stop_current(world, parent, &state);
+}
+
+/// `stop_current`: the token falls silent, a `direct` loop's channel is cut.
+fn stop_current(world: &mut World, parent: Entity, state: &LoopState) {
+    if let Some(token) = &state.token {
+        silence(world, token);
+    }
+    if state.direct
+        && let Some(channel) = state.def.sound_channel
+        && let Some(client) = world.get::<PlayerMob>(parent).map(|p| p.client)
+    {
+        world.write_message(stop_message(client, channel));
+    }
+}
+
+/// `timeleft(timer_id)`: seconds until the loop's next sound (its start or mid timer); `None`
+/// when it does not run or repeats natively.
+pub fn time_left(world: &World, parent: Entity, path: &str) -> Option<f64> {
+    let next = world
+        .get::<SoundLoops>(parent)?
+        .0
+        .iter()
+        .find(|s| s.def.path == path)?
+        .next?;
+    Some((next - now(world)).max(0.0))
 }
 
 /// [`start`] or [`stop`] to match `on`.
@@ -583,6 +889,22 @@ pub fn set_mid_sounds(
     if let Some(file) = restart {
         play(world, parent, path, file, None, true);
     }
+}
+
+/// `set_mid_length`: the wait between mid sounds; the pending one moves by the difference
+/// (`updatetimedelay`). A natively repeating loop ignores it.
+pub fn set_mid_length(world: &mut World, parent: Entity, path: &str, mid_length: f64) {
+    with_state(world, parent, path, |s| {
+        if s.mid_length == mid_length {
+            return;
+        }
+        if s.looping
+            && let Some(next) = s.next.as_mut()
+        {
+            *next += mid_length - s.mid_length;
+        }
+        s.mid_length = mid_length;
+    });
 }
 
 /// The clients that hear a token loop now (tests, admin views).
@@ -652,7 +974,7 @@ fn start_sound_loop(world: &mut World, parent: Entity, path: &str, t: f64) {
     let Some((def, mids)) = with_state(world, parent, path, |s| {
         s.looping = true;
         s.native = s.def.native_repeat(s.mids);
-        s.next = (!s.native).then_some(t + s.def.mid_length);
+        s.next = (!s.native).then_some(t + s.mid_length);
         (s.def, s.mids)
     }) else {
         return;
@@ -675,9 +997,16 @@ fn sound_loop(world: &mut World, parent: Entity, path: &str) {
     })
     .flatten();
     world.resource_mut::<SoundRng>().0 = rng;
-    if let Some(file) = file {
-        play(world, parent, path, file, None, false);
-    }
+    let Some(file) = file else {
+        return;
+    };
+    let t = now(world);
+    with_state(world, parent, path, |s| {
+        if let Some(&(_, len)) = s.def.clip_lengths.iter().find(|(f, _)| *f == file) {
+            s.next = Some(t + len);
+        }
+    });
+    play(world, parent, path, file, None, false);
 }
 
 /// `get_sound()`: a weighted pick; with `each_once` every sound once per round of the list,
@@ -777,16 +1106,34 @@ fn play_once(
 ) {
     let volume = volume_override.unwrap_or(def.volume);
     if direct {
-        if let Some(client) = world.get::<PlayerMob>(parent).map(|p| p.client) {
-            world.write_message(SendSound {
-                client,
-                sound: SoundEvent {
-                    file: file.to_owned(),
-                    volume,
-                    speed: 1.0,
-                    offset: None,
-                },
-            });
+        let Some(client) = world.get::<PlayerMob>(parent).map(|p| p.client) else {
+            return;
+        };
+        let sound = SoundEvent {
+            file: file.to_owned(),
+            volume,
+            speed: 1.0,
+            offset: None,
+        };
+        match def.sound_channel {
+            Some(channel) => {
+                world.write_message(SendChannelSound {
+                    client,
+                    sound: ChannelSound {
+                        channel,
+                        sound: Some(sound),
+                        update: false,
+                        repeat: false,
+                        fx: SoundFx {
+                            category: def.category,
+                            ..Default::default()
+                        },
+                    },
+                });
+            }
+            None => {
+                world.write_message(SendSound { client, sound });
+            }
         }
         return;
     }
@@ -872,13 +1219,9 @@ fn drive(world: &mut World) {
             } else {
                 0.0
             };
-            let next = s.next.unwrap_or(t) + (s.def.mid_length + jitter).max(0.1);
+            let next = s.next.unwrap_or(t) + (s.mid_length + jitter).max(0.1);
             // A long stall does not replay every missed loop.
-            s.next = Some(if next <= t {
-                t + s.def.mid_length
-            } else {
-                next
-            });
+            s.next = Some(if next <= t { t + s.mid_length } else { next });
         });
         world.resource_mut::<SoundRng>().0 = rng;
         sound_loop(world, e, path);
@@ -1259,5 +1602,77 @@ mod tests {
                 .reserve(None),
             Some(CHANNEL_HIGHEST_AVAILABLE)
         );
+    }
+
+    fn channel_sent(world: &mut World) -> Vec<SendChannelSound> {
+        world
+            .resource_mut::<Messages<SendChannelSound>>()
+            .drain()
+            .collect()
+    }
+
+    #[test]
+    fn a_direct_channel_loop_waits_each_clip_and_is_cut() {
+        use ss13_shared::protocol::CHANNEL_WEATHER;
+        let mut world = world();
+        let client = world.spawn_empty().id();
+        let mob = world
+            .spawn((PlayerMob { client }, TilePos::new(2, 2, 1)))
+            .id();
+        start_with(&mut world, mob, &SNOWSTORM, false, true);
+        let sent = channel_sent(&mut world);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(
+            (sent[0].client, sent[0].sound.channel),
+            (client, CHANNEL_WEATHER)
+        );
+        let file = sent[0].sound.sound.as_ref().unwrap().file.clone();
+        let len = SNOWSTORM
+            .clip_lengths
+            .iter()
+            .find(|(f, _)| *f == file)
+            .unwrap()
+            .1;
+        // The next clip comes after this one's own length, not `mid_length`.
+        advance(&mut world, len - 0.1);
+        assert!(channel_sent(&mut world).is_empty());
+        advance(&mut world, 0.2);
+        assert_eq!(channel_sent(&mut world).len(), 1);
+        // Handed over without a cut: the clip plays out.
+        assert!(time_left(&world, mob, SNOWSTORM.path).is_some());
+        cancel(&mut world, mob, SNOWSTORM.path, false);
+        assert!(channel_sent(&mut world).is_empty());
+        // Cut: the channel stops, no end sound.
+        start_with(&mut world, mob, &RAIN_MIDDLE, true, true);
+        channel_sent(&mut world);
+        cancel(&mut world, mob, RAIN_MIDDLE.path, true);
+        let sent = channel_sent(&mut world);
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].sound.sound.is_none());
+        assert!(
+            world
+                .resource_mut::<Messages<SendSound>>()
+                .drain()
+                .next()
+                .is_none()
+        );
+        assert!(played(&mut world).is_empty());
+    }
+
+    #[test]
+    fn set_mid_length_moves_the_pending_sound() {
+        let mut world = world();
+        let e = spawn(&mut world);
+        start(&mut world, e, &TENDRIL_HEARTBEAT);
+        assert_eq!(played(&mut world).len(), 1);
+        // 1.8 s normally; frantic (0.4 s) from now: the next beat 0.4 s after the last one.
+        advance(&mut world, 0.2);
+        set_mid_length(&mut world, e, TENDRIL_HEARTBEAT.path, 0.4);
+        advance(&mut world, 0.1);
+        assert!(played(&mut world).is_empty());
+        advance(&mut world, 0.15);
+        assert_eq!(played(&mut world).len(), 1);
+        advance(&mut world, 0.45);
+        assert_eq!(played(&mut world).len(), 1);
     }
 }

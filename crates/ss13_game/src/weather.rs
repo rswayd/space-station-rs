@@ -20,13 +20,15 @@
 //!   ([`make_eligible`], tg levels with a weather trait) gets one by `probability`, and is
 //!   eligible again 5-10 minutes after that weather's longest duration. The mining level
 //!   (`ZTRAIT_ASHSTORM`, [`ss13_mapload::mining_z`]) gets the ash storm (90) and emberfall (10).
+//! - Storm sounds (`area_sound_manager` of every player's mob, `weather_listener`): a player in
+//!   an impacted area of an ash, sand, snow or rain storm hears the stage's loop for that area
+//!   ([`weather_sounds`]; weather radios: `crate::weather_announcer`).
 // shortcut: no area overlays (needs a client contract: tg draws the stage's icon state over
-// every impacted area), no particles, no turf or thunder effects (no rain on the station), no
-// storm sound managers (`area_sound_manager`; weather radios: `crate::weather_announcer`); the
+// every impacted area), no particles, no turf or thunder effects (no rain on the station); the
 // base `weather_act_mob` pull of body temperature towards 20 °C is not ported; no status display
 // radiation alert (the displays have no emergency override); no icemoon, sand or rain weathers;
-// the ash storm has no area sound loops (`GLOB.ash_storm_sounds`) or thunder, and does
-// not refill dug basalt (`refill_dug`), and its damage ignores `required_bodytype`.
+// the ash storm has no thunder, and does not refill dug basalt (`refill_dug`), and its damage
+// ignores `required_bodytype`.
 
 use std::collections::HashSet;
 
@@ -42,6 +44,7 @@ use ss13_shared::protocol::SoundEvent;
 use crate::combat::CombatRng;
 use crate::ghost::Ghost;
 use crate::health::{Health, Stat};
+use crate::looping_sound::LoopDef;
 use crate::server::PlayerMob;
 
 /// `SSweather.wait`.
@@ -443,7 +446,7 @@ impl Plugin for WeatherPlugin {
         app.init_resource::<ActiveWeather>()
             .init_resource::<WeatherSchedule>()
             .add_systems(Startup, init_schedule)
-            .add_systems(Update, fire)
+            .add_systems(Update, (fire, weather_sounds).chain())
             .add_plugins(crate::weather_announcer::WeatherAnnouncerPlugin);
     }
 }
@@ -1094,6 +1097,176 @@ fn schedule(world: &mut World, now: f64) {
             .find(|(l, _, _)| *l == z)
         {
             level.2 = Some(now + rest + kind.duration_upper());
+        }
+    }
+}
+
+/// `/datum/component/area_sound_manager` on a player's mob while a storm with a playlist runs on
+/// its level: the loop of its area, if any.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct WeatherTrack {
+    def: Option<&'static LoopDef>,
+    /// The storm stage it follows: a new one is `handle_change` (the start sound plays).
+    stage: (WeatherKind, Stage),
+    /// `next_loop_time`: the loop waits for the old one's next sound (and `skip_start`).
+    start_at: Option<(f64, bool)>,
+}
+
+/// The weathers with a sound playlist (`get_playlist_ref`).
+fn has_playlist(kind: WeatherKind) -> bool {
+    matches!(
+        kind,
+        WeatherKind::AshStorm
+            | WeatherKind::Emberfall
+            | WeatherKind::SandStorm
+            | WeatherKind::SnowStorm
+            | WeatherKind::RainStorm
+    )
+}
+
+/// The playlists (`GLOB.ash_storm_sounds`, `sand_storm_sounds`, `snowstorm_sounds`,
+/// `rain_storm_sounds`): the loop of an impacted area at a stage.
+fn playlist(kind: WeatherKind, stage: Stage, outdoors: bool) -> Option<&'static LoopDef> {
+    use crate::looping_sound::defs::*;
+    let pick = |a: &'static LoopDef, b: &'static LoopDef| Some(if outdoors { a } else { b });
+    match (kind, stage) {
+        (WeatherKind::AshStorm | WeatherKind::Emberfall, Stage::Main) => {
+            pick(&ACTIVE_OUTSIDE_ASHSTORM, &ACTIVE_INSIDE_ASHSTORM)
+        }
+        (WeatherKind::AshStorm | WeatherKind::Emberfall, _) => {
+            pick(&WEAK_OUTSIDE_ASHSTORM, &WEAK_INSIDE_ASHSTORM)
+        }
+        (WeatherKind::SandStorm, Stage::Main) => Some(&ACTIVE_OUTSIDE_ASHSTORM),
+        (WeatherKind::SandStorm, _) => Some(&WEAK_OUTSIDE_ASHSTORM),
+        // Filled from `start()` and kept through the wind-down.
+        (WeatherKind::SnowStorm, Stage::Telegraph) => None,
+        (WeatherKind::SnowStorm, _) => Some(&SNOWSTORM),
+        (WeatherKind::RainStorm, Stage::Telegraph) => Some(&RAIN_START),
+        (WeatherKind::RainStorm, Stage::Main) => Some(&RAIN_MIDDLE),
+        (WeatherKind::RainStorm, Stage::WindDown) => Some(&RAIN_END),
+        _ => None,
+    }
+}
+
+/// A storm with a playlist on `mob`'s level: the stage followed (the one whose playlist has
+/// the mob's area, else the first) and the loop of the area.
+fn storm_here(
+    world: &World,
+    mob: Entity,
+) -> Option<((WeatherKind, Stage), Option<&'static LoopDef>)> {
+    let pos = crate::explosions::turf_of(world, mob)?;
+    let storms: Vec<&Weather> = world
+        .get_resource::<ActiveWeather>()?
+        .0
+        .iter()
+        .filter(|w| has_playlist(w.kind) && w.levels.contains(&pos.z))
+        .collect();
+    let first = storms.first()?;
+    let area = world.get_resource::<Areas>().and_then(|a| a.area_at(pos));
+    let outdoors = area.is_some_and(|a| world.get::<DmArea>(a).is_some_and(|d| d.outdoors));
+    let playing = area.and_then(|area| {
+        storms.iter().find_map(|w| {
+            let def = playlist(w.kind, w.stage, outdoors).filter(|_| w.areas.contains(&area))?;
+            Some(((w.kind, w.stage), def))
+        })
+    });
+    Some(match playing {
+        Some((stage, def)) => (stage, Some(def)),
+        None => ((first.kind, first.stage), None),
+    })
+}
+
+/// The area sound managers: each player's mob on a storm's level plays its area's loop to its
+/// client (`direct`). Moving to an area with another loop changes it without the start sound
+/// (`react_to_move`), a new stage changes it with it (`handle_change`); either way the new loop
+/// waits for the old one's next sound (`next_loop_time`). An area out of the storm stops the
+/// loop; the storm's end or leaving its level or logging out ends the manager
+/// (`handle_removal`, `react_to_z_move`, `COMSIG_MOB_LOGOUT`). A stopped loop cuts its channel
+/// sound.
+// Cost: while a storm runs (or a manager lives), per tick one turf, area and weather lookup per
+// player; nothing otherwise.
+pub fn weather_sounds(world: &mut World) {
+    use crate::looping_sound::{cancel, start_with, time_left};
+    let storm = world
+        .get_resource::<ActiveWeather>()
+        .is_some_and(|a| a.0.iter().any(|w| has_playlist(w.kind)));
+    let mut tracked = world.query_filtered::<Entity, With<WeatherTrack>>();
+    let mut mobs: Vec<Entity> = tracked.iter(world).collect();
+    if !storm && mobs.is_empty() {
+        return;
+    }
+    if storm {
+        let mut players =
+            world.query_filtered::<Entity, (With<PlayerMob>, Without<WeatherTrack>)>();
+        mobs.extend(players.iter(world));
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    for mob in mobs {
+        let here = if world.get::<PlayerMob>(mob).is_some() {
+            storm_here(world, mob)
+        } else {
+            None
+        };
+        let track = world.get::<WeatherTrack>(mob).copied();
+        match (track, here) {
+            (None, None) => {}
+            (Some(t), None) => {
+                if let Some(old) = t.def {
+                    cancel(world, mob, old.path, true);
+                }
+                world.entity_mut(mob).remove::<WeatherTrack>();
+            }
+            (None, Some((stage, def))) => {
+                if let Some(def) = def {
+                    start_with(world, mob, def, false, true);
+                }
+                world.entity_mut(mob).insert(WeatherTrack {
+                    def,
+                    stage,
+                    start_at: None,
+                });
+            }
+            (Some(t), Some((stage, def))) => {
+                let changed = t.stage != stage;
+                if !changed && t.def.map(|d| d.path) == def.map(|d| d.path) {
+                    if let (Some(def), Some((at, skip))) = (def, t.start_at)
+                        && at <= now
+                    {
+                        start_with(world, mob, def, skip, true);
+                        world.entity_mut(mob).insert(WeatherTrack {
+                            start_at: None,
+                            ..t
+                        });
+                    }
+                    continue;
+                }
+                // `change_the_track`: a pending start keeps its time.
+                let skip = !changed;
+                let at = t
+                    .start_at
+                    .map(|(at, _)| at)
+                    .or_else(|| {
+                        t.def
+                            .and_then(|old| time_left(world, mob, old.path))
+                            .map(|left| now + left)
+                    })
+                    .filter(|&at| at > now);
+                if let Some(old) = t.def {
+                    // shortcut: with a next loop the old sound plays out (tg cuts a channel
+                    // loop's sound at once, then waits silent for its timer).
+                    cancel(world, mob, old.path, def.is_none());
+                }
+                if let Some(def) = def
+                    && at.is_none()
+                {
+                    start_with(world, mob, def, skip, true);
+                }
+                world.entity_mut(mob).insert(WeatherTrack {
+                    def,
+                    stage,
+                    start_at: def.and(at).map(|at| (at, skip)),
+                });
+            }
         }
     }
 }

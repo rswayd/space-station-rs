@@ -112,6 +112,8 @@ pub(super) fn absorb_stage(
             );
             // `take_overall_damage(40)`.
             hurt(world, target, DamageType::Brute, 40.0);
+            // `absorbing_loop = new(owner, start_immediately = TRUE)`.
+            crate::looping_sound::start(world, mob, &crate::looping_sound::defs::CHANGELING_ABSORB);
         }
     }
     if let Some(mut ling) = world.get_mut::<Changeling>(mob) {
@@ -130,9 +132,16 @@ pub(super) fn absorb_interrupted(world: &mut World, mob: Entity) {
     let was = world
         .get_mut::<Changeling>(mob)
         .and_then(|mut c| c.absorbing.take());
+    stop_absorb_loop(world, mob);
     if was.is_some() {
         chat_to(world, mob, Span::Warning, "прервано!");
     }
+}
+
+/// `qdel(absorbing_loop)`.
+fn stop_absorb_loop(world: &mut World, mob: Entity) {
+    let path = crate::looping_sound::defs::CHANGELING_ABSORB.path;
+    crate::looping_sound::cancel(world, mob, path, true);
 }
 
 /// [`Job::Changeling`] completions.
@@ -160,6 +169,7 @@ pub(super) fn finish_absorb(world: &mut World, mob: Entity, target: Entity) {
     if let Some(mut ling) = world.get_mut::<Changeling>(mob) {
         ling.absorbing = None;
     }
+    stop_absorb_loop(world, mob);
     // Revalidated: another changeling may have drained it meanwhile.
     if world.get_entity(target).is_err() || !can_absorb(world, mob, target, true) {
         return;

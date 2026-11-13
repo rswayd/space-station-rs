@@ -33,6 +33,7 @@ use ss13_world::SpatialIndex;
 use crate::combat::CombatRng;
 use crate::construction::{baseturfs_of, change_turf, path_of, scrape_away, turf_at};
 use crate::health::{DamageType, Health, Stat};
+use crate::looping_sound::defs::TENDRIL_HEARTBEAT;
 use crate::mobs::BasicMob;
 use crate::sound::{PlaySound, playsound};
 
@@ -248,6 +249,7 @@ fn attach(add: On<Add<BasicMob>>, mobs: Query<&BasicMob>, mut commands: Commands
             damaged_at: now,
         });
         world.entity_mut(mob).insert(TendrilCombat::default());
+        crate::looping_sound::start(world, mob, &TENDRIL_HEARTBEAT);
     });
 }
 
@@ -328,6 +330,7 @@ pub fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
     let Some(tendril) = world.get::<Tendril>(mob).cloned() else {
         return;
     };
+    crate::looping_sound::cancel(world, mob, TENDRIL_HEARTBEAT.path, true);
     // `playsound(turf, 'tendril_destroyed.ogg', 200, FALSE, 50, TRUE, TRUE)`.
     let mut sound = PlaySound::new(pos, DESTROYED_SOUND, 200.0, false);
     sound.extrarange = 50.0;
@@ -411,7 +414,6 @@ const REVENGE_RANGE: u32 = 2;
 const BEAT_NORMAL: f64 = 1.8;
 const BEAT_FAST: f64 = 1.0;
 const BEAT_FRANTIC: f64 = 0.4;
-const BEAT_SOUND: &str = "sound/effects/singlebeat.ogg";
 const CHASER_SOUND: &str = "sound/effects/magic/demon_attack1.ogg";
 const SPIKE_HIT_SOUND: &str = "sound/items/weapons/slice.ogg";
 const TENTACLE_HIT_SOUND: &str = "sound/effects/wounds/pierce1.ogg";
@@ -467,7 +469,6 @@ pub struct TendrilCombat {
     pub stab_ready: f64,
     pub strikes: Vec<(f64, Strike)>,
     pub chasers: Vec<Chaser>,
-    pub next_beat: f64,
     /// Brute damage at the last look (`revenge_ability` reacts to being hurt).
     pub seen_brute: f32,
 }
@@ -820,10 +821,12 @@ fn combat(world: &mut World) {
             }
         }
         // `update_heartbeat`.
-        if now >= c.next_beat {
-            sound(world, at, BEAT_SOUND, 50.0, false);
-            c.next_beat = now + beat_rate(c.target.is_some(), ratio);
-        }
+        crate::looping_sound::set_mid_length(
+            world,
+            mob,
+            TENDRIL_HEARTBEAT.path,
+            beat_rate(c.target.is_some(), ratio),
+        );
         if let Ok(mut e) = world.get_entity_mut(mob) {
             e.insert(c);
         }

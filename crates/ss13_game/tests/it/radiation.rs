@@ -3,7 +3,7 @@
 //! his hand reads the extreme level), not one behind a full insulator, not one in a radiation
 //! suit and hood; a pulse with a minimum exposure time only warms a human up, a pulse 3 s later
 //! irradiates him; healing the toxin damage ends the irradiation. A uranium statue (the
-//! `radioactive` element) pulses every 3 s.
+//! `radioactive` element) pulses every 3 s. A scanning counter clicks while pulses reach it.
 
 use bevy::prelude::*;
 use ss13_game::breath::{AlertCategory, Alerts};
@@ -181,4 +181,68 @@ fn uranium_statue_pulses_every_three_seconds() {
     // The next pulses come 3 s apart; one of them lands past the exposure time.
     run(&mut app, 6.5);
     assert!(app.world().get::<Irradiated>(mob).is_some());
+}
+
+#[derive(Resource, Default)]
+struct Clicks(Vec<String>);
+
+fn record_clicks(mut sounds: MessageReader<ss13_game::sound::PlaySound>, mut out: ResMut<Clicks>) {
+    out.0.extend(
+        sounds
+            .read()
+            .filter(|s| s.sound.starts_with("sound/items/geiger/"))
+            .map(|s| s.sound.clone()),
+    );
+}
+
+/// A scanning counter in a hand clicks the pulse's danger (`geiger_sound`): the extreme clicks
+/// every 0.2 s, silence 5 s after the last pulse; switched off it stops at once.
+#[test]
+fn scanning_geiger_clicks_until_the_radiation_is_gone() {
+    use ss13_game::looping_sound;
+    const LOOP: &str = "/datum/looping_sound/geiger";
+    let mut app = server("geiger_clicks");
+    app.init_resource::<Clicks>()
+        .add_systems(PostUpdate, record_clicks);
+    let world = app.world_mut();
+    let source = world.spawn(at(3)).id();
+    let holder = human(world, at(5));
+    let counter = item(world, GEIGER, 0);
+    world.entity_mut(counter).insert(CarriedBy(holder));
+    world.get_mut::<Inventory>(holder).unwrap().hands[0] = Some(counter);
+    world.entity_mut(counter).insert(Geiger::default());
+    world.get_mut::<Geiger>(counter).unwrap().scanning = true;
+    // An off counter on the floor next to it stays quiet.
+    let off = item(world, GEIGER, 0);
+    world.entity_mut(off).insert(at(5));
+
+    radiation::radiation_pulse(world, source, 4.0, 0.5, 100.0, 0.0);
+    run(&mut app, 1.0);
+    assert!(looping_sound::is_active(app.world(), counter, LOOP));
+    assert!(!looping_sound::is_active(app.world(), off, LOOP));
+    let clicks = std::mem::take(&mut app.world_mut().resource_mut::<Clicks>().0);
+    assert!(clicks.len() >= 3, "a click every 0.2 s: {clicks:?}");
+    assert!(
+        clicks
+            .iter()
+            .all(|c| c.starts_with("sound/items/geiger/ext")),
+        "the extreme level: {clicks:?}"
+    );
+
+    // 5 s without a pulse: silence.
+    run(&mut app, 5.0);
+    assert!(!looping_sound::is_active(app.world(), counter, LOOP));
+    app.world_mut().resource_mut::<Clicks>().0.clear();
+    run(&mut app, 1.0);
+    assert!(app.world().resource::<Clicks>().0.is_empty());
+
+    // Clicking again, then switched off.
+    let world = app.world_mut();
+    radiation::radiation_pulse(world, source, 4.0, 0.5, 100.0, 0.0);
+    run(&mut app, 0.6);
+    assert!(looping_sound::is_active(app.world(), counter, LOOP));
+    let world = app.world_mut();
+    let client = world.spawn_empty().id();
+    assert!(radiation::geiger_attack_self(world, client, counter));
+    assert!(!looping_sound::is_active(app.world(), counter, LOOP));
 }

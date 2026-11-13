@@ -38,6 +38,7 @@ use crate::chem::{name_of, tell_mob, visible};
 use crate::combat::{CombatMode, CombatRng, NextMove};
 use crate::health::{DamageType, Health, HealthSystems, Stat};
 use crate::inventory::Inventory;
+use crate::looping_sound::defs::CHOKING;
 use crate::mood::MoodEvent;
 use crate::status_effects::StatusSystems;
 use crate::tools::{Actor, DoAfter};
@@ -46,15 +47,6 @@ use crate::zone::BodyZone;
 /// `/datum/status_effect/choke::tick_interval`; the Heimlich's `do_after` (deciseconds).
 const CHOKE_TICK_SECS: f64 = 0.2;
 pub const HEIMLICH_DS: f32 = 70.0;
-/// `/datum/looping_sound/choking`: `mid_length`.
-const GAG_SECS: f64 = 1.6;
-const GAGS: [&str; 5] = [
-    "sound/mobs/humanoids/human/gag_vomit/gag1.ogg",
-    "sound/mobs/humanoids/human/gag_vomit/gag2.ogg",
-    "sound/mobs/humanoids/human/gag_vomit/gag3.ogg",
-    "sound/mobs/humanoids/human/gag_vomit/gag4.ogg",
-    "sound/mobs/humanoids/human/gag_vomit/gag5.ogg",
-];
 pub const CRACK_VOMIT: &str = "sound/mobs/humanoids/human/gag_vomit/crack_vomit.ogg";
 pub const DESECRATION: [&str; 3] = [
     "sound/effects/desecration/desecration-01.ogg",
@@ -99,7 +91,6 @@ pub struct Choking {
     /// The `vomit_delay` end, `None` for `STATUS_EFFECT_PERMANENT`.
     pub vomit_at: Option<f64>,
     next_tick: f64,
-    next_gag: f64,
 }
 
 /// `/datum/status_effect/terrified` (its terror lives on the mob's `Fearful`).
@@ -329,8 +320,11 @@ pub fn apply_choke(
         flaming_until,
         vomit_at: vomit_delay.map(|d| now + f64::from(d)),
         next_tick: now + CHOKE_TICK_SECS,
-        next_gag: now,
     });
+    // `choke_loop`, `check_audio_state`.
+    if !dead(world, mob) {
+        crate::looping_sound::start(world, mob, &CHOKING);
+    }
     crate::mood::add_event(world, mob, "choke", &CHOKE_MOOD);
     crate::medical::traumas::refresh(world, mob);
     let name = name_of(world, mob);
@@ -351,6 +345,7 @@ pub fn end_choke(world: &mut World, mob: Entity) {
         return;
     };
     world.entity_mut(mob).remove::<Choking>();
+    crate::looping_sound::cancel(world, mob, CHOKING.path, true);
     crate::mood::clear_event(world, mob, "choke");
     crate::medical::traumas::refresh(world, mob);
     let inside = world
@@ -379,6 +374,7 @@ fn choke_tick(world: &mut World) {
             .is_some_and(|p| p.0 == mob);
         if !inside {
             world.entity_mut(mob).remove::<Choking>();
+            crate::looping_sound::cancel(world, mob, CHOKING.path, true);
             crate::mood::clear_event(world, mob, "choke");
             crate::medical::traumas::refresh(world, mob);
             continue;
@@ -393,8 +389,10 @@ fn choke_tick(world: &mut World) {
         if let Some(mut c) = world.get_mut::<Choking>(mob) {
             c.next_tick += CHOKE_TICK_SECS;
         }
-        // `should_do_effects`.
-        if dead(world, mob) {
+        // `should_do_effects`; `check_audio_state` on death and revival.
+        let alive = !dead(world, mob);
+        crate::looping_sound::set(world, mob, &CHOKING, alive);
+        if !alive {
             continue;
         }
         let secs = CHOKE_TICK_SECS as f32;
@@ -419,13 +417,6 @@ fn choke_tick(world: &mut World) {
                 }
             }
             crate::status_effects::adjust_stamina(world, mob, 2.0 * secs);
-        }
-        if now >= choke.next_gag {
-            let gag = GAGS[rng_range(world, 0, 4) as usize];
-            play(world, mob, gag, 90.0);
-            if let Some(mut c) = world.get_mut::<Choking>(mob) {
-                c.next_gag = now + GAG_SECS;
-            }
         }
     }
 }

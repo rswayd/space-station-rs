@@ -18,9 +18,12 @@
 //!   violent landings, half the travel time, every door forced open for good.
 //! - The call button (cooldown 2 s) refuses while the lift moves, opens the doors when it is
 //!   already on the button's level, else calls it there and says how the trip ended.
+//! - Elevator music (`/obj/effect/abstract/elevator_music_zone`): a player within a tile of the
+//!   zone hears `local_forecast` on the elevator channel at their ambience volume while its
+//!   panel has power ([`elevator_music`]).
 // shortcut: no radial up/down on the platform itself (tramstation's public lifts have none), no
 // floor indicators, no warnings on the level below, no multitool reset of the panel or button,
-// no emag of the button, no elevator music, no `simple_move_wrapper`.
+// no emag of the button, no `simple_move_wrapper`.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
@@ -37,6 +40,7 @@ use crate::doors::{Door, with_door};
 use crate::inventory::{Inventory, id_allowed};
 use crate::power::Unpowered;
 use crate::security_level::{SecLevel, SecurityLevel};
+use crate::server::PlayerMob;
 use crate::sound::{PlaySound, playsound};
 use crate::tools::now;
 pub use crate::transport_ui::{
@@ -46,6 +50,9 @@ pub use crate::transport_ui::{
 
 pub const PANEL: &str = "/obj/machinery/elevator_control_panel";
 const LIFT_DOOR: &str = "/obj/machinery/door/poddoor/lift";
+pub const MUSIC_ZONE: &str = "/obj/effect/abstract/elevator_music_zone";
+/// The zone's `range` (no map edits it).
+const MUSIC_RANGE: u32 = 1;
 /// `sleep(1.1 SECONDS)` after the doors close, `stoplag(travel_speed + 0.1 SECONDS)`.
 const CLOSE_SECS: f64 = 1.1;
 const STEP_GAP_SECS: f64 = 0.1;
@@ -90,6 +97,16 @@ pub struct LiftTrip {
     pub caller: Option<(Entity, Entity)>,
 }
 
+/// `/obj/effect/abstract/elevator_music_zone` with its `elevator_music_area` proximity
+/// monitor: the linked panel (`link_to_panel`), whether it plays (`enabled`) and the mobs it
+/// tracks (`tracked_mobs`).
+#[derive(Component, Clone, Debug)]
+pub struct ElevatorMusic {
+    pub panel: Option<Entity>,
+    pub enabled: bool,
+    pub tracked: Vec<Entity>,
+}
+
 /// The elevator doors (`GLOB.elevator_doors`) with their `transport_linked_id`, and the
 /// openings waiting for their 0.7 s.
 #[derive(Resource, Default, Debug)]
@@ -119,6 +136,7 @@ impl Plugin for ElevatorPlugin {
                     panel_clicks.after(ResolveClicks).before(UiSystems::Open),
                     panel_acts.in_set(UiSystems::Handle),
                     tick_lifts,
+                    elevator_music.run_if(any_with_component::<ElevatorMusic>),
                 ),
             );
     }
@@ -156,6 +174,99 @@ pub fn link_elevators(world: &mut World) {
                 .doors
                 .push((e, dm.transport_linked_id.clone()));
         }
+    }
+    link_music_zones(world);
+}
+
+/// `GLOB.elevator_music[linked_elevator_id]` and the panels' `link_to_panel`.
+fn link_music_zones(world: &mut World) {
+    let mut q = world.query_filtered::<(Entity, &DmTransport), With<Mapped>>();
+    let zones: Vec<(Entity, String)> = q
+        .iter(world)
+        .filter(|(_, t)| is_under(&t.path, MUSIC_ZONE))
+        .map(|(e, t)| (e, t.linked_elevator_id.clone()))
+        .collect();
+    for (zone, id) in zones {
+        if id.is_empty() {
+            warn!("elevator music zone {zone} has no elevator id");
+            continue;
+        }
+        let panel = world
+            .query::<(Entity, &ElevatorPanel)>()
+            .iter(world)
+            .find(|(_, p)| p.linked == id)
+            .map(|(e, _)| e);
+        world.entity_mut(zone).insert(ElevatorMusic {
+            panel,
+            enabled: true,
+            tracked: Vec::new(),
+        });
+    }
+}
+
+/// The `elevator_music_area` monitors: a player's mob coming within range gets the music
+/// (`direct`, playing while the zone is enabled), one leaving it loses it; the panel losing or
+/// regaining power stops or starts every tracked loop (`turn_off`, `turn_on`).
+// Cost: per tick, zones (a few per map) × player mobs distance checks.
+fn elevator_music(world: &mut World) {
+    use crate::looping_sound::{cancel, defs::LOCAL_FORECAST, start_with, stop};
+    let players: Vec<Entity> = world
+        .query_filtered::<Entity, With<PlayerMob>>()
+        .iter(world)
+        .collect();
+    let zones: Vec<(Entity, ElevatorMusic)> = world
+        .query::<(Entity, &ElevatorMusic)>()
+        .iter(world)
+        .map(|(e, m)| (e, m.clone()))
+        .collect();
+    for (zone, mut music) in zones {
+        let at = crate::explosions::turf_of(world, zone);
+        let enabled = music
+            .panel
+            .is_none_or(|p| world.get_entity(p).is_ok() && world.get::<Unpowered>(p).is_none());
+        let near = |world: &World, mob: Entity| {
+            world.get::<PlayerMob>(mob).is_some()
+                && at.is_some_and(|at| {
+                    crate::explosions::turf_of(world, mob)
+                        .and_then(|p| at.chebyshev(p))
+                        .is_some_and(|d| d <= MUSIC_RANGE)
+                })
+        };
+        // `on_uncrossed`, `mob_destroyed`.
+        let mut kept = Vec::new();
+        for mob in std::mem::take(&mut music.tracked) {
+            if world.get_entity(mob).is_err() {
+                continue;
+            }
+            if near(world, mob) {
+                kept.push(mob);
+            } else {
+                cancel(world, mob, LOCAL_FORECAST.path, true);
+            }
+        }
+        music.tracked = kept;
+        // `turn_on`, `turn_off`.
+        if enabled != music.enabled {
+            music.enabled = enabled;
+            for &mob in &music.tracked {
+                if enabled {
+                    start_with(world, mob, &LOCAL_FORECAST, false, true);
+                } else {
+                    stop(world, mob, LOCAL_FORECAST.path);
+                }
+            }
+        }
+        // `on_entered`.
+        for &mob in &players {
+            if music.tracked.contains(&mob) || !near(world, mob) {
+                continue;
+            }
+            music.tracked.push(mob);
+            if enabled {
+                start_with(world, mob, &LOCAL_FORECAST, false, true);
+            }
+        }
+        world.entity_mut(zone).insert(music);
     }
 }
 

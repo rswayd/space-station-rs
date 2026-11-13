@@ -3,8 +3,9 @@
 //! [`DmTransport`] carries the transport vars of the linear modules (`/obj/structure/transport`),
 //! their landmarks (transport ids, tram nav and platform beacons), the tram controls, call
 //! buttons and cabinets, the elevator panels and the doors a transport drives (lift blast doors,
-//! elevator windoors, tram airlocks, and any door a map links with `transport_linked_id`). Type
-//! defaults and `.dmm` edits; the game (`ss13_game::transport`) builds the transports from it.
+//! elevator windoors, tram airlocks, and any door a map links with `transport_linked_id`), the
+//! elevator music zones. Type defaults and `.dmm` edits; the game (`ss13_game::transport`)
+//! builds the transports from it.
 
 use bevy::prelude::*;
 use serde_json::Value;
@@ -19,7 +20,7 @@ pub const MODULE_ROOT: &str = "/obj/structure/transport";
 pub const LANDMARK_ROOT: &str = "/obj/effect/landmark/transport";
 pub const DOOR_ROOT: &str = "/obj/machinery/door";
 const COMPONENT: &str = "dm_transport";
-const ROOTS: [&str; 9] = [
+const ROOTS: [&str; 10] = [
     MODULE_ROOT,
     LANDMARK_ROOT,
     "/obj/machinery/computer/tram_controls",
@@ -29,6 +30,8 @@ const ROOTS: [&str; 9] = [
     "/obj/machinery/door/poddoor/lift",
     "/obj/machinery/door/window/elevator",
     "/obj/machinery/door/airlock/tram",
+    // `linked_elevator_id` of the elevator music.
+    "/obj/effect/abstract/elevator_music_zone",
 ];
 
 /// The transport vars of a DM type (type defaults + map edits). Prototype data like

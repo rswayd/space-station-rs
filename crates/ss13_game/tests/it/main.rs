@@ -147,6 +147,7 @@ mod spiders;
 mod stack_recipes;
 mod stock_parts;
 mod storage;
+mod storm_sounds;
 mod succumb;
 mod suits;
 mod surfaces;

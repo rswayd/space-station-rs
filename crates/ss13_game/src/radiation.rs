@@ -32,8 +32,8 @@
 //! Cost: a pulse visits `(2r + 1)^2` tiles and, per human or item there, a line of at most `r`
 //! tiles (tile insulation cached per pulse): a range 8 supermatter pulse every SSair fire is
 //! ~300 tiles. Irradiated mobs process every 2 s.
-// shortcut: no green glow filter on irradiated atoms, no geiger clicking sound loop
-// (`geiger_sound`), no MOD radiation counter panel, no `/datum/status_effect/radiation_immunity`,
+// shortcut: no green glow filter on irradiated atoms, no MOD radiation counter panel or its
+// clicking (`geiger_sound` on the module: the counter's own loop is [`geiger_click`]), no `/datum/status_effect/radiation_immunity`,
 // no showers (the wash hook is here); add with those mechanics.
 // shortcut: the `radioactive` element reaches uranium atoms by type ([`URANIUM_MATERIAL_ATOMS`]),
 // not through `custom_materials` (non-item atoms carry no materials in the port); move to the
@@ -725,8 +725,25 @@ fn notify_geigers(world: &mut World, target: Entity, danger: u8, now: f64) {
         let scanning = g.scanning;
         if scanning {
             refresh_geiger(world, counter);
+            geiger_click(world, counter, danger);
         }
     }
+}
+
+/// `geiger_sound/on_pre_potential_irradiation`: the clicking of the pulse's danger starts, or
+/// switches to it (`get_sound` reads the last pulse); it stops 5 s after the last pulse.
+fn geiger_click(world: &mut World, counter: Entity, danger: u8) {
+    let def = &crate::looping_sound::defs::GEIGER[usize::from(danger.clamp(1, 4) - 1)];
+    if crate::looping_sound::is_active(world, counter, def.path) {
+        crate::looping_sound::set_mid_sounds(world, counter, def.path, def.mid_sounds);
+    } else {
+        crate::looping_sound::start(world, counter, def);
+    }
+}
+
+fn geiger_click_stop(world: &mut World, counter: Entity) {
+    let path = crate::looping_sound::defs::GEIGER[0].path;
+    crate::looping_sound::stop(world, counter, path);
 }
 
 fn geiger_mut(world: &mut World, counter: Entity) -> Mut<'_, Geiger> {
@@ -767,6 +784,10 @@ pub fn geiger_attack_self(world: &mut World, client: Entity, item: Entity) -> bo
     g.scanning = !g.scanning;
     let on = g.scanning;
     refresh_geiger(world, item);
+    // `qdel(GetComponent(/datum/component/geiger_sound))`.
+    if !on {
+        geiger_click_stop(world, item);
+    }
     crate::tools::tell(
         world,
         client,
@@ -1063,6 +1084,15 @@ fn process_radiation(world: &mut World) {
             if g.scanning {
                 refresh_geiger(world, counter);
             }
+        }
+        if g.reset_at <= now
+            && crate::looping_sound::is_active(
+                world,
+                counter,
+                crate::looping_sound::defs::GEIGER[0].path,
+            )
+        {
+            geiger_click_stop(world, counter);
         }
         if let Some((at, target, user)) = g.scan
             && at <= now
