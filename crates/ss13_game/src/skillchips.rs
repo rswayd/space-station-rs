@@ -55,7 +55,7 @@ const EXCISE_DS: f32 = 150.0;
 /// The connector's `do_after` (1.5 seconds), deciseconds.
 const CONNECTOR_DS: f32 = 15.0;
 /// `/obj/item/organ/cyberimp/brain/connector`.
-pub const CONNECTOR: &str = "/obj/item/organ/cyberimp/brain/connector";
+pub const CHIP_CONNECTOR: &str = "/obj/item/organ/cyberimp/brain/connector";
 const BASKETWEAVING: &str = "/obj/item/skillchip/basketweaving";
 const BRAINWASHING: &str = "/obj/item/skillchip/brainwashing";
 

@@ -409,7 +409,7 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
 /// `chip_connector/add_unique`: a connector implant goes in (`special`).
 pub(super) fn chip_connector(world: &mut World, mob: Entity) {
     use crate::medical::cyberimps::{ImplantSlot, insert, spawn_implant};
-    let Some(implant) = spawn_implant(world, crate::skillchips::CONNECTOR) else {
+    let Some(implant) = spawn_implant(world, crate::skillchips::CHIP_CONNECTOR) else {
         return;
     };
     if !insert(world, implant, mob, ImplantSlot::Cns) {

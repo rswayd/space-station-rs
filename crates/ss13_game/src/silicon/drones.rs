@@ -301,7 +301,7 @@ impl Plugin for DronesPlugin {
                     drone_chat.after(SaySystems),
                     answers.after(PromptSystems::Answer),
                     verbs.in_set(UiSystems::Handle),
-                    (on_death, holder_loving, station_stuck),
+                    (on_death, holder_loving, station_stuck, pending_gear),
                 ),
             );
     }
@@ -353,19 +353,13 @@ pub(crate) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
         BinaryCapable,
     ));
     set_shy(world, mob, kind.shy);
-    if let Some(path) = kind.storage
-        && let Some(storage) = equip_new(world, mob, path, InventorySlot::SuitStorage)
-    {
-        if path == DRONE_TOOLS {
-            built_in_tools(world, storage);
-        }
-        if let Some((tc, flag)) = kind.uplink {
-            crate::antag::uplink::give_item_uplink(world, mob, storage, tc, flag, "Syndrone");
-        }
-    }
-    if let Some(hat) = kind.hat {
-        equip_new(world, mob, hat, InventorySlot::Head);
-    }
+    // `attach` runs while the mob's own template is being spawned (the build templates are
+    // borrowed): its equipment comes after ([`give_gear`]).
+    world.entity_mut(mob).insert(DroneGear {
+        storage: kind.storage,
+        hat: kind.hat,
+        uplink: kind.uplink,
+    });
     if kind.root == POLYMORPHED {
         let roll = world.resource_mut::<crate::combat::CombatRng>().range(0, 2);
         let visual = [MAINTDRONE, REPAIRDRONE, SCOUTDRONE][roll as usize];
@@ -392,6 +386,46 @@ pub(crate) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
 }
 
 /// A new `path` into the drone's empty `slot` (`equip_to_slot_or_del`).
+/// A new drone's `default_storage` and `default_headwear`, not yet spawned.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct DroneGear {
+    storage: Option<&'static str>,
+    hat: Option<&'static str>,
+    uplink: Option<(u32, u32)>,
+}
+
+/// Spawns a new drone's [`DroneGear`] into its slots.
+pub fn give_gear(world: &mut World, mob: Entity) {
+    let Some(gear) = world.get::<DroneGear>(mob).copied() else {
+        return;
+    };
+    world.entity_mut(mob).remove::<DroneGear>();
+    if let Some(path) = gear.storage
+        && let Some(storage) = equip_new(world, mob, path, InventorySlot::SuitStorage)
+    {
+        if path == DRONE_TOOLS {
+            built_in_tools(world, storage);
+        }
+        if let Some((tc, flag)) = gear.uplink {
+            crate::antag::uplink::give_item_uplink(world, mob, storage, tc, flag, "Syndrone");
+        }
+    }
+    if let Some(hat) = gear.hat {
+        equip_new(world, mob, hat, InventorySlot::Head);
+    }
+}
+
+/// Drones spawned by anything else (the map, a dispenser, an admin) get their gear next tick.
+fn pending_gear(world: &mut World) {
+    let pending: Vec<Entity> = world
+        .query_filtered::<Entity, With<DroneGear>>()
+        .iter(world)
+        .collect();
+    for mob in pending {
+        give_gear(world, mob);
+    }
+}
+
 fn equip_new(world: &mut World, mob: Entity, path: &str, slot: InventorySlot) -> Option<Entity> {
     let item = crate::construction::spawn_detached(world, path)?;
     world.entity_mut(item).insert((Networked, CarriedBy(mob)));
@@ -574,6 +608,7 @@ pub fn take_shell(
     let mob_type = def.mob_type.as_deref()?;
     let &pos = world.get::<TilePos>(shell)?;
     let mob = crate::mobs::spawn::spawn_mob(world, mob_type, pos)?;
+    give_gear(world, mob);
     // `unique_name`: "[mob_name] ([rand(1, 999)])".
     let base = def
         .mob_name

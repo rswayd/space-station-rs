@@ -247,6 +247,8 @@ fn a_regular_drone_is_shy_and_wears_only_hats() {
     let world = s.0.server.world_mut();
     let drone =
         ss13_game::mobs::spawn::spawn_mob(world, DRONE, TilePos::new(3, 2, 1)).expect("a drone");
+    // Its gear comes after the spawn (the system does it next tick).
+    ss13_game::silicon::drones::give_gear(world, drone);
     assert!(
         world
             .get::<Drone>(drone)

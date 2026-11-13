@@ -677,7 +677,20 @@ fn an_rcd_builds_a_wall_and_takes_it_down() {
     assert_eq!(s.turf_path(BUILD_AT), "/turf/closed/wall");
     assert_eq!(s.world().get::<Matter>(rcd).unwrap().matter, 144);
 
-    // A right click deconstructs it: 4 s, 26 matter, the floor back.
+    // A right click deconstructs it: 4 s, 26 matter, the floor back. Deconstruction needs the
+    // engineer skillchip (BandaStation `check_engineer_skillchip`).
+    {
+        use ss13_game::skillchips::{Skillchip, def_of, implant, try_activate};
+        let mob = s.players[0].mob;
+        let world = s.server.world_mut();
+        let chip = world
+            .spawn(Skillchip::new(
+                def_of("/obj/item/skillchip/job/engineer").unwrap(),
+            ))
+            .id();
+        implant(world, mob, chip, true).expect("the chip goes in");
+        try_activate(world, chip, true, true);
+    }
     let wall = s.turf(BUILD_AT);
     s.click_with(wall, true);
     s.wait_do_after(10.0, "the deconstruction");
