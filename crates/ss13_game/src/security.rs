@@ -485,7 +485,10 @@ pub(crate) fn security_clicks(world: &mut World, mut clicks: Local<MessageCursor
             None if click.modifiers.right => {
                 if target != mob {
                     world.entity_mut(mob).insert(NextMove(now + CLICK_CD_MELEE));
-                    shove(world, mob, target);
+                    // BandaStation's strongarms shove harder (`crate::medical::strong_limbs`).
+                    if !crate::medical::strong_limbs::strong_shove(world, mob, target) {
+                        shove(world, mob, target);
+                    }
                 }
                 true
             }

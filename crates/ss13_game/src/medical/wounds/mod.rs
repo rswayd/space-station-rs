@@ -296,6 +296,10 @@ pub struct Limb {
     pub scars: Vec<scars::Scar>,
     /// `applied_items[LIMB_ITEM_TOURNIQUET]` (`crate::medical::tourniquet`).
     pub tourniquet: bool,
+    /// The type of a special limb attached here by surgery (BandaStation's strongarm and
+    /// strongleg, `crate::medical::strong_limbs`); `None` for the species' own or a plain
+    /// robotic one.
+    pub kind: Option<String>,
 }
 
 impl Limb {
