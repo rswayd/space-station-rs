@@ -633,7 +633,7 @@ fn init_bounty(
     let (name, help, kind, claim, theft_time_ds, black_market_prob) = match &ty.ty {
         Type::ObjectiveItem => init_objective_item(snapshot, handler, difficulty)?,
         Type::Machine(options, location, claim) => {
-            init_machine(world, snapshot, handler, *options, *location, claim.clone())?
+            init_machine(world, snapshot, handler, options, *location, claim.clone())?
         }
         Type::Person(item) => init_person(world, snapshot, handler, *item)?,
         Type::Bot(def) => init_bot(world, snapshot, handler, def)?,

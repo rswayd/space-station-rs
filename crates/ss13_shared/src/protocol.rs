@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Dir, TilePos};
 
 /// Bumped on every incompatible change; checked during the handshake.
-pub const PROTOCOL_VERSION: u32 = 116;
+pub const PROTOCOL_VERSION: u32 = 117;
 
 /// Simulation tick (20 Hz, as BYOND tg). Server loop and network tick sync must agree on it.
 pub const TICK_DURATION: Duration = Duration::from_millis(50);
