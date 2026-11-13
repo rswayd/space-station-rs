@@ -280,15 +280,19 @@ pub fn express_data(c: &ExpressConsole, supply_blocked: bool) -> CargoExpressDat
 
 impl ServerUi for CargoExpressUi {
     type Source = &'static ExpressConsole;
-    type UserParam = ();
+    type UserParam = Option<Res<'static, super::supply::SupplyShuttle>>;
     type Act = ExpressAct;
 
     fn static_data(c: &ExpressConsole) -> CargoStatic {
         (*c.catalogue).clone()
     }
 
-    fn data(c: &ExpressConsole, _: Entity, _: &()) -> CargoExpressData {
-        express_data(c, false)
+    fn data(
+        c: &ExpressConsole,
+        _: Entity,
+        shuttle: &bevy::ecs::system::SystemParamItem<'_, '_, Self::UserParam>,
+    ) -> CargoExpressData {
+        express_data(c, shuttle.as_deref().is_some_and(|s| s.blocked))
     }
 
     fn parse_act(action: &str, params: &UiParams) -> Result<ExpressAct, UiReject> {

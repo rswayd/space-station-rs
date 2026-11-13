@@ -308,6 +308,15 @@ pub fn emag_act(world: &mut World, client: Entity, mob: Entity, console: Entity)
 /// tg `process`: enough IDs (or the emag) start the engines.
 fn process(world: &mut World, console: Entity) {
     let t = now(world);
+    if shuttle_mode(world) == Some(ShuttleMode::Stranded)
+        && world
+            .get::<EmergencyConsole>(console)
+            .is_some_and(|c| c.emagged || !c.authorized.is_empty())
+        && let Some(mut c) = world.get_mut::<EmergencyConsole>(console)
+    {
+        c.authorized.clear();
+        c.emagged = false;
+    }
     let Some(c) = world.get::<EmergencyConsole>(console) else {
         return;
     };

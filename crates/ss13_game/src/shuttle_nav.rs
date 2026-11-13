@@ -715,6 +715,18 @@ fn emag_interaction(world: &mut World, client: Entity, held: Entity, target: Ent
 /// The mobile ports' timers: ignition, transit, arrival.
 fn tick_flights(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
+    // `check_effects`: ripples where a shuttle in transit is about to land.
+    let mut q = world.query::<(Entity, &NavShuttle)>();
+    let landing: Vec<(Entity, Entity, f64)> = q
+        .iter(world)
+        .filter_map(|(e, n)| match n.flight {
+            Flight::Transit { dest, until } => Some((e, dest, until - now)),
+            _ => None,
+        })
+        .collect();
+    for (port, dest, left) in landing {
+        crate::shuttle::check_ripples(world, port, dest, left);
+    }
     let mut q = world.query::<(Entity, &NavShuttle)>();
     let due: Vec<(Entity, NavShuttle)> = q
         .iter(world)

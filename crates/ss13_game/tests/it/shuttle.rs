@@ -50,6 +50,9 @@ const TYPES: &str = r##"{
         "icon": { "resource": "l.dmi" }, "icon_state": "x2", "invisibility": 101 } },
     "/obj/effect/landmark/start": { "parent": "/obj/effect/landmark" },
     "/obj/effect/landmark/start/assistant": { "parent": "/obj/effect/landmark/start" },
+    "/obj/effect/abstract": { "parent": "/obj/effect" },
+    "/obj/effect/abstract/ripple": { "parent": "/obj/effect/abstract", "declared_vars": {
+        "icon": { "resource": "l.dmi" }, "icon_state": "x2", "anchored": 1, "alpha": 0 } },
     "/obj/docking_port": { "parent": "/obj", "declared_vars": { "invisibility": 101,
         "icon": { "resource": "l.dmi" }, "icon_state": "x2", "anchored": 1, "dir": 1,
         "shuttle_id": null, "width": 0, "height": 0, "dwidth": 0, "dheight": 0 } },
@@ -58,6 +61,8 @@ const TYPES: &str = r##"{
     "/obj/docking_port/mobile": { "parent": "/obj/docking_port" },
     "/obj/docking_port/mobile/emergency": { "parent": "/obj/docking_port/mobile",
         "declared_vars": { "shuttle_id": "emergency", "dir": 4 } },
+    "/obj/docking_port/mobile/emergency/shuttle_build": {
+        "parent": "/obj/docking_port/mobile/emergency" },
     "/obj/machinery": { "parent": "/obj", "declared_vars": { "anchored": 1 } },
     "/obj/machinery/door": { "parent": "/obj/machinery", "declared_vars": {
         "icon": { "resource": "d.dmi" }, "icon_state": "door_closed", "density": 1, "opacity": 1,
@@ -158,6 +163,18 @@ wwwww
 "}
 "##;
 
+/// A Build Your Own Shuttle kit of the same shape.
+const BYOS: &str = r##""w" = (/turf/closed/wall/shuttle,/area/shuttle/escape)
+"f" = (/turf/open/floor/plating,/area/shuttle/escape)
+"p" = (/obj/docking_port/mobile/emergency/shuttle_build{dir = 2; name = "BYOS"},/turf/open/floor/plating,/area/shuttle/escape)
+
+(1,1,1) = {"
+wwpww
+wfffw
+wwwww
+"}
+"##;
+
 const SPAWN: TilePos = TilePos::new(8, 7, 1);
 const CONSOLE: TilePos = TilePos::new(9, 7, 1);
 const DOCK: TilePos = TilePos::new(5, 4, 1);
@@ -190,8 +207,10 @@ fn fixture_assets(test: &str) -> PathBuf {
         .join(test);
     let used = [
         "/obj/effect/landmark/start/assistant",
+        "/obj/effect/abstract/ripple",
         "/obj/docking_port/stationary",
         "/obj/docking_port/mobile/emergency",
+        "/obj/docking_port/mobile/emergency/shuttle_build",
         "/obj/machinery/computer/communications",
         "/obj/machinery/door/airlock",
         "/turf/open/floor",
@@ -209,7 +228,11 @@ fn fixture_assets(test: &str) -> PathBuf {
         TYPES,
         &used,
         &STATES,
-        &[("map.dmm", MAP), ("shuttle.dmm", SHUTTLE)],
+        &[
+            ("map.dmm", MAP),
+            ("shuttle.dmm", SHUTTLE),
+            ("byos.dmm", BYOS),
+        ],
     )
 }
 
@@ -575,6 +598,117 @@ fn red_alert_call_and_level_change() {
     security_level::set_level(s.server.world_mut(), SecLevel::Green, true);
     let after = left(&s);
     assert!((after - before * 4.0).abs() < 1e-6, "{before} -> {after}");
+}
+
+/// tg `check_effects` and `checkHostileEnvironment`: ripples cover the landing tiles in the last
+/// 10 s of the call and go when the shuttle docks; a hostile environment strands the igniting
+/// shuttle (no calls, no launch) until it is cleared, then it docks for the full dock time.
+#[test]
+fn ripples_and_hostile_environment() {
+    use ss13_game::shuttle::{
+        Blocker, Ripple, Ripples, clear_hostile_environment, register_hostile_environment,
+    };
+    let mut s = Station::fixture("ripples_and_hostile_environment");
+    let port = s.server.world().resource::<EmergencyShuttle>().port;
+    let ripples_at_dock = |s: &mut Station| {
+        let world = s.server.world_mut();
+        world
+            .query_filtered::<&TilePos, With<Ripple>>()
+            .iter(world)
+            .filter(|p| **p == DOCK)
+            .count()
+    };
+    assert!(ss13_game::shuttle::call_shuttle(
+        s.server.world_mut(),
+        "test",
+        None,
+        1.0
+    ));
+    s.run_until_for(5.0, "ripples", |s| {
+        s.server.world().get::<Ripples>(port).is_some()
+    });
+    assert_eq!(
+        s.server.world().get::<Ripples>(port).unwrap().0.len(),
+        15,
+        "one per shuttle tile"
+    );
+    assert_eq!(ripples_at_dock(&mut s), 1);
+    s.run_until_for(10.0, "docked", |s| s.mode() == ShuttleMode::Docked);
+    assert!(s.server.world().get::<Ripples>(port).is_none());
+    assert_eq!(ripples_at_dock(&mut s), 0, "trampled with the landing");
+
+    register_hostile_environment(s.server.world_mut(), Blocker::Revolution);
+    assert_eq!(
+        s.mode(),
+        ShuttleMode::Docked,
+        "docked: held only when igniting"
+    );
+    s.run_until_for(10.0, "stranded", |s| s.mode() == ShuttleMode::Stranded);
+    s.run_until_for(5.0, "announced", |s| {
+        s.said("Отправка была отложена на неопределенный срок до разрешения конфликта.")
+    });
+    for _ in 0..30 {
+        s.step();
+    }
+    assert_eq!(s.mode(), ShuttleMode::Stranded, "no launch while hostile");
+    assert_eq!(
+        s.server
+            .world()
+            .resource::<EmergencyShuttle>()
+            .state
+            .can_evac(1e9, 0.0)
+            .unwrap_err(),
+        "Вызов эвакуационного шаттла был заблокирован Центральным Командованием."
+    );
+
+    clear_hostile_environment(s.server.world_mut(), Blocker::Revolution);
+    assert_eq!(s.mode(), ShuttleMode::Docked);
+    let now = s.now();
+    let left = s
+        .server
+        .world()
+        .resource::<EmergencyShuttle>()
+        .state
+        .timer
+        .left(now)
+        .unwrap();
+    assert!(
+        (left - 12.0).abs() < 0.1,
+        "the full dock time again: {left}"
+    );
+    s.run_until_for(5.0, "cleared", |s| {
+        s.said("У вас есть 12 секунд, чтобы добраться до эвакуационного шаттла.")
+    });
+    s.run_until_for(20.0, "launched", |s| s.mode() == ShuttleMode::Escape);
+}
+
+/// `shuttle_build/postregister`: a bought BYOS kit docks at the station at once; the call then
+/// finds it docked.
+#[test]
+fn byos_kit_docks_when_bought() {
+    let test = "byos_kit_docks_when_bought";
+    let mut s = Station::fixture(test);
+    let path = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("shuttle_fixture")
+        .join(test)
+        .join("byos.dmm");
+    assert!(ss13_game::shuttle_catalog::replace_emergency(
+        s.server.world_mut(),
+        "construction",
+        &path
+    ));
+    let world = s.server.world();
+    let shuttle = world.resource::<EmergencyShuttle>();
+    assert_eq!(shuttle.name, "BYOS");
+    assert_eq!(*world.get::<TilePos>(shuttle.port).unwrap(), DOCK);
+    assert_eq!(shuttle.state.mode, ShuttleMode::Idle);
+    assert!(ss13_game::shuttle::call_shuttle(
+        s.server.world_mut(),
+        "test",
+        None,
+        1.0
+    ));
+    s.run_until_for(10.0, "docked", |s| s.mode() == ShuttleMode::Docked);
 }
 
 /// Docks the real MetaStation emergency shuttle with a client in the departure lounge and
