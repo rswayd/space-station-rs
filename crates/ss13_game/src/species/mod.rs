@@ -1455,6 +1455,7 @@ pub fn has_trait(world: &World, mob: Entity, t: Trait) -> bool {
     if def_of(world, mob).has(t)
         || crate::antag::zombie::grants(world, mob, t)
         || crate::medical::bioware::grants(world, mob, t)
+        || crate::minigames::basketball::grants(world, mob, t)
         || (matches!(t, Trait::ResistCold | Trait::ResistLowPressure)
             && crate::antag::changeling::server::void_adapted(world, mob))
     {

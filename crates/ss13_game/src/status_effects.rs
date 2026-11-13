@@ -976,6 +976,7 @@ pub fn apply(world: &mut World, mob: Entity, kind: Incap, secs: f32) -> bool {
     } else {
         crate::antag::zombie::spec_stun(world, mob, secs)
             * crate::medical::bioware::stun_mod(world, mob)
+            * crate::minigames::basketball::stun_mod(world, mob)
     };
     if stun_blocked(world, mob, kind, secs) {
         return world
@@ -1089,7 +1090,8 @@ pub fn shake_up(world: &mut World, mob: Entity) {
 /// tg `Knockdown(amount, daze_amount)`.
 pub fn knockdown(world: &mut World, mob: Entity, secs: f32, daze: f32) {
     let secs = crate::antag::zombie::spec_stun(world, mob, secs)
-        * crate::medical::bioware::stun_mod(world, mob);
+        * crate::medical::bioware::stun_mod(world, mob)
+        * crate::minigames::basketball::stun_mod(world, mob);
     // tg returns before the daze too.
     if stun_blocked(world, mob, Incap::Knockdown, secs) {
         return;

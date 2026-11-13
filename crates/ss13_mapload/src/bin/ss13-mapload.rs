@@ -137,6 +137,8 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
                 .source
                 .join("_maps/templates/lazy_templates/abductor_ships.dmm"),
         );
+        // And the ghosts' basketball stadiums (`ss13_game::minigames::basketball`).
+        map_dirs.push(config.source.join("_maps/minigame/basketball"));
         // The functional test bots' case maps (`ss13_bots`) load on the same assets.
         let cases = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/cases");
         if cases.is_dir() {
