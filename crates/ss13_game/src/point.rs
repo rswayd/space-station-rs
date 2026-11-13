@@ -112,6 +112,7 @@ fn spawn_arrow(world: &mut World, at: TilePos, pixel_offset: [i16; 2], now: f64)
             overlays: vec![],
             // `pointed()` ignores the arrows; nothing clicks them.
             mouse_opacity: MouseOpacity::Transparent,
+            glide: 0,
         },
         Networked,
         PointArrow {

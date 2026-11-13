@@ -136,6 +136,7 @@ pub fn spawn_wormhole(world: &mut World, pos: TilePos) -> Entity {
                 rotation: 0,
                 overlays: vec![],
                 mouse_opacity: MouseOpacity::Icon,
+                glide: 0,
             },
             Density,
             Networked,

@@ -438,6 +438,7 @@ fn hash_appearance(a: &Appearance, optics: Option<&Optics>) -> u64 {
     a.pixel_offset.hash(&mut h);
     a.rotation.hash(&mut h);
     a.mouse_opacity.hash(&mut h);
+    a.glide.hash(&mut h);
     a.overlays.len().hash(&mut h);
     for o in &a.overlays {
         o.icon_state.hash(&mut h);
@@ -456,6 +457,7 @@ fn same_appearance(a: &Appearance, b: &Appearance) -> bool {
         && a.pixel_offset == b.pixel_offset
         && a.rotation == b.rotation
         && a.mouse_opacity == b.mouse_opacity
+        && a.glide == b.glide
         && a.overlays == b.overlays
 }
 
@@ -2060,6 +2062,7 @@ mod tests {
             pixel_offset: [0, 0],
             rotation: 0,
             mouse_opacity: Default::default(),
+            glide: 0,
             overlays: overlay
                 .map(|icon| Overlay::new(IconStateId(icon)))
                 .into_iter()

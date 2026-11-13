@@ -127,6 +127,7 @@ impl Template {
             pixel_offset: [atom.pixel_x, atom.pixel_y],
             rotation: 0,
             mouse_opacity: MouseOpacity::from_dm(atom.mouse_opacity),
+            glide: 0,
             overlays: Vec::new(),
         });
         let mut missing_look = Vec::new();

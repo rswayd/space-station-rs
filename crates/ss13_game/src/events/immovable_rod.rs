@@ -111,6 +111,7 @@ pub fn spawn_rod(world: &mut World, start: TilePos, end: TilePos) -> Entity {
                 rotation: 0,
                 overlays: vec![],
                 mouse_opacity: MouseOpacity::Icon,
+                glide: 0,
             },
             Density,
             Networked,

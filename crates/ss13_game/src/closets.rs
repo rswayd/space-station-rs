@@ -1198,6 +1198,7 @@ mod tests {
             overlays: vec![],
             rotation: 0,
             mouse_opacity: Default::default(),
+            glide: 0,
         }
     }
 

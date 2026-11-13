@@ -170,6 +170,7 @@ fn appearance(state: IconStateId, dir: Dir, layer: f32) -> (Facing, Appearance) 
         pixel_offset: [0, 0],
         rotation: 0,
         mouse_opacity: Default::default(),
+        glide: 0,
         overlays: vec![],
     };
     (Facing(dir), a)

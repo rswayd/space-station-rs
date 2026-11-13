@@ -769,6 +769,7 @@ pub fn show_image(
                 rotation: look.rotation,
                 overlays: Vec::new(),
                 mouse_opacity: MouseOpacity::Transparent,
+                glide: 0,
             },
             Networked,
             Invisibility(IMAGE_INVISIBILITY),

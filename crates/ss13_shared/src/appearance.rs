@@ -32,6 +32,11 @@ pub struct Appearance {
     pub overlays: Vec<Overlay>,
     /// BYOND `mouse_opacity`: whether clicks stop at this atom.
     pub mouse_opacity: MouseOpacity,
+    /// BYOND `glide_size` (an appearance var there too), icon pixels per second; 0 = the client's
+    /// default step glide. Nonzero: the drawn point, tile plus `pixel_offset`, moves as one at
+    /// this rate (tg projectiles: `animate_movement = NO_STEPS`, `pixel_x`/`pixel_y` animated
+    /// every tick).
+    pub glide: u16,
 }
 
 /// BYOND `mouse_opacity` (`MOUSE_OPACITY_TRANSPARENT` 0, `MOUSE_OPACITY_ICON` 1,

@@ -83,6 +83,7 @@ fn appearance(rng: &mut Rng) -> Appearance {
         pixel_offset: [0, 0],
         rotation: 0,
         mouse_opacity: Default::default(),
+        glide: 0,
         overlays,
     }
 }

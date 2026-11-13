@@ -65,6 +65,7 @@ fn hidden_cable(world: &mut World, pos: TilePos) -> Entity {
                 rotation: 0,
                 overlays: Vec::new(),
                 mouse_opacity: ss13_shared::MouseOpacity::default(),
+                glide: 0,
             },
             HiddenUnderTile,
         ))

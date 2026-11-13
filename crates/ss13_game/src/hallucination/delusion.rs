@@ -122,6 +122,7 @@ pub fn start(world: &mut World, mob: Entity, preset: Delusion, args: Args) -> bo
             pixel_offset: [0, 0],
             rotation: 0,
             mouse_opacity: own.mouse_opacity,
+            glide: 0,
             overlays: Vec::new(),
         };
         if !add_alt_appearance(world, target, key.clone(), Seers::mob(mob), look) {
@@ -190,6 +191,7 @@ mod tests {
             pixel_offset: [0, 0],
             rotation: 0,
             mouse_opacity: Default::default(),
+            glide: 0,
             overlays: Vec::new(),
         }
     }

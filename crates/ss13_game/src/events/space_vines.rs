@@ -522,6 +522,7 @@ pub fn spawn_vine(
                 rotation: 0,
                 overlays: vec![],
                 mouse_opacity: MouseOpacity::Opaque,
+                glide: 0,
             },
             crate::obj_damage::Anchored(true),
             Networked,

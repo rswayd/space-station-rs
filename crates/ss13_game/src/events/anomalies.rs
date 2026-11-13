@@ -641,6 +641,7 @@ fn spawn_one(
             rotation: 0,
             overlays: vec![],
             mouse_opacity: MouseOpacity::Icon,
+            glide: 0,
         },
         Networked,
         Anomaly {

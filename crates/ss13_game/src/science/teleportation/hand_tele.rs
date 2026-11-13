@@ -419,6 +419,7 @@ fn spawn_portal(world: &mut World, pos: TilePos, expires_at: f64) -> Entity {
                 rotation: 0,
                 overlays: vec![],
                 mouse_opacity: MouseOpacity::Icon,
+                glide: 0,
             },
             Density,
             Networked,

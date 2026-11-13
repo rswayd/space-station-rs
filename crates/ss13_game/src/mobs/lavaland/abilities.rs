@@ -335,6 +335,7 @@ fn spawn_visual(
             rotation: 0,
             overlays: vec![],
             mouse_opacity: MouseOpacity::Transparent,
+            glide: 0,
         });
     let mut e = world.spawn((Name::new(state.to_owned()), pos, marker));
     if let Some(look) = look {

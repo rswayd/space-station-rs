@@ -446,6 +446,7 @@ fn make_visual(world: &mut World, link: Entity, at: Entity) {
             pixel_offset: [0, 0],
             rotation: 0,
             mouse_opacity: MouseOpacity::Transparent,
+            glide: 0,
             overlays: Vec::new(),
         });
     look.color = Some(HOLO_COLOR);

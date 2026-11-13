@@ -89,6 +89,7 @@ pub fn spawn(world: &mut World, pos: TilePos, v: Visual) -> Option<Entity> {
                     rotation: 0,
                     overlays: vec![],
                     mouse_opacity: MouseOpacity::Transparent,
+                    glide: 0,
                 },
                 Networked,
                 TempVisual {

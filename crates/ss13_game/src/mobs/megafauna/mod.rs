@@ -650,6 +650,7 @@ pub(super) fn spawn_visual(world: &mut World, pos: TilePos, v: Visual) -> Option
                     rotation: 0,
                     overlays: vec![],
                     mouse_opacity: MouseOpacity::Transparent,
+                    glide: 0,
                 },
                 Networked,
                 TempVisual { until },

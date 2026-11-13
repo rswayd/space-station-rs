@@ -564,6 +564,7 @@ pub fn spawn_overmind(world: &mut World, pos: TilePos, points: f32) -> Entity {
                 pixel_offset: [0, 0],
                 rotation: 0,
                 mouse_opacity: ss13_shared::MouseOpacity::Transparent,
+                glide: 0,
                 overlays: vec![],
             },
             Invisibility(crate::ghost::INVISIBILITY_OBSERVER),

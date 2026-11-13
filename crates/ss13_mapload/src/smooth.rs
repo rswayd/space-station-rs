@@ -291,6 +291,7 @@ fn smooth_entities(
             pixel_offset: [atom.pixel_x, atom.pixel_y],
             rotation: 0,
             mouse_opacity: ss13_shared::MouseOpacity::from_dm(atom.mouse_opacity),
+            glide: 0,
             overlays,
         });
     }

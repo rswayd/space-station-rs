@@ -404,6 +404,7 @@ fn spawn_stream(world: &mut World, owner: Entity, pos: TilePos, now: f64) -> Ent
                 rotation: 0,
                 overlays: Vec::new(),
                 mouse_opacity: MouseOpacity::Icon,
+                glide: 0,
             },
             Networked,
             Invisibility(u8::MAX),
