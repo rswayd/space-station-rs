@@ -55,7 +55,7 @@
 Передача данных между схемами по NTNet (зашифрованные ключом) и по проводной сети.
 
 - **Код:** [`/obj/item/circuit_component/ntnet_send`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/wiremod/components/ntnet/ntnet_send.dm#L7), [`ntnet/`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/wiremod/components/ntnet), [`/obj/item/circuit_component/wirenet_send`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/wiremod/components/wirenet/send.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/wiremod/circuit.rs` (`Kind::NtnetSend`, `NtnetSendLiteral`, `NtnetReceive`, `WirenetSend`, `WirenetSendLiteral`, `WirenetReceive`, `Effect::Network`, `Circuit::network_receive`), мир — `crates/ss13_game/src/wiremod/server.rs` (`ntnet_send`, `wirenet_send`), `crates/ss13_game/src/power/grid.rs` (`cable_net_at`): тип списка (опция) меняет тип порта пакета, ключ шифрования должен совпасть, приёмник берёт пакет, только если его тип списка принимает тип отправителя, и шлёт `Triggered`; NTNet — всем приёмникам, пока работает хотя бы один NTNet-реле (без реле передатчик не срабатывает и не тратит энергию); провода — приёмникам, чья оболочка закреплена на тайле с кабелем выбранного слоя (кнопки «1/2/3», по умолчанию жёлтый) той же энергосети. `// shortcut:` слой кабеля сбрасывается, если компонент вынуть из схемы; нет подсказок UI «Currently connected to»
 
 ### BCI (нейроинтерфейс) и его компоненты
 Имплант-оболочка в мозг: схема читает мысли, рисует HUD-оверлеи (объекты, полосы, счётчики, перехват цели), вводит реагенты, VOX; ставится в BCI-имплантере.

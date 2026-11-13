@@ -42,7 +42,7 @@ use ss13_tgui::server::{
 };
 use ss13_tgui::{UiInterface as _, UiStatus};
 
-use super::circuit::{Circuit, Ctx, Effect, Kind, STEP};
+use super::circuit::{Circuit, Ctx, Effect, Kind, Packet, STEP};
 use super::*;
 use crate::assemblies::server::{
     drop_out, in_hands_of, insert, name_of, now, to_hands, within_reach,
@@ -300,6 +300,12 @@ pub fn with_circuit<R>(
     };
     let before = charge;
     let pos = crate::explosions::turf_of(world, e);
+    let ntnet = ic
+        .circuit
+        .nodes
+        .iter()
+        .any(|n| matches!(n.kind, Kind::NtnetSend | Kind::NtnetSendLiteral))
+        && crate::ntnet_relay::find_functional_ntnet_relay(world);
     let mut rng = CombatRng(world.get_resource::<CombatRng>().map_or(0x5eed, |r| r.0));
     let (result, charge, effects) = {
         let w: &World = world;
@@ -326,6 +332,7 @@ pub fn with_circuit<R>(
             name_of: &names,
             id_of: &ids,
             id_card: &cards,
+            ntnet,
             effects: Vec::new(),
         };
         let result = f(&mut ic.circuit, &mut ctx);
@@ -406,6 +413,100 @@ fn apply(world: &mut World, circuit: Entity, shell: Option<Entity>, effect: Effe
         Effect::Device { node, port } => {
             super::devices::device_input(world, circuit, shell, node, port);
         }
+        Effect::Network {
+            node,
+            wirenet,
+            packet,
+        } => {
+            if wirenet {
+                wirenet_send(world, circuit, shell, node, &packet);
+            } else {
+                ntnet_send(world, &packet);
+            }
+        }
+    }
+}
+
+/// `COMSIG_GLOB_CIRCUIT_NTNET_DATA_SENT`: every NTNet receiver, while a relay works.
+// Cost: one pass over the circuits per sent package (the transmitters' trigger rate).
+fn ntnet_send(world: &mut World, packet: &Packet) {
+    if !crate::ntnet_relay::find_functional_ntnet_relay(world) {
+        return;
+    }
+    let targets: Vec<(Entity, Vec<u32>)> = world
+        .query::<(Entity, &IntegratedCircuit)>()
+        .iter(world)
+        .map(|(e, c)| {
+            let ids = c.circuit.receivers(Kind::NtnetReceive);
+            (e, ids.into_iter().map(|(id, _)| id).collect::<Vec<u32>>())
+        })
+        .filter(|(_, ids)| !ids.is_empty())
+        .collect();
+    let now = now(world);
+    for (c, ids) in targets {
+        with_circuit(world, c, |circuit, _| {
+            circuit.network_receive(&ids, packet, now)
+        });
+    }
+}
+
+/// The powernet a circuit's wirenet component on `layer` is connected to
+/// (`circuit_component_wirenet_connection`): the shell anchored on a tile with a cable on that
+/// layer.
+fn wirenet_of(
+    world: &World,
+    shell: Option<Entity>,
+    layer: u8,
+) -> Option<crate::power::grid::NetId> {
+    let shell = shell?;
+    if !crate::obj_damage::anchored(world, shell) {
+        return None;
+    }
+    let pos = *world.get::<TilePos>(shell)?;
+    world
+        .get_resource::<crate::power::grid::Grid>()?
+        .cable_net_at(pos, layer)
+}
+
+/// `powernet/data_transmission`: every wirenet receiver connected to the sender's powernet.
+fn wirenet_send(
+    world: &mut World,
+    circuit: Entity,
+    shell: Option<Entity>,
+    node: u32,
+    packet: &Packet,
+) {
+    let Some(layer) = world
+        .get::<IntegratedCircuit>(circuit)
+        .and_then(|c| c.circuit.cable_layer(node))
+    else {
+        return;
+    };
+    let Some(net) = wirenet_of(world, shell, layer) else {
+        return;
+    };
+    let targets: Vec<(Entity, Vec<u32>)> = {
+        let mut query = world.query::<(Entity, &IntegratedCircuit)>();
+        let w: &World = world;
+        query
+            .iter(w)
+            .filter_map(|(e, c)| {
+                let ids: Vec<u32> = c
+                    .circuit
+                    .receivers(Kind::WirenetReceive)
+                    .into_iter()
+                    .filter(|&(_, layer)| wirenet_of(w, c.shell, layer) == Some(net))
+                    .map(|(id, _)| id)
+                    .collect();
+                (!ids.is_empty()).then_some((e, ids))
+            })
+            .collect()
+    };
+    let now = now(world);
+    for (c, ids) in targets {
+        with_circuit(world, c, |circuit, _| {
+            circuit.network_receive(&ids, packet, now)
+        });
     }
 }
 
