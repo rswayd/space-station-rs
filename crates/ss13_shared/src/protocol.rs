@@ -225,14 +225,175 @@ pub struct SoundEvent {
     pub offset: Option<[i16; 2]>,
 }
 
+/// tg's reserved BYOND channels (`code/__DEFINES/sound.dm`, BandaStation's TTS ones). BYOND has
+/// 1024; the ones below [`CHANNEL_HIGHEST_AVAILABLE`] are handed out by the server's `SSsounds`.
 /// tg `CHANNEL_LOBBYMUSIC`: the lobby's title music.
 pub const CHANNEL_LOBBYMUSIC: u16 = 1024;
+pub const CHANNEL_ADMIN: u16 = 1023;
+pub const CHANNEL_VOX: u16 = 1022;
 /// tg `CHANNEL_JUKEBOX`: jukeboxes and boomboxes.
 pub const CHANNEL_JUKEBOX: u16 = 1021;
+pub const CHANNEL_HEARTBEAT: u16 = 1020;
+pub const CHANNEL_BOSS_MUSIC: u16 = 1019;
+pub const CHANNEL_AMBIENCE: u16 = 1018;
+pub const CHANNEL_BUZZ: u16 = 1017;
+pub const CHANNEL_TRAITOR: u16 = 1016;
+pub const CHANNEL_CHARGED_SPELL: u16 = 1015;
+pub const CHANNEL_ELEVATOR: u16 = 1014;
+pub const CHANNEL_ESCAPEMENU: u16 = 1013;
+pub const CHANNEL_WEATHER: u16 = 1012;
+pub const CHANNEL_TTS_RADIO: u16 = 1011;
+pub const CHANNEL_TTS_ANNOUNCEMENT: u16 = 1010;
+pub const CHANNEL_TTS_TELEPATHY: u16 = 1009;
+pub const CHANNEL_HIGHEST_AVAILABLE: u16 = 1008;
 
-/// Server → client: a sound on a numbered BYOND channel (tg `sound(file, channel = N)`); it
-/// replaces whatever plays on that channel, and `None` stops it (`sound(null, channel = N)`,
-/// `stop_sound_channel`).
+/// BYOND `SOUND_ENVIRONMENT_NONE`: no reverb.
+pub const SOUND_ENVIRONMENT_NONE: i8 = -1;
+/// BYOND's environments (`SOUND_ENVIRONMENT_*`, 0 generic .. 25 psychotic).
+pub const SOUND_ENVIRONMENT_UNDERWATER: i8 = 22;
+pub const SOUND_ENVIRONMENT_DRUGGED: i8 = 23;
+pub const SOUND_ENVIRONMENT_PSYCHOTIC: i8 = 25;
+
+/// tg's sound volume preferences (`/datum/preference/numeric/volume/*`, BandaStation's TTS
+/// ones): the player's volume of each kind of sound. [`SoundCategory::Game`] is every other
+/// sound (no preference: only the master volume).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum SoundCategory {
+    #[default]
+    Game,
+    /// `sound_ambience_volume`.
+    Ambience,
+    /// `sound_ship_ambience_volume`.
+    ShipAmbience,
+    /// `sound_lobby_volume`.
+    LobbyMusic,
+    /// `sound_midi`: admin music and the round end song.
+    AdminMusic,
+    /// `sound_jukebox`.
+    Jukebox,
+    /// `sound_instruments`.
+    Instruments,
+    /// `sound_radio_noise`.
+    RadioNoise,
+    /// `sound_ai_vox`.
+    AiVox,
+    /// `sound_tts_volume`.
+    Tts,
+    /// `sound_tts_radio_volume`.
+    TtsRadio,
+}
+
+impl SoundCategory {
+    /// The preferences, in tg's menu order.
+    pub const PREFERENCES: [Self; 10] = [
+        Self::Ambience,
+        Self::ShipAmbience,
+        Self::LobbyMusic,
+        Self::AdminMusic,
+        Self::Jukebox,
+        Self::Instruments,
+        Self::RadioNoise,
+        Self::AiVox,
+        Self::Tts,
+        Self::TtsRadio,
+    ];
+
+    /// The preference's `savefile_key`.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Game => "",
+            Self::Ambience => "sound_ambience_volume",
+            Self::ShipAmbience => "sound_ship_ambience_volume",
+            Self::LobbyMusic => "sound_lobby_volume",
+            Self::AdminMusic => "sound_midi",
+            Self::Jukebox => "sound_jukebox",
+            Self::Instruments => "sound_instruments",
+            Self::RadioNoise => "sound_radio_noise",
+            Self::AiVox => "sound_ai_vox",
+            Self::Tts => "sound_tts_volume",
+            Self::TtsRadio => "sound_tts_radio_volume",
+        }
+    }
+
+    /// The preference's name in BandaStation's preferences menu (`sounds.tsx`).
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Game => "Игра",
+            Self::Ambience => "Громкость окружения",
+            Self::ShipAmbience => "Громкость звуков корабля",
+            Self::LobbyMusic => "Громкость музыки в лобби",
+            Self::AdminMusic => "Громкость админской музыки",
+            Self::Jukebox => "Громкость музыкальных автоматов",
+            Self::Instruments => "Громкость музыкальных инструментов",
+            Self::RadioNoise => "Громкость оповещения рации",
+            Self::AiVox => "Громкость оповещения VOX ИИ",
+            Self::Tts => "TTS - громкость",
+            Self::TtsRadio => "TTS - громкость рации",
+        }
+    }
+
+    /// `create_default_value`: the maximum, 75 for the radio TTS.
+    pub fn default_percent(self) -> u8 {
+        match self {
+            Self::TtsRadio => 75,
+            _ => 100,
+        }
+    }
+
+    /// The preference of a sound sent on a reserved `channel` without one of its own (tg sends
+    /// those at the preference's volume).
+    pub fn of_channel(channel: u16) -> Self {
+        match channel {
+            CHANNEL_LOBBYMUSIC => Self::LobbyMusic,
+            CHANNEL_ADMIN => Self::AdminMusic,
+            CHANNEL_VOX => Self::AiVox,
+            CHANNEL_JUKEBOX => Self::Jukebox,
+            CHANNEL_AMBIENCE => Self::Ambience,
+            CHANNEL_BUZZ => Self::ShipAmbience,
+            CHANNEL_TTS_RADIO => Self::TtsRadio,
+            CHANNEL_TTS_ANNOUNCEMENT | CHANNEL_TTS_TELEPATHY => Self::Tts,
+            _ => Self::Game,
+        }
+    }
+}
+
+/// What BYOND's `sound` datum adds to a [`SoundEvent`].
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SoundFx {
+    /// `sound.environment` (`SOUND_ENVIRONMENT_*`): the listener's room reverb;
+    /// [`SOUND_ENVIRONMENT_NONE`] for none.
+    pub environment: i8,
+    /// `sound.pitch`: a pitch multiplier that keeps the length (`speed` changes both).
+    pub pitch: f32,
+    /// tg `volume_preference`; [`SoundCategory::Game`] takes the channel's
+    /// ([`SoundCategory::of_channel`]).
+    pub category: SoundCategory,
+}
+
+impl Default for SoundFx {
+    fn default() -> Self {
+        Self {
+            environment: SOUND_ENVIRONMENT_NONE,
+            pitch: 1.0,
+            category: SoundCategory::Game,
+        }
+    }
+}
+
+impl SoundFx {
+    /// The preference the client scales a sound on `channel` by.
+    pub fn category_on(&self, channel: u16) -> SoundCategory {
+        match self.category {
+            SoundCategory::Game => SoundCategory::of_channel(channel),
+            own => own,
+        }
+    }
+}
+
+/// Server → client: a BYOND `sound` datum (tg `SEND_SOUND`). On a numbered channel it replaces
+/// whatever plays there, and `None` stops it (`sound(null, channel = N)`, `stop_sound_channel`).
+/// Channel 0 is BYOND's "any free channel": the sound plays alongside the others (`playsound`),
+/// and `None` on it stops every sound.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct ChannelSound {
     pub channel: u16,
@@ -242,6 +403,7 @@ pub struct ChannelSound {
     pub update: bool,
     /// BYOND `sound.repeat`: loops until stopped.
     pub repeat: bool,
+    pub fx: SoundFx,
 }
 
 /// Server → client system notice (MOTD, admin message, kick reason, ...).

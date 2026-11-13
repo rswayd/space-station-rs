@@ -477,11 +477,17 @@ fn record(
     mut notices: MessageReader<NoticeReceived>,
     mut admin: MessageReader<AdminResponseReceived>,
     mut sounds: MessageReader<ss13_net::sound::client::SoundReceived>,
+    mut channel_sounds: MessageReader<ss13_net::sound::client::ChannelSoundReceived>,
     mut observed: ResMut<Observed>,
 ) {
     observed
         .sounds
         .extend(sounds.read().map(|s| s.0.file.clone()));
+    observed.sounds.extend(
+        channel_sounds
+            .read()
+            .filter_map(|s| s.0.sound.as_ref().map(|s| s.file.clone())),
+    );
     for AdminResponseReceived(response) in admin.read() {
         match response {
             AdminResponse::Rights { rank, rights } => {

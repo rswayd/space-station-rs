@@ -15,7 +15,7 @@
 //! Every traitor hears the round's code phrases and responses ([`SyndicateCodewords`], tg
 //! `SStraitor`) highlighted blue and red ([`Codewords`]); they are in the info panel and the
 //! report footer.
-// shortcut: no moodlets or stinger sound; the clown keeps his clumsiness (no mutations here).
+// shortcut: no moodlets; the clown keeps his clumsiness (no mutations here).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -397,6 +397,7 @@ fn gain(world: &mut World, mob: Entity, show_panel: bool) -> bool {
     world.entity_mut(mob).insert(codeword_hearing(&words));
     // The base `on_gain` (`silent = FALSE`): `greet()`, the panel note, the panel itself.
     chat(world, client, Span::Bold, format!("Вы - {TRAITOR_NAME}."));
+    crate::sound::play_stinger(world, mob, ss13_mapload::sound::files::STINGER_TRAITOR);
     chat(
         world,
         client,

@@ -1,6 +1,7 @@
 //! Client half of the Escape menu and the Who window ([`crate::escape_menu`]): Esc opens the menu
 //! (the host window's [`OPEN`] act) and closes it again, unless a text field has the keyboard or
-//! another window took it (tgui modals cancel on Esc themselves).
+//! another window took it (tgui modals cancel on Esc themselves). The menu sets the master volume
+//! and the volume of each kind of sound (tg's volume preferences, [`SoundVolumes`]).
 
 use bevy::audio::{
     AudioSink, AudioSinkPlayback, GlobalVolume, PlaybackSettings, SpatialAudioSink, Volume,
@@ -10,13 +11,14 @@ use bevy::scene::EntityScene;
 use bevy::text::EditableText;
 use ss13_net::client::SendIntent;
 use ss13_net::ui::client::UiMessageReceived;
-use ss13_shared::protocol::ClientIntent;
+use ss13_shared::protocol::{ClientIntent, SoundCategory};
 use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::UiInterface;
 use ss13_tgui::client::{AppTguiClientExt, ClientUi, ClientWindow, SetLocal, UiLocalState};
 use ss13_ui_kit::prelude::*;
 
 use crate::escape_menu::*;
+use crate::sound_client::SoundVolumes;
 
 pub struct EscapeMenuClientPlugin;
 
@@ -26,7 +28,11 @@ impl Plugin for EscapeMenuClientPlugin {
             .register_ui_view::<EscapeMenuUi>()
             .register_ui_view::<WhoUi>()
             .init_resource::<MenuHostWindow>()
-            .add_systems(Update, (receive, escape_key, sync_volume).chain());
+            .init_resource::<SoundVolumes>()
+            .add_systems(
+                Update,
+                (receive, escape_key, sync_volume, sync_kind_volumes).chain(),
+            );
     }
 }
 
@@ -132,10 +138,49 @@ fn sync_volume(
     }
 }
 
+/// The menu's [`UiLocalState`] key for the volume of a kind of sound (tg's volume preferences).
+fn kind_key(category: SoundCategory) -> String {
+    format!("{LOCAL_VOLUME}_{}", category.key())
+}
+
+/// The menu's volume rows of each kind set [`SoundVolumes`] (`crate::sound_client` re-levels
+/// what plays); a freshly opened menu starts from them.
+fn sync_kind_volumes(
+    mut menus: Query<(&mut ClientWindow, &mut UiLocalState)>,
+    mut volumes: ResMut<SoundVolumes>,
+) {
+    for (mut window, mut local) in &mut menus {
+        if window.interface != EscapeMenuUi::NAME {
+            continue;
+        }
+        for category in SoundCategory::PREFERENCES {
+            let key = kind_key(category);
+            let Some(wanted) = local.value(&key).and_then(|v| v.parse::<u8>().ok()) else {
+                local.set(&key, &volumes.get(category).to_string());
+                window.mark_dirty();
+                continue;
+            };
+            if wanted.min(100) != volumes.get(category) {
+                volumes.set(category, wanted);
+            }
+        }
+    }
+}
+
 /// A `−`/`+` button that sets the menu's volume to `value` percent.
 fn volume_button(icon: &'static str, tooltip: &'static str, value: u32) -> impl Scene + use<> {
+    key_volume_button(LOCAL_VOLUME.to_owned(), icon, tooltip, value)
+}
+
+/// A `−`/`+` button that sets the volume under `key` to `value` percent.
+fn key_volume_button(
+    key: String,
+    icon: &'static str,
+    tooltip: &'static str,
+    value: u32,
+) -> impl Scene + use<> {
     let set = SetLocal {
-        key: LOCAL_VOLUME.into(),
+        key,
         value: value.to_string(),
         rerender: true,
     };
@@ -149,9 +194,40 @@ fn line(text: String) -> impl Scene + use<> {
     bsn! { Node Children [ Text(text) ] }
 }
 
+/// One kind's volume: its preference name, `−`, the percent, `+`.
+fn kind_volume_row(category: SoundCategory, local: &UiLocalState) -> impl Scene + use<> {
+    let key = kind_key(category);
+    let value = local
+        .get(&key)
+        .parse::<u32>()
+        .unwrap_or_else(|_| u32::from(category.default_percent()))
+        .min(100);
+    let quieter = EntityScene(key_volume_button(
+        key.clone(),
+        "volume-low",
+        "Тише",
+        value.saturating_sub(VOLUME_STEP),
+    ));
+    let louder = EntityScene(key_volume_button(
+        key,
+        "volume-high",
+        "Громче",
+        (value + VOLUME_STEP).min(100),
+    ));
+    let shown = EntityScene(line(format!("{value}%")));
+    let label = category.label().to_owned();
+    bsn! {
+        @LabeledListItem { @label: label }
+        Children [
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6) }
+            Children [ {quieter} -- {shown} -- {louder} ]
+        ]
+    }
+}
+
 impl ClientUi for EscapeMenuUi {
-    const WIDTH: f32 = 320.0;
-    const HEIGHT: f32 = 260.0;
+    const WIDTH: f32 = 420.0;
+    const HEIGHT: f32 = 640.0;
 
     fn content(_: &(), data: &EscapeMenuData) -> impl Scene {
         menu(data, &UiLocalState::default())
@@ -188,6 +264,10 @@ fn menu(data: &EscapeMenuData, local: &UiLocalState) -> impl Scene + use<> {
         (volume + VOLUME_STEP).min(100),
     ));
     let volume = EntityScene(line(format!("{volume}%")));
+    let kinds: Vec<_> = SoundCategory::PREFERENCES
+        .into_iter()
+        .map(|category| kind_volume_row(category, local))
+        .collect();
     let who = WHO.to_owned();
     bsn! {
         @WindowContent
@@ -208,6 +288,12 @@ fn menu(data: &EscapeMenuData, local: &UiLocalState) -> impl Scene + use<> {
                         Children [ {quieter} -- {volume} -- {louder} ]
                     ]
                 ]
+            ]
+            --
+            @Section { @title: "Звук" }
+            Children [
+                @LabeledList
+                Children [ {kinds} ]
             ]
             --
             @Section

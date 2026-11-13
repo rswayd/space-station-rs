@@ -616,7 +616,8 @@ pub fn note_sound(
     let mut sound = PlaySound::new(pos, file, volume, false)
         .extrarange(range.max(0.5) - SOUND_RANGE)
         .ignore_walls(false)
-        .pitch(frequency);
+        .speed(frequency)
+        .volume_preference(ss13_shared::protocol::SoundCategory::Instruments);
     sound.min_volume = volume;
     sound
 }
@@ -1128,7 +1129,7 @@ mod tests {
         let sound = note_sound(TilePos::new(0, 0, 1), "a.ogg".into(), 11.55, 15.0, 2.0);
         assert_eq!(sound.extrarange, 0.0);
         assert!(!sound.ignore_walls);
-        assert_eq!(sound.pitch, 2.0);
+        assert_eq!((sound.speed, sound.pitch), (2.0, 1.0));
         let at_edge = crate::sound::falloff_volume(
             sound.vol,
             14.0,

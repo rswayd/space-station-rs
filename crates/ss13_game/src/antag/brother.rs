@@ -15,7 +15,7 @@
 //! the target of one of the team's objectives, not a brother already and not mindshielded, makes
 //! them a brother of the team (`add_brother`), tells the team and burns the flash out. When the
 //! last conversion is spent nobody in the team can convert any more.
-// shortcut: no stinger sound, moodlet, memory, admin panel commands, removal from the team or
+// shortcut: no moodlet, memory, admin panel commands, removal from the team or
 // hijack speed; the greeting uses `.danger` (no `.alertsyndie` chat class); everyone is male
 // (no genders yet). Mindshields: `crate::antag::revolution::server::mindshielded`.
 
@@ -159,7 +159,8 @@ pub fn add_brother(world: &mut World, mob: Entity, team: Option<Entity>) -> bool
             ..default()
         },
     ));
-    // `on_gain`.
+    // `on_gain`: `finalize_brother` plays the stinger (BandaStation's own) and renames the team.
+    crate::sound::play_stinger(world, mob, ss13_mapload::sound::files::STINGER_BROTHER);
     update_name(world, team);
     if brothers_left > 0 && world.get::<Inventory>(mob).is_some() {
         equip_conspicuous_item(world, mob, BROTHER_FLASH);

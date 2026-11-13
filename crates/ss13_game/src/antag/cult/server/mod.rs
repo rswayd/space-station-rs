@@ -30,7 +30,8 @@
 // veiling or blood rites. No cult master abilities (marks, final reckoning, pulse), no TTS.
 // Structures: [`structures`]; soulstones, shades and shells: [`soulstone`]. A sacrifice leaves
 // a soulstone (with the shade of a body with a mind) and gibs what is left. Nar'Sie is a sprite that does not move or consume:
-// no singularity component. No cinematic, sounds or shuttle lockdown.
+// no singularity component. No cinematic or shuttle lockdown; its death sound (`demon_dies`) waits
+// for a killable Nar'Sie.
 
 use bevy::ecs::message::MessageCursor;
 use std::ops::Not;

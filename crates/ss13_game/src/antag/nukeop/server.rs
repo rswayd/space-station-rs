@@ -1156,6 +1156,15 @@ pub(crate) fn bomb_exploding(world: &mut World, _bomb: Entity) {
         Span::BoldAnnounce,
         "Ядерное устройство активировано! Взрыв неизбежен!",
     );
+    // `explode`: the alarm for everyone.
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::to_playing_players(
+            ss13_mapload::sound::files::NUKE_ALARM,
+            70.0,
+            false,
+        ),
+    );
 }
 
 /// `actually_explode` + `really_actually_explode`.

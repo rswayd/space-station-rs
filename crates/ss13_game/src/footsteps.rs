@@ -9,6 +9,10 @@
 //! ([`DmTurf`]). A lying, unbuckled mob crawls instead (`crawl1.ogg` at 15, every step). Walking,
 //! buckled or immobile mobs are silent, and so are turfs without a `footstep` (open space).
 //!
+//! BandaStation's MOD boots (`modular_bandastation/sounds/code/mod_shoes.dm`) carry tg's
+//! `/datum/component/shoe_footstep`: they silence the wearer's own steps and every other step
+//! play a rig step by their slowdown ([`mod_step_sound`]) at 30, `vary`, 3 tiles less range.
+//!
 //! Cost: one turf lookup per mob step (a few per player per second).
 // shortcut: humans only (basic mobs' claw/heavy/shoe elements are added in `Initialize` procs
 // the dump does not lower); no `footstep_override` (catwalks, tables), species or robotic legs,
@@ -33,6 +37,52 @@ pub const HUMAN_VOLUME: f32 = 1.0;
 pub const HUMAN_E_RANGE: f32 = -6.0;
 /// `FEET` (`FOOT_LEFT | FOOT_RIGHT`).
 const FEET: u32 = (1 << 5) | (1 << 6);
+
+/// BandaStation `/obj/item/clothing/shoes/mod` `step_volume`.
+pub const MOD_STEP_VOLUME: f32 = 30.0;
+
+/// MOD boots: their `slowdown` (their share of the suit's, `update_speed`) and their
+/// `shoe_footstep` step counter.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
+pub struct ModBoots {
+    pub slowdown: f32,
+    pub steps: u8,
+}
+
+/// BandaStation `update_footstep_sounds`: heavier boots, heavier steps.
+pub fn mod_step_sound(slowdown: f32) -> &'static str {
+    use ss13_mapload::sound::files::MOD_STEPS;
+    if slowdown >= 0.3 {
+        MOD_STEPS[0]
+    } else if slowdown >= 0.2 {
+        MOD_STEPS[1]
+    } else if slowdown >= 0.1 {
+        MOD_STEPS[2]
+    } else {
+        MOD_STEPS[3]
+    }
+}
+
+/// `update_speed` sets the boots' `slowdown` (and with it their step sound).
+pub fn set_mod_boots_slowdown(world: &mut World, boots: Entity, slowdown: f32) {
+    if let Some(mut b) = world.get_mut::<ModBoots>(boots) {
+        if b.slowdown != slowdown {
+            b.slowdown = slowdown;
+        }
+    } else if let Ok(mut e) = world.get_entity_mut(boots) {
+        e.insert(ModBoots { slowdown, steps: 0 });
+    }
+}
+
+/// `shoe_footstep/stepped` with `steps_per_play = 1`: every other step sounds.
+pub fn count_shoe_step(steps: &mut u8) -> bool {
+    if *steps < 1 {
+        *steps += 1;
+        return false;
+    }
+    *steps = 0;
+    true
+}
 
 /// tg `steps_for_living[mob]`.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -79,6 +129,7 @@ pub(crate) fn play_footsteps(
         ),
     >,
     clothing: Query<&DmClothing>,
+    mut mod_boots: Query<&mut ModBoots>,
     turfs: Query<&DmTurf, With<Turf>>,
     index: Res<SpatialIndex>,
     sfx: Res<Sfx>,
@@ -116,6 +167,17 @@ pub(crate) fn play_footsteps(
         }
         let stat = stat.copied().unwrap_or_default();
         if walking.is_some_and(|w| w.0) || buckled || health.is_some_and(|h| !h.can_move(stat)) {
+            continue;
+        }
+        if let Some(mut boots) = inventory
+            .and_then(|i| i.shoes)
+            .and_then(|s| mod_boots.get_mut(s).ok())
+        {
+            if count_shoe_step(&mut boots.steps) {
+                let file = mod_step_sound(boots.slowdown);
+                let sound = PlaySound::new(m.to, file, MOD_STEP_VOLUME, true);
+                out.write(sound.extrarange(crate::sound::MEDIUM_RANGE_SOUND_EXTRARANGE));
+            }
             continue;
         }
         let sounds = match count {
@@ -166,6 +228,20 @@ pub(crate) fn play_footsteps(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mod_boots_step_by_slowdown_every_other_step() {
+        use ss13_mapload::sound::files::MOD_STEPS;
+        assert_eq!(mod_step_sound(0.5), MOD_STEPS[0]);
+        assert_eq!(mod_step_sound(0.3), MOD_STEPS[0]);
+        assert_eq!(mod_step_sound(0.25), MOD_STEPS[1]);
+        assert_eq!(mod_step_sound(0.1), MOD_STEPS[2]);
+        assert_eq!(mod_step_sound(0.0), MOD_STEPS[3]);
+        assert_eq!(mod_step_sound(-0.2), MOD_STEPS[3]);
+        let mut steps = 0;
+        let sounded: Vec<bool> = (0..4).map(|_| count_shoe_step(&mut steps)).collect();
+        assert_eq!(sounded, [false, true, false, true]);
+    }
 
     #[test]
     fn every_other_step_sounds_and_the_count_wraps_at_24() {

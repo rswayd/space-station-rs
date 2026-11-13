@@ -1981,6 +1981,17 @@ const HYPERSPACE_DIR: &str = "sound/runtime/hyperspace/";
 /// within 2.5 times that its distant version from the first engine; a shuttle without engines
 /// plays it from one of its doors, one without either plays nothing.
 pub fn hyperspace_sound(world: &mut World, port: Entity, phase: Hyperspace) {
+    hyperspace_sound_with(world, port, phase, None);
+}
+
+/// [`hyperspace_sound`] with BandaStation's `get_custom_sound(phase)`: `near` replaces the sound
+/// heard close to the engines.
+pub fn hyperspace_sound_with(
+    world: &mut World,
+    port: Entity,
+    phase: Hyperspace,
+    near: Option<&str>,
+) {
     let (Some(mobile), Some(&origin)) = (
         world.get::<MobileDock>(port).cloned(),
         world.get::<TilePos>(port),
@@ -2029,7 +2040,11 @@ pub fn hyperspace_sound(world: &mut World, port: Entity, phase: Hyperspace) {
                 .copied()
                 .min_by_key(|e| at.chebyshev(*e).unwrap_or(u32::MAX))
                 .unwrap_or(distant);
-            (nearest, format!("{HYPERSPACE_DIR}{}.ogg", phase.sound()))
+            let file = near.map_or_else(
+                || format!("{HYPERSPACE_DIR}{}.ogg", phase.sound()),
+                str::to_owned,
+            );
+            (nearest, file)
         } else {
             continue;
         };

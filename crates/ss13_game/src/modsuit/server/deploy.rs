@@ -731,6 +731,11 @@ pub(super) fn update_wearer(world: &mut World, control: Entity) {
         total += modules::slowdown(world, m);
     }
     let share = total / (suit.parts.len() + 1) as f32;
+    // `shoe_part.update_footstep_sounds()` (BandaStation's step sounds by the boots' slowdown).
+    if let Some(boots) = suit.parts.iter().find(|p| p.base == "boots") {
+        let slowdown = if boots.sealed { share } else { share.max(0.0) };
+        crate::footsteps::set_mod_boots_slowdown(world, boots.item, slowdown);
+    }
     let mut slowdown = share;
     // `/datum/movespeed_modifier/jetpack/full_speed` (`movetypes = FLOATING`).
     if world

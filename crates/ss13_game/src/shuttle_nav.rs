@@ -15,6 +15,8 @@
 //!   "set_destination" picks one.
 //! - Escape pods refuse a request below red alert unless their console is emagged, and launch
 //!   once (`crate::escape_pods::request`).
+//! - BandaStation's hyperspace sounds ([`hyperspace_cues`]): the warm-up 3 s before the
+//!   ignition ends, the arrival 2 s before docking (also at the destination dock).
 // shortcut: no admin-controlled consoles (authorization request, `admin_controlled`), no
 // illiterate random launch, no head revolutionary warning, no remote control, no `check_dock`
 // (docks here never overlap), no recharge time, no `no_destination_swap` mid-flight changes (a
@@ -217,6 +219,9 @@ pub struct NavShuttle {
     pub previous: Option<Entity>,
     /// `/obj/docking_port/mobile/elevator`: a request docks it at once, no ignition or transit.
     pub instant: bool,
+    /// BandaStation `sound_played_start`, `sound_played_end`: this flight's hyperspace sounds.
+    pub sound_played_start: bool,
+    pub sound_played_end: bool,
 }
 
 impl NavShuttle {
@@ -229,6 +234,56 @@ impl NavShuttle {
             call_secs: CALL_SECS,
             previous: None,
             instant: false,
+            sound_played_start: false,
+            sound_played_end: false,
+        }
+    }
+}
+
+/// BandaStation (`aesthetics_sounds/code/shuttle.dm`): the warm-up plays 3 s before the
+/// ignition ends, the arrival 2 s before the shuttle docks.
+pub const WARMUP_SOUND_SECS: f64 = 3.0;
+pub const END_SOUND_SECS: f64 = 2.0;
+
+/// BandaStation's `/obj/docking_port/mobile/check` hyperspace sounds of the small shuttles (the
+/// emergency and arrivals shuttles have tg's own): the warm-up before the ignition ends, the
+/// arrival before docking, also heard at the destination dock.
+fn hyperspace_cues(world: &mut World, now: f64) {
+    use crate::shuttle::{Hyperspace, hyperspace_sound_with};
+    use ss13_mapload::sound::files::{SHUTTLE_END, SHUTTLE_WARMUP};
+    let mut q = world.query::<(Entity, &NavShuttle)>();
+    let cues: Vec<(Entity, Hyperspace, Option<Entity>)> = q
+        .iter(world)
+        .filter_map(|(port, nav)| match nav.flight {
+            Flight::Igniting { until, .. }
+                if !nav.sound_played_start && until - now <= WARMUP_SOUND_SECS =>
+            {
+                Some((port, Hyperspace::Warmup, None))
+            }
+            Flight::Transit { dest, until }
+                if !nav.sound_played_end && until - now <= END_SOUND_SECS =>
+            {
+                Some((port, Hyperspace::End, Some(dest)))
+            }
+            _ => None,
+        })
+        .collect();
+    for (port, phase, dest) in cues {
+        if let Some(mut nav) = world.get_mut::<NavShuttle>(port) {
+            match phase {
+                Hyperspace::Warmup => nav.sound_played_start = true,
+                _ => nav.sound_played_end = true,
+            }
+        }
+        let near = if phase == Hyperspace::Warmup {
+            SHUTTLE_WARMUP
+        } else {
+            SHUTTLE_END
+        };
+        hyperspace_sound_with(world, port, phase, Some(near));
+        if let Some(&at) = dest.and_then(|d| world.get::<TilePos>(d)) {
+            let sound = crate::sound::PlaySound::new(at, SHUTTLE_END, 100.0, true);
+            crate::sound::playsound(world, sound.pressure_affected(false));
         }
     }
 }
@@ -762,6 +817,7 @@ fn emag_interaction(world: &mut World, client: Entity, held: Entity, target: Ent
 /// The mobile ports' timers: ignition, transit, arrival.
 fn tick_flights(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
+    hyperspace_cues(world, now);
     // `check_effects`: ripples where a shuttle in transit is about to land.
     let mut q = world.query::<(Entity, &NavShuttle)>();
     let landing: Vec<(Entity, Entity, f64)> = q
@@ -816,6 +872,11 @@ fn tick_flights(world: &mut World) {
         };
         if let Some(mut n) = world.get_mut::<NavShuttle>(port) {
             n.flight = next;
+            // `SHUTTLE_IDLE`: the next flight plays its sounds again.
+            if next == Flight::Idle {
+                n.sound_played_start = false;
+                n.sound_played_end = false;
+            }
         }
     }
 }
