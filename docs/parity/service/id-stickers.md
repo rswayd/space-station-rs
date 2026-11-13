@@ -13,4 +13,4 @@
 
 - **Код:** [`/datum/supply_pack/misc/id_stickers`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/id_stickers/code/supply_packs.dm#L1)
 - **BandaStation:** [`modular_bandastation/id_stickers/code/supply_packs.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/id_stickers/code/supply_packs.dm#L1) — форковый пак
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — пак `ID stickers` (деревянный ящик, 3600) приходит из `cargo.ron` как остальные паки; `crates/ss13_game/src/cargo/supply.rs` `loot_of`: спаунер `/obj/effect/spawner/random/id_stickers` в ящике (и в кейсе гуди-заказов) разворачивается в наклейки по весам `loot`, как при загрузке карты (общая логика с почтовыми гуди)

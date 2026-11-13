@@ -13,7 +13,7 @@
 
 - **Код:** [`/datum/ai_bridge`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/ai_bridge.dm#L16), [`/datum/config_entry/string/ai_secretary_url`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/ai_bridge.dm#L309)
 - **BandaStation:** [`code/modules/paperwork/ai_bridge.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/paperwork/ai_bridge.dm#L16) — файл целиком добавлен форком
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — требует внешнего LLM-сервиса по сети (`ai_secretary_url/token/model`) и админской панели факсов (группа админки); в порт без такого сервиса не переносится
 
 ### Ксерокс
 Копирует бумагу, фото, документы и отдельские бумаги (тонер, запас бумаги, до 10 копий), печатает бланки; можно сесть на стекло и отксерить себя. Тонер меняется картриджем.
