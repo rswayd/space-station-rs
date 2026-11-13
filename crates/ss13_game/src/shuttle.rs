@@ -39,7 +39,8 @@
 //!   forbids recalls for a while; a trade blockade strands the supply shuttle (`crate::cargo`).
 //! - Ripples ([`check_ripples`]): 10 s before a shuttle lands its landing tiles show ripples,
 //!   removed when it docks or turns back.
-// shortcut: no shuttle events or airlock cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
+//! - Flight events (`crate::shuttle_events`): turbulence and meteors during the escape.
+// shortcut: no airlock cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
 // stand-in too (no Syndicate base level, `emergency_syndicate`); `syndicate_landing` records it.
 
 use std::collections::{HashMap, HashSet};
@@ -1091,6 +1092,7 @@ pub(crate) fn setup_shuttle(world: &mut World) {
         syndicate_landing: false,
         sound_played: false,
     });
+    crate::shuttle_events::setup(world);
 }
 
 /// A shuttle loaded from a template onto its own level ([`setup_template_shuttle`]).
@@ -1838,6 +1840,9 @@ fn tick(world: &mut World) {
         let port = shuttle.port;
         check_ripples(world, port, dock, left);
     }
+    if world.resource::<EmergencyShuttle>().state.mode == ShuttleMode::Escape {
+        crate::shuttle_events::process(world, now);
+    }
     let step = world.resource_mut::<EmergencyShuttle>().state.check(now);
     emergency_sounds(world, now);
     let Some(step) = step else {
@@ -1880,6 +1885,7 @@ fn tick(world: &mut World) {
             hyperspace_sound(world, port, Hyperspace::Launch);
             let result = initiate_docking(world, port, transit);
             log_move(world, "enter transit", Some(result));
+            crate::shuttle_events::start_up(world, now, config.escape_secs);
             let mut shuttle = world.resource_mut::<EmergencyShuttle>();
             shuttle.state.launched(now, config.escape_secs);
             let minutes = minutes_left(&shuttle.state, now);

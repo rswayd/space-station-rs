@@ -711,6 +711,56 @@ fn byos_kit_docks_when_bought() {
     s.run_until_for(10.0, "docked", |s| s.mode() == ShuttleMode::Docked);
 }
 
+/// `/datum/shuttle_event/turbulence`: during the flight everyone aboard who is not buckled is
+/// knocked down after the warning shake.
+#[test]
+fn turbulence_knocks_down_the_unbuckled() {
+    use ss13_game::shuttle_events::{EVENTS, ShuttleEvents};
+    let test = "turbulence_knocks_down_the_unbuckled";
+    let assets = fixture_assets(test);
+    let config = ShuttleConfig {
+        call_secs: 1.0,
+        dock_secs: 11.0,
+        escape_secs: 60.0,
+        refuel_secs: 0.0,
+        autocall_threshold: None,
+        template: Some(assets.join("shuttle.dmm")),
+    };
+    let mut s = Station::start(test, config, fixture_map(&assets, &["map.dmm"]));
+    let mut events = ShuttleEvents::new(1);
+    events.add(&EVENTS[0]);
+    s.server.world_mut().insert_resource(events);
+    assert!(ss13_game::shuttle::call_shuttle(
+        s.server.world_mut(),
+        "test",
+        None,
+        1.0
+    ));
+    s.run_until_for(10.0, "docked", |s| s.mode() == ShuttleMode::Docked);
+    for dir in [
+        Dir::West,
+        Dir::West,
+        Dir::West,
+        Dir::South,
+        Dir::South,
+        Dir::South,
+        Dir::South,
+    ] {
+        s.walk(dir);
+    }
+    s.run_until_for(20.0, "launched", |s| s.mode() == ShuttleMode::Escape);
+    s.run_until_for(10.0, "warned", |s| {
+        s.said("подпрастранственной турбулентности")
+    });
+    let mob = s.mob();
+    s.run_until_for(40.0, "knocked down", |s| {
+        s.server
+            .world()
+            .get::<ss13_game::status_effects::StatusEffects>(mob)
+            .is_some_and(|e| e.paralyze > 0.0)
+    });
+}
+
 /// Docks the real MetaStation emergency shuttle with a client in the departure lounge and
 /// reports the move's time and the replication bytes it cost that client.
 #[test]
