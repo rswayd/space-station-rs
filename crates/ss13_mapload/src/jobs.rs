@@ -123,6 +123,9 @@ pub struct Outfit {
     /// `belt_contents` (type, count): into the storage worn on the belt.
     #[serde(default)]
     pub belt_contents: Vec<(String, u32)>,
+    /// `skillchips`: chip types implanted and activated after the items.
+    #[serde(default)]
+    pub skillchips: Vec<String>,
 }
 
 impl Outfit {
@@ -333,6 +336,10 @@ pub fn outfit(types: &DmTypes, path: &str) -> Outfit {
             Some((path_value(Some(key))?, n))
         })
         .collect();
+    let skillchips = list_items(types.resolved(path, "skillchips"))
+        .into_iter()
+        .filter_map(|(k, _)| path_value(Some(k)))
+        .collect();
     Outfit {
         path: path.to_owned(),
         items,
@@ -340,6 +347,7 @@ pub fn outfit(types: &DmTypes, path: &str) -> Outfit {
         accessory: slot("accessory"),
         implants,
         belt_contents,
+        skillchips,
     }
 }
 
@@ -669,6 +677,7 @@ mod tests {
             "backpack_contents": { "list": [
                 { "assoc": [{ "path": "/obj/item/choice_beacon" }, 2] }] },
             "implants": { "list": [{ "path": "/obj/item/implant/mindshield" }] },
+            "skillchips": { "list": [{ "path": "/obj/item/skillchip/job/engineer" }] },
             "id_trim": { "path": "/datum/id_trim/job/security_officer" },
             "uniform": { "path": "/obj/item/clothing/under/rank/security/officer" },
             "shoes": { "path": "/obj/item/clothing/shoes/jackboots/sec" } } },
@@ -786,6 +795,7 @@ mod tests {
             ]
         );
         assert_eq!(outfit.implants, ["/obj/item/implant/mindshield"]);
+        assert_eq!(outfit.skillchips, ["/obj/item/skillchip/job/engineer"]);
         assert!(officer.unresolved.is_empty(), "{:?}", officer.unresolved);
         let hos = &data.jobs[data.job("Head of Security").unwrap()];
         assert_eq!(

@@ -648,6 +648,10 @@ pub mod shuttle_nav;
 pub mod shuttle_remote;
 pub mod silicon;
 #[cfg(feature = "server")]
+pub mod skill_station;
+#[cfg(feature = "server")]
+pub mod skillchips;
+#[cfg(feature = "server")]
 pub mod skills;
 pub mod slot_machine;
 #[cfg(feature = "client")]

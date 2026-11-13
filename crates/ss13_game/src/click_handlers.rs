@@ -283,6 +283,7 @@
 //! | 2500 | `disposals::interact` |
 //! | 2600 | `genetics::console::interact` |
 //! | 2650 | `medical::pods::interact` (sleepers, cryo cells, lipid extractors, organ harvesters) |
+//! | 2651 | `skill_station::interact` (the occupant's window, else open or close) |
 //! | 2653 | `cryosleep::interact` (the cryo console's window) |
 //! | 2660 | `medical::kiosk::interact` |
 //! | 2661 | `silicon::camera_advanced::attack_hand` (the advanced camera console's eye) |
@@ -487,6 +488,8 @@
 //! | 2600 | `chem_heater::item_interaction` |
 //! | 2610 | `medical::cryo::item_interaction` (a cup into the cell) |
 //! | 2630 | `medical::limbgrower::item_interaction` (limb design disks) |
+//! | 2631 | `skillchips` excision (a sharp-edged tool on a brain with chips on the floor) |
+//! | 2641 | `skill_station::item_interaction` (a skillchip into the station) |
 //! | 2700 | `wallmount::item_interaction` |
 //! | 2703 | `airlock_controllers` (any item presses an access button or console) |
 //! | 2707 | `wallmount::frames::item_interaction` (wall frames on walls, their screwdriver and wrench) |

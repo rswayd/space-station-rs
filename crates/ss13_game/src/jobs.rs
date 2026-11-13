@@ -407,6 +407,7 @@ pub fn fallback_jobs() -> JobsData {
                 accessory: None,
                 implants: Vec::new(),
                 belt_contents: Vec::new(),
+                skillchips: Vec::new(),
             }),
             trim: Some("/datum/id_trim/job/assistant".into()),
             assignment: "Assistant".into(),

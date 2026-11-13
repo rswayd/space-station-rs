@@ -148,6 +148,10 @@ pub enum MedJob {
     Defib { unit: Entity, stage: defib::Stage },
     /// An autosurgeon implanting someone else ([`cyberimps::finish_autosurgeon`]).
     Autosurgeon,
+    /// A sharp tool excising a brain's skillchips (`crate::skillchips::finish_excision`).
+    ExciseSkillchips,
+    /// The CNS skillchip connector's fiddling (`crate::skillchips::finish_connector`).
+    ChipConnector { implant: Entity },
     /// A tourniquet going on ([`tourniquet::complete`]).
     Tourniquet { zone: BodyZone },
     /// A tourniquet coming off through the examine link ([`tourniquet::complete_removal`]).
@@ -180,6 +184,10 @@ pub fn complete_med(world: &mut World, mob: Entity, action: &DoAfter, job: MedJo
         MedJob::LoadDisk => operating::finish_load(world, actor, target),
         MedJob::Defib { unit, stage } => defib::complete(world, mob, action, unit, stage),
         MedJob::Autosurgeon => cyberimps::finish_autosurgeon(world, actor, target),
+        MedJob::ExciseSkillchips => crate::skillchips::finish_excision(world, target),
+        MedJob::ChipConnector { implant } => {
+            crate::skillchips::finish_connector(world, actor.client, mob, implant);
+        }
         MedJob::Tourniquet { zone } => tourniquet::complete(world, actor, target, zone),
         MedJob::RemoveTourniquet { zone } => {
             tourniquet::complete_removal(world, mob, target, zone);

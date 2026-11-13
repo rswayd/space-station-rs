@@ -26,7 +26,7 @@
 //!   loads it, a screwdriver takes it out, using it in hand implants yourself at once, on someone
 //!   else after 8 s.
 // shortcut: no bodypart overlays, sounds, sparks or eye colours; no thrusters, spine (Atlas),
-// skillchip connector, surgical processor, strong-arm or shard blades (they go in and out but
+// surgical processor, strong-arm or shard blades (they go in and out but
 // do nothing but their brain-implant EMP stun); no diagnostic HUD (none
 // exists yet); no emagging toolkits, no drop-key retract, no custom arm implant; an arm implant
 // stays in the body when its arm is cut off (it only cannot extend into a missing hand); no
@@ -68,6 +68,8 @@ const REBOOT_DELAY: f64 = 1.0;
 const STUN_RESISTANCE_SECS: f64 = 6.0;
 const REBOOTER_COOLDOWN: f64 = 60.0;
 const REBOOTER_EMP_SECS: f64 = 9.0;
+/// The skillchip connector's EMP reboot (`90 / severity` deciseconds).
+const CONNECTOR_EMP_SECS: f64 = 9.0;
 /// The nutriment pump's `synth_cool` timer and feed rate per second.
 const PUMP_COOLDOWN: f64 = 5.0;
 const PUMP_FEED: f32 = 25.0;
@@ -195,6 +197,9 @@ pub enum Kind {
         reagents: &'static [(&'static str, f32, f32)],
         centcom: bool,
     },
+    /// `/obj/item/organ/cyberimp/brain/connector`: its button puts the held skillchip in or
+    /// takes one out (`crate::skillchips::connector_click`).
+    Connector,
     /// Goes in and out, does nothing here.
     Inert,
 }
@@ -385,7 +390,7 @@ pub fn classify(path: &str) -> Option<(ImplantSlot, Kind)> {
     } else if under("/brain/anti_stun") {
         (ImplantSlot::Cns, Kind::AntiStun)
     } else if under("/brain/connector") {
-        (ImplantSlot::Cns, Kind::Inert)
+        (ImplantSlot::Cns, Kind::Connector)
     } else if under("/brain/surgical_processor") {
         (ImplantSlot::Hippocampus, Kind::Inert)
     } else if under("/eyes/hud") {
@@ -807,7 +812,7 @@ fn refresh_buttons(world: &mut World, mob: Entity) {
         let has_action = world.get::<Implant>(implant).is_some_and(|i| {
             matches!(
                 i.kind,
-                Kind::Toolkit { .. } | Kind::AntiDrop | Kind::Hud { .. }
+                Kind::Toolkit { .. } | Kind::AntiDrop | Kind::Hud { .. } | Kind::Connector
             )
         });
         if has_action {
@@ -875,6 +880,7 @@ pub fn ui_action_click(world: &mut World, client: Entity, mob: Entity, implant: 
     match kind {
         Kind::Toolkit { .. } => toggle_toolkit(world, client, mob, implant),
         Kind::AntiDrop => toggle_anti_drop(world, client, mob, implant),
+        Kind::Connector => crate::skillchips::connector_click(world, client, mob, implant),
         Kind::Hud { .. } => {
             let on = world.get_mut::<Implant>(implant).map(|mut i| {
                 i.active = !i.active;
@@ -1575,6 +1581,14 @@ pub fn emp(world: &mut World, implant: Entity, mob: Entity, severity: f64, now: 
     }
     match state.kind {
         Kind::AntiDrop => throw_held(world, implant, mob, severity),
+        // `connector/emp_act`: failing until `reboot` (`90 / severity` deciseconds).
+        Kind::Connector if !still_failing(world, implant, now) => {
+            if let Some(mut s) = world.get_mut::<Implant>(implant) {
+                s.failing = true;
+                s.reboot_at = Some(now + CONNECTOR_EMP_SECS / severity);
+            }
+            crate::skillchips::connector_emp(world, mob, severity);
+        }
         Kind::AntiStun if !state.failing => {
             if let Some(mut s) = world.get_mut::<Implant>(implant) {
                 s.failing = true;
@@ -1622,6 +1636,18 @@ pub fn emp(world: &mut World, implant: Entity, mob: Entity, severity: f64, now: 
         }
         _ => {}
     }
+}
+
+/// Whether `implant` is failing at `now`; an EMP failure that is over reboots it first.
+pub fn still_failing(world: &mut World, implant: Entity, now: f64) -> bool {
+    let Some(mut state) = world.get_mut::<Implant>(implant) else {
+        return false;
+    };
+    if state.failing && state.reboot_at.is_some_and(|t| now >= t) {
+        state.failing = false;
+        state.reboot_at = None;
+    }
+    state.failing
 }
 
 /// The anti-drop's EMP: the hands let go and throw what they held up to `10 / severity` tiles.

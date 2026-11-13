@@ -5,7 +5,8 @@
 //! backpack comes from `crate::jobs::join` and gets `box` and `backpack_contents`
 //! ([`fill_backpack`]).
 // The outfit's `accessory` is pinned to its uniform (`crate::clothing::accessories::pin`).
-// The outfit's `implants` go in last, silently ([`implant_outfit`]).
+// The outfit's `implants` go in last, silently ([`implant_outfit`]), then its `skillchips`
+// (`crate::skillchips::implant_outfit`).
 // shortcut: no `can_equip` check (tg deletes an item that does not fit),
 // no `internals_slot` (tg opens that tank at spawn).
 
@@ -93,6 +94,7 @@ pub fn equip(world: &mut World, mob: Entity, job: &Job, name: &str) -> Inventory
         }
     }
     implant_outfit(world, mob, outfit);
+    crate::skillchips::implant_outfit(world, mob, &outfit.skillchips);
     inventory
 }
 

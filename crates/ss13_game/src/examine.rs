@@ -229,6 +229,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::service::id_stickers::examine_lines(world, target, &mut lines);
     crate::service::art::examine_lines(world, examiner, target, &mut lines);
     crate::decay::examine_lines(world, target, &mut lines);
+    crate::skillchips::examine_lines(world, target, &mut lines);
     crate::coffee::examine_lines(world, target, &mut lines);
     crate::cargo::examine_lines(world, target, &mut lines);
     crate::smartfridge::examine_lines(world, target, &mut lines);

@@ -88,6 +88,7 @@ use crate::interfaces::power_monitor::{PowerMonitorArea, PowerMonitorData, Power
 use crate::interfaces::rapid_pipe_dispenser::{
     RapidPipeDispenserUi, RpdCategory, RpdData, RpdPreview, RpdRecipe, RpdStatic,
 };
+use crate::interfaces::skill_station::{SkillChipEntry, SkillStationData, SkillStationUi};
 use crate::interfaces::sleeper::{SleeperChem, SleeperData, SleeperOccupant, SleeperUi};
 use crate::interfaces::smart_vend::{FridgeItem, SmartVendData, SmartVendUi};
 use crate::interfaces::smes::{SmesData, SmesStatic, SmesUi};
@@ -896,6 +897,39 @@ pub fn sample(name: &str) -> Option<Sample> {
                 ready_implants: 3,
                 ready: true,
                 replenishing: false,
+            },
+        ),
+        SkillStationUi::NAME => of::<SkillStationUi>(
+            "Skillsoft station",
+            &(),
+            &SkillStationData {
+                working: false,
+                timeleft: None,
+                skillchip_ready: true,
+                implantable: true,
+                implantable_reason: None,
+                skill_name: "Wine Tasting".into(),
+                skill_desc: "Recognize wine vintage from taste alone.".into(),
+                skill_icon: "wine-bottle".into(),
+                complexity: 1,
+                slot_use: 1,
+                error: None,
+                current: vec![SkillChipEntry {
+                    name: "Engineering Circuitry".into(),
+                    icon: "sitemap".into(),
+                    desc: "Recognise airlock and APC wire layouts.".into(),
+                    complexity: 1,
+                    slot_use: 2,
+                    removable: true,
+                    chip_ref: "1".into(),
+                    active: true,
+                    active_error: None,
+                    cooldown: 0.0,
+                }],
+                complexity_used: 1,
+                complexity_max: 3,
+                slots_used: 2,
+                slots_max: 5,
             },
         ),
         ImplantPadUi::NAME => of::<ImplantPadUi>(

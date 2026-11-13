@@ -246,6 +246,7 @@ fn operative_outfit(path: &str) -> Outfit {
         accessory: None,
         implants: Vec::new(),
         belt_contents: Vec::new(),
+        skillchips: Vec::new(),
     }
 }
 

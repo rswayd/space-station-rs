@@ -30,8 +30,11 @@
 // disruption disk); no silo link (the ore silo's remote materials), no ranged ARCD beam, no
 // cyborg (cell) or exosuit RCD, no windoors, reflectors, floodlight frames or wall frames
 // (APC, alarms: the simple circuits disk does nothing yet), no openspace clicks, no emag/EMP
-// detonation, no BandaStation engineer skillchip (no skillchips are ported: anyone may
-// deconstruct, at the normal delay); misc, lava and chasm turfs take nothing.
+// detonation; misc, lava and chasm turfs take nothing.
+// BandaStation `skillchip_rcd`: without the engineer skillchip ([`knows_advanced`]) a right
+// click does not deconstruct ("нет скиллчипа!"), the list has no airlock access and every
+// build takes 1.5 times as long; silicons, drones, repair bots, the ARCD and the admin RCD
+// need no chip.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
@@ -53,6 +56,13 @@ use crate::sound::{PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, Stack, do_after, tell, use_stack};
 
 pub const RCD: &str = "/obj/item/construction/rcd";
+/// BandaStation `RCD_NO_SKILLCHIP_DELAY_MULTIPLIER`.
+const NO_SKILLCHIP_DELAY_MULTIPLIER: f32 = 1.5;
+/// The RCDs whose `check_engineer_skillchip` always passes (BandaStation).
+const NO_SKILLCHIP_RCDS: [&str; 2] = [
+    "/obj/item/construction/rcd/combat/admin",
+    "/obj/item/construction/rcd/arcd",
+];
 /// `/obj/item/construction`: the RCD and its family ([`super::rhd`]) share [`Matter`].
 const CONSTRUCTION: &str = "/obj/item/construction";
 const AMMO: &str = "/obj/item/rcd_ammo";
@@ -784,8 +794,11 @@ pub fn open_designs(
         items.push(format!("{mark}{}", design_name(world, design)));
         options.push(Some(i));
     }
-    items.push("Доступ шлюзов".to_owned());
-    options.push(None);
+    // BandaStation: "Airlock Access" needs the engineer skillchip.
+    if knows_advanced(world, mob, item) {
+        items.push("Доступ шлюзов".to_owned());
+        options.push(None);
+    }
     let prompt = ask_world(
         world,
         Ask::new(
@@ -873,6 +886,9 @@ fn design_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
         }
         match choice {
             None => {
+                if !knows_advanced(world, mob, item) {
+                    continue;
+                }
                 world.write_message(OpenUi::new::<ElectronicsWindow>(
                     client,
                     mob,
@@ -1174,6 +1190,12 @@ fn start(
     let Some((delay, cost)) = rcd_vals(world, &m, target, design) else {
         return true;
     };
+    // BandaStation `can_place`: deconstruction needs the engineer skillchip.
+    let knows = knows_advanced(world, actor.mob, held);
+    if design.is_none() && !knows {
+        crate::balloon::balloon_alert(world, actor.mob, held, "нет скиллчипа!");
+        return true;
+    }
     if !use_resource(world, actor.client, held, cost, true) {
         return true;
     }
@@ -1186,7 +1208,10 @@ fn start(
         );
         return true;
     }
-    let delay = delay * m.delay_mod;
+    let mut delay = delay * m.delay_mod;
+    if !knows {
+        delay *= NO_SKILLCHIP_DELAY_MULTIPLIER;
+    }
     let Some(&pos) = world.get::<TilePos>(target) else {
         return true;
     };
@@ -1471,6 +1496,30 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
             format!("Выбрано: {}.", design_name(world, design)),
         ));
     }
+    if item_path(world, target).is_some_and(|p| is_under(p, RCD)) {
+        lines.push((
+            Span::Plain,
+            "Для полноценного использования требуется скиллчип инженера.".to_owned(),
+        ));
+    }
+}
+
+/// BandaStation `check_engineer_skillchip`: `user` has `TRAIT_ADVANCED_RCD_KNOWLEDGE` (the
+/// engineer skillchip) or uses an RCD inherently (`can_inherently_use_rcd`: silicons, drones,
+/// repair bots), or `rcd` needs no chip.
+pub fn knows_advanced(world: &World, user: Entity, rcd: Entity) -> bool {
+    if item_path(world, rcd).is_some_and(|p| NO_SKILLCHIP_RCDS.iter().any(|r| is_under(p, r))) {
+        return true;
+    }
+    if world.get::<crate::silicon::Silicon>(user).is_some()
+        || crate::skillchips::has_trait(world, user, crate::skillchips::ADVANCED_RCD_KNOWLEDGE)
+    {
+        return true;
+    }
+    world.get::<crate::mobs::BasicMob>(user).is_some_and(|b| {
+        is_under(&b.def.path, "/mob/living/basic/drone")
+            || is_under(&b.def.path, "/mob/living/basic/bot/repairbot")
+    })
 }
 
 #[cfg(test)]

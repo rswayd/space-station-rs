@@ -23,8 +23,9 @@
 //! Ananas Affinity and Aversion; Junkie, Smoker and Alcoholic (`crate::addictions`), Extreme
 //! Medicine Allergy (`crate::chem` metabolism), Food Allergy (`crate::food`), Social Anxiety
 //! (`ss13_chat::speech::Anxiety`, eye contact on examine), Clown Enjoyer, Mime Fan, Musician,
-//! Tagger (`crate::crayons`, `crate::syndie_spraycan`) and Pyromania (`crate::breath`).
-// shortcut: the other tg quirks wait for their mechanics (phobias, skillchips, hallucinations, wheelchairs...); no medical record lines, no
+//! Tagger (`crate::crayons`, `crate::syndie_spraycan`), Pyromania (`crate::breath`), Chip
+//! Connector and Chipped (`crate::skillchips`).
+// shortcut: the other tg quirks wait for their mechanics (phobias, hallucinations, wheelchairs...); no medical record lines, no
 // customization options (blindfold colour, glasses type, paraplegic variant, hemiplegic side,
 // CSL strength), no hardcore or random quirks, no mail goodies, no quirk transfer between
 // bodies; the point settings are tg's config defaults, not read from `config/game_options.txt`.
@@ -363,6 +364,10 @@ pub fn item_paths() -> Vec<String> {
 pub enum Quirk {
     AlcoholTolerance,
     Bilingual,
+    /// A CNS skillchip connector implant (`crate::skillchips::connector_click`).
+    ChipConnector,
+    /// A random commercial skillchip, implanted and active (`crate::skillchips`).
+    Chipped,
     DrunkHealing,
     Friendly,
     Jolly,
@@ -461,6 +466,14 @@ impl Quirks {
     pub fn has(&self, quirk: Quirk) -> bool {
         self.0.contains(&quirk)
     }
+}
+
+/// Chip Connector's implant and Chipped's chip (`connector`, `installed_chip`), despawned when
+/// the quirk goes.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct QuirkChips {
+    pub connector: Option<Entity>,
+    pub chip: Option<Entity>,
 }
 
 /// Smooth-Headed's `old_hair`, and whether the head was covered at the last check.

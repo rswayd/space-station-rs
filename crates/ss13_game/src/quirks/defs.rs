@@ -24,7 +24,7 @@ const fn q(
 
 /// Every ported quirk in tg's menu order (`cmp_quirk_asc`: positive, negative, neutral, then by
 /// name). BandaStation texts.
-pub const QUIRKS: [QuirkDef; 53] = [
+pub const QUIRKS: [QuirkDef; 55] = [
     q(
         Quirk::AlcoholTolerance,
         "/datum/quirk/alcohol_tolerance",
@@ -54,6 +54,34 @@ pub const QUIRKS: [QuirkDef; 53] = [
              научились их понимать.",
         )),
         Some((Span::Notice, "Кажется, вы забыли свой второй язык.")),
+    ),
+    q(
+        Quirk::ChipConnector,
+        "/datum/quirk/chip_connector",
+        "Chip Connector",
+        "У вас установлено устройство, позволяющее вручную добавлять и удалять чипы навыков! \
+         Только постарайтесь держаться подальше от электромагнитных импульсов.",
+        "plug",
+        4,
+        Some((Span::Notice, "Вы чувствуете СОЕДИНЕНИЕ.")),
+        Some((Span::Danger, "Вы больше не чувствуете СОЕДИНЕНИЯ.")),
+    ),
+    q(
+        Quirk::Chipped,
+        "/datum/quirk/chipped",
+        "Chipped",
+        "Несколько лет назад вы попали под влияние моды на чипы навыков и установили себе один \
+         из коммерчески доступных чипов.",
+        "microchip",
+        2,
+        Some((
+            Span::Notice,
+            "Вы вдруг почувствовали, что стали чипированным.",
+        )),
+        Some((
+            Span::Danger,
+            "Теперь вы больше не чувствуете себя чипированным.",
+        )),
     ),
     q(
         Quirk::ClownEnjoyer,

@@ -397,6 +397,10 @@ impl Plugin for GameServerPlugin {
             crate::implants::ImplantsPlugin,
             crate::defenses::server::DefensesPlugin,
         ))
+        .add_plugins((
+            crate::skillchips::SkillchipsPlugin,
+            crate::skill_station::SkillStationPlugin,
+        ))
         .add_plugins(crate::restaurant::RestaurantPlugin)
         .add_plugins((
             crate::cooking::CookingServerPlugin,

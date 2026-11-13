@@ -19,7 +19,8 @@
 //! mob's speech gurgles (`ss13_chat::speech::Tongueless`).
 //! A removed brain carries the mind out and an inserted one brings it in
 //! (`super::brainmob`).
-// shortcut: no skillchips, organ traits,
+// Skillchips ride in the brain (`crate::skillchips`).
+// shortcut: no organ traits,
 // actions or status effects, no eating organs, no blood DNA, no organ cell lines; eyes
 // give sight through `crate::vision` (blind when missing or failing, nearsighted when damaged),
 // without night vision, tint or flash protection of their own; species organ variants beyond the
@@ -695,6 +696,7 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
     };
     if state.slot == Slot::Brain {
         super::traumas::let_go(world, organ);
+        crate::skillchips::brain_removed(world, organ, mob, special);
     }
     world.entity_mut(organ).remove::<OrganOf>();
     crate::antag::abductor::server::gland_removed(world, organ, mob);

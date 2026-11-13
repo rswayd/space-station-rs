@@ -1782,6 +1782,43 @@ pub const BITRUNNING_DISK_TYPES: &[&str] = &[
 
 /// Security defenses (`ss13_game::legcuffs`, `ss13_game::defenses`): what an energy bola snares
 /// with, what a frame and a barrier grenade build, and a barricade's debris.
+/// Skillchips (`ss13_game::skillchips`): job outfits implant them, the Chipped quirk picks one,
+/// the connector and the skill station hand them back.
+pub const SKILLCHIP_RUNTIME_TYPES: &[&str] = &[
+    "/obj/item/skillchip/acrobatics",
+    "/obj/item/skillchip/acrobatics/kiss",
+    "/obj/item/skillchip/appraiser",
+    "/obj/item/skillchip/basketweaving",
+    "/obj/item/skillchip/big_pointer",
+    "/obj/item/skillchip/bonsai",
+    "/obj/item/skillchip/brainwashing",
+    "/obj/item/skillchip/chefs_kiss",
+    "/obj/item/skillchip/disk_verifier",
+    "/obj/item/skillchip/disposals",
+    "/obj/item/skillchip/drunken_brawler",
+    "/obj/item/skillchip/entrails_reader",
+    "/obj/item/skillchip/intj",
+    "/obj/item/skillchip/job/chef",
+    "/obj/item/skillchip/job/clown",
+    "/obj/item/skillchip/job/detectives_taste",
+    "/obj/item/skillchip/job/engineer",
+    "/obj/item/skillchip/job/janitor",
+    "/obj/item/skillchip/job/miner",
+    "/obj/item/skillchip/job/psychology",
+    "/obj/item/skillchip/job/roboticist",
+    "/obj/item/skillchip/light_remover",
+    "/obj/item/skillchip/master_angler",
+    "/obj/item/skillchip/matrix_taunt",
+    "/obj/item/skillchip/musical",
+    "/obj/item/skillchip/research_director",
+    "/obj/item/skillchip/sabrage",
+    "/obj/item/skillchip/self_surgery",
+    "/obj/item/skillchip/useless_adapter",
+    "/obj/item/skillchip/wine_taster",
+    // The Chip Connector quirk's implant.
+    "/obj/item/organ/cyberimp/brain/connector",
+];
+
 pub const SECDEF_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/restraints/legcuffs/beartrap/energy/cyborg",
     "/obj/machinery/porta_turret",
@@ -1852,7 +1889,7 @@ pub const CARGO_FLORA_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 34] = [
+    let tables: [&[&'static str]; 35] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -1889,6 +1926,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         BITRUNNING_DISK_TYPES,
         GIFT_TYPES,
         SECDEF_RUNTIME_TYPES,
+        SKILLCHIP_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
     // What a bullet or a fragment leaves in a body (`ss13_game::embedding`).
