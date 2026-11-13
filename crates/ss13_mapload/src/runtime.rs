@@ -1412,6 +1412,14 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/food/pizza/custom",
     "/obj/item/food/burger/empty",
     "/obj/item/food/pie/empty",
+    // Summon Events' item events (`ss13_game::events::wizard_items`): the greentext and the
+    // Cursed Items sets.
+    "/obj/item/greentext",
+    "/obj/item/cigarette/rollie/trippy",
+    "/obj/item/clothing/mask/luchador",
+    "/obj/item/clothing/gloves/boxing",
+    "/obj/item/katana/cursed",
+    "/obj/item/clothing/mask/chameleon",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman
