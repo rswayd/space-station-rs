@@ -749,6 +749,7 @@ fn transmit_speech(
         implant_radios,
         (controls, codewords),
         mut talked,
+        jammers,
     ): (
         Res<TelecommsOutage>,
         Res<Time>,
@@ -763,6 +764,7 @@ fn transmit_speech(
             Query<&ss13_chat::server::Codewords>,
         ),
         MessageWriter<RadioTalked>,
+        Option<Res<crate::devices::jammer::JammerZones>>,
     ),
 ) {
     let now = time.elapsed_secs_f64();
@@ -859,6 +861,10 @@ fn transmit_speech(
             let Some(freq) = radio.transmit_freq(channel) else {
                 continue;
             };
+            // Nearby active jammers prevent the message from transmitting.
+            if jammers.as_deref().is_some_and(|j| j.jams(pos, freq)) {
+                continue;
+            }
             let superspace = radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
                 && (freq == FREQ_CENTCOM || freq == FREQ_STATUS_DISPLAYS);
             // The superspace broadcast returns before the noise.
@@ -922,6 +928,12 @@ fn transmit_speech(
                 || pos
                     .chebyshev(spoke.pos)
                     .is_none_or(|d| d > radio.canhear_range)
+            {
+                continue;
+            }
+            if jammers
+                .as_deref()
+                .is_some_and(|j| j.jams(pos, radio.frequency))
             {
                 continue;
             }

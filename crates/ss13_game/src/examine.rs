@@ -208,6 +208,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::fancy::examine_lines(world, target, &mut lines);
     crate::id_show::examine_lines(world, target, &mut lines);
     crate::toys::examine_lines(world, target, &mut lines);
+    crate::toy_mechs::examine_lines(world, target, &mut lines);
     crate::cryosleep::examine_lines(world, target, &mut lines);
     crate::extinguisher::examine_lines(world, target, &mut lines);
     crate::chem::examine_lines(world, examiner, target, &mut lines);

@@ -422,8 +422,17 @@ pub fn cure_eye_blur(world: &mut World, mob: Entity) {
 pub fn eye_protection(world: &World, mob: Entity, worn: i32) -> i32 {
     match sight(world, mob) {
         Some(s) if !s.eyes || s.blind_awake => EYE_PROTECTION_INFINITY,
-        // The eyes' `flash_protect` a changeling's augmented eyesight sets.
-        _ => worn + crate::antag::changeling::server::ling_flash_protect(world, mob),
+        // The eyes' `flash_protect` a changeling's augmented eyesight sets; BandaStation's
+        // shielded HUD implant adds 2 up to `FLASH_PROTECTION_WELDER`.
+        _ => {
+            let eyes = crate::antag::changeling::server::ling_flash_protect(world, mob);
+            let eyes = if crate::medical::cyberimps::shielded_eyes(world, mob) {
+                (eyes + 2).min(2)
+            } else {
+                eyes
+            };
+            worn + eyes
+        }
     }
 }
 

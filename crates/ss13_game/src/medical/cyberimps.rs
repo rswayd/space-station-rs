@@ -19,13 +19,15 @@
 //!   tube lets internals work without a mask ([`breathing_tube`], `crate::internals`).
 //! - Each `SSmobs` fire the nutriment pumps feed a hungry owner and the reviver heals an owner
 //!   down in crit (and revives the dead it can); the CNS rebooter clears stuns a second after
-//!   they land, then resists them for 6 s, once a minute.
+//!   they land, then resists them for 6 s, once a minute. BandaStation's pumps top their
+//!   reagents up in the blood every 5 s (the CentCom one also feeds a hungry owner); its shielded
+//!   security HUD protects the eyes from flashes while on ([`shielded_eyes`]).
 //! - An autosurgeon holds one organ or implant: an organ or implant used on it (other hand)
 //!   loads it, a screwdriver takes it out, using it in hand implants yourself at once, on someone
 //!   else after 8 s.
 // shortcut: no bodypart overlays, sounds, sparks or eye colours; no thrusters, spine (Atlas),
-// skillchip connector, surgical processor, strong-arm, shard blades or BandaStation pumps
-// (they go in and out but do nothing but their brain-implant EMP stun); no diagnostic HUD (none
+// skillchip connector, surgical processor, strong-arm or shard blades (they go in and out but
+// do nothing but their brain-implant EMP stun); no diagnostic HUD (none
 // exists yet); no emagging toolkits, no drop-key retract, no custom arm implant; an arm implant
 // stays in the body when its arm is cut off (it only cannot extend into a missing hand); no
 // autosurgeon on items on the floor, no TK check, no name suffix.
@@ -180,15 +182,36 @@ pub enum Kind {
     Reviver,
     AntiDrop,
     AntiStun,
-    /// `HUD_traits`.
+    /// `HUD_traits`; `shielded`: BandaStation's shielded security HUD (flash protection).
     Hud {
         security: bool,
         medical: bool,
+        shielded: bool,
     },
     BreathingTube,
+    /// BandaStation `/obj/item/organ/cyberimp/chest/pump`: `reagent_data` (reagent, amount
+    /// injected, threshold it tops up to); `centcom` feeds a hungry owner too.
+    Pump {
+        reagents: &'static [(&'static str, f32, f32)],
+        centcom: bool,
+    },
     /// Goes in and out, does nothing here.
     Inert,
 }
+
+/// `/obj/item/organ/cyberimp/chest/pump/centcom`'s `reagent_data`.
+const CENTCOM_PUMP: [(&str, f32, f32); 5] = [
+    ("/datum/reagent/medicine/syndicate_nanites", 5.0, 20.0),
+    ("/datum/reagent/medicine/leporazine", 2.0, 8.0),
+    ("/datum/reagent/medicine/synaptizine", 2.0, 4.0),
+    ("/datum/reagent/medicine/coagulant", 4.0, 16.0),
+    ("/datum/reagent/iron", 10.0, 20.0),
+];
+/// `/obj/item/organ/cyberimp/chest/pump/sansufentanyl`'s `reagent_data`.
+const SANSUFENTANYL_PUMP: [(&str, f32, f32); 1] =
+    [("/datum/reagent/medicine/sansufentanyl", 1.0, 4.0)];
+/// BandaStation's shielded security HUD implant (`cyberimp_eye.dm`).
+const SHIELDED_HUD: &str = "/obj/item/organ/cyberimp/eyes/hud/security/shielded";
 
 const SURGERY_TOOLS: [&str; 7] = [
     "/obj/item/retractor/augment",
@@ -333,8 +356,24 @@ pub fn classify(path: &str) -> Option<(ImplantSlot, Kind)> {
             ImplantSlot::StomachAid,
             nutriment(NUTRITION_LEVEL_STARVING, 5.0, false),
         )
+    } else if under("/chest/pump/centcom") {
+        let pump = Kind::Pump {
+            reagents: &CENTCOM_PUMP,
+            centcom: true,
+        };
+        (ImplantSlot::StomachAid, pump)
+    } else if under("/chest/pump/sansufentanyl") {
+        let pump = Kind::Pump {
+            reagents: &SANSUFENTANYL_PUMP,
+            centcom: false,
+        };
+        (ImplantSlot::StomachAid, pump)
     } else if under("/chest/pump") {
-        (ImplantSlot::StomachAid, Kind::Inert)
+        let pump = Kind::Pump {
+            reagents: &[],
+            centcom: false,
+        };
+        (ImplantSlot::StomachAid, pump)
     } else if under("/chest/reviver") {
         (ImplantSlot::HeartAid, Kind::Reviver)
     } else if under("/chest/thrusters") {
@@ -353,6 +392,7 @@ pub fn classify(path: &str) -> Option<(ImplantSlot, Kind)> {
         let hud = Kind::Hud {
             security: under("/eyes/hud/security"),
             medical: under("/eyes/hud/medical"),
+            shielded: is_under(path, SHIELDED_HUD),
         };
         (ImplantSlot::Hud, hud)
     } else if under("/mouth/breathing_tube") {
@@ -732,7 +772,9 @@ pub fn implant_huds(world: &World, mob: Entity) -> (bool, bool) {
         .and_then(|i| world.get::<Implant>(i))
         .filter(|i| i.active && !i.failing)
         .map_or((false, false), |i| match i.kind {
-            Kind::Hud { security, medical } => (security, medical),
+            Kind::Hud {
+                security, medical, ..
+            } => (security, medical),
             _ => (false, false),
         })
 }
@@ -1134,7 +1176,12 @@ fn implants_life(world: &mut World, mut last_fired: Local<u64>) {
     let implants: Vec<(Entity, Entity)> = world
         .query::<(Entity, &Implant, &OrganOf)>()
         .iter(world)
-        .filter(|(_, i, _)| matches!(i.kind, Kind::Nutriment { .. } | Kind::Reviver))
+        .filter(|(_, i, _)| {
+            matches!(
+                i.kind,
+                Kind::Nutriment { .. } | Kind::Reviver | Kind::Pump { .. }
+            )
+        })
         .map(|(e, _, o)| (e, o.0))
         .collect();
     for _ in 0..fires {
@@ -1157,8 +1204,64 @@ pub fn life(world: &mut World, implant: Entity, mob: Entity, secs: f32, now: f64
             ..
         } if !dead => nutriment(world, implant, mob, threshold, black_market, secs, now),
         Kind::Reviver => reviver(world, implant, mob, now),
+        Kind::Pump { reagents, centcom } if !dead => {
+            pump(world, implant, mob, reagents, centcom, secs, now);
+        }
         _ => {}
     }
+}
+
+/// BandaStation's pump `on_life`: off cooldown, each reagent below its threshold in the blood
+/// gets its amount; the CentCom pump also feeds a hungry owner 25 a second; then 5 s of
+/// cooldown.
+fn pump(
+    world: &mut World,
+    implant: Entity,
+    mob: Entity,
+    reagents: &[(&str, f32, f32)],
+    centcom: bool,
+    secs: f32,
+    now: f64,
+) {
+    let ready = world
+        .get::<Implant>(implant)
+        .is_some_and(|i| now >= i.cooldown_until);
+    if !ready {
+        return;
+    }
+    for &(path, amount, threshold) in reagents {
+        if crate::chem::blood_amount(world, mob, path) < threshold {
+            add_blood_reagent(world, mob, path, amount);
+        }
+    }
+    if centcom
+        && let Some(mut hunger) = world.get::<crate::hunger::Hunger>(mob).cloned()
+        && hunger.nutrition <= crate::hunger::NUTRITION_LEVEL_HUNGRY
+    {
+        tell_owner(
+            world,
+            mob,
+            Span::Notice,
+            "Вы чувствуете себя менее голодным...",
+        );
+        hunger.adjust(PUMP_FEED * secs);
+        world.entity_mut(mob).insert(hunger);
+    }
+    if let Some(mut state) = world.get_mut::<Implant>(implant) {
+        state.cooldown_until = now + PUMP_COOLDOWN;
+    }
+}
+
+/// BandaStation's shielded security HUD: while the HUD is on, the eyes' `flash_protect` gains
+/// 2, up to `FLASH_PROTECTION_WELDER`.
+// The fork's `on_mob_insert` toggles the HUD (switching it off on insertion, protection with
+// it); here the protection simply follows the HUD's state.
+pub fn shielded_eyes(world: &World, mob: Entity) -> bool {
+    implant_in(world, mob, ImplantSlot::Hud)
+        .and_then(|i| world.get::<Implant>(i))
+        .is_some_and(|i| {
+            i.active && !i.failing && matches!(i.kind, Kind::Hud { shielded: true, .. })
+        })
 }
 
 /// The nutriment pump's `on_life`: at or below its threshold it feeds 25 a second, then cools
@@ -1961,7 +2064,8 @@ mod tests {
             kind,
             Kind::Hud {
                 security: true,
-                medical: false
+                medical: false,
+                shielded: false
             }
         );
         // Arm implants go into either arm, nothing else leaves its zone.
@@ -2065,6 +2169,44 @@ mod tests {
         assert!(world.get::<StatusEffects>(mob).unwrap().stun >= 20.0);
         rebooter_tick(&mut world, cns, mob, 79.0);
         assert!(!world.get::<Implant>(cns).unwrap().failing);
+    }
+
+    #[test]
+    fn bandastation_pumps_and_shielded_hud() {
+        let mut world = World::new();
+        let mob = human(&mut world);
+        let pump =
+            spawn_implant(&mut world, "/obj/item/organ/cyberimp/chest/pump/centcom").unwrap();
+        assert!(matches!(
+            world.get::<Implant>(pump).unwrap().kind,
+            Kind::Pump { centcom: true, reagents } if reagents.len() == 5
+        ));
+        insert(&mut world, pump, mob, ImplantSlot::StomachAid);
+        world
+            .entity_mut(mob)
+            .insert(crate::hunger::Hunger::new(100.0));
+        life(&mut world, pump, mob, 2.0, 10.0);
+        assert_eq!(
+            world.get::<crate::hunger::Hunger>(mob).unwrap().nutrition,
+            150.0
+        );
+        // Cooling down 5 s.
+        life(&mut world, pump, mob, 2.0, 12.0);
+        assert_eq!(
+            world.get::<crate::hunger::Hunger>(mob).unwrap().nutrition,
+            150.0
+        );
+        life(&mut world, pump, mob, 2.0, 15.0);
+        assert_eq!(
+            world.get::<crate::hunger::Hunger>(mob).unwrap().nutrition,
+            200.0
+        );
+
+        let hud = spawn_implant(&mut world, SHIELDED_HUD).unwrap();
+        insert(&mut world, hud, mob, ImplantSlot::Hud);
+        assert!(shielded_eyes(&world, mob));
+        world.get_mut::<Implant>(hud).unwrap().active = false;
+        assert!(!shielded_eyes(&world, mob));
     }
 
     #[test]

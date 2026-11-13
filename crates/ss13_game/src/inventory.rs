@@ -650,6 +650,11 @@ fn apply(world: &mut World, client: Entity, action: Action) {
                 // The forensics spoofer scans or applies.
             } else if slot == active
                 && let Some(item) = inventory.slot(slot)
+                && crate::devices::jammer::toggle(world, mob, item)
+            {
+                // A radio jammer turns on or off.
+            } else if slot == active
+                && let Some(item) = inventory.slot(slot)
                 && crate::service::art::palette_menu(world, client, mob, item)
             {
                 // A paint palette's or spray can's colours (`/datum/component/palette`).
@@ -923,6 +928,8 @@ fn click_equip_slot(
         // tg `defibrillator/attack_hand` from its slot: the paddles come out or go back.
         (None, Some(worn)) if crate::medical::defib::attack_hand_worn(world, client, mob, worn) => {
         }
+        // tg `shoes/attack_hand`: the wearer works on their untied or knotted laces.
+        (None, Some(worn)) if crate::clothing::laces::attack_hand_worn(world, mob, worn) => {}
         (None, Some(worn)) if no_drop(world, worn) => {}
         (None, Some(worn)) => {
             unequip(world, mob, mob_pos, slot);

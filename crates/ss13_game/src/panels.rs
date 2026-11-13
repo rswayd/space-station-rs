@@ -41,6 +41,10 @@ pub struct StripSlot {
     pub obscured: u8,
     /// The viewer is putting on or taking off this slot right now.
     pub interacting: bool,
+    /// tg `alternate`: the keys of the entry's alternate actions (`"knot"`, `"untie"`,
+    /// `"unknot"` on laced shoes).
+    #[serde(default)]
+    pub alternate: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -51,6 +55,8 @@ pub struct StripItem {
 
 /// `act('use', { key })`.
 pub const STRIP_USE: &str = "use";
+/// `act('alt', { key })`: the entry's alternate action.
+pub const STRIP_ALT: &str = "alt";
 
 /// tgui `LootPanel` (`/datum/lootpanel`): the contents of a turf, tg's alt-click.
 pub struct LootPanelUi;

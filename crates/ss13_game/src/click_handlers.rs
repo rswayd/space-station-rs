@@ -63,6 +63,7 @@
 //! | 1763 | `devices::broadcast_camera::attack_self` (live or offline) |
 //! | 1767 | `clothing::gear::toggle_magboots` |
 //! | 1773 | `devices::door_remote::attack_self` (the next mode) |
+//! | 1777 | `devices::jammer::attack_self` (the disruptor wave) |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -127,11 +128,13 @@
 //! | 3327 | `talking_toys::attack_self` (action figures, pull-string toys, the big red button, the toy nuke) |
 //! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
+//! | 3337 | `toy_mechs::attack_self` (playing with a toy mech) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
 //! | 3357 | `clothing::collar_bomb::press` (the collar bomb's button) |
 //! | 3367 | `science::bitrunning::help::host_monitor` (the host health of an avatar) |
 //! | 3369 | `hookah::mouthpiece_attack_self` (a lit hookah's mouthpiece: a draw) |
 //! | 3377 | `science::bitrunning::disks::attack_self` (a bitrunning disk's program choice) |
+//! | 3387 | `clothing::laces::attack_self` (shoes in hand tied or untied) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -149,6 +152,7 @@
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 409 | `medical::surgery::notes_interaction` (research notes onto the notes in the other hand) |
 //! | 419 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a held hookah) |
+//! | 427 | `toy_mechs::item_interaction` (a toy mech on the one in the other hand: a brawl) |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
@@ -371,6 +375,7 @@
 //! | 69 | `cannons::item_interaction` (cannon balls, charge, fuse, wrench; mounted gun ammo and wrench) |
 //! | 53 | `holodeck::item_interaction` (holo floors take no items, ready buttons, the holodeck conveyor) |
 //! | 100 | `antag::uplink::item_interaction` |
+//! | 197 | `antag::syndie_items::scan_secondary` (right click with an agent card: a human or an item scanned for ID cards) |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 247 | `weapons::disarm_attack` (a right click with a shield or a pillow shoves) |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |
@@ -423,6 +428,7 @@
 //! | 1487 | `gun_pins::pin_interaction` (a firing pin into a gun, the DNA pin keyed on a carbon) |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1505 | `extinguisher::refill_click` (a tank refills it) |
+//! | 1537 | `devices::jammer::interact_with_atom` (the directed disruptor wave) |
 //! | 1527 | `science::ordnance_machines::item_interaction` (data disks into the doppler array and tank compressor, tanks into the compressor, doppler wrench) |
 //! | 1535 | `chem_machines::item_interaction` (containers, fuel, condensers, droppers and syringes, tools refused while working, wrenches) |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |
@@ -543,6 +549,7 @@
 //! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3647 | `talking_toys` emag on a toy nuke |
+//! | 3657 | `toy_mechs::item_interaction`, `attack` (a toy mech on another: a brawl; on a human: the battle offer) |
 //! | 3649 | `toys::held_on_target` (caps, toy swords, balloons, the Mini-Meteor; water balloons never hit mobs) |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |

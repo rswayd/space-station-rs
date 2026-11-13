@@ -186,6 +186,10 @@ pub enum AlertCategory {
     BodycamViewed,
     /// `/datum/status_effect/freon`'s alert (`crate::freon`).
     Frozen,
+    /// `ALERT_SHOES_KNOT` (`crate::clothing::laces`): `/atom/movable/screen/alert/shoes/untied`
+    /// and `knotted`; a click works on the laces.
+    ShoesUntied,
+    ShoesKnotted,
 }
 
 /// One thrown alert: its type's base `icon_state` and `severity` (0: none).
@@ -245,6 +249,21 @@ impl Alert {
                     "Вморожен в лёд",
                     "Вы вморожены в ледяной куб и не можете двигаться! Действовать (например, \
                      стрелять) всё ещё можно. Сопротивляйтесь, чтобы выбраться из куба!",
+                );
+            }
+            // `/atom/movable/screen/alert/shoes/*` (the base `template` state).
+            AlertCategory::ShoesUntied => {
+                return (
+                    "Развязаны шнурки",
+                    "Ваши шнурки на обуви развязаны! Нажмите на уведомление или обувь, чтобы \
+                     завязать их.",
+                );
+            }
+            AlertCategory::ShoesKnotted => {
+                return (
+                    "Завязанные узлом шнурки",
+                    "Кто-то завязал шнурки на обуви вместе! Нажмите на уведомление или обувь, \
+                     чтобы развязать узел.",
                 );
             }
             AlertCategory::Discoordinated => {

@@ -404,6 +404,10 @@ pub enum Job {
     SpaceDragon(crate::antag::space_dragon::DragonJob),
     /// A spy scanning a bounty's target ([`crate::antag::spy`]).
     Spy(crate::antag::spy::SpyJob),
+    /// An agent card scanning a human for ID cards ([`crate::antag::syndie_items`]).
+    AgentCardScan {
+        card: Entity,
+    },
     /// The Grand Ritual and the Scepter of Vendormancy.
     Wizard(crate::antag::wizard::server::WizardJob),
     /// The ninja's hacks and drains, the fugitive capture machine ([`crate::antag::raiders`]).
@@ -1617,6 +1621,9 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::NukeCore(job) => crate::antag::nukeop::core_theft::complete(world, mob, action, job),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::Device(job) => crate::devices::complete_job(world, client, mob, target, job),
+        &Job::AgentCardScan { card } => {
+            crate::antag::syndie_items::complete_scan(world, client, mob, target, card);
+        }
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),
         &Job::Flora(job) => crate::flora::complete(world, mob, action, job),
         &Job::Trap(job) => crate::traps::complete(world, mob, action, job),
