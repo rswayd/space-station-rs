@@ -246,12 +246,8 @@ fn acts(world: &mut World, mut cursor: Local<MessageCursor<UiActed<BankMachineUi
                 }
                 machine_say(world, e, "Siphon of station credits has begun!");
                 // `start_siphon`: the user's ID (hands first) against `req_access`.
-                let authorized = crate::inventory::id_allowed(
-                    world,
-                    actor,
-                    &[ACCESS_VAULT.to_owned()],
-                    &[],
-                );
+                let authorized =
+                    crate::inventory::id_allowed(world, actor, &[ACCESS_VAULT.to_owned()], &[]);
                 if let Some(mut m) = world.get_mut::<BankMachine>(e) {
                     m.unauthorized = !authorized;
                     m.siphoning = true;
@@ -373,7 +369,10 @@ mod tests {
     fn siphon_drains_the_cargo_budget() {
         let mut world = World::new();
         let mut economy = Economy::new(1);
-        economy.department_mut(ACCOUNT_CAR).unwrap().adjust_money(450);
+        economy
+            .department_mut(ACCOUNT_CAR)
+            .unwrap()
+            .adjust_money(450);
         world.insert_resource(economy);
         world.insert_resource(BankRng(Rng::new(1)));
         world.insert_resource(Time::<()>::default());
