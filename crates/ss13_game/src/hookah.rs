@@ -1043,6 +1043,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_last_fuel_burns_out_and_the_smoke_settles() {
+        let mut world = World::new();
+        world.init_resource::<Time>();
+        let hookah = world
+            .spawn(Hookah {
+                fuel: 2,
+                lit: true,
+                smoke: 30.0,
+                ..default()
+            })
+            .id();
+        process(&mut world);
+        let state = world.get::<Hookah>(hookah).unwrap();
+        assert_eq!(state.fuel, 1);
+        assert!(state.lit);
+        assert!((state.smoke - 29.9).abs() < 1e-4);
+        // Nothing more within the cooldowns.
+        process(&mut world);
+        assert_eq!(world.get::<Hookah>(hookah).unwrap().fuel, 1);
+        world.get_mut::<Hookah>(hookah).unwrap().next_fuel = 0.0;
+        process(&mut world);
+        let state = world.get::<Hookah>(hookah).unwrap();
+        assert_eq!(state.fuel, 0);
+        assert!(!state.lit, "out of fuel it goes out");
+        assert_eq!(state.smoke, 0.0);
+    }
+
+    #[test]
     fn radial_states_follow_the_options() {
         assert_eq!(radial_state(OPTION_EXTINGUISH), "extinguish");
         assert_eq!(radial_state(OPTION_BLOW), "blow");
