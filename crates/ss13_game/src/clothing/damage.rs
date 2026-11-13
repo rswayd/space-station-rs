@@ -90,6 +90,8 @@ pub enum ClothingJob {
         shoes: Entity,
         job: super::laces::LaceJob,
     },
+    /// The polymorph belt's core, scan and channel (`crate::clothing::polymorph_belt`).
+    Belt(super::polymorph_belt::BeltJob),
 }
 
 /// `body_zone2cover_flags`.
@@ -492,6 +494,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         }
         ClothingJob::Laces { shoes, job } => {
             super::laces::complete(world, mob, shoes, job);
+            return;
+        }
+        ClothingJob::Belt(job) => {
+            super::polymorph_belt::complete(world, mob, action, job);
             return;
         }
     };
