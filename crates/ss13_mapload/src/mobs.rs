@@ -27,6 +27,8 @@ pub const MEGAFAUNA_ROOT: &str = "/mob/living/simple_animal/hostile/megafauna";
 pub const ALIEN_ROOT: &str = "/mob/living/carbon/alien";
 /// tg `/mob/living/simple_animal/hostile/ooze`: read as basic mobs like the megafauna.
 pub const OOZE_ROOT: &str = "/mob/living/simple_animal/hostile/ooze";
+/// tg lavaland elites (`mining_mobs/elites/`): read as basic mobs like the megafauna.
+pub const ELITE_ROOT: &str = "/mob/living/simple_animal/hostile/asteroid/elite";
 const COMPONENT: &str = "dm_mob";
 /// `CANPUSH` of `status_flags`; `MOVE_RESIST_DEFAULT`.
 const CANPUSH: u32 = 1 << 3;
@@ -72,6 +74,36 @@ pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
     "/obj/item/stack/ore/gold",
     "/obj/item/stack/ore/uranium",
     "/obj/item/stack/ore/diamond",
+];
+
+/// What `ss13_game::mobs::jungle` spawns: the leaper's suicide frogs, bubbles and sludge, the
+/// projectiles of the leaper, the mega arachnid and seedlings, the arachnid's snare and acid,
+/// the venus human trap a flower bud grows.
+pub const JUNGLE_RUNTIME_TYPES: [&str; 10] = [
+    "/mob/living/basic/frog/suicide",
+    "/mob/living/basic/venus_human_trap",
+    "/obj/structure/leaper_bubble",
+    "/obj/effect/decal/cleanable/leaper_sludge",
+    "/obj/projectile/leaper",
+    "/obj/projectile/mega_arachnid",
+    "/obj/projectile/seedling",
+    "/obj/item/restraints/legcuffs/beartrap/mega_arachnid",
+    "/obj/effect/slippery_acid",
+    "/obj/structure/alien/resin/flower_bud",
+];
+
+/// What the elite tumor makes (`ss13_game::mobs::megafauna::elites`): the four elites, the
+/// broodmother's babies, the tumor shard and the elites' trophies.
+pub const ELITE_RUNTIME_TYPES: [&str; 9] = [
+    "/mob/living/simple_animal/hostile/asteroid/elite/broodmother",
+    "/mob/living/simple_animal/hostile/asteroid/elite/broodmother_child",
+    "/mob/living/simple_animal/hostile/asteroid/elite/pandora",
+    "/mob/living/simple_animal/hostile/asteroid/elite/legionnaire",
+    "/mob/living/simple_animal/hostile/asteroid/elite/herald",
+    "/obj/item/tumor_shard",
+    "/obj/item/crusher_trophy/broodmother_tongue",
+    "/obj/item/clothing/accessory/pandora_hope",
+    "/obj/item/clothing/neck/cloak/herald_cloak",
 ];
 
 /// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
@@ -410,6 +442,7 @@ fn is_basic(path: &str) -> bool {
         || is_under(path, MEGAFAUNA_ROOT)
         || is_under(path, ALIEN_ROOT)
         || is_under(path, OOZE_ROOT)
+        || is_under(path, ELITE_ROOT)
 }
 
 /// Every `/mob/living/basic` type and the megafauna.
@@ -575,7 +608,8 @@ fn mob_def(
         .collect();
     let max_health = num("maxHealth", 20.0);
     // `/mob/living/simple_animal` names for the same things.
-    let simple = is_under(path, MEGAFAUNA_ROOT) || is_under(path, OOZE_ROOT);
+    let simple =
+        is_under(path, MEGAFAUNA_ROOT) || is_under(path, OOZE_ROOT) || is_under(path, ELITE_ROOT);
     let basic_mob_flags = if simple {
         // `del_on_death` -> `DEL_ON_DEATH`.
         u32::from(num("del_on_death", 0.0) != 0.0)

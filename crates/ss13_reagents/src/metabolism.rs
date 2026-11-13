@@ -165,6 +165,8 @@ enum Effect {
     Cryoxadone,
     Pyroxadone,
     Toxin,
+    /// `toxin/leaper_venom`: harmless up to 5 u.
+    LeaperVenom,
     Ethanol,
 }
 
@@ -179,6 +181,7 @@ fn effect_of(path: &str) -> Option<Effect> {
         "/datum/reagent/medicine/c2/convermol" => Effect::Convermol,
         "/datum/reagent/medicine/cryoxadone" => Effect::Cryoxadone,
         "/datum/reagent/medicine/pyroxadone" => Effect::Pyroxadone,
+        "/datum/reagent/toxin/leaper_venom" => Effect::LeaperVenom,
         // Subtypes that keep the parent's `on_mob_life` (most call `..()` first).
         p if is_under(p, "/datum/reagent/toxin") => Effect::Toxin,
         p if is_under(p, "/datum/reagent/consumable/ethanol") => Effect::Ethanol,
@@ -544,6 +547,12 @@ fn on_mob_life(
             body.adjust(Damage::Brute, -0.5 * power * ratio * seconds);
             body.adjust(Damage::Burn, -0.75 * power * ratio * seconds);
             body.adjust(Damage::Tox, -0.5 * power * ratio * seconds);
+        }
+        Effect::LeaperVenom => {
+            // `toxpwr = 0`: the parent's `on_mob_life` does nothing.
+            if holder.reagents[i].volume > 5.0 {
+                body.adjust(Damage::Tox, 1.25 * ratio * seconds);
+            }
         }
         Effect::Toxin => {
             if def.toxpwr != 0.0 && body.health() > def.health_required {

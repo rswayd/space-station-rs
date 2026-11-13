@@ -299,6 +299,7 @@
 //! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |
 //! | 2900 | `mining::interact` |
 //! | 2903 | `mining::boulders::attack_hand` (a BRM teleports a boulder; right click: toggles it, a boulder out of a refinery) |
+//! | 2907 | `mobs::megafauna::elites::tumor_hand` (a human wakes a lavaland elite tumor) |
 //! | 3000 | `holosign::attack_hand` |
 //! | 3097 | `plumbing_net::interact` (plumbing machine settings) |
 //! | 3100 | `plumbing::interact` |
@@ -528,6 +529,7 @@
 //! | 2985 | `cargo::materials_market::item_interaction` |
 //! | 2991 | `cargo::bank_machine::deposit` (money into the vault's bank machine) |
 //! | 3000 | `mining::item_interaction` |
+//! | 3007 | `mobs::megafauna::elites::held_on` (a regenerative core boosts an elite tumor, a tumor shard revives a dead elite) |
 //! | 3100 | `science::item_interaction` |
 //! | 3110 | `science::exodrone::server::item_interaction` (the drone launcher) |
 //! | 3200 | `botany::item_interaction` |

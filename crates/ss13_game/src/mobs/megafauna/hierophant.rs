@@ -728,6 +728,16 @@ fn queue_burst(
     }
 }
 
+/// A damaging blast of `caster` appearing on `pos` at `at` (another boss's use of them:
+/// pandora's `blast/damaging/pandora`).
+pub(super) fn queue_blast(world: &mut World, at: f64, pos: TilePos, caster: Entity, damage: f32) {
+    let blast = Blast {
+        caster: Some(caster),
+        damage,
+    };
+    world.resource_mut::<Vortex>().queued.push((at, pos, blast));
+}
+
 /// A blast appearing on `pos` now.
 fn blast_now(world: &mut World, pos: TilePos, blast: Blast) {
     let now = now(world);
@@ -976,7 +986,11 @@ fn do_damage(world: &mut World, pos: TilePos, blast: Blast) {
             is_under(&b.def.path, ss13_mapload::mobs::MEGAFAUNA_ROOT)
                 || is_under(&b.def.path, ELITE_ROOT)
         });
-        if monster {
+        // `monster_damage_boost = FALSE` of pandora's blasts.
+        let boosted = blast
+            .caster
+            .is_none_or(|c| !super::elites::is_pandora(world, c));
+        if monster && boosted {
             crate::mobs::defense::hurt(world, victim, DamageType::Brute, blast.damage, None);
         }
     }

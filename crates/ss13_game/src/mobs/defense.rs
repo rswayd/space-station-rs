@@ -338,14 +338,18 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
         facing.set_if_neq(ss13_shared::Facing(dir));
     }
     // `COMSIG_HOSTILE_PRE_ATTACKINGTARGET`: constructs repair constructs, illusions replicate,
-    // shove or spare their original.
+    // shove or spare their original, suicide frogs blow up.
     if super::constructs::healing_touch(world, attacker, target)
         || super::illusion::on_preattack(world, attacker, target)
         || super::oneoffs::pre_melee(world, attacker, target)
+        || super::jungle::pre_melee(world, attacker, target)
     {
-        world.entity_mut(attacker).insert(NextMove(
-            now + f64::from(basic.def.melee_attack_cooldown) / 10.0,
-        ));
+        // A suicide frog is gone with its blast.
+        if let Ok(mut e) = world.get_entity_mut(attacker) {
+            e.insert(NextMove(
+                now + f64::from(basic.def.melee_attack_cooldown) / 10.0,
+            ));
+        }
         return true;
     }
     let def = &basic.def;
@@ -404,6 +408,7 @@ pub fn melee_attack(world: &mut World, attacker: Entity, target: Entity) -> bool
     super::space_fauna::after_melee(world, attacker, target);
     super::gorilla::after_melee(world, attacker, target);
     super::bees::after_melee(world, attacker, target);
+    super::jungle::after_melee(world, attacker, target);
     true
 }
 

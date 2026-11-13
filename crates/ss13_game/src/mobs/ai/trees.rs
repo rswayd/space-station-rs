@@ -48,6 +48,7 @@ macro_rules! speech {
     };
 }
 
+mod jungle;
 mod lavaland;
 mod space;
 mod troopers;
@@ -109,6 +110,8 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
         built.retaliates = true;
     } else if let Some(lava) = lavaland::build(path) {
         built = lava;
+    } else if let Some(wild) = jungle::build(path) {
+        built = wild;
     } else if let Some(trooper) = troopers::build(path) {
         built = trooper;
     } else if let Some(fauna) = space::build(path) {

@@ -308,6 +308,7 @@ fn step(world: &mut World, e: Entity, dt: f32) {
         if p.moved >= p.data.range {
             crate::mining::rocks::kinetic_on_range(world, &mut p, tile);
             crate::bows::arrow_drop(world, &p.data.path, tile);
+            crate::mobs::jungle::on_projectile_range(world, &p.data.path, tile);
             // `/obj/projectile/energy/electrode/on_range`.
             if p.data.tase_stamina > 0.0 {
                 crate::effects::particles::do_sparks(world, 1, true, tile);
@@ -538,7 +539,9 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     {
         return;
     }
-    if crate::mobs::megafauna::deflects_projectile(world, target) {
+    if crate::mobs::megafauna::deflects_projectile(world, target)
+        || crate::mobs::jungle::blocks_projectile(world, p, target)
+    {
         return;
     }
     impact(world, p, name, target);
@@ -551,6 +554,8 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
     crate::mining::crusher::destabilizer_hit(world, e, p.firer, target);
     crate::misc_items::target::bullet_act(world, e, p, target);
     crate::mobs::megafauna::on_projectile_hit(world, p, target);
+    // The leaper bubble's venom, the arachnid's flesh snare (`crate::mobs::jungle`).
+    crate::mobs::jungle::on_projectile_hit(world, p, target);
     // A cryo/pyro beam's `temp/on_hit` (`crate::genetics::effects`).
     crate::genetics::effects::beam_hit(world, e, target);
     if let Some(bolt) = bolt {

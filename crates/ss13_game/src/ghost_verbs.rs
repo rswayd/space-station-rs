@@ -666,6 +666,11 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
         crate::antag::spiders::take_egg(world, client, ghost, spawner);
         return None;
     }
+    // A kudzu flower bud grows its venus human trap (`crate::mobs::jungle`).
+    if crate::mobs::jungle::is_bud(world, spawner) {
+        crate::mobs::jungle::take_bud(world, client, ghost, spawner);
+        return None;
+    }
     let def = s
         .def
         .as_deref()
