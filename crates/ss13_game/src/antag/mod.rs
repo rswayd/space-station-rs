@@ -59,6 +59,8 @@ pub mod revolution;
 #[cfg(feature = "server")]
 pub mod santa;
 #[cfg(feature = "server")]
+pub mod separatist;
+#[cfg(feature = "server")]
 pub mod slaughter;
 #[cfg(feature = "server")]
 pub mod space_dragon;
@@ -126,6 +128,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             santa::SantaPlugin,
             ashwalker::AshwalkerPlugin,
             voidwalker::VoidwalkerPlugin,
+            separatist::SeparatistPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
