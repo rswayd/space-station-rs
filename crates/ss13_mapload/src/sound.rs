@@ -335,7 +335,10 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 433] = [
+    pub const GAME_CODE: [&str; 436] = [
+        "sound/effects/wounds/pierce3.ogg",
+        "sound/effects/wounds/splatter.ogg",
+        "sound/items/weapons/bite.ogg",
         "sound/effects/confirmdropoff.ogg",
         "sound/items/basketball_bounce.ogg",
         "sound/items/weapons/shove.ogg",
