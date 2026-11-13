@@ -77,7 +77,7 @@
 Строительная база шахтёров: консоль с дронами-строителями, выбор места посадки маяком, запуск базы на планету.
 
 - **Код:** [`/obj/machinery/computer/auxiliary_base`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/aux_base.dm#L14), [`/obj/item/assault_pod/mining`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/aux_base.dm#L257), [`/obj/structure/mining_shuttle_beacon`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mining/aux_base.dm#L332); tgui: [`AuxBaseConsole.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AuxBaseConsole.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — постройка базы консолью с дроном-строителем есть (`crates/ss13_game/src/base_construction.rs`, пункт «Консоль постройки базы» в `engineering/structures-misc.md`: дрон в пределах `/area/shuttle/auxiliary_base`, РСД, вентиляторы, турели); нет консоли `computer/auxiliary_base` (окно `AuxBaseConsole`, запуск базы на планету, управление турелями), маяка посадки `mining_shuttle_beacon` и десантной капсулы `assault_pod/mining`, `landing_zone_dock`
 
 ### Флора лаваленда и ледяной луны
 Грибы, кактусы, серака, огнецвет и прочие растения: собираются в ингредиенты (лекарства пепельных ходоков, еда), отрастают со временем.

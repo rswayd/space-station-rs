@@ -137,7 +137,9 @@ const SHEET_MATTER: [(&str, u32); 7] = [
 
 /// RCD types (and the family's, [`super::rhd`]): path, `max_matter`, starting `matter`,
 /// `construction_upgrades`, `canRturf`, `delay_mod`; subtypes first.
-const VARIANTS: [(&str, u32, u32, u8, bool, f32); 15] = [
+const VARIANTS: [(&str, u32, u32, u8, bool, f32); 16] = [
+    // A base construction console's (`crate::base_construction`); restocked on the map.
+    ("/obj/item/construction/rcd/internal", 600, 0, 0, false, 0.5),
     (
         "/obj/item/construction/rcd/borg/syndicate",
         160,
@@ -564,6 +566,8 @@ pub struct RcdJob {
     pub design: Option<usize>,
     pub cost: u32,
     pub effect: Option<Entity>,
+    /// Worked through a base construction console's eye: the RCD is the console's, not held.
+    pub remote: bool,
 }
 
 /// A construction effect, gone at `until` if the build never finished.
@@ -577,6 +581,8 @@ struct RcdEffect {
 struct RcdPrompt {
     item: Entity,
     options: Vec<Option<usize>>,
+    /// Opened through a base construction console (the RCD is the console's).
+    remote: bool,
 }
 
 pub fn build(app: &mut App) {
@@ -747,6 +753,17 @@ pub fn load(world: &mut World, client: Entity, rcd: Entity, used: Entity) -> boo
 
 /// `attack_self`: the design list.
 pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity) -> bool {
+    open_designs(world, client, mob, item, false)
+}
+
+/// The design list of `item`; `remote`: a base construction console's RCD (its "Configure RCD").
+pub fn open_designs(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    item: Entity,
+    remote: bool,
+) -> bool {
     let Some(m) = world.get::<Matter>(item).copied() else {
         return false;
     };
@@ -782,7 +799,11 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
             },
         ),
     );
-    world.entity_mut(prompt).insert(RcdPrompt { item, options });
+    world.entity_mut(prompt).insert(RcdPrompt {
+        item,
+        options,
+        remote,
+    });
     true
 }
 
@@ -815,7 +836,12 @@ fn design_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
         .map(|a| (a.prompt, a.client, a.actor, a.answer.clone()))
         .collect();
     for (prompt, client, mob, answer) in answers {
-        let Some(RcdPrompt { item, options }) = world.get::<RcdPrompt>(prompt).cloned() else {
+        let Some(RcdPrompt {
+            item,
+            options,
+            remote,
+        }) = world.get::<RcdPrompt>(prompt).cloned()
+        else {
             continue;
         };
         let Some(PromptAnswer::Item(index)) = answer else {
@@ -824,9 +850,13 @@ fn design_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptAnswe
         let Some(&choice) = options.get(index) else {
             continue;
         };
-        let holding = world
-            .get::<Inventory>(mob)
-            .is_some_and(|i| i.hands.contains(&Some(item)));
+        let holding = if remote {
+            crate::base_construction::controls_rcd(world, mob, item)
+        } else {
+            world
+                .get::<Inventory>(mob)
+                .is_some_and(|i| i.hands.contains(&Some(item)))
+        };
         let able = world.get::<Stat>(mob) == Some(&Stat::Conscious)
             && !crate::status_effects::incapacitation(world, mob).incapacitated;
         if !holding || !able {
@@ -1101,6 +1131,30 @@ pub fn item_interaction(
     target: Entity,
     right: bool,
 ) -> bool {
+    start(world, actor, held, target, right, false)
+}
+
+/// `LAZYLEN(atom.rcd_vals(user, rcd))`: the RCD's current design (a build) works on `target`.
+pub fn works_on(world: &World, rcd: Entity, target: Entity) -> bool {
+    world
+        .get::<Matter>(rcd)
+        .is_some_and(|m| rcd_vals(world, m, target, DESIGNS.get(m.design)).is_some())
+}
+
+/// `rcd_create` of a base construction console's RCD on `target` at its eye: `actor.item` is
+/// the console's RCD, the user's hands are not involved.
+pub fn remote_create(world: &mut World, actor: Actor, rcd: Entity, target: Entity) -> bool {
+    start(world, actor, rcd, target, false, true)
+}
+
+fn start(
+    world: &mut World,
+    actor: Actor,
+    held: Entity,
+    target: Entity,
+    right: bool,
+    remote: bool,
+) -> bool {
     // Matter or a disk clicked onto an RCD lying around (`item_interaction`).
     if world.get::<Matter>(target).is_some() && world.get::<Matter>(held).is_none() {
         return load(world, actor.client, target, held);
@@ -1141,6 +1195,7 @@ pub fn item_interaction(
         design: design.map(|_| m.design),
         cost,
         effect,
+        remote,
     };
     if !do_after(world, actor, target, delay, 0, Job::Rcd(job))
         && let Some(e) = effect

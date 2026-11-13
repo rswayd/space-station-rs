@@ -213,6 +213,8 @@ pub mod bar;
 #[cfg(feature = "server")]
 pub mod barsign;
 #[cfg(feature = "server")]
+pub mod base_construction;
+#[cfg(feature = "server")]
 pub mod blackbox;
 #[cfg(feature = "server")]
 pub mod botany;
@@ -731,6 +733,8 @@ pub mod toys;
 #[cfg(feature = "server")]
 pub mod transform;
 #[cfg(feature = "server")]
+pub mod transit_tubes;
+#[cfg(feature = "server")]
 pub mod transport;
 pub mod transport_ui;
 #[cfg(feature = "client")]
@@ -754,6 +758,8 @@ pub mod votes;
 pub mod votes_client;
 #[cfg(feature = "server")]
 pub mod wall_damage;
+#[cfg(feature = "server")]
+pub mod wall_support;
 #[cfg(feature = "server")]
 pub mod wallmount;
 #[cfg(feature = "server")]

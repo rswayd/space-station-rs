@@ -11,7 +11,8 @@
 //! needs the disk and the code and refuses in space.
 //! Arming sets the delta security level and disarming restores the level it was armed at
 //! (`arm_nuke`, `disarm_nuke`).
-// shortcut: no deconstruction (nuke core, screwdriver/welder states), countdown effect, sounds,
+// The deconstruction to the plutonium core is `super::core_theft`.
+// shortcut: no countdown effect, sounds,
 // pinpointer alert, ghost notification, minimap blip or cinematic; no red alert after an
 // off-station detonation (`drop_level`).
 
@@ -341,6 +342,7 @@ pub struct NuclearBombPlugin;
 
 impl Plugin for NuclearBombPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(super::core_theft::CoreTheftPlugin);
         app.register_ui::<NuclearBombUi>()
             .add_systems(ss13_world::MapInit, setup_bombs)
             .add_systems(
@@ -389,6 +391,7 @@ fn setup_bombs(world: &mut World) {
             actually_explode_at: None,
             previous_level: default(),
         });
+        super::core_theft::setup_bomb(world, e);
     }
 }
 
@@ -586,11 +589,11 @@ pub(crate) fn area_path(world: &World, area: Entity) -> Option<&str> {
 }
 
 /// `update_icon_state` + `update_overlays`.
-fn update_look(world: &mut World, bomb_e: Entity) {
+pub(super) fn update_look(world: &mut World, bomb_e: Entity) {
     let Some(look) = world.get::<NuclearBomb>(bomb_e).map(|b| b.state.look()) else {
         return;
     };
-    let (state, lights) = match look {
+    let (mut state, lights) = match look {
         NukeLook::OffLocked => ("_base", None),
         NukeLook::OffUnlocked => ("_base", Some("lights-safety")),
         NukeLook::Timing => ("_timing", Some("lights-timing")),
@@ -605,16 +608,27 @@ fn update_look(world: &mut World, bomb_e: Entity) {
     } else {
         "nuclearbomb"
     };
+    let interior = world
+        .get::<super::core_theft::NukeInterior>(bomb_e)
+        .and_then(|i| i.state.interior_overlay());
+    if interior.is_some() {
+        state = "_base";
+    }
     let Some(index) = world.get_resource::<IconIndex>() else {
         return;
     };
     let state = index.get(NUKE_DMI, &format!("{base}{state}"));
     let lights = lights.and_then(|l| index.get(NUKE_DMI, l));
+    let interior = interior.and_then(|i| index.get(NUKE_DMI, i));
     if let Some(mut appearance) = world.get_mut::<Appearance>(bomb_e) {
         if let Some(state) = state {
             appearance.icon_state = state;
         }
-        appearance.overlays = lights.map(Overlay::new).into_iter().collect();
+        appearance.overlays = lights
+            .into_iter()
+            .chain(interior)
+            .map(Overlay::new)
+            .collect();
     }
 }
 

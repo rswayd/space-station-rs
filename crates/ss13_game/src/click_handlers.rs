@@ -156,6 +156,7 @@
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 469 | `electric_chair::item_interaction` (a helmet on the electropack, a wrench on the shock kit in the other hand) |
+//! | 471 | `antag::nukeop::core_theft::other_hand` (a core and a core container on each other) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 477 | `instruments::boombox::other_hand` (a music tape into the boombox in the other hand, its menu) |
 //! | 479 | `toys::item_on_item` (caps into a cap gun, toy sword tools, filling and bursting balloons, emagging a Mini-Meteor) |
@@ -338,6 +339,7 @@
 //! | 3497 | `telecomms_config::interact` (telecomms machine, monitor and log browser windows) |
 //! | 3501 | `cargo::bank_machine` (the vault bank machine window) |
 //! | 3507 | `blackbox::attack_hand` (the blackbox out of its recorder) |
+//! | 3511 | `transit_tubes::attack_hand` (a transit tube station opens, closes or has its pod emptied) |
 //! | 3517 | `ntnet_relay::interact` (the `NtnetRelay` window) |
 //! | 3529 | `cannons::attack_hand` (a mounted gun fires, the repeater winds) |
 //! | 3539 | `gym::punch` (the punching bag) |
@@ -375,10 +377,12 @@
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 239 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a hookah; the mouthpiece on oneself: a draw) |
+//! | 261 | `antag::nukeop::core_theft::held_on_target` (the nuclear bomb's deconstruction tools, cores and containers, a core and a container on each other) |
 //! | 271 | `power::turbine::item_interaction` (turbine tools and parts, sheets on a part, a multitool on the console) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
+//! | 291 | `transit_tubes::held_on_target` (wrench and crowbar on tubes, stations, pods and unattached tubes) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
@@ -499,6 +503,8 @@
 //! | 2950 | `vehicles::item_interaction` |
 //! | 2959 | `electric_chair::item_interaction` (a helmet on an electropack, a shock kit on a chair, its screwdriver, wrenches on the kit and the electric chair) |
 //! | 2960 | `flora::item_interaction` |
+//! | 2941 | `base_construction` refill (sheets and matter cartridges into a base construction console's RCD) |
+//! | 2961 | `wall_support::held_on_target` (rods on a wall; a screwdriver or right-click wirecutters on a wall support) |
 //! | 2969 | `wall_damage::item_interaction` (a welder on a dented wall, rust scraped or burnt off, tiles refused by rusty floors) |
 //! | 2970 | `cargo::mail_sorter::item_interaction` |
 //! | 2975 | `cargo::coupon::attack_atom` (supply consoles) |
