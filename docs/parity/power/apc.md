@@ -49,7 +49,7 @@ tgui-окно: заряд ячейки, включение главного ру
 Эфириал правым кликом пустой рукой заряжает свой желудок от APC или отдаёт ему энергию.
 
 - **Код:** [`proc/ethereal_interact()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_attack.dm#L28), [`proc/charge_from_ethereal()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/power/apc/apc_attack.dm#L77)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/power/ethereal.rs` (`EtherealStomach`, `attack_hand_secondary`, `complete`), правый клик человека по APC (`power/apc_ui.rs`): без желудка эфириала или с зарядом ≥ `ETHEREAL_CHARGE_NORMAL` — переключение замка, затем эфириал вне боевого режима отдаёт желудок в ячейку APC, в боевом — выкачивает ячейку, но не ниже половины (повтор шагов, пока можно); шаг 3 с по `0.1 × STANDARD_ETHEREAL_CHARGE`, кулдаун `drain_time`, повторная проверка желудка и ячейки в конце шага, все balloon-тексты BandaStation. Желудок эфириала хранит заряд (полный при появлении, предел `ETHEREAL_CHARGE_DANGEROUS`). Проверено: `tests/it/id_lock.rs` (`ethereals_charge_and_drain_apcs`). Нет задержки 0.75 с перед первым balloon. Собственная жизнь желудка (разряд со временем, алерты и урон от заряда, поглощение удара током, зарядка в боргозарядке) — у вида, `docs/parity/mobs/species-list.md` «Эфириалы»
 
 ### Взлом APC сбойным ИИ
 Malf ИИ взламывает APC (рост вычислительной мощности), может переселиться в него и вернуться.

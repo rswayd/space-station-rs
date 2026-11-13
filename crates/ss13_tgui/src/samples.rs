@@ -57,6 +57,9 @@ use crate::interfaces::gas_analyzer::{
 use crate::interfaces::gps::{GpsData, GpsSignal, GpsUi};
 use crate::interfaces::gravity_generator::{GravityGeneratorData, GravityGeneratorUi};
 use crate::interfaces::holodeck::{HoloProgram, HolodeckData, HolodeckUi};
+use crate::interfaces::hypertorus::{
+    HfrFuelEntry, HfrGas, HypertorusData, HypertorusStatic, HypertorusUi,
+};
 use crate::interfaces::implant_chair::{ImplantChairData, ImplantChairOccupant, ImplantChairUi};
 use crate::interfaces::implant_pad::{ImplantPadData, ImplantPadUi};
 use crate::interfaces::iv_drip::{IvDripData, IvDripUi};
@@ -97,6 +100,7 @@ use crate::interfaces::teg::{
 };
 use crate::interfaces::text_input::{TextInputStatic, TextInputUi};
 use crate::interfaces::thermo_machine::{ThermoMachineData, ThermoMachineUi};
+use crate::interfaces::turbine_computer::{TurbineComputerData, TurbineComputerUi};
 use crate::interfaces::vending::{
     ProductRecord, StockItem, UserData, VendingData, VendingStatic, VendingUi,
 };
@@ -500,6 +504,57 @@ pub fn sample(name: &str) -> Option<Sample> {
                     pressure_inlet: 3_010.0,
                     pressure_outlet: 2_987.3,
                 }),
+            },
+        ),
+        HypertorusUi::NAME => of::<HypertorusUi>(
+            "HFR interface",
+            &HypertorusStatic {
+                base_max_temperature: 1e8,
+                selectable_fuel: vec![
+                    HfrFuelEntry {
+                        name: "Nothing".into(),
+                        ..Default::default()
+                    },
+                    HfrFuelEntry {
+                        name: "Hydrogen + Tritium fuel".into(),
+                        id: "h2_t2_fuel".into(),
+                        ..Default::default()
+                    },
+                ],
+            },
+            &HypertorusData {
+                selected: "h2_t2_fuel".into(),
+                fusion_gases: vec![HfrGas {
+                    id: "hydrogen".into(),
+                    name: "Hydrogen".into(),
+                    amount: 812.4,
+                }],
+                power_level: 2,
+                integrity: 96.5,
+                start_power: true,
+                start_cooling: true,
+                heating_conductor: 100.0,
+                magnetic_constrictor: 100.0,
+                fuel_injection_rate: 25.0,
+                moderator_injection_rate: 25.0,
+                cooling_volume: 200.0,
+                mod_filtering_rate: 100.0,
+                ..Default::default()
+            },
+        ),
+        TurbineComputerUi::NAME => of::<TurbineComputerUi>(
+            "gas turbine control computer",
+            &(),
+            &TurbineComputerData {
+                connected: true,
+                active: true,
+                rpm: 31_420.0,
+                power: 942_600.0,
+                temp: 1_840.0,
+                integrity: 87.5,
+                max_rpm: 50_000.0,
+                max_temperature: 50_000.0,
+                regulator: 0.5,
             },
         ),
         MechBayPowerConsoleUi::NAME => of::<MechBayPowerConsoleUi>(

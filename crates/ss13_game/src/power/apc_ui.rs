@@ -9,7 +9,7 @@
 // The malfunctioning AI's "hack", "occupy" and "deoccupy" acts: `crate::silicon::malf`.
 // An ID (or a PDA with one) on the APC, or a human's empty-hand right click, is tg `togglelock`
 // ([`toggle_lock`]).
-// shortcut: no APC cover state (`opened`), `BROKEN|MAINT`, ethereal charge or remote control
+// shortcut: no APC cover state (`opened`), `BROKEN|MAINT` or remote control
 // console, so `togglelock` skips those refusals; "overload" (silicons) does nothing; the cover bolts and emergency-lighting
 // switches are kept and shown but do not change the cover or the lights' backup cells yet
 // (night shift dims the area's lights, `super::set_nightshift`).
@@ -196,13 +196,14 @@ impl Plugin for ApcUiPlugin {
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
         // tg `attack_hand` of an APC with its cover closed: its window.
-        // A human's right click (`attack_hand_secondary`) is `togglelock` instead.
+        // A human's right click (`attack_hand_secondary`) is `togglelock` instead, and an
+        // ethereal's charge exchange (`super::ethereal`).
         app.add_click_handler(ClickPhase::EmptyHand, 2100, |w, c| {
             if c.modifiers.right
                 && w.get::<Apc>(c.target).is_some()
                 && w.get::<crate::human::HumanLook>(c.mob).is_some()
             {
-                toggle_lock(w, c.mob, c.target);
+                super::ethereal::attack_hand_secondary(w, c.client, c.mob, c.target);
                 return true;
             }
             crate::power::apc_ui::interact(w, c.client, c.mob, c.target)

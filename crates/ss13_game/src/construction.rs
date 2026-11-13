@@ -439,6 +439,8 @@ pub enum Job {
     EngMachine(crate::eng_machines::EngJob),
     /// Wrenching a light fixture frame apart ([`crate::power::lighting`]).
     Light(crate::power::lighting::LightJob),
+    /// Ethereals at APCs, turbine parts ([`crate::power`]).
+    Power(crate::power::PowerJob),
     /// Drawing, outlining or eating with a crayon ([`crate::crayons`]).
     Crayon(crate::crayons::CrayonJob),
     /// The Heimlich, washing slime off ([`crate::afflictions`]).
@@ -1597,6 +1599,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::DisplayCase(job) => crate::displaycase::complete(world, mob, action, job),
         &Job::FishMount(job) => crate::fishing::mount::complete(world, mob, action, job),
         &Job::Light(job) => crate::power::lighting::complete(world, action, job),
+        &Job::Power(job) => crate::power::complete(world, mob, action, job),
         Job::Crayon(job) => crate::crayons::complete(world, mob, action, job.clone()),
         &Job::Affliction(job) => crate::afflictions::complete(world, mob, action, job),
         &Job::Curse(job) => crate::curses::complete(world, mob, action, job),

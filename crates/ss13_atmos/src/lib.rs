@@ -17,6 +17,7 @@
 //! light) and burn what is on their tile through [`FireAct`] messages.
 
 pub mod electrolysis;
+pub mod fusion;
 pub mod gas;
 pub mod level;
 pub mod pipenet;

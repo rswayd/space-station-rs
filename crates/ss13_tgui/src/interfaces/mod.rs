@@ -26,6 +26,7 @@ pub mod gas_analyzer;
 pub mod gps;
 pub mod gravity_generator;
 pub mod holodeck;
+pub mod hypertorus;
 pub mod implant_chair;
 pub mod implant_pad;
 #[cfg(feature = "client")]
@@ -55,5 +56,6 @@ pub mod tank;
 pub mod teg;
 pub mod text_input;
 pub mod thermo_machine;
+pub mod turbine_computer;
 pub mod vending;
 pub mod wires;

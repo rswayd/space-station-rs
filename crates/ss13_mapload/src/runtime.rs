@@ -187,6 +187,17 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `traps`: the earth trap's rock, the cables strung between tripwire posts.
     "/obj/structure/flora/rock/style_random",
     "/obj/structure/tripwire/cable",
+    // `atmos_machinery::hfr`: the Hypertorus' machines its boxes deploy into.
+    "/obj/machinery/atmospherics/components/unary/hypertorus/core",
+    "/obj/machinery/atmospherics/components/unary/hypertorus/fuel_input",
+    "/obj/machinery/atmospherics/components/unary/hypertorus/waste_output",
+    "/obj/machinery/atmospherics/components/unary/hypertorus/moderator_input",
+    "/obj/machinery/hypertorus/interface",
+    "/obj/machinery/hypertorus/corner",
+    // `power::turbine`: parts taken out of the gas turbine.
+    "/obj/item/turbine_parts/compressor",
+    "/obj/item/turbine_parts/rotor",
+    "/obj/item/turbine_parts/stator",
     // `safes`: the vault safe's piggy bank.
     "/obj/item/piggy_bank/vault",
     // `secure_safes`: the captain's spare ID safe's card.

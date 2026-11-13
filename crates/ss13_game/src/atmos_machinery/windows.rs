@@ -1896,6 +1896,8 @@ pub enum AtmosJob {
     Fitting(super::fitting::FittingJob),
     /// One layer of an RPD build.
     Rpd(super::rpd::RpdJob),
+    /// The Hypertorus' parts ([`super::hfr`]).
+    Hfr(super::hfr::HfrJob),
 }
 
 /// The end of an [`AtmosJob`] (tg `use_tool` succeeded).
@@ -1903,6 +1905,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
     match job {
         AtmosJob::Fitting(job) => super::fitting::complete(world, mob, action, job),
         AtmosJob::Rpd(job) => super::rpd::complete(world, mob, action, job),
+        AtmosJob::Hfr(job) => super::hfr::complete(world, mob, action, job),
         AtmosJob::Repair => {
             let target = action.target;
             let Some(max) = world
