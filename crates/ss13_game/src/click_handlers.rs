@@ -482,6 +482,7 @@
 //! | 1691 | `service::cards::item_interaction` (cards, hands and decks on each other, pens marking) |
 //! | 1700 | `service::server::item_interaction` |
 //! | 1750 | `medical::bodyparts::item_interaction` |
+//! | 1771 | `antag::minions::potion_interaction` (the intelligence potion offered to a creature) |
 //! | 1773 | `science::xenobio_console::item_interaction` (potions, monkey cubes into the slime console) |
 //! | 1777 | `science::xenobio::item_interaction` (slimes, extracts) |
 //! | 1783 | `science::cell_lines::dish_interaction` (a petri dish into the microscope or a growing vat) |

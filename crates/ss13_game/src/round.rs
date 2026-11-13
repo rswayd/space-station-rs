@@ -982,6 +982,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::ashwalker::roundend_report(world, end));
     antags.extend(crate::antag::voidwalker::roundend_report(world, end));
     antags.extend(crate::antag::spy::roundend_report(world, end));
+    antags.extend(crate::antag::separatist::roundend_report(world, end));
     antags.extend(crate::antag::revolution::server::roundend_report(
         world, end,
     ));

@@ -1017,10 +1017,11 @@ fn victory(world: &mut World, lobby: Entity, game: &Game) {
             crate::health::dust(world, p.mob);
         }
     }
+    let t = now(world);
     if let Some(mut l) = world.get_mut::<BasketballLobby>(lobby)
         && let Some(g) = l.game.as_mut()
     {
-        g.cleanup_at = Some(now(world) + VICTORY_LAP_SECS);
+        g.cleanup_at = Some(t + VICTORY_LAP_SECS);
         g.countdown = 0;
     }
 }

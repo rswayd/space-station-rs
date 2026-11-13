@@ -1418,6 +1418,12 @@ pub fn take_bud(world: &mut World, client: Entity, ghost: Entity, bud: Entity) {
     ] {
         crate::tools::tell(world, client, span, text);
     }
+    crate::antag::minions::add_minion(
+        world,
+        mob,
+        crate::antag::minions::MinionKind::VenusTrap,
+        None,
+    );
 }
 
 /// The bud's four thorny vines: the tiles one and two away diagonally.

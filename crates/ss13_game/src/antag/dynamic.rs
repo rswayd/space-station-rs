@@ -302,6 +302,11 @@ pub const MALF_RULESET: &str = "Roundstart Malfunctioning AI";
 /// `/datum/dynamic_ruleset/roundstart/heretic` `max_antag_cap = list("denominator" = 24)`.
 pub const HERETIC_CAP_DENOMINATOR: u32 = 24;
 pub const SPY_RULESET: &str = "Roundstart Spies";
+/// `/datum/dynamic_ruleset/roundstart/extended`, `meteor` and `nations`: weight 0 (only queued
+/// by admins), `min_antag_cap = 0`: they execute with nobody selected.
+pub const EXTENDED_RULESET: &str = "Extended";
+pub const METEOR_RULESET: &str = "Meteor";
+pub const NATIONS_RULESET: &str = "Nations";
 /// `/datum/dynamic_ruleset/roundstart/spies` `min_antag_cap = list("denominator" = 20,
 /// "offset" = 1)`, no `max_antag_cap`: exactly that many or nothing.
 pub const SPY_CAP_DENOMINATOR: u32 = 20;
@@ -342,7 +347,7 @@ const fn flat(w: u32) -> [u32; 4] {
     [w; 4]
 }
 
-pub const ROUNDSTART_RULESETS: [Ruleset; 13] = [
+pub const ROUNDSTART_RULESETS: [Ruleset; 16] = [
     Ruleset {
         config_tag: TRAITOR_RULESET,
         weight: flat(10),
@@ -432,6 +437,29 @@ pub const ROUNDSTART_RULESETS: [Ruleset; 13] = [
         weight: [0, 1, 3, 3],
         min_pop: 10,
         repeatable: true,
+        high_impact: false,
+    },
+    // `solo` (Extended, Nations) cancels the other picks in tg; at weight 0 they are never
+    // picked by the roll.
+    Ruleset {
+        config_tag: EXTENDED_RULESET,
+        weight: flat(0),
+        min_pop: 0,
+        repeatable: false,
+        high_impact: false,
+    },
+    Ruleset {
+        config_tag: METEOR_RULESET,
+        weight: flat(0),
+        min_pop: 0,
+        repeatable: false,
+        high_impact: false,
+    },
+    Ruleset {
+        config_tag: NATIONS_RULESET,
+        weight: flat(0),
+        min_pop: 0,
+        repeatable: false,
         high_impact: false,
     },
 ];
@@ -603,7 +631,12 @@ pub fn prepare_roundstart(
         .map_or(Rng::new(0), |r| r.0);
     let (tier, rulesets) = roll_tier_and_rulesets(&config, population, &mut rng);
     let mut selected: Vec<(usize, &'static str)> = Vec::new();
+    let mut crewless = Vec::new();
     for ruleset in rulesets {
+        if is_crewless(ruleset) {
+            crewless.push(ruleset);
+            continue;
+        }
         let (role, caps) = if ruleset == NUKEOPS_RULESET {
             let cap = nukeops_cap(population);
             (super::nukeop::ROLE_OPERATIVE, (cap, cap))
@@ -646,6 +679,7 @@ pub fn prepare_roundstart(
     world.insert_resource(DynamicRng(rng));
     let mut executed: Vec<&'static str> = selected.iter().map(|&(_, r)| r).collect();
     executed.dedup();
+    executed.extend(crewless);
     super::midround::start(world, tier, population, executed);
     for &(i, ruleset) in &selected {
         let data = &world.resource::<Jobs>().data;
@@ -719,6 +753,49 @@ pub fn execute_roundstart(world: &mut World, selected: &[(Entity, &'static str)]
     // `blood_cult/execute`: one team for all, then `setup_objectives`.
     if !cultists.is_empty() {
         super::cult::server::start_cult(world, &cultists);
+    }
+    let crewless: Vec<&'static str> = world
+        .get_resource::<super::midround::Midround>()
+        .map(|m| {
+            m.executed
+                .iter()
+                .copied()
+                .filter(|r| is_crewless(r))
+                .collect()
+        })
+        .unwrap_or_default();
+    for ruleset in crewless {
+        execute_crewless(world, ruleset);
+    }
+}
+
+/// The rulesets without antagonists (`min_antag_cap = 0`).
+pub fn is_crewless(ruleset: &str) -> bool {
+    matches!(ruleset, EXTENDED_RULESET | METEOR_RULESET | NATIONS_RULESET)
+}
+
+/// `execute()` of Extended, Meteor and Nations.
+pub fn execute_crewless(world: &mut World, ruleset: &str) {
+    info!("dynamic: executing {ruleset}");
+    // "No midrounds no latejoins".
+    if matches!(ruleset, EXTENDED_RULESET | NATIONS_RULESET)
+        && let Some(mut midround) = world.get_resource_mut::<super::midround::Midround>()
+    {
+        midround.to_spawn = [0; 3];
+    }
+    match ruleset {
+        METEOR_RULESET => crate::events::meteors::start_meteor_mode(
+            world,
+            crate::events::meteors::METEOR_MODE_DELAY_SECS,
+            crate::events::meteors::METEOR_MODE_RAMPUP_MINUTES,
+        ),
+        // Assistants stay out ("BARBARISM"), silicons are the United Nations.
+        NATIONS_RULESET => {
+            for department in super::separatist::NATIONS_DEPARTMENTS {
+                super::separatist::create_separatist_nation(world, Some(department), false, false);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -989,6 +1066,40 @@ mod tests {
         assert_eq!(blacklisted_jobs(&data, true), [1, 2, 3, 4]);
         // Without `PROTECT_ROLES_FROM_ANTAGONIST` only the blacklisted and mechanical ones.
         assert_eq!(blacklisted_jobs(&data, false), [3, 4]);
+    }
+
+    #[test]
+    fn crewless_rulesets_stop_midrounds_or_start_meteors() {
+        // Weight 0: the roll never picks them.
+        let mut rng = Rng::new(1);
+        for _ in 0..50 {
+            let picked = pick_roundstart_rulesets(4, 100, 4, &mut rng);
+            assert!(!picked.iter().any(|r| is_crewless(r)), "{picked:?}");
+        }
+        let mut world = World::new();
+        world.insert_resource(super::super::midround::Midround {
+            to_spawn: [2, 1, 3],
+            ..Default::default()
+        });
+        execute_crewless(&mut world, METEOR_RULESET);
+        assert_eq!(
+            world
+                .resource::<super::super::midround::Midround>()
+                .to_spawn,
+            [2, 1, 3]
+        );
+        assert!(
+            world
+                .get_resource::<crate::events::meteors::MeteorMode>()
+                .is_some_and(|m| m.start_at == crate::events::meteors::METEOR_MODE_DELAY_SECS)
+        );
+        execute_crewless(&mut world, EXTENDED_RULESET);
+        assert_eq!(
+            world
+                .resource::<super::super::midround::Midround>()
+                .to_spawn,
+            [0; 3]
+        );
     }
 
     #[test]

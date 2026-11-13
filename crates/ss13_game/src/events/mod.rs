@@ -570,6 +570,14 @@ pub fn controls() -> Vec<EventControl> {
             1,
             wizard::make_fake_explosion,
         )),
+        summon(c(
+            wizard::DEPARTMENT_REVOLT,
+            0,
+            0.0,
+            0,
+            1,
+            wizard::make_department_revolt,
+        )),
         needs(
             wizard::petsplosion_can_run,
             summon(c(

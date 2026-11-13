@@ -63,6 +63,7 @@ pub const RACE_SWAP: &str = "Race Swap";
 pub const MADNESS: &str = "Curse of Madness";
 pub const FAKE_EXPLOSION: &str = "Fake Nuclear Explosion";
 pub const PETSPLOSION: &str = "Petsplosion";
+pub const DEPARTMENT_REVOLT: &str = "Departmental Uprising";
 
 pub fn make_lava(_: &mut World) -> Box<dyn RoundEvent> {
     Box::new(Lava)
@@ -116,6 +117,20 @@ pub fn make_summon_guns(_: &mut World) -> Box<dyn RoundEvent> {
 }
 
 struct SummonGuns;
+
+pub fn make_department_revolt(_: &mut World) -> Box<dyn RoundEvent> {
+    Box::new(DepartmentRevolt)
+}
+
+/// `/datum/round_event/wizard/deprevolt`: a random department secedes, unannounced and
+/// dangerous (the admin setup's department and answers are not asked here).
+struct DepartmentRevolt;
+
+impl RoundEvent for DepartmentRevolt {
+    fn start(&mut self, world: &mut World, _: &mut EventState) {
+        crate::antag::separatist::create_separatist_nation(world, None, false, true);
+    }
+}
 
 impl RoundEvent for SummonGuns {
     fn start(&mut self, world: &mut World, _: &mut EventState) {

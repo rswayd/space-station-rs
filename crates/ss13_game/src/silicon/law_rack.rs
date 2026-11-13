@@ -415,6 +415,10 @@ impl LawRack {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LinkedRack(pub Entity);
 
+/// tg `no_law_rack_link`: the silicon never links to a rack (the separatist United Nations AI).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct NoLawRackLink;
+
 /// A timed rack step ([`Job::LawRack`]); `slot` is 0-based.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LawRackJob {
@@ -677,7 +681,10 @@ pub fn can_link_to(world: &World, rack: Entity, mob: Entity) -> bool {
         .get::<TilePos>(rack)
         .zip(world.get::<TilePos>(mob))
         .is_some_and(|(a, b)| a.z == b.z);
-    if !same_z || world.get::<LinkedRack>(mob).is_some() {
+    if !same_z
+        || world.get::<LinkedRack>(mob).is_some()
+        || world.get::<NoLawRackLink>(mob).is_some()
+    {
         return false;
     }
     if let Some(core) = world.get::<AiCore>(mob) {

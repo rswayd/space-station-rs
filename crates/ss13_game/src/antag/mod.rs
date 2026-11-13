@@ -32,6 +32,8 @@ pub mod brother;
 pub mod changeling;
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "server")]
+pub mod contractor;
 pub mod cult;
 #[cfg(feature = "server")]
 pub mod dynamic;
@@ -42,6 +44,8 @@ pub mod heretic;
 pub mod hud;
 #[cfg(feature = "server")]
 pub mod midround;
+#[cfg(feature = "server")]
+pub mod minions;
 #[cfg(feature = "server")]
 pub mod morph;
 #[cfg(feature = "server")]
@@ -58,6 +62,8 @@ pub mod revenant;
 pub mod revolution;
 #[cfg(feature = "server")]
 pub mod santa;
+#[cfg(feature = "server")]
+pub mod separatist;
 #[cfg(feature = "server")]
 pub mod slaughter;
 #[cfg(feature = "server")]
@@ -126,6 +132,9 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             santa::SantaPlugin,
             ashwalker::AshwalkerPlugin,
             voidwalker::VoidwalkerPlugin,
+            separatist::SeparatistPlugin,
+            minions::MinionsPlugin,
+            contractor::ContractorPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);

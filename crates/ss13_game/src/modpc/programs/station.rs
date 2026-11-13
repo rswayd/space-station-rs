@@ -273,6 +273,9 @@ fn screen(
         StationProgram::Robotact => {
             StationScreen::Robotact(Box::new(super::robotact::data(world, pc)))
         }
+        StationProgram::ContractUplink => {
+            StationScreen::Contractor(Box::new(super::contractor::data(world, pc)))
+        }
         // Launchers open their own window and never come to the front.
         StationProgram::BudgetOrders | StationProgram::ScienceHub => {
             StationScreen::Bots(Vec::new())
@@ -670,6 +673,7 @@ pub enum StationAct {
     /// NT Frontier.
     Paper(crate::science::scipaper::PaperAct),
     Robotact(super::robotact::RobotactAct),
+    Contractor(super::contractor::ContractAct),
 }
 
 impl StationAct {
@@ -689,6 +693,7 @@ impl StationAct {
             | Self::DeleteRequest(_) => &[BountyBoard],
             Self::Paper(_) => &[Frontier],
             Self::Robotact(_) => &[Robotact],
+            Self::Contractor(_) => &[ContractUplink],
         }
     }
 }
@@ -700,6 +705,9 @@ pub fn parse(action: &str, params: &UiParams) -> Option<Result<StationAct, UiRej
     }
     if let Some(act) = super::robotact::parse(action) {
         return Some(Ok(StationAct::Robotact(act)));
+    }
+    if let Some(act) = super::contractor::parse(action, params) {
+        return Some(act.map(StationAct::Contractor));
     }
     let text = |key: &str| params.get(key).unwrap_or_default().to_owned();
     Some(match action {
@@ -885,6 +893,7 @@ pub fn apply(
         StationAct::PayApplicant(r, a) => pay_applicant(world, client, pc, r, a),
         StationAct::DeleteRequest(r) => delete_request(world, client, pc, r),
         StationAct::Robotact(act) => super::robotact::apply(world, client, actor, pc, act),
+        StationAct::Contractor(act) => super::contractor::apply(world, client, actor, pc, act),
         StationAct::Paper(act) => {
             let out = crate::science::scipaper::apply(world, pc, &mut state.frontier, act);
             if let Some(line) = out.say {

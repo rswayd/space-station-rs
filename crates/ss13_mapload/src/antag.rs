@@ -504,7 +504,7 @@ pub const ABDUCTOR_RUNTIME_TYPES: [&str; 38] = [
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (see `docs/parity/antagonists/uplink.md`).
 // shortcut: a curated list; grow it as the items' mechanics land.
-pub const UPLINK_ITEMS: [&str; 126] = [
+pub const UPLINK_ITEMS: [&str; 129] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -550,6 +550,11 @@ pub const UPLINK_ITEMS: [&str; 126] = [
     "/datum/uplink_item/stealthy_weapons/sleepy_pen",
     // The failsafe code (`ss13_game::antag::uplink`; its item is abstract).
     "/datum/uplink_item/device_tools/failsafe",
+    // The contract kit and the contractor shop it unlocks (`ss13_game::antag::contractor`; the
+    // reroll's item is abstract).
+    "/datum/uplink_item/bundles_tc/contract_kit",
+    "/datum/uplink_item/contractor/reroll",
+    "/datum/uplink_item/contractor/pinpointer",
     // Not sold (`purchasable_from = NONE`): brings the raw telecrystal's prototype for
     // `buy_raw_tc`.
     "/datum/uplink_item/bundles_tc/telecrystal",
