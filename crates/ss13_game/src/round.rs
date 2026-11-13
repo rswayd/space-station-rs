@@ -242,6 +242,11 @@ impl Ticker {
         self.state
     }
 
+    /// tg `totalPlayersReady`: the ready players when the lobby last counted them.
+    pub fn ready_players(&self) -> u32 {
+        self.ready_players
+    }
+
     /// tg `start_now` verb: `Ok(true)` starts the round as soon as possible, `Ok(false)` cancels an
     /// earlier start and counts down 3 minutes; refused once the round is setting up.
     pub fn start_now(&mut self) -> Result<bool, &'static str> {

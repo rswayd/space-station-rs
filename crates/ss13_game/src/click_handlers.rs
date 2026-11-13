@@ -337,6 +337,7 @@
 //! | 3575 | `legcuffs::attack_hand` (an energy snare springs on the hand that touches it) |
 //! | 3585 | `cargo::black_market::ltsrbt_hand` (the LTSRBT opens and closes; right click: its window) |
 //! | 3595 | `furniture::fold_emergency_bed` (right click: an empty emergency bed folds into the hands) |
+//! | 3605 | `genetics::dna_vault` (the DNA vault's window) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -349,6 +350,7 @@
 //! | 25 | `weapons::special::sm_pre_attack` (the supermatter sword consumes an object or a turf) |
 //! | 35 | `weapons::special::powerfist_interaction` (a tank, wrench or screwdriver on a power-fist) |
 //! | 43 | `embedding::item_interaction` (a hemostat or wirecutters pluck what is embedded in the aimed bodypart) |
+//! | 45 | `genetics::dna_vault` (a DNA probe links to a vault, samples, uploads) |
 //! | 50 | `fishing::server::held_on_target` (casts, a fisher's clicks), `fishing::aquarium::item_interaction`, `fishing::mount::item_interaction` (a fish onto a trophy mount, its screwdriver), `fishing::catalog::analyze` (the fish analyzer) |
 //! | 59 | `deployable_turrets::item_interaction` (a wrench packs an HMG up) |
 //! | 79 | `gym::item_interaction` (punching bag wrench/crowbar right clicks, the loom) |

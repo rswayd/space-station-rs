@@ -363,6 +363,10 @@ pub enum Op {
     AutopsyMechanic,
     /// `basic/dissection`: research notes from a corpse.
     Dissection,
+    /// `basic/viral_bonding`: the patient's diseases become carried without symptoms.
+    ViralBonding,
+    /// `limb/bionecrosis`: a romerol tumour in the brain.
+    Bionecrosis,
 }
 
 /// The static part of an operation.

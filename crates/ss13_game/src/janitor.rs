@@ -658,6 +658,16 @@ pub fn expose_by(
                 crate::mobs::defense::hurt(world, target, DamageType::Brute, 1.5 * burn, None);
             }
         } else {
+            if living {
+                crate::medical::diseases::reagent_expose(
+                    world,
+                    target,
+                    &chem.def(r.id).path,
+                    volume,
+                    methods,
+                    touch_protection,
+                );
+            }
             crate::pyrotechnics::expose(
                 world,
                 &chem,

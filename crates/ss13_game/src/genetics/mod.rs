@@ -14,7 +14,9 @@
 // temperature damage has no resist traits). Add each with the system it needs.
 
 pub mod console;
+pub mod dna_vault;
 pub mod effects;
+pub mod mutation_toxin;
 
 use std::sync::Arc;
 
@@ -726,6 +728,7 @@ pub struct GeneticsServerPlugin;
 
 impl Plugin for GeneticsServerPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(dna_vault::DnaVaultPlugin);
         // Click chain hooks (`crate::click_handlers`).
         use crate::click_handlers::{AddClickHandler, ClickPhase};
         // tg `attack_hand` of the DNA console (its window) and scanner (open/close).

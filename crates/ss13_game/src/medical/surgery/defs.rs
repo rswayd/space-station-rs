@@ -135,6 +135,8 @@ impl Op {
             Self::Autopsy,
             Self::AutopsyMechanic,
             Self::Dissection,
+            Self::ViralBonding,
+            Self::Bionecrosis,
         ]);
         ops.extend(Bioware::ALL.map(Self::Bioware));
         ops
@@ -165,7 +167,8 @@ impl Op {
             | Self::InciseOrgans
             | Self::Amputate
             | Self::Autopsy
-            | Self::Dissection => Some(false),
+            | Self::Dissection
+            | Self::ViralBonding => Some(false),
             _ => None,
         }
     }
@@ -913,6 +916,48 @@ impl Op {
                     "пациент должен быть мёртвым",
                     "пациент ранее не должен подвергаться вскрытию",
                 ],
+                ..base
+            },
+            Self::ViralBonding => OpDef {
+                path: "/datum/surgery_operation/basic/viral_bonding",
+                name: "Вирусное связывание",
+                catalog_name: "Виропластика (Вирусное связывание)",
+                desc: "Создание симбиотической связи между пациентом и вирусом, которым он \
+                       заражён.",
+                time: 100.0,
+                flags: flags::LOCKED,
+                target: Target::Basic(TargetZone::Chest),
+                all_required: SKIN_OPEN | ORGANS_CUT,
+                implements: &[
+                    (Tool("cautery"), 1.0),
+                    (Tool("welder"), 2.0),
+                    (Path("/obj/item"), 3.33),
+                ],
+                tool_rec: "cautery",
+                required: &[
+                    "у пациента должен быть вирус для формирования связи",
+                    "пациент должен получить >1u Spaceacillin",
+                    "пациент должен получить >1u Virus Food",
+                    "пациент должен получить >1u Formaldehyde",
+                ],
+                ..base
+            },
+            Self::Bionecrosis => OpDef {
+                path: "/datum/surgery_operation/limb/bionecrosis",
+                name: "Вызвать бионекроз",
+                catalog_name: "Бионекропластика (Некротическое оживление)",
+                desc: "Введение реагентов, стимулирующих рост Ромерол-опухоли в мозге пациента.",
+                time: 50.0,
+                flags: flags::LOCKED,
+                all_required: SKIN_OPEN | BONE_SAWED,
+                any_blocked: VESSELS_UNCLAMPED,
+                implements: &[
+                    (Path("/obj/item/reagent_containers/syringe"), 1.0),
+                    (Path("/obj/item/pen"), 3.33),
+                ],
+                tool_rec: "syringe",
+                required: &["в конечности должен присутствовать мозг"],
+                blocked: &["в конечности не должно быть Ромерол-опухоли"],
                 ..base
             },
             Self::Bioware(kind) => bioware_def(kind, base),
