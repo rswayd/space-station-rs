@@ -129,6 +129,27 @@ impl ScanCondition {
         Self::Easy,
     ];
 
+    /// The `/datum/scan_condition` subtype.
+    pub fn type_path(self) -> &'static str {
+        match self {
+            Self::Nebula => "/datum/scan_condition/nebula",
+            Self::Pulsar => "/datum/scan_condition/pulsar",
+            Self::AsteroidBelt => "/datum/scan_condition/asteroid_belt",
+            Self::BlackHole => "/datum/scan_condition/black_hole",
+            Self::Easy => "/datum/scan_condition/easy",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Nebula => "Nebula",
+            Self::Pulsar => "Pulsar",
+            Self::AsteroidBelt => "Asteroid Belt",
+            Self::BlackHole => "Black Hole",
+            Self::Easy => "Easy Scan",
+        }
+    }
+
     pub fn description(self) -> &'static str {
         match self {
             Self::Nebula => {
@@ -1054,6 +1075,28 @@ impl SiteKind {
         Self::Junkyard,
     ];
 
+    /// The `/datum/exploration_site` subtype.
+    pub fn type_path(self) -> &'static str {
+        match self {
+            Self::AbandonedRefuelingStation => {
+                "/datum/exploration_site/abandoned_refueling_station"
+            }
+            Self::TraderPost => "/datum/exploration_site/trader_post",
+            Self::CargoWreck => "/datum/exploration_site/cargo_wreck",
+            Self::AlienSpaceship => "/datum/exploration_site/alien_spaceship",
+            Self::UnchartedPlanet => "/datum/exploration_site/uncharted_planet",
+            Self::AlienRuins => "/datum/exploration_site/alien_ruins",
+            Self::AsteroidBelt => "/datum/exploration_site/asteroid_belt",
+            Self::SpaceMine => "/datum/exploration_site/spacemine",
+            Self::Junkyard => "/datum/exploration_site/junkyard",
+        }
+    }
+
+    /// The type's `initial(name)`.
+    pub fn name(self) -> &'static str {
+        self.def().0
+    }
+
     /// `(name, description, band_info, site_traits, fluff_type)`.
     #[allow(clippy::type_complexity)]
     fn def(
@@ -1138,6 +1181,7 @@ impl SiteKind {
 #[derive(Clone, Debug)]
 pub struct Site {
     pub id: u32,
+    pub kind: SiteKind,
     pub name: String,
     pub description: String,
     pub distance: u32,
@@ -1154,6 +1198,25 @@ pub struct Site {
 }
 
 impl Site {
+    /// `/datum/experiment/exploration_scan/is_complete()` for this site: scanned with
+    /// `scan_type` (`point`/`deep`; anything else: any), of `site_type` and with `condition`
+    /// (empty: any).
+    pub fn fits_exploration(&self, site_type: &str, condition: &str, scan_type: &str) -> bool {
+        let scanned = match scan_type {
+            "deep" => self.deep_scan_complete,
+            "point" => self.point_scan_complete,
+            _ => true,
+        };
+        scanned
+            && (site_type.is_empty()
+                || crate::obj_damage::is_under(self.kind.type_path(), site_type))
+            && (condition.is_empty()
+                || self
+                    .conditions
+                    .iter()
+                    .any(|c| crate::obj_damage::is_under(c.type_path(), condition)))
+    }
+
     /// `display_name`.
     pub fn display_name(&self) -> &str {
         if self.revealed { &self.name } else { "Anomaly" }
@@ -1295,6 +1358,7 @@ impl Exploration {
         let (name, description, bands, traits, fluff_type) = kind.def();
         let mut site = Site {
             id: self.id(),
+            kind,
             name: name.to_owned(),
             description: description.to_owned(),
             distance: 1,
@@ -1497,5 +1561,22 @@ mod tests {
         assert_eq!(s.probe_names, ["Juno"]);
         assert_eq!(s.fluff["fluff_space"], ["a"]);
         assert!(s.planet_types[0].2);
+    }
+
+    #[test]
+    fn exploration_experiments_check_kind_condition_and_scan() {
+        let mut ex = Exploration::new(Strings::default(), Vec::new(), 7);
+        let mut site = ex.new_site(SiteKind::AsteroidBelt, 1);
+        site.conditions = vec![ScanCondition::BlackHole];
+        let belt = "/datum/exploration_site/asteroid_belt";
+        let hole = "/datum/scan_condition/black_hole";
+        assert!(!site.fits_exploration(belt, "", "point"));
+        site.point_scan_complete = true;
+        assert!(site.fits_exploration(belt, "", "point"));
+        assert!(!site.fits_exploration("/datum/exploration_site/junkyard", "", "point"));
+        assert!(!site.fits_exploration("", hole, "deep"));
+        site.deep_scan_complete = true;
+        assert!(site.fits_exploration("", hole, "deep"));
+        assert!(!site.fits_exploration("", "/datum/scan_condition/nebula", "deep"));
     }
 }

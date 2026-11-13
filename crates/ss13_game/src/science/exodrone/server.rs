@@ -15,8 +15,7 @@
 //! Timers are deadlines checked every tick ([`tick`]); the windows' data is built in
 //! [`refresh_views`] for consoles with an open window and copied by `ui_data`.
 // shortcut: no launcher fuel overlays, no supply pod for emergency landings (the drone appears
-// on the turf), no console alert screen, no `open_experiments` (exploration experiments are not
-// ported), no adventure images. The drone's cargo blacklist (tg `GLOB.blacklisted_cargo_types`,
+// on the turf), no console alert screen, no adventure images. The drone's cargo blacklist (tg `GLOB.blacklisted_cargo_types`,
 // its item entries) is checked at launch, also for the top level (tg's storage refuses those).
 
 use bevy::ecs::message::MessageCursor;
@@ -335,7 +334,16 @@ fn init_new(
         } else if is_under(path, CONTROL_CONSOLE) {
             commands.entity(e).insert(ControlConsole::default());
         } else if is_under(path, SCANNER_CONSOLE) {
-            commands.entity(e).insert(ScannerConsole::default());
+            // `post_machine_initialize`: an always active handler for exploration experiments.
+            commands.entity(e).insert((
+                ScannerConsole::default(),
+                crate::science::experi_scanner::ExperimentHandler {
+                    kind: crate::science::experi_scanner::HandlerKind::Exoscanner,
+                    parent_path: path.to_owned(),
+                    linked: true,
+                    selected: None,
+                },
+            ));
         } else if is_under(path, SCANNER) {
             commands.entity(e).insert(Exoscanner);
         }
@@ -1500,6 +1508,37 @@ fn resolve_scan(world: &mut World) {
             }
         }
     }
+    complete_exploration_experiments(world);
+}
+
+/// `/datum/experiment/exploration_scan` completion: every available one some site fits.
+// Not as in tg: there the console's always active handler is never actioned, so these never
+// complete; here every resolved scan checks them.
+pub fn complete_exploration_experiments(world: &mut World) {
+    use ss13_mapload::research::ExperimentKind;
+    let done: Vec<String> = {
+        let (Some(web), Some(db)) = (
+            world.get_resource::<crate::science::techweb::Techweb>(),
+            world.get_resource::<crate::science::techweb::ResearchDb>(),
+        ) else {
+            return;
+        };
+        let ex = world.resource::<Exploration>();
+        web.available_experiments
+            .iter()
+            .filter(|e| match &db.experiments[e.def].kind {
+                ExperimentKind::Exploration { scan_type, .. } => ex
+                    .sites
+                    .iter()
+                    .any(|s| s.fits_exploration(&e.site_type, &e.condition, scan_type)),
+                _ => false,
+            })
+            .map(|e| e.id.clone())
+            .collect()
+    };
+    for id in done {
+        crate::science::experi_scanner::complete_and_announce(world, &id);
+    }
 }
 
 /// The dishes' look (`update_icon_state`).
@@ -2199,6 +2238,7 @@ pub enum ScannerAct {
     StartPoint,
     StartDeep,
     ConfirmFail,
+    OpenExperiments,
 }
 
 impl ServerUi for ExoscannerConsoleUi {
@@ -2220,17 +2260,18 @@ impl ServerUi for ExoscannerConsoleUi {
             START_POINT_SCAN => ScannerAct::StartPoint,
             START_DEEP_SCAN => ScannerAct::StartDeep,
             CONFIRM_FAIL => ScannerAct::ConfirmFail,
+            OPEN_EXPERIMENTS => ScannerAct::OpenExperiments,
             _ => return Err(UiReject::UnknownAction),
         })
     }
 }
 
 fn scanner_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<ExoscannerConsoleUi>>>) {
-    let pending: Vec<(Entity, ScannerAct)> = acts
+    let pending: Vec<(Entity, Entity, Entity, ScannerAct)> = acts
         .read(world.resource::<Messages<UiActed<ExoscannerConsoleUi>>>())
-        .map(|a| (a.source, a.act.clone()))
+        .map(|a| (a.client, a.actor, a.source, a.act.clone()))
         .collect();
-    for (console, act) in pending {
+    for (client, actor, console, act) in pending {
         if world.get::<Unpowered>(console).is_some() {
             continue;
         }
@@ -2279,6 +2320,23 @@ fn scanner_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<Exoscan
             ScannerAct::ConfirmFail => {
                 if let Some(mut c) = world.get_mut::<ScannerConsole>(console) {
                     c.failed = false;
+                }
+            }
+            ScannerAct::OpenExperiments => {
+                if world
+                    .get::<crate::science::experi_scanner::ExperimentHandler>(console)
+                    .is_some()
+                {
+                    let name = world.get::<DmName>(console).map_or_else(String::new, |n| {
+                        crate::vending::plain_name(&n.name).to_owned()
+                    });
+                    let title = format!(
+                        "{} | Конфигурация Экспериментов",
+                        ss13_shared::capitalize(&name)
+                    );
+                    world.write_message(ss13_tgui::server::OpenUi::new::<
+                        crate::science::ExperimentConfigureUi,
+                    >(client, actor, console, title));
                 }
             }
         }

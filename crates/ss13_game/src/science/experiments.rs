@@ -14,7 +14,7 @@
 //! Ordnance experiments (`/datum/experiment/ordnance`, [`super::scipaper`]) are added like the
 //! others but only complete when a paper on them is published.
 // shortcut: experiments of the unsupported kinds (people, plants, materials, mechs, cytology,
-// fish, physical events, exploration: `ExperimentKind::Unsupported`) are never
+// fish, physical events: `ExperimentKind::Unsupported`) are never
 // added to the techweb, and a node that requires one counts it as done; port each with the system
 // its checks read.
 
@@ -89,6 +89,12 @@ pub struct Experiment {
     pub scanned: Vec<Scanned>,
     /// `scanning/points` `points`.
     pub points: u32,
+    /// `exploration_scan`: `required_site_type` and `required_condition` after
+    /// `random/New()` picked them (empty: any).
+    pub site_type: String,
+    pub condition: String,
+    /// `random/New()`'s name, replacing the type's.
+    pub rolled_name: Option<String>,
 }
 
 /// The points kinds (`/datum/experiment/scanning/points`).
@@ -156,13 +162,47 @@ impl Experiment {
                 picked += n;
             }
         }
-        Self {
+        let mut experiment = Self {
             def,
             id: d.id.clone(),
             scanned: vec![Scanned::default(); required.len()],
             required,
             points: 0,
+            site_type: String::new(),
+            condition: String::new(),
+            rolled_name: None,
+        };
+        if let ExperimentKind::Exploration {
+            site_type,
+            condition,
+            scan_type,
+            random_sites,
+            random_conditions,
+        } = &d.kind
+        {
+            let mut pick = |list: &[String], fixed: &String| {
+                if list.is_empty() {
+                    fixed.clone()
+                } else {
+                    list[rng.range(0, list.len() as u32 - 1) as usize].clone()
+                }
+            };
+            experiment.site_type = pick(random_sites.as_slice(), site_type);
+            experiment.condition = pick(random_conditions.as_slice(), condition);
+            if !random_sites.is_empty() || !random_conditions.is_empty() {
+                experiment.rolled_name = Some(exploration_name(
+                    scan_type,
+                    &experiment.site_type,
+                    &experiment.condition,
+                ));
+            }
         }
+        experiment
+    }
+
+    /// The name the windows and announcements show.
+    pub fn name<'a>(&'a self, def: &'a ExperimentDef) -> &'a str {
+        self.rolled_name.as_deref().unwrap_or(&def.name)
     }
 
     /// tg `is_complete()`.
@@ -170,8 +210,13 @@ impl Experiment {
         // `ordnance/is_complete`: `completed`, set only by publishing (which removes it); the
         // autopsies' too, set by the autopsy that completes them
         // (`crate::medical::surgery::autopsy`).
+        // Exploration scans are checked against the sites when a scan resolves
+        // (`super::exodrone::server`).
         if super::scipaper::is_ordnance(&def.id)
-            || matches!(def.kind, ExperimentKind::Autopsy { .. })
+            || matches!(
+                def.kind,
+                ExperimentKind::Autopsy { .. } | ExperimentKind::Exploration { .. }
+            )
         {
             return false;
         }
@@ -326,6 +371,28 @@ impl Experiment {
     }
 }
 
+/// `exploration_scan/random/New()`'s name: "Point scan of asteroid belt affected by Nebula".
+// Not as in tg: its `Join("")` drops the spaces between the parts.
+fn exploration_name(scan_type: &str, site_type: &str, condition: &str) -> String {
+    use super::exodrone::sites::{ScanCondition, SiteKind};
+    let mut parts = vec![format!("{scan_type} scan of")];
+    parts.push(
+        SiteKind::ALL
+            .iter()
+            .find(|k| k.type_path() == site_type)
+            .map_or("site", |k| k.name())
+            .to_owned(),
+    );
+    if let Some(c) = ScanCondition::ALL
+        .iter()
+        .find(|c| c.type_path() == condition)
+    {
+        // `\the` before a proper name (capitalised) is dropped.
+        parts.push(format!("affected by {}", c.name()));
+    }
+    ss13_shared::capitalize(&parts.join(" "))
+}
+
 /// The experiment can be performed here (see the module shortcut).
 pub fn performable(db: &ResearchDb, id: &str) -> bool {
     db.experiment_index
@@ -372,10 +439,13 @@ impl Techweb {
     /// tg `complete_experiment`: completed, the refund of a skipped discount and the points
     /// reward. Returns the announcement.
     pub fn complete_experiment(&mut self, db: &ResearchDb, id: &str) -> String {
+        let rolled = self.experiment(id).and_then(|e| e.rolled_name.clone());
         self.available_experiments.retain(|e| e.id != id);
         self.completed_experiments.insert(id.to_owned());
         let def = db.experiment_index.get(id).map(|&i| &db.experiments[i]);
-        let name = def.map_or(id, |d| d.name.as_str());
+        let name = rolled
+            .as_deref()
+            .unwrap_or_else(|| def.map_or(id, |d| d.name.as_str()));
         let mut text = format!("{name} has been completed");
         let refund = self.skipped_experiments.get(id).copied().unwrap_or(0.0);
         if refund > 0.0 {
@@ -584,5 +654,30 @@ mod tests {
         assert_eq!(declension_ru(12, "о", "а", "ов"), "ов");
         assert_eq!(percent(0.98), "98");
         assert_eq!(percent(0.995), "99.5");
+    }
+
+    #[test]
+    fn random_exploration_experiments_pick_and_name_their_target() {
+        let mut db = db();
+        db.experiments[0].kind = ExperimentKind::Exploration {
+            site_type: String::new(),
+            condition: String::new(),
+            scan_type: "point".into(),
+            random_sites: vec![],
+            random_conditions: vec!["/datum/scan_condition/nebula".into()],
+        };
+        let x = Experiment::new(&db, 0, &mut ExperimentRng::new(3));
+        assert_eq!(x.condition, "/datum/scan_condition/nebula");
+        assert!(x.site_type.is_empty());
+        assert_eq!(
+            x.name(&db.experiments[0]),
+            "Point scan of site affected by Nebula"
+        );
+        // Never completed by `is_complete`: the scans check them.
+        assert!(!x.is_complete(&db.experiments[0]));
+        assert_eq!(
+            exploration_name("deep", "/datum/exploration_site/junkyard", ""),
+            "Deep scan of space junk field"
+        );
     }
 }

@@ -783,7 +783,16 @@ fn scan_configuration(data: &ExoscannerData) -> impl Scene + use<> {
                 Text(cost)
             ]
             --
-            @Section { @title: "Configure Targeted Scans", @fill: true, @scrollable: true }
+            @Section {
+                @title: "Configure Targeted Scans",
+                @fill: true,
+                @scrollable: true,
+                @buttons: bsn! {
+                    @ss13_ui_kit::Button { @icon: "tasks", @content: "View Experiments" }
+                    Act({OPEN_EXPERIMENTS.to_owned()})
+                    Name("exoscanner: experiments")
+                },
+            }
             Children [ {sites} ]
         ]
     }

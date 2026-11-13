@@ -53,6 +53,7 @@ pub const SCANNER: &str = "/obj/item/experi_scanner";
 pub const DESTRUCTIVE_SCANNER: &str = "/obj/machinery/destructive_scanner";
 const SCANNING: &str = "/datum/experiment/scanning";
 const PHYSICAL: &str = "/datum/experiment/physical";
+const EXPLORATION: &str = "/datum/experiment/exploration_scan";
 /// The handheld scan's `do_after`, deciseconds.
 const SCAN_DELAY_DS: f32 = 10.0;
 /// `start_closing` -> `start_scanning` -> `finish_scanning` -> `open`, seconds.
@@ -69,6 +70,9 @@ pub enum HandlerKind {
     Handheld,
     /// The destructive scanner: scanning experiments, a start button.
     Destructive,
+    /// The scanner array console: exploration experiments, always active (completed by the
+    /// scans, `crate::science::exodrone::server`).
+    Exoscanner,
 }
 
 /// tg `/datum/component/experiment_handler`.
@@ -201,6 +205,7 @@ pub fn is_compatible(
     let (allowed, disallowed): (&[&str], u32) = match handler.kind {
         HandlerKind::Handheld => (&[SCANNING, PHYSICAL], TRAIT_DESTRUCTIVE),
         HandlerKind::Destructive => (&[SCANNING], 0),
+        HandlerKind::Exoscanner => (&[EXPLORATION], 0),
     };
     def.traits & disallowed == 0
         && (def.allowed_experimentors.is_empty()
@@ -366,7 +371,9 @@ fn final_checks(world: &mut World, handler: Entity, kind: &ExperimentKind, targe
             }
             true
         }
-        ExperimentKind::Unsupported | ExperimentKind::Autopsy { .. } => false,
+        ExperimentKind::Unsupported
+        | ExperimentKind::Autopsy { .. }
+        | ExperimentKind::Exploration { .. } => false,
     }
 }
 
@@ -640,6 +647,7 @@ impl ServerUi for ExperimentConfigureUi {
         (db, web, servers): &SystemParamItem<'_, '_, ConfigureParams>,
     ) -> ExperimentConfigureData {
         let mut data = ExperimentConfigureData {
+            always_active: handler.kind == HandlerKind::Exoscanner,
             has_start_callback: handler.kind == HandlerKind::Destructive,
             ..default()
         };
@@ -675,7 +683,7 @@ impl ServerUi for ExperimentConfigureUi {
                 let def = &db.experiments[e.def];
                 ExperimentInfo {
                     path: e.id.clone(),
-                    name: def.name.clone(),
+                    name: e.name(def).to_owned(),
                     description: def.description.clone(),
                     tag: tag(def),
                     performance_hint: def.performance_hint.clone(),

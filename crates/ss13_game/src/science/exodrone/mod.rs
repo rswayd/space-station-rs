@@ -283,3 +283,4 @@ pub const START_WIDE_SCAN: &str = "start_wide_scan";
 pub const START_POINT_SCAN: &str = "start_point_scan";
 pub const START_DEEP_SCAN: &str = "start_deep_scan";
 pub const CONFIRM_FAIL: &str = "confirm_fail";
+pub const OPEN_EXPERIMENTS: &str = "open_experiments";
