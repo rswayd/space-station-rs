@@ -7,8 +7,9 @@
 //! origin and the sound at its tile offset, scaled down so rodio's own `1/d²` attenuation never
 //! applies: the server already attenuated the volume as tg does.
 //!
-//! `SS13_VOLUME` (0-100, default 100) is the master volume; the Escape menu sets it and the
-//! volume of each kind.
+//! The master volume and the volume of each kind come from the client settings file
+//! ([`crate::client_settings`]; `SS13_VOLUME`, 0-100, when the file has no master volume); the
+//! Escape menu sets them and they are saved back.
 //!
 //! A sound datum ([`ChannelSoundReceived`]) on a numbered channel (the lobby music, jukeboxes,
 //! reserved channels) replaces the one playing there, or stops it; an update only changes its
@@ -18,8 +19,6 @@
 //! Every sound file (13 MB on MetaStation's assets) is read in the background at startup
 //! ([`preload`]); a sound played before that finishes is read on the spot, as before (a cold
 //! read took ~10 ms of the frame).
-// shortcut: the volumes are not saved (the next launch starts from `SS13_VOLUME` and the
-// preferences' defaults); persist them with the first client settings file.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -86,6 +85,34 @@ impl SoundVolumes {
     }
 }
 
+/// The settings key of the master volume, in percent.
+pub const MASTER_KEY: &str = "volume.master";
+
+/// The settings key of a kind's volume, in percent.
+pub fn volume_key(category: SoundCategory) -> String {
+    format!("volume.{}", category.key())
+}
+
+/// Saves the volumes when the Escape menu changes them.
+fn persist_volumes(
+    global: Res<GlobalVolume>,
+    volumes: Res<SoundVolumes>,
+    mut settings: ResMut<crate::client_settings::ClientSettings>,
+    time: Res<Time<Real>>,
+) {
+    if !global.is_changed() && !volumes.is_changed() {
+        return;
+    }
+    let now = time.elapsed_secs_f64();
+    let master = (global.volume.to_linear() * 100.0)
+        .round()
+        .clamp(0.0, 100.0) as u32;
+    settings.set(MASTER_KEY, master, now);
+    for category in SoundCategory::PREFERENCES {
+        settings.set(&volume_key(category), volumes.get(category), now);
+    }
+}
+
 /// A playing sound: its kind and the server's volume (0-1) before the player's volume of it.
 #[derive(Component, Clone, Copy, Debug)]
 struct PlayedSound {
@@ -120,15 +147,32 @@ struct Preloading(Task<Vec<(String, Vec<u8>)>>);
 
 impl Plugin for SoundClientPlugin {
     fn build(&self, app: &mut App) {
-        let master = std::env::var("SS13_VOLUME")
-            .ok()
-            .and_then(|v| v.parse::<f32>().ok())
+        if !app.is_plugin_added::<crate::client_settings::ClientSettingsPlugin>() {
+            app.add_plugins(crate::client_settings::ClientSettingsPlugin);
+        }
+        let settings = app
+            .world()
+            .resource::<crate::client_settings::ClientSettings>();
+        let master = settings
+            .parsed::<f32>(MASTER_KEY)
+            .or_else(|| {
+                std::env::var("SS13_VOLUME")
+                    .ok()
+                    .and_then(|v| v.parse::<f32>().ok())
+            })
             .map_or(1.0, |v| (v / 100.0).clamp(0.0, 1.0));
+        let mut volumes = SoundVolumes::default();
+        for category in SoundCategory::PREFERENCES {
+            if let Some(percent) = settings.parsed::<u8>(&volume_key(category)) {
+                volumes.set(category, percent);
+            }
+        }
         app.add_audio_source::<ProcessedSound>()
             .insert_resource(GlobalVolume::new(Volume::Linear(master)))
             .init_resource::<MutedUntil>()
             .init_resource::<ChannelPlayers>()
-            .init_resource::<SoundVolumes>()
+            .insert_resource(volumes)
+            .add_systems(Update, persist_volumes)
             .insert_resource(SoundFiles {
                 root: self.asset_root.join(SOUND_DIR),
                 loaded: HashMap::new(),

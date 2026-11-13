@@ -573,6 +573,7 @@ impl Plugin for TguiClientPlugin {
             .add_observer(clear_local)
             .add_observer(crate::interfaces::key_combo::client_side::capture_combo)
             .add_plugins(crate::interfaces::color_picker::client_side::plugin)
+            .add_plugins(crate::slider::plugin)
             .add_observer(local_on_input)
             .add_observer(local_on_number)
             .add_observer(send_act)

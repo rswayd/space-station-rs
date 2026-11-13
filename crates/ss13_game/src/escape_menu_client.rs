@@ -14,7 +14,7 @@ use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::protocol::{ClientIntent, SoundCategory};
 use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::UiInterface;
-use ss13_tgui::client::{AppTguiClientExt, ClientUi, ClientWindow, SetLocal, UiLocalState};
+use ss13_tgui::client::{AppTguiClientExt, ClientUi, ClientWindow, UiLocalState};
 use ss13_ui_kit::prelude::*;
 
 use crate::escape_menu::*;
@@ -92,7 +92,7 @@ fn escape_key(
 
 /// The menu's [`UiLocalState`] key for the master volume, in percent.
 const LOCAL_VOLUME: &str = "volume";
-const VOLUME_STEP: u32 = 10;
+const VOLUME_STEP: u32 = 5;
 
 /// The master volume, in percent.
 fn volume_percent(global: &GlobalVolume) -> u32 {
@@ -104,8 +104,6 @@ fn volume_percent(global: &GlobalVolume) -> u32 {
 /// The menu's volume buttons set [`LOCAL_VOLUME`]; this applies it to [`GlobalVolume`] and to
 /// the sounds already playing (bevy reads `GlobalVolume` only when a sound starts). A freshly
 /// opened menu starts from the current volume.
-// shortcut: not saved; the next launch starts from `SS13_VOLUME` again. Persist it with the
-// first client settings file.
 fn sync_volume(
     mut menus: Query<(&mut ClientWindow, &mut UiLocalState)>,
     mut global: ResMut<GlobalVolume>,
@@ -167,26 +165,24 @@ fn sync_kind_volumes(
     }
 }
 
-/// A `−`/`+` button that sets the menu's volume to `value` percent.
-fn volume_button(icon: &'static str, tooltip: &'static str, value: u32) -> impl Scene + use<> {
-    key_volume_button(LOCAL_VOLUME.to_owned(), icon, tooltip, value)
-}
-
-/// A `−`/`+` button that sets the volume under `key` to `value` percent.
-fn key_volume_button(
-    key: String,
-    icon: &'static str,
-    tooltip: &'static str,
-    value: u32,
-) -> impl Scene + use<> {
-    let set = SetLocal {
+/// A volume slider writing `key` (0-100, steps of 5) with its percent beside it.
+fn volume_slider(key: String, value: u32) -> impl Scene + use<> {
+    let slider = EntityScene(ss13_tgui::slider::slider(
         key,
-        value: value.to_string(),
-        rerender: true,
-    };
+        value as f32,
+        0.0,
+        100.0,
+        VOLUME_STEP as f32,
+    ));
+    let shown = format!("{value}%");
     bsn! {
-        @ss13_ui_kit::Button { @icon: icon, @tooltip: tooltip, @compact: true }
-        set
+        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(8) }
+        Children [
+            {slider}
+            --
+            Node { width: px(36), justify_content: JustifyContent::FlexEnd }
+            Children [ Text(shown) ]
+        ]
     }
 }
 
@@ -194,7 +190,7 @@ fn line(text: String) -> impl Scene + use<> {
     bsn! { Node Children [ Text(text) ] }
 }
 
-/// One kind's volume: its preference name, `−`, the percent, `+`.
+/// One kind's volume: its preference name and its slider.
 fn kind_volume_row(category: SoundCategory, local: &UiLocalState) -> impl Scene + use<> {
     let key = kind_key(category);
     let value = local
@@ -202,26 +198,11 @@ fn kind_volume_row(category: SoundCategory, local: &UiLocalState) -> impl Scene 
         .parse::<u32>()
         .unwrap_or_else(|_| u32::from(category.default_percent()))
         .min(100);
-    let quieter = EntityScene(key_volume_button(
-        key.clone(),
-        "volume-low",
-        "Тише",
-        value.saturating_sub(VOLUME_STEP),
-    ));
-    let louder = EntityScene(key_volume_button(
-        key,
-        "volume-high",
-        "Громче",
-        (value + VOLUME_STEP).min(100),
-    ));
-    let shown = EntityScene(line(format!("{value}%")));
+    let slider = EntityScene(volume_slider(key, value));
     let label = category.label().to_owned();
     bsn! {
         @LabeledListItem { @label: label }
-        Children [
-            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6) }
-            Children [ {quieter} -- {shown} -- {louder} ]
-        ]
+        Children [ {slider} ]
     }
 }
 
@@ -253,17 +234,7 @@ fn menu(data: &EscapeMenuData, local: &UiLocalState) -> impl Scene + use<> {
         .parse::<u32>()
         .unwrap_or(100)
         .min(100);
-    let quieter = EntityScene(volume_button(
-        "volume-low",
-        "Тише",
-        volume.saturating_sub(VOLUME_STEP),
-    ));
-    let louder = EntityScene(volume_button(
-        "volume-high",
-        "Громче",
-        (volume + VOLUME_STEP).min(100),
-    ));
-    let volume = EntityScene(line(format!("{volume}%")));
+    let volume = EntityScene(volume_slider(LOCAL_VOLUME.to_owned(), volume));
     let kinds: Vec<_> = SoundCategory::PREFERENCES
         .into_iter()
         .map(|category| kind_volume_row(category, local))
@@ -283,10 +254,7 @@ fn menu(data: &EscapeMenuData, local: &UiLocalState) -> impl Scene + use<> {
                     Children [ {players} ]
                     --
                     @LabeledListItem { @label: "Громкость" }
-                    Children [
-                        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6) }
-                        Children [ {quieter} -- {volume} -- {louder} ]
-                    ]
+                    Children [ {volume} ]
                 ]
             ]
             --

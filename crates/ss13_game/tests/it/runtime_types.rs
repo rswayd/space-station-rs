@@ -313,6 +313,8 @@ fn game_sound_literals_are_converted() {
     let mut sources = Vec::new();
     read_sources(&crates.join("ss13_game/src"), &mut sources);
     read_sources(&crates.join("ss13_admin/src"), &mut sources);
+    // The emotes' sounds (`ss13_chat::emote`), the game plays them.
+    read_sources(&crates.join("ss13_chat/src"), &mut sources);
     let mut missing = BTreeSet::new();
     for s in &sources {
         for (start, _) in s.text.match_indices('"') {

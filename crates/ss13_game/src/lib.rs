@@ -255,6 +255,8 @@ pub mod click_handlers;
 pub mod client;
 #[cfg(feature = "client")]
 pub mod client_keys;
+#[cfg(feature = "client")]
+pub mod client_settings;
 #[cfg(feature = "server")]
 pub mod closets;
 pub mod clothing;

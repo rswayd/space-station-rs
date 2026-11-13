@@ -835,10 +835,121 @@ pub fn tongue_sounds(
     Some(files)
 }
 
-/// tg `get_sound`: the tongue's, then the emote's own (`sounds_by_mobtype` of `roar`: adults).
+/// tg `sounds_by_mobtype` of `/mob/living/carbon/human` (by gender), with BandaStation's
+/// additions (`modular_bandastation/emote_panel/code/human.dm`): what a human without a species
+/// tongue sound makes. Sigh and snore are the `SFX_*` keys.
+pub fn human_sounds(female: bool, key: &str) -> Option<&'static [&'static str]> {
+    let g = |f: &'static [&'static str], m: &'static [&'static str]| if female { f } else { m };
+    Some(match key {
+        "gasp" => g(
+            &[
+                "sound/mobs/humanoids/human/gasp/gasp_female1.ogg",
+                "sound/mobs/humanoids/human/gasp/gasp_female2.ogg",
+                "sound/mobs/humanoids/human/gasp/gasp_female3.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/gasp_female_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/gasp_female_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/gasp_female_3.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/gasp_female_4.ogg",
+            ],
+            &[
+                "sound/mobs/humanoids/human/gasp/gasp_male1.ogg",
+                "sound/mobs/humanoids/human/gasp/gasp_male2.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/gasp_male_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/gasp_male_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/gasp_male_3.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/gasp_male_4.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/gasp_male_5.ogg",
+            ],
+        ),
+        "laugh" => g(LAUGH_F, LAUGH_M),
+        "sneeze" => g(SNEEZE_F, SNEEZE_M),
+        "cough" => g(COUGH_F, COUGH_M),
+        "scream" => g(SCREAM_F, SCREAM_M),
+        "sigh" => g(SIGH_F, SIGH_M),
+        "cry" => g(CRY_F, CRY_M),
+        "giggle" => g(
+            &[
+                "modular_bandastation/emote_panel/audio/human/female/giggle_female_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/giggle_female_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/giggle_female_3.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/giggle_female_4.ogg",
+            ],
+            &[
+                "modular_bandastation/emote_panel/audio/human/male/giggle_male_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/giggle_male_2.ogg",
+            ],
+        ),
+        "yawn" => g(
+            &[
+                "modular_bandastation/emote_panel/audio/human/female/yawn_female_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/yawn_female_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/yawn_female_3.ogg",
+            ],
+            &[
+                "modular_bandastation/emote_panel/audio/human/male/yawn_male_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/yawn_male_2.ogg",
+            ],
+        ),
+        "choke" => g(
+            &[
+                "modular_bandastation/emote_panel/audio/human/female/choke_female_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/choke_female_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/choke_female_3.ogg",
+            ],
+            &[
+                "modular_bandastation/emote_panel/audio/human/male/choke_male_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/choke_male_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/choke_male_3.ogg",
+            ],
+        ),
+        "moan" => g(
+            &[
+                "modular_bandastation/emote_panel/audio/human/female/moan_female_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/moan_female_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/female/moan_female_3.ogg",
+            ],
+            &[
+                "modular_bandastation/emote_panel/audio/human/male/moan_male_1.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/moan_male_2.ogg",
+                "modular_bandastation/emote_panel/audio/human/male/moan_male_3.ogg",
+            ],
+        ),
+        "sniff" => g(
+            &["sound/mobs/humanoids/human/sniff/female_sniff.ogg"],
+            &["sound/mobs/humanoids/human/sniff/male_sniff.ogg"],
+        ),
+        "sniffle" => g(
+            &["modular_bandastation/emote_panel/audio/human/female/sniff_female.ogg"],
+            &["modular_bandastation/emote_panel/audio/human/male/sniff_male.ogg"],
+        ),
+        "snore" => g(&["snore_female"], &["snore_male"]),
+        "clap" => &[
+            "sound/mobs/humanoids/human/clap/clap1.ogg",
+            "sound/mobs/humanoids/human/clap/clap2.ogg",
+            "sound/mobs/humanoids/human/clap/clap3.ogg",
+            "sound/mobs/humanoids/human/clap/clap4.ogg",
+        ],
+        "snap" => &[
+            "sound/mobs/humanoids/human/snap/fingersnap1.ogg",
+            "sound/mobs/humanoids/human/snap/fingersnap2.ogg",
+        ],
+        "whistle" => &[
+            "sound/mobs/humanoids/human/whistle/whistle1.ogg",
+            "modular_bandastation/emote_panel/audio/whistle.ogg",
+        ],
+        "hiss" => &["sound/mobs/humanoids/human/hiss/human_hiss.ogg"],
+        _ => return None,
+    })
+}
+
+/// tg `get_sound`: the tongue's, then a human's `sounds_by_mobtype` ([`human_sounds`]), then
+/// the emote's own (`sounds_by_mobtype` of `roar`: adults).
 fn sound_of(emote: &Emote, user: &EmoteUser) -> Option<EmoteSound> {
     let files = (user.mob == EmoteMob::Human)
-        .then(|| tongue_sounds(user.species, user.female, emote.key))
+        .then(|| {
+            tongue_sounds(user.species, user.female, emote.key)
+                .or_else(|| human_sounds(user.female, emote.key))
+        })
         .flatten()
         .or_else(|| {
             let own = !emote.sounds.is_empty()
@@ -1021,6 +1132,33 @@ mod tests {
     }
 
     #[test]
+    fn humans_gasp_and_scream_by_gender_and_a_species_tongue_comes_first() {
+        let files = |act: &str, u: &EmoteUser| match run_as(act, u) {
+            EmoteOutcome::Run { sound, .. } => sound.map(|s| s.files),
+            other => panic!("{other:?}"),
+        };
+        let male = HUMAN_USER;
+        let female = EmoteUser {
+            female: true,
+            ..HUMAN_USER
+        };
+        let gasp = files("gasp", &male).expect("a human gasps aloud");
+        assert!(gasp.contains(&"sound/mobs/humanoids/human/gasp/gasp_male1.ogg"));
+        let gasp_f = files("gasp", &female).unwrap();
+        assert!(gasp_f.contains(&"sound/mobs/humanoids/human/gasp/gasp_female1.ogg"));
+        assert!(files("scream", &male).unwrap().contains(&SCREAM_M[0]));
+        let lizard = EmoteUser {
+            species: EmoteSpecies::Lizard,
+            ..HUMAN_USER
+        };
+        assert!(
+            files("scream", &lizard).unwrap()[0].contains("lizard_scream"),
+            "the tongue's sound wins"
+        );
+        assert_eq!(files("smile", &male), None);
+    }
+
+    #[test]
     fn emotes_follow_tg() {
         let h = &HUMAN_USER;
         assert_eq!(ran(run_as("scream", h)), "кричит!");
@@ -1180,8 +1318,11 @@ mod tests {
             sound(run_as("scream", &lizard)).map(|s| s.files.len()),
             Some(3)
         );
-        // A plain human's common emotes stay silent here.
-        assert_eq!(sound(run_as("scream", &HUMAN_USER)), None);
+        // A plain human screams with tg's human sounds (`sounds_by_mobtype`).
+        assert_eq!(
+            sound(run_as("scream", &HUMAN_USER)).map(|s| s.files),
+            Some(SCREAM_M)
+        );
         assert_eq!(
             tongue_sounds(EmoteSpecies::Moth, false, "deathgasp"),
             Some(&["sound/mobs/humanoids/moth/moth_death.ogg"][..])

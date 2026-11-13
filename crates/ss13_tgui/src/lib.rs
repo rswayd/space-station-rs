@@ -23,6 +23,8 @@ pub mod prompt;
 pub mod samples;
 #[cfg(feature = "server")]
 pub mod server;
+#[cfg(feature = "client")]
+pub mod slider;
 
 /// A tgui interface: the name and data shapes both sides agree on.
 pub trait UiInterface: Send + Sync + 'static {
