@@ -1177,7 +1177,6 @@ mod tests {
         );
     }
 
-    #[test]
     /// A laser (400 px/s) seen at 20 Hz: the tile and the sub-tile offset change together, the
     /// offset jumping back by a tile; with the tile a frame late, then the offset a frame late,
     /// the drawn point still only goes forward, and keeps up.

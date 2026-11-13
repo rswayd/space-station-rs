@@ -63,7 +63,7 @@ use ss13_mapload::{
     Areas, DEFAULT_AREA, DEFAULT_TURF, DmAtom, DmDockingPort, DmName, DmObj, DmPower, IconIndex,
     MapLoadPlugin, MapLoadReport, MapSeed, ShuttleTemplates, Turf,
 };
-use ss13_shared::{Appearance, Dir, Facing, LightSource, TilePos};
+use ss13_shared::{Appearance, Dir, Facing, TilePos};
 use ss13_world::SpatialIndex;
 
 use crate::announce::{
@@ -1671,7 +1671,9 @@ fn shuttle_rotate(world: &mut World, e: Entity, rotation: i32) {
         .unwrap_or(Dir::South);
     crate::door_structures::face(world, e, angle_dir(angle(dir) + rotation));
     let turns = rotation.rem_euclid(360) / 90;
-    if let Some(mut light) = world.get_mut::<LightSource>(e) {
+    if let Some(mut optics) = world.get_mut::<ss13_shared::Optics>(e)
+        && let Some(light) = optics.light.as_mut()
+    {
         light.dir = angle_dir(angle(light.dir) + rotation);
         let [x, y] = turn_offset([light.offset[0].into(), light.offset[1].into()], turns);
         light.offset = [x as i8, y as i8];
