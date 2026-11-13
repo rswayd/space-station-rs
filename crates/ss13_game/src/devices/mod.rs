@@ -132,6 +132,8 @@ pub enum DeviceJob {
     RepairClock(Entity),
     /// The stealing hand taking these shoes ([`hand_items`]).
     StealShoes(Entity),
+    /// A noogie's start (`iteration` 0, `first`) or its next round ([`hand_items`]).
+    Noogie { iteration: u32, first: bool },
 }
 
 /// The end of a [`DeviceJob`].
@@ -147,6 +149,9 @@ pub fn complete_job(
         DeviceJob::UnsealDoor => door_seal::complete_unseal(world, mob, target),
         DeviceJob::RepairClock(clock) => table_clock::complete_repair(world, mob, clock),
         DeviceJob::StealShoes(shoes) => hand_items::complete_steal(world, mob, target, shoes),
+        DeviceJob::Noogie { iteration, first } => {
+            hand_items::noogie_round(world, client, mob, target, iteration, first);
+        }
     }
 }
 

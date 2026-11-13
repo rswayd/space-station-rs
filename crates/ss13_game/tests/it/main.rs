@@ -68,6 +68,7 @@ mod grenades;
 mod guardians;
 mod gulag;
 mod guns;
+mod hand_items;
 mod harness;
 mod heretic;
 mod holodeck;

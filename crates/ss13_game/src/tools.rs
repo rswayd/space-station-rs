@@ -672,6 +672,9 @@ fn run_do_afters(world: &mut World) {
             if let Job::AgentCardScan { .. } = action.job {
                 crate::antag::syndie_items::scan_interrupted(world, mob, action.target);
             }
+            if let Job::Device(crate::devices::DeviceJob::Noogie { .. }) = action.job {
+                crate::devices::hand_items::noogie_interrupted(world, mob, action.target);
+            }
             if let Job::Clothing(crate::clothing::ClothingJob::Laces { shoes, job }) = action.job {
                 crate::clothing::laces::interrupted(world, mob, shoes, job);
             }
