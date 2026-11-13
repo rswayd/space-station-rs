@@ -56,3 +56,9 @@ Set Security Level, вызов/отзыв/отключение шаттла, в�
 
 - **Код:** [`adminshuttle.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminshuttle.dm#L1), [`ADMIN_VERB(change_sec_level)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/adminevents.dm#L152)
 - **Статус в ss13-rs:** 🟡 частично — `crates/ss13_admin/src/server.rs`, `crates/ss13_admin/src/client.rs` (вкладка игры: «Уровень угрозы», `AdminRequest::SetSecurityLevel`, `R_ADMIN`); нет вызова/отзыва/отключения шаттла, враждебной среды, менеджера и событий шаттла
+
+### Панель киборга (BorgPanel)
+Админская панель киборга: ячейка и заряд, модель, апгрейды, законы, связь с ИИ, флаги (emag, lockdown, scrambledcodes), каналы радио. Перенесено из silicon/cyborgs.md «NTOS Robotact и BorgPanel».
+
+- **Код:** [`/datum/borgpanel`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/admin/verbs/borgpanel.dm#L6); tgui: [`BorgPanel.jsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/BorgPanel.jsx)
+- **Статус в ss13-rs:** ❌ нет — нужны админские окна над чужими мобами в `crates/ss13_admin`; состояние киборга для неё есть (`crates/ss13_game/src/silicon/chassis.rs` `Chassis`, `cyborg.rs` `Cyborg`, `borg_upgrades.rs`)
