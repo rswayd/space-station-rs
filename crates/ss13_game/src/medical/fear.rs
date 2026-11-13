@@ -15,7 +15,7 @@
 //! - A hug calms (`comfort_owner`, [`on_hug`]); a hug from something the mob fears scares it.
 // shortcut: no personalities (fear multiplier 1), no `TRAIT_FEARLESS` or
 // `TRAIT_MIND_TEMPORARILY_GONE` (no sources), no examine or mood-check lines, no tunnel vision,
-// heartbeat loop or panic breathing (`losebreath`), no stagger or spooked slowdown, no forced
+// heartbeat loop or panic `losebreath`, no stagger or spooked slowdown, no forced
 // "AAAAH!!" say and no `jump` emote (not in the chat's emotes), no phobia highlight in the
 // heard line or small-voice span on the said one (the stutter only), no hug block (the hug
 // still lands); vomiting is not delayed by 5 s; the scary word reacts at once (tg: 1 s later);
@@ -209,6 +209,7 @@ pub fn tick(world: &mut World, mob: Entity, secs: f32, rng: &mut CombatRng) {
     }
     let amount = panic(world, mob, &mut fear, now, unconscious, secs, rng);
     adjustment += add(&mut fear, amount);
+    panic_breathing(world, mob, fear.attack_until.is_some());
     if !fear.phobias.is_empty() && !unconscious {
         startle(world, mob, &mut fear, now, rng);
     }
@@ -218,6 +219,8 @@ pub fn tick(world: &mut World, mob: Entity, secs: f32, rng: &mut CombatRng) {
     fear.last_tick = fear.buildup;
     // The terrified source removed itself and nothing else feeds the fear.
     if !fear.terrified && fear.phobias.is_empty() && !fear.monophobia {
+        // `QDEL_NULL(breath_loop)`.
+        panic_breathing(world, mob, false);
         if let Ok(mut entity) = world.get_entity_mut(mob) {
             entity.remove::<Fearful>();
         }
@@ -605,6 +608,16 @@ fn vomiting(world: &mut World, mob: Entity, fear: &Fearful, secs: f32, rng: &mut
         say_to(world, mob, Span::Warning, "You feel sick...");
         let blood = fear.buildup >= PASSIVE_MAXIMUM;
         super::diseases::vomit(world, mob, 10.0, true, blood, 1);
+    }
+}
+
+/// The panic attack's `breath_loop` (`direct`: only the panicking hear their breathing).
+fn panic_breathing(world: &mut World, mob: Entity, on: bool) {
+    use crate::looping_sound::{defs::PANIC_BREATHING, start_with, stop};
+    if on {
+        start_with(world, mob, &PANIC_BREATHING, false, true);
+    } else {
+        stop(world, mob, PANIC_BREATHING.path);
     }
 }
 

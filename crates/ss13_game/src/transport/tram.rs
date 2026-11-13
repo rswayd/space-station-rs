@@ -25,9 +25,9 @@
 // shortcut: no controller cabinet window (`TramController`: emergency stop, reset, door and
 // sensor switches; [`estop`] and [`reset_position`] are the way in), no cover, lock, emag or
 // repairs of the cabinet, no home controller in telecoms (`COMM_ERROR`), no malfunction event,
-// no immovable rod pushes, no tram registration plaque or persistence, no looping travel sound or
-// TTS voice, no rapid mode, no platform icons in the console, no multitool re-pointing of call
-// buttons, no emergency release of the doors, no crossing signals, sensors, destination signs,
+// no immovable rod pushes, no tram registration plaque or persistence, no TTS voice, no rapid
+// mode, no platform icons in the console, no multitool re-pointing of call buttons, no
+// emergency release of the doors, no crossing signals, sensors, destination signs,
 // power rectifiers or energized plates (the cabinet's own power is the tram's).
 
 use std::collections::HashMap;
@@ -530,6 +530,14 @@ fn start_moving(world: &mut World, tram_e: Entity) {
     if let Some(mut tram) = world.get_mut::<Tram>(tram_e) {
         tram.next_move = Some(t + tram.delay_secs);
     }
+    travel_loop(world, tram_e, true);
+}
+
+/// `nav_beacon.tram_loop.start()` / `stop()`: the travel sound rides the nav beacon.
+fn travel_loop(world: &mut World, tram_e: Entity, on: bool) {
+    if let Some(nav) = world.get::<Tram>(tram_e).and_then(|t| t.nav_beacon) {
+        crate::looping_sound::set(world, nav, &crate::looping_sound::defs::TRAM, on);
+    }
 }
 
 /// `estop`: the cabinet's emergency stop.
@@ -691,6 +699,7 @@ fn end_trip(world: &mut World, tram_e: Entity, platform: Option<Entity>) {
 fn normal_stop(world: &mut World, tram_e: Entity) {
     let line = specific_id(world, tram_e);
     cycle_doors(world, &line, true, false);
+    travel_loop(world, tram_e, false);
     schedule(world, tram_e, 2.0, TramEvent::Unlock);
     schedule(world, tram_e, 2.5, TramEvent::Jingle);
     let dest = world.get::<Tram>(tram_e).and_then(|t| t.destination);
@@ -708,6 +717,7 @@ fn normal_stop(world: &mut World, tram_e: Entity) {
 /// `degraded_stop`: arriving without power.
 fn degraded_stop(world: &mut World, tram_e: Entity) {
     crash_fx(world, tram_e);
+    travel_loop(world, tram_e, false);
     schedule(world, tram_e, 4.0, TramEvent::Unlock);
     if status(world, tram_e) & SYSTEM_FAULT != 0 {
         set_status(world, tram_e, SYSTEM_FAULT, false);
@@ -728,6 +738,7 @@ fn halt_and_catch_fire(world: &mut World, tram_e: Entity) {
         crash_fx(world, tram_e);
         estop_throw(world, tram_e);
     }
+    travel_loop(world, tram_e, false);
     schedule(world, tram_e, 4.0, TramEvent::Unlock);
     schedule(world, tram_e, 2.0, TramEvent::OpenDoors);
     end_trip(world, tram_e, None);

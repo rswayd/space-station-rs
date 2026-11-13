@@ -526,6 +526,8 @@ pub fn on_ascend(world: &mut World, mob: Entity, def: &'static KnowledgeDef) {
         VOID_FINAL => {
             let t = now(world);
             world.entity_mut(mob).insert(VoidStorm { next_tick: t });
+            // `sound_loop = new(user, TRUE, TRUE)`: a token everyone around hears.
+            crate::looping_sound::start(world, mob, &crate::looping_sound::defs::VOID_LOOP);
         }
         _ => {}
     }
@@ -602,6 +604,9 @@ pub fn tick(world: &mut World, t: f64) {
             .insert(VoidStorm { next_tick: t + 2.0 });
         if world.get::<Stat>(mob) == Some(&Stat::Dead) {
             world.entity_mut(mob).remove::<VoidStorm>();
+            // `on_death`: `sound_loop.stop()`.
+            let path = crate::looping_sound::defs::VOID_LOOP.path;
+            crate::looping_sound::stop(world, mob, path);
             continue;
         }
         let Some(&center) = world.get::<TilePos>(mob) else {

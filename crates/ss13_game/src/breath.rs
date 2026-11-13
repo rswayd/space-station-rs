@@ -1937,6 +1937,15 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         events: Vec::new(),
     };
 
+    // `breathing_loop.stop()`: internals closed, deafened, dead.
+    {
+        use crate::looping_sound::{defs::BREATHING, is_active, stop};
+        if is_active(world, mob, BREATHING.path)
+            && (internal.is_none() || stat == Stat::Dead || !crate::sound::can_hear(world, mob))
+        {
+            stop(world, mob, BREATHING.path);
+        }
+    }
     // The lungs and heart organs (`crate::medical::organs`): a mob without modelled organs
     // breathes with healthy ones.
     use crate::medical::organs::{self, Slot};
@@ -1960,6 +1969,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         && (fired.is_multiple_of(next_breath) || resp.failed_last_breath)
     {
         let mut breath = None;
+        let mut on_internals = false;
         if !resp.misses_breath(stat, lungs_failing, crate::pull::choked(world, mob)) {
             // `get_breath_from_internal`; `Some(None)` is an open but empty tank.
             let mut from_tank = None;
@@ -1970,6 +1980,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
                     from_tank = Some(air.remove_air_volume(BREATH_VOLUME));
                 }
             }
+            on_internals = matches!(from_tank, Some(Some(_)));
             breath = match from_tank {
                 Some(tank_breath) => tank_breath,
                 None if cryo.is_some() => cryo.and_then(|cell| {
@@ -1990,7 +2001,12 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
             };
         }
         if has_lungs {
-            resp.check_breath(breath.as_mut(), &mut ctx);
+            let breathed = resp.check_breath(breath.as_mut(), &mut ctx);
+            // A good breath from internals starts the breathing sound (`breathing_loop`).
+            if breathed && on_internals && crate::sound::can_hear(world, mob) {
+                use crate::looping_sound::{defs::BREATHING, start_with};
+                start_with(world, mob, &BREATHING, false, true);
+            }
         } else {
             resp.no_lungs(&mut ctx);
         }
