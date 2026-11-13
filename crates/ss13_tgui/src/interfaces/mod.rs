@@ -54,5 +54,6 @@ pub mod tank;
 pub mod teg;
 pub mod text_input;
 pub mod thermo_machine;
+pub mod turbine_computer;
 pub mod vending;
 pub mod wires;

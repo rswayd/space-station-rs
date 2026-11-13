@@ -109,6 +109,9 @@ pub struct DmPower {
     pub power_consumption_rate: f64,
     pub no_low_power: bool,
     pub start_with_cell: bool,
+    /// Machines that declare it (the gas turbine's rotor and console): the id that links them
+    /// at roundstart.
+    pub mapping_id: String,
 }
 
 #[derive(Clone, Copy)]
@@ -119,7 +122,7 @@ enum Kind {
 }
 
 /// Power vars, their [`DmPower`] field and the family that has them.
-const VARS: [(&str, Kind, &str); 30] = [
+const VARS: [(&str, Kind, &str); 31] = [
     ("use_power", Kind::Num, MACHINE_ROOT),
     ("idle_power_usage", Kind::Num, MACHINE_ROOT),
     ("active_power_usage", Kind::Num, MACHINE_ROOT),
@@ -150,6 +153,7 @@ const VARS: [(&str, Kind, &str); 30] = [
     ("power_consumption_rate", Kind::Num, LIGHT_ROOT),
     ("no_low_power", Kind::Flag, LIGHT_ROOT),
     ("start_with_cell", Kind::Flag, LIGHT_ROOT),
+    ("mapping_id", Kind::Text, MACHINE_ROOT),
 ];
 
 /// Types that get [`DmPower`]: the families above, the cable family and the helpers.

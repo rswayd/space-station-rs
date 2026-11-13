@@ -808,7 +808,7 @@ fn init_supermatter(world: &mut World) {
 }
 
 /// DM number text for the integrity (`round(x, 0.01)`): no trailing zeros.
-fn dm_number(x: f64) -> String {
+pub(crate) fn dm_number(x: f64) -> String {
     let s = format!("{:.2}", byond_round(x, 0.01));
     s.trim_end_matches('0').trim_end_matches('.').to_owned()
 }

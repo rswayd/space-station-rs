@@ -196,3 +196,84 @@ fn emitter_controls_lock_only_while_on() {
     assert!(click(&mut app, engineer, emitter, false));
     assert!(!emitter_locked(&app), "unlocked");
 }
+
+/// An ethereal's right click on an APC (`ethereal_interact`): out of combat mode the stomach
+/// charges the APC's cell a tenth of a standard charge per step; in combat mode it drains the
+/// cell down to half and the next step starts at once.
+#[test]
+fn ethereals_charge_and_drain_apcs() {
+    use ss13_game::combat::CombatMode;
+    use ss13_game::construction::Job;
+    use ss13_game::medical::organs::{Organ, OrganHost, OrganOf, Slot};
+    use ss13_game::power::ethereal::{self, APC_POWER_GAIN, ETHEREAL_STOMACH, EtherealStomach};
+    use ss13_game::power::{Cell, PowerJob};
+    use ss13_game::tools::DoAfter;
+
+    let mut app = server("ethereal");
+    let apc = apc(&app);
+    let world = app.world_mut();
+    world.get_mut::<Apc>(apc).unwrap().cell = Some(Cell {
+        charge: 6000.0,
+        maxcharge: 10_000.0,
+        chargerate: 1000.0,
+    });
+    let human = mob(world, Inventory::default());
+    world
+        .entity_mut(human)
+        .insert((HumanLook::random_assistant(1), OrganHost));
+    let stomach = world
+        .spawn((
+            Organ::new(Slot::Stomach, ETHEREAL_STOMACH),
+            EtherealStomach {
+                charge: 5000.0,
+                drain_until: f64::NEG_INFINITY,
+            },
+            OrganOf(human),
+        ))
+        .id();
+
+    let step = |app: &mut App| {
+        let world = app.world_mut();
+        let action = world
+            .entity_mut(human)
+            .take::<DoAfter>()
+            .expect("a step started");
+        let Job::Power(PowerJob::Ethereal(job)) = action.job else {
+            panic!("{:?}", action.job);
+        };
+        ethereal::complete(world, human, &action, job);
+    };
+    let cell = |app: &App| app.world().get::<Apc>(apc).unwrap().cell.unwrap().charge;
+    let charge = |app: &App| app.world().get::<EtherealStomach>(stomach).unwrap().charge;
+
+    assert!(click(&mut app, human, apc, true));
+    step(&mut app);
+    assert_eq!(cell(&app), 6000.0 + APC_POWER_GAIN);
+    assert_eq!(charge(&app), 5000.0 - APC_POWER_GAIN);
+    assert!(app.world().get::<DoAfter>(human).is_none(), "one step only");
+
+    // Combat mode drains, but never under half the APC's cell.
+    let world = app.world_mut();
+    world.entity_mut(human).insert(CombatMode(true));
+    world
+        .get_mut::<EtherealStomach>(stomach)
+        .unwrap()
+        .drain_until = f64::NEG_INFINITY;
+    assert!(click(&mut app, human, apc, true));
+    step(&mut app);
+    assert_eq!(cell(&app), 6000.0);
+    assert_eq!(charge(&app), 5000.0);
+    step(&mut app);
+    assert_eq!(cell(&app), 5000.0);
+    // At half nothing more comes out; under it the safety protocol stops the loop.
+    app.world_mut()
+        .get_mut::<Apc>(apc)
+        .unwrap()
+        .cell
+        .as_mut()
+        .unwrap()
+        .charge = 4000.0;
+    step(&mut app);
+    assert_eq!(cell(&app), 4000.0);
+    assert!(app.world().get::<DoAfter>(human).is_none());
+}

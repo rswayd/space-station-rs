@@ -664,6 +664,7 @@ pub mod files {
         "sound/machines/card_slide.ogg",
         "sound/machines/ding.ogg",
         "sound/machines/eject.ogg",
+        "sound/machines/engine_alert/engine_alert1.ogg",
         "sound/machines/engine_alert/engine_alert3.ogg",
         "sound/machines/high_tech_confirm.ogg",
         "sound/machines/printer.ogg",

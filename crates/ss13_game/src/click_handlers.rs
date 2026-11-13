@@ -199,6 +199,7 @@
 //! | 1487 | `gun_pins` (a firing pin into a gun, the DNA pin keyed on a carbon; in the other hand also the tools that take a pin out) |
 //! | 1497 | `guns::box_interaction` (rounds into the other hand's ammo box or magazine) |
 //! | 1500 | `guns::item_interaction` |
+//! | 1511 | `power::turbine` (sheets on a turbine part in the other hand) |
 //! | 1600 | `guns::attack_hand` (empty active hand) |
 //! | 1700 | `construction::split_into_hand` (empty active hand) |
 //!
@@ -258,7 +259,8 @@
 //! | 2017 | `misc_items::puzzle::press` (ruin puzzle buttons) |
 //! | 2027 | `misc_items::flatpacks::unload` (the topmost flatpack off a cart) |
 //! | 2037 | `modsuit::link::remove_cell` (right click: the MODlink scryer's cell out) |
-//! | 2100 | `power::apc_ui::interact` (right click by a human: `toggle_lock`) |
+//! | 2021 | `power::turbine::interact` (the `TurbineComputer` window) |
+//! | 2100 | `power::apc_ui::interact` (right click by a human: `toggle_lock`, an ethereal's charge exchange `power::ethereal`) |
 //! | 2200 | `mecha::bay::interact` |
 //! | 2207 | `mecha::control::interact` (the exosuit control console's window) |
 //! | 2300 | `mecha::core::attack_hand` |
@@ -362,6 +364,7 @@
 //! | 229 | `smoking::held_on_target` (lighters and matches on mobs, lighting someone's cigarette, smokables, matchboxes, vapes, dipping) |
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
+//! | 271 | `power::turbine::item_interaction` (turbine tools and parts, sheets on a part, a multitool on the console) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |

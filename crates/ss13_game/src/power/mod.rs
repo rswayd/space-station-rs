@@ -20,6 +20,7 @@ pub mod apc_ui;
 pub mod cable_coil;
 pub mod chargers;
 pub mod emitter;
+pub mod ethereal;
 pub mod field_generator;
 pub mod gravity_generator;
 pub mod grid;
@@ -39,6 +40,7 @@ pub mod supermatter_consume;
 pub mod supermatter_ui;
 pub mod teg;
 pub mod tesla;
+pub mod turbine;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -357,6 +359,23 @@ pub struct PowerReport {
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct PowerSystems;
 
+/// Timed steps of this module's machines ([`crate::construction::Job::Power`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PowerJob {
+    /// An ethereal draining or charging an APC ([`ethereal`]).
+    Ethereal(ethereal::EtherealJob),
+    /// Turbine parts: installing one, upgrading one with sheets ([`turbine`]).
+    Turbine(turbine::TurbineJob),
+}
+
+/// A finished [`PowerJob`].
+pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, job: PowerJob) {
+    match job {
+        PowerJob::Ethereal(job) => ethereal::complete(world, mob, action, job),
+        PowerJob::Turbine(job) => turbine::complete(world, mob, action, job),
+    }
+}
+
 pub struct PowerServerPlugin;
 
 impl Plugin for PowerServerPlugin {
@@ -391,6 +410,8 @@ impl Plugin for PowerServerPlugin {
                 portagrav::PortagravPlugin,
                 supermatter_ui::SupermatterUiPlugin,
                 pipe_cleaner::PipeCleanerPlugin,
+                ethereal::EtherealPlugin,
+                turbine::TurbinePlugin,
             ))
             .add_systems(
                 MapInit,

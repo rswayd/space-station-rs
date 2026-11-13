@@ -96,6 +96,7 @@ use crate::interfaces::teg::{
 };
 use crate::interfaces::text_input::{TextInputStatic, TextInputUi};
 use crate::interfaces::thermo_machine::{ThermoMachineData, ThermoMachineUi};
+use crate::interfaces::turbine_computer::{TurbineComputerData, TurbineComputerUi};
 use crate::interfaces::vending::{
     ProductRecord, StockItem, UserData, VendingData, VendingStatic, VendingUi,
 };
@@ -499,6 +500,21 @@ pub fn sample(name: &str) -> Option<Sample> {
                     pressure_inlet: 3_010.0,
                     pressure_outlet: 2_987.3,
                 }),
+            },
+        ),
+        TurbineComputerUi::NAME => of::<TurbineComputerUi>(
+            "gas turbine control computer",
+            &(),
+            &TurbineComputerData {
+                connected: true,
+                active: true,
+                rpm: 31_420.0,
+                power: 942_600.0,
+                temp: 1_840.0,
+                integrity: 87.5,
+                max_rpm: 50_000.0,
+                max_temperature: 50_000.0,
+                regulator: 0.5,
             },
         ),
         MechBayPowerConsoleUi::NAME => of::<MechBayPowerConsoleUi>(
