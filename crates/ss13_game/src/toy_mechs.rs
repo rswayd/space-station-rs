@@ -935,6 +935,8 @@ mod tests {
         world.init_resource::<Time>();
         world.init_resource::<bevy::ecs::message::Messages<PlaySound>>();
         world.insert_resource(CombatRng(7));
+        // A defeated toy's wreck is spawned by path (none without prototypes).
+        world.init_resource::<crate::construction::BuildTemplates>();
         let at = TilePos::new(5, 5, 0);
         let controller = world.spawn((at, crate::health::Stat::Conscious)).id();
         let defender = mech(&mut world, "/obj/item/toy/mecha/ripley", at);

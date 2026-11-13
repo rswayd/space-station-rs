@@ -74,6 +74,17 @@ const TYPES: &str = r##"{
         "parent": "/obj/machinery/bouldertech/refinery",
         "declared_vars": { "name": "boulder smelter" } },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
+    "/obj/item/card": { "parent": "/obj/item" },
+    "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
+        "access": { "list": [] }, "slot_flags": 256 } },
+    "/obj/item/card/id/advanced": { "parent": "/obj/item/card/id" },
+    "/obj/item/clothing": { "parent": "/obj/item" },
+    "/obj/item/clothing/under": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 2 } },
+    "/obj/item/clothing/under/color": { "parent": "/obj/item/clothing/under" },
+    "/obj/item/clothing/under/color/grey": { "parent": "/obj/item/clothing/under/color" },
+    "/obj/item/clothing/shoes": { "parent": "/obj/item/clothing", "declared_vars": { "slot_flags": 128 } },
+    "/obj/item/clothing/shoes/sneakers": { "parent": "/obj/item/clothing/shoes" },
+    "/obj/item/clothing/shoes/sneakers/black": { "parent": "/obj/item/clothing/shoes/sneakers" },
     "/mob/living": { "parent": "/mob" },
     "/mob/living/carbon": { "parent": "/mob/living" },
     "/mob/living/carbon/human": { "parent": "/mob/living/carbon", "declared_vars": {
@@ -205,19 +216,15 @@ fn a_vent_boulder_goes_through_the_brm_and_the_smelter() {
 
     // The BRM pulls an available boulder onto its tile, then is blocked by it.
     let brm = on::<Brm>(&app, BRM_AT).expect("BRM set up");
-    app.world_mut()
-        .resource_mut::<OreGeneration>()
-        .available
-        .push(boulder);
+    // Only this boulder is on offer (the vent may have made others meanwhile).
+    app.world_mut().resource_mut::<OreGeneration>().available = vec![boulder];
     assert_eq!(
         boulders::pre_collect(app.world_mut(), brm, true, 1),
         Collect::Teleported
     );
     assert_eq!(app.world().get::<TilePos>(boulder), Some(&BRM_AT));
-    app.world_mut()
-        .resource_mut::<OreGeneration>()
-        .available
-        .push(boulder);
+    // Only this boulder is on offer (the vent may have made others meanwhile).
+    app.world_mut().resource_mut::<OreGeneration>().available = vec![boulder];
     assert_eq!(
         boulders::pre_collect(app.world_mut(), brm, true, 1),
         Collect::Blocked
