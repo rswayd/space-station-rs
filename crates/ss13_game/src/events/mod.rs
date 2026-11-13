@@ -10,7 +10,8 @@
 //! - [`mass_hallucination`]: the same hallucination for every human (`crate::hallucination`).
 //! - [`radiation_leak`] (a machine pulses radiation until fixed with tools,
 //!   `crate::radiation::RadioactiveEmitter`), [`supermatter_surge`]
-//!   (`crate::power::supermatter`), [`stray_cargo`] (`crate::cargo::supplypod`).
+//!   (`crate::power::supermatter`), [`stray_cargo`] (`crate::cargo::supplypod`),
+//!   [`shuttle_loan`] (`crate::cargo::supply`, accepted at a supply console).
 //! - Health: [`disease_outbreak`] (`crate::medical::diseases`), [`fake_virus`],
 //!   [`heart_attack`] (`crate::medical::organs`), [`brain_trauma`]
 //!   (`crate::medical::traumas`).
@@ -64,6 +65,7 @@ pub mod radiation_storm;
 pub mod scrubber_overflow;
 pub mod sentience;
 pub mod shuttle;
+pub mod shuttle_loan;
 pub mod space_vines;
 pub mod stray_cargo;
 pub mod supermatter_surge;
@@ -223,6 +225,10 @@ pub fn controls() -> Vec<EventControl> {
             ),
         ),
         c(stray_cargo::NAME, 20, 10.0, 0, 4, stray_cargo::make),
+        needs(
+            shuttle_loan::available,
+            c(shuttle_loan::NAME, 10, 7.0, 0, 3, shuttle_loan::make),
+        ),
         c(
             brand_intelligence::NAME,
             5,

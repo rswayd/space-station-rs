@@ -53,7 +53,7 @@
 Плавающие цифры над объектом: таймер бомбы Синдиката, ядерной бомбы, целостности суперматерии, аномалий, песочных часов.
 
 - **Код:** [`/obj/effect/countdown`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/countdown.dm#L1), [`/obj/effect/countdown/syndicatebomb`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/countdown.dm#L82), [`/obj/effect/countdown/supermatter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/effects/countdown.dm#L103)
-- **Статус в ss13-rs:** ❌ нет — нет механик с таймером
+- **Статус в ss13-rs:** ❌ нет — механики с таймером уже есть (ядерная бомба `crates/ss13_game/src/antag/nukeop/bomb.rs`, суперматерия), но нет реплицируемого текста над объектом: клиент рисует текст над сущностью только из разовых анимаций (`balloon_client.rs`, `runechat_client.rs`); нужен реплицируемый компонент «maptext» (бамп протокола)
 
 ### Постеры
 Постеры (официальные, контрабандные, «разыскивается», «пропал без вести») вешаются на стены из свёрнутого постера, срываются руками (остаётся рваный); случайный постер выбирается при загрузке.

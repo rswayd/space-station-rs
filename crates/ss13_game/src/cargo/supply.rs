@@ -24,9 +24,10 @@
 //!   card), more in an account-locked secure crate, the first order past the limit charged the
 //!   `CRATE_TAX`; one manifest lists all the buyer's orders.
 //! - Leaving CentCom it also loads the waiting mail ([`super::mail::create_mail`]).
-// shortcut: departmental order consoles, chef groceries, the materials market, shuttle
-// loans, requisition papers and manifest errors are not ported. Packs with their own `fill()`
-// are not offered.
+//! - A shuttle loan ([`LoanOffer`], `crate::events::shuttle_loan`) calls it from CentCom
+//!   straight to the station dock, without transit.
+// shortcut: departmental order consoles, chef groceries, the materials market, requisition
+// papers and manifest errors are not ported. Packs with their own `fill()` are not offered.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -277,7 +278,17 @@ pub struct SupplyShuttle {
     pub away_name: String,
     /// tg `SSshuttle.supply_blocked`: a trade blockade is registered.
     pub blocked: bool,
+    /// tg `SSshuttle.shuttle_loan`: the offered loan (`crate::events::shuttle_loan`).
+    pub loan: Option<LoanOffer>,
     rng: Rng,
+}
+
+/// An offered shuttle loan: its situation (index into `crate::events::shuttle_loan`'s table)
+/// and whether the shuttle went (tg `dispatched`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LoanOffer {
+    pub situation: usize,
+    pub dispatched: bool,
 }
 
 impl SupplyShuttle {
@@ -475,6 +486,7 @@ fn setup_supply(world: &mut World) {
         home_name,
         away_name: "CentCom".into(),
         blocked: false,
+        loan: None,
         rng: Rng::new(seed ^ 0x7375_7070),
     });
 }
@@ -576,6 +588,12 @@ fn tick(world: &mut World) {
                 world.resource_mut::<SupplyShuttle>().mode = SupplyMode::Idle;
                 return;
             };
+            // A loaned shuttle is called straight from CentCom (`initiate_docking` override).
+            if world.resource::<SupplyShuttle>().at_centcom() {
+                buy(world);
+                let mut turfs = empty_turfs(world, port);
+                super::mail::create_mail(world, &mut turfs);
+            }
             let result = initiate_docking(world, port, destination);
             log_move("dock", &result);
             let mut shuttle = world.resource_mut::<SupplyShuttle>();
@@ -630,7 +648,7 @@ fn log_move(what: &str, result: &Result<crate::shuttle::MoveReport, crate::shutt
 }
 
 /// Free floor tiles of the shuttle (tg `is_blocked_turf`: nothing dense on it).
-fn empty_turfs(world: &World, port: Entity) -> Vec<TilePos> {
+pub(crate) fn empty_turfs(world: &World, port: Entity) -> Vec<TilePos> {
     shuttle_tiles(world, port)
         .into_iter()
         .filter(|&p| {

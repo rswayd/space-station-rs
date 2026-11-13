@@ -17,7 +17,10 @@
 //!
 //! A coupon used on a console goes inside ([`super::coupon`]); an order of its pack takes it
 //! (the discount off its cost), cancelling the order drops it back on the console's tile.
-// shortcut: no hacked boards (contraband) or loans.
+//!
+//! "Loan" accepts an offered shuttle loan (`crate::events::shuttle_loan`) while the shuttle
+//! idles at CentCom; the request console has no button in tg and is refused here.
+// shortcut: no hacked boards (contraband).
 
 use std::sync::Arc;
 
@@ -397,6 +400,7 @@ pub enum CargoAct {
     Deny(u32),
     DenyAll,
     TogglePrivate,
+    Loan,
 }
 
 /// tg `ui_data`.
@@ -420,6 +424,8 @@ pub fn console_data(
         can_send: console.can_send,
         can_approve_requests: console.can_approve_requests,
         requestonly: console.request_only,
+        loan: shuttle.is_some_and(|s| s.loan.is_some()),
+        loan_dispatched: shuttle.is_some_and(|s| s.loan.is_some_and(|l| l.dispatched)),
         message: if shuttle.is_some_and(|s| s.blocked) {
             BLOCKADE_WARNING.into()
         } else {
@@ -539,6 +545,7 @@ impl ServerUi for CargoUi {
             DENY => Ok(CargoAct::Deny(id()?)),
             DENY_ALL => Ok(CargoAct::DenyAll),
             TOGGLE_PRIVATE => Ok(CargoAct::TogglePrivate),
+            LOAN => Ok(CargoAct::Loan),
             _ => Err(UiReject::UnknownAction),
         }
     }
@@ -851,6 +858,31 @@ fn send(world: &mut World, console: Entity) {
     }
 }
 
+/// tg `ui_act` "loan".
+fn loan(world: &mut World, console: Entity, actor: Entity) {
+    let Some(shuttle) = world.get_resource::<SupplyShuttle>() else {
+        return;
+    };
+    if shuttle.loan.is_none_or(|l| l.dispatched) {
+        return;
+    }
+    if shuttle.blocked {
+        machine_say(world, console, BLOCKADE_WARNING);
+        return;
+    }
+    if shuttle.mode != SupplyMode::Idle || !shuttle.at_centcom() {
+        return;
+    }
+    if crate::events::shuttle_loan::loan_shuttle(world) {
+        machine_say(
+            world,
+            console,
+            "The supply shuttle has been loaned to CentCom.",
+        );
+        info!("{console}: {actor} accepted a shuttle loan event");
+    }
+}
+
 /// tg `ui_act`, one exclusive pass; every check runs here.
 fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi>>>) {
     let pending: Vec<(Entity, Entity, CargoAct)> = acts
@@ -928,6 +960,7 @@ fn console_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<CargoUi
                     console.self_paid = !console.self_paid;
                 }
             }
+            CargoAct::Loan if !state.request_only => loan(world, console, actor),
             act => debug!("{console}: refused {act:?}"),
         }
     }

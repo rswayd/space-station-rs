@@ -542,6 +542,19 @@ pub fn force_event(world: &mut World, name: &str, announce: Option<bool>) -> Res
     Ok(())
 }
 
+/// tg `end_when = activeFor + 1` from outside the event (a console accepting its offer): every
+/// running `name` event ends at its fire after next.
+pub fn end_next_fire(world: &mut World, name: &str) {
+    let Some(control) = world.resource::<Events>().index(name) else {
+        return;
+    };
+    for run in &mut world.resource_mut::<Events>().running {
+        if run.state.control == control {
+            run.state.end_when = run.state.active_for + 1;
+        }
+    }
+}
+
 /// tg `/datum/round_event/process()`.
 fn process(world: &mut World, run: &mut Running) {
     let ev = &mut run.state;

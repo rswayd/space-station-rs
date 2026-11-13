@@ -240,6 +240,30 @@ fn status_view(data: &CargoData, st: &CargoStatic) -> impl Scene + use<> {
     };
     let message = data.message.clone();
     let department = data.department.clone();
+    // tg `CargoStatus`: the loan row, hidden on the request console.
+    let loan: Box<dyn SceneList> = if !data.loan || data.requestonly {
+        Box::new(EntityScene(bsn! { Node }))
+    } else if data.loan_dispatched {
+        let bad = UiColor::Bad.text().unwrap_or_default();
+        Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Loan" }
+            Children [
+                Node Propagate::<TextColor>(TextColor(bad))
+                Children [ Text("Loaned to Centcom") ]
+            ]
+        }))
+    } else {
+        let can_loan = data.away && data.docked;
+        Box::new(EntityScene(bsn! {
+            @LabeledListItem { @label: "Loan" }
+            Children [
+                @ss13_ui_kit::Button { @content: "Loan Shuttle" }
+                ss13_ui_kit::Button { disabled: {!can_loan} }
+                Act({LOAN.to_owned()})
+                Name("cargo: loan")
+            ]
+        }))
+    };
     bsn! {
         @Section {
             @title: department,
@@ -256,6 +280,8 @@ fn status_view(data: &CargoData, st: &CargoStatic) -> impl Scene + use<> {
                 Children [ {shuttle} ]
                 --
                 @LabeledListItem { @label: "CentCom Message", @content: message }
+                --
+                {loan}
             ]
         ]
     }

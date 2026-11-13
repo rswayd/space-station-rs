@@ -761,6 +761,82 @@ fn department_request_is_paid_by_the_department() {
 
 /// Registers MetaStation's supply shuttle from its map json and delivers one order to the
 /// cargo bay.
+/// Shuttle Loan: the offer shows on the supply console; "Loan" pays the situation's bonus,
+/// calls the shuttle from CentCom for five minutes and posts the transit text; a second "Loan"
+/// changes nothing; the offer is cleared when the event ends.
+#[test]
+fn shuttle_loan_from_the_console() {
+    use ss13_game::events::controller::fire;
+    use ss13_game::events::shuttle_loan::{NAME, SITUATIONS};
+    use ss13_game::events::{Events, force_event};
+
+    let mut s = Station::fixture("shuttle_loan_from_the_console");
+    s.server
+        .world_mut()
+        .resource_mut::<EconomyConfig>()
+        .payday_secs = 1e9;
+    s.set_access(&["qm", "cargo"]);
+    let console = s.console();
+    s.click(console);
+    s.run_until_for(10.0, "the console window opens", |s| {
+        s.client().world().resource::<ConsoleWindow>().id.is_some()
+    });
+    assert!(!s.data().loan);
+
+    let world = s.server.world_mut();
+    world.resource_mut::<Events>().scheduled = f64::MAX;
+    force_event(world, NAME, Some(true)).unwrap();
+    // `announce_when = 1`.
+    fire(world);
+    fire(world);
+    let offer = world
+        .resource::<SupplyShuttle>()
+        .loan
+        .expect("the loan is offered");
+    assert!(!offer.dispatched);
+    let situation = &SITUATIONS[offer.situation];
+    s.run_until_for(10.0, "the console shows the offer", |s| {
+        s.data().loan && !s.data().loan_dispatched
+    });
+
+    let budget = s.cargo_budget();
+    s.act("loan", &[]);
+    s.run_until_for(10.0, "loaned", |s| {
+        s.said("The supply shuttle has been loaned to CentCom.")
+    });
+    assert_eq!(s.cargo_budget(), budget + situation.bonus);
+    let now = s.server.world().resource::<Time>().elapsed_secs_f64();
+    let shuttle = s.shuttle();
+    assert_eq!(shuttle.mode, SupplyMode::Call);
+    assert!(shuttle.to_station && shuttle.at_centcom());
+    assert!(shuttle.timer.left(now).is_some_and(|l| l > 290.0));
+    assert!(
+        s.server
+            .world()
+            .resource::<SupplyOrders>()
+            .centcom_message
+            .contains(situation.transit)
+    );
+    // The event may already have ended on its own fires; either way a second loan pays nothing.
+    s.act("loan", &[]);
+    s.steps(10);
+    assert_eq!(s.cargo_budget(), budget + situation.bonus, "paid once");
+
+    let world = s.server.world_mut();
+    for _ in 0..3 {
+        fire(world);
+    }
+    assert!(world.resource::<SupplyShuttle>().loan.is_none());
+    assert_eq!(
+        world
+            .resource::<Events>()
+            .running()
+            .filter(|n| *n == NAME)
+            .count(),
+        0
+    );
+}
+
 #[test]
 #[ignore = "needs generated assets and MetaStation; run with --ignored"]
 fn metastation_supply() {
