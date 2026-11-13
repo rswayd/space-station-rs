@@ -272,6 +272,8 @@ pub mod cryosleep_client;
 #[cfg(feature = "server")]
 pub mod curses;
 #[cfg(feature = "server")]
+pub mod custom_food;
+#[cfg(feature = "server")]
 pub mod death;
 #[cfg(feature = "server")]
 pub mod debuffs;

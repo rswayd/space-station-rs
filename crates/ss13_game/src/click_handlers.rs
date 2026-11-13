@@ -149,6 +149,7 @@
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
+//! | 459 | `custom_food::customizable_attack` (food onto a custom food base in the other hand) |
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
@@ -503,6 +504,7 @@
 //! | 3260 | `mobs::farm::feed_egg_layer` |
 //! | 3291 | `food_storage::try_insert` (right click: an item hidden in bread, cake, cheese, cutlets) |
 //! | 3300 | `food::item_interaction` |
+//! | 3309 | `custom_food::customizable_attack` (food onto a custom food base: bread, bun, dough, bowl, ...) |
 //! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3419 | `secure_safes::item_interaction` (panel screwdriver, multitool hack, items into the storage) |

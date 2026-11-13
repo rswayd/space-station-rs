@@ -1001,6 +1001,27 @@ pub fn complete(world: &mut World, mob: Entity, _action: &DoAfter, job: HookahJo
     }
 }
 
+/// `examine`: the bowl's food and whether it is lit.
+pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(Span, String)>) {
+    let Some(state) = world.get::<Hookah>(target) else {
+        return;
+    };
+    let names: Vec<String> = state.food.iter().map(|&f| name_of(world, f)).collect();
+    let listed = if names.is_empty() {
+        "пусто".to_owned()
+    } else {
+        crate::clothing::accessories::english_list(&names)
+    };
+    lines.push((Span::Notice, format!("В чаше {listed}.")));
+    if state.lit {
+        let text = format!(
+            "{} зажжён.",
+            ss13_shared::capitalize(&name_of(world, target))
+        );
+        lines.push((Span::Notice, text));
+    }
+}
+
 /// `throw_impact` -> `atom_destruction`: a landed hookah shatters. True when it was one.
 pub fn thrown(world: &mut World, hookah: Entity) -> bool {
     if world.get::<Hookah>(hookah).is_none() {

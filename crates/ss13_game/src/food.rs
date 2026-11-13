@@ -1156,10 +1156,12 @@ fn finish_process(world: &mut World, actor: Actor, food: Entity, index: usize) {
     let chem = world.get_resource::<Chem>().map(|c| c.0.clone());
     let amount = process.amount.max(1);
     let mut name = prototype_name(world, &process.result);
+    let mut results = Vec::new();
     for _ in 0..amount {
         let Some(made) = crate::construction::spawn_obj(world, &process.result, pos) else {
             continue;
         };
+        results.push(made);
         name = name_of(world, made);
         let made_holder = world
             .get::<Reagents>(made)
@@ -1175,6 +1177,8 @@ fn finish_process(world: &mut World, actor: Actor, food: Entity, index: usize) {
             world.entity_mut(made).insert(Reagents(holder));
         }
     }
+    world.flush();
+    crate::custom_food::on_processed(world, food, &results);
     crate::food_storage::release(world, food);
     world.despawn(food);
     crate::construction::tile_changed(world, pos);

@@ -1322,6 +1322,17 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/hookah",
     "/obj/item/hookah_mouthpiece",
     "/obj/item/hookah_coals",
+    // Custom food bases turned into their replacements (`ss13_game::custom_food`).
+    "/obj/item/food/sushi/empty",
+    "/obj/item/food/onigiri/empty",
+    "/obj/item/food/hard_taco_shell/empty",
+    "/obj/item/food/cake/empty/vegan",
+    "/obj/item/food/cake/empty",
+    "/obj/item/food/bread/empty",
+    "/obj/item/food/salad/empty",
+    "/obj/item/food/pizza/custom",
+    "/obj/item/food/burger/empty",
+    "/obj/item/food/pie/empty",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman
