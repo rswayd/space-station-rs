@@ -13,6 +13,7 @@
 // features, chromosomes, combined recipes or mutation overlays. Cold and heat adaptation carry their tg numbers but no effect yet (body
 // temperature damage has no resist traits). Add each with the system it needs.
 
+pub mod cloner;
 pub mod console;
 pub mod dna_vault;
 pub mod effects;
@@ -765,6 +766,7 @@ impl Plugin for GeneticsServerPlugin {
                     .in_set(ss13_tgui::server::UiSystems::Handle),
             );
         console::build(app);
+        cloner::build(app);
     }
 }
 

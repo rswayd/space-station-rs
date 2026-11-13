@@ -72,4 +72,4 @@
 
 - **Код:** [`/datum/surgery_operation/limb/tune_vocal_cords`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/medical/code/surgery/vocal_cords.dm#L1)
 - **BandaStation:** [`modular_bandastation/medical/code/surgery/vocal_cords.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/medical/code/surgery/vocal_cords.dm#L1) — новая операция
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/medical/surgery/` (`Op::TuneVocalCords`: `defs.rs`, `checks.rs`, `perform.rs`, `success.rs`, `failure.rs`): только голова с открытой кожей, без блокировки, скальпель 1 / нож 2 / кусачки 2,85 / ручка 5, 6,4 с, тексты начала и успеха; провал — «вонзаете … в горло», боль, 20 brute голове. Сама смена голоса (`change_tts_seed`, выбор голоса хирургом) — за компонентом TTS (`docs/parity/server/tts.md`, «Голос персонажа и компонент TTS»): голосов в порте нет

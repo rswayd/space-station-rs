@@ -1045,6 +1045,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/coffee_cartridge",
     "/obj/item/dest_tagger",
     DNA_ACTIVATOR,
+    // The experimental cloner's total failure (`ss13_game::genetics::cloner`).
+    "/mob/living/basic/fleshblob",
     "/obj/item/gibtonite",
     "/obj/item/graft",
     CLUSTERBUSTER_SEGMENT,
