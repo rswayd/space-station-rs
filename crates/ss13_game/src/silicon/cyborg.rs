@@ -7,7 +7,9 @@
 //!   whose laws it then follows (`lawsync`: `ai_to_cyborg`).
 //! - Model choice (tg `pick_model`'s radial menu, here tgui's `tgui_input_list` window): the
 //!   models tg offers with BandaStation's config (no security), giving the model's sprite, radio
-//!   channels and `basic_modules`. The modules sit in the model, worn in the back slot as a
+//!   channels and `basic_modules`. A model with skins (`borg_skins`, BandaStation's added ones
+//!   among them) asks which one in a radial around the cyborg; then the cyborg is locked down
+//!   for the transform: four tool sounds 0.7 s apart, each with sparks (BandaStation). The modules sit in the model, worn in the back slot as a
 //!   storage: clicking it opens it, a module goes to a hand from there, dropping one (Q) puts it
 //!   back (tg `uneq_active`). A cyborg picks nothing up and puts no module down or into other
 //!   storages. Three modules can be out at once ([`ModuleSlots`]); swap (X) cycles them
@@ -28,7 +30,7 @@
 //!   ([`spawn_borg`], [`activate`]).
 // shortcut: no cyborg HUD (the human slots are shown; only the hands and the back slot work;
 // the third module slot shares the right hand's cell, see `ModuleSlots`), no broken slots
-// (`break_cyborg_slot`), no lamp, ion thrusters, model transform animation, skins, tipping,
+// (`break_cyborg_slot`), no lamp, ion thrusters, transform flick or smoke, tipping,
 // model traits or actions (`borg_meson`, auto-wash); the syndicate models have no thermal
 // vision, chameleon projector, syndicate access or factions; consumables but the flashes are
 // not respawned at the station (nor their 0.5% of the charge drawn, which tg takes only when
@@ -36,10 +38,11 @@
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
-use ss13_mapload::silicon::{ROBOT_SYNDICATE_CELL, ROBOT_TYPE, RobotModel};
+use ss13_mapload::silicon::{BorgSkin, ROBOT_SYNDICATE_CELL, ROBOT_TYPE, RobotModel};
 use ss13_mapload::{DmObj, IconIndex};
 use ss13_shared::chat::Span;
-use ss13_shared::{Appearance, TilePos};
+use ss13_shared::{Appearance, IconStateId, TilePos};
+use ss13_tgui::prompt::{PromptAnswer, PromptAnswered};
 use ss13_tgui::server::{OpenUi, UiActed, UiSystems};
 use ss13_world::Mover;
 
@@ -166,6 +169,10 @@ impl Plugin for CyborgPlugin {
                 Update,
                 (
                     choose_model.in_set(UiSystems::Handle),
+                    skin_answers
+                        .in_set(UiSystems::Handle)
+                        .after(ss13_tgui::prompt::PromptSystems::Answer),
+                    transform_steps.run_if(any_with_component::<Transforming>),
                     station_clicks.after(ResolveClicks),
                     (cell_drain, charge_occupants, station_looks)
                         .chain()
@@ -549,19 +556,195 @@ fn choose_model(world: &mut World, mut acts: Local<MessageCursor<UiActed<ListInp
         else {
             continue;
         };
-        transform_to(world, borg, index, &model);
-        world.entity_mut(borg).remove::<ListInput>();
-        notice(
-            world,
+        if model.skins.is_empty() {
+            finish_pick(world, client, borg, index, &model, None);
+        } else {
+            ask_skin(world, client, borg, index, &model);
+        }
+    }
+}
+
+/// On the radial of [`ask_skin`]: the model being picked.
+#[derive(Component, Clone, Copy, Debug)]
+struct SkinPrompt {
+    borg: Entity,
+    model: usize,
+}
+
+/// The sprite of a skin (tg `image(icon = SKIN_ICON || robots.dmi, icon_state)`).
+fn skin_icon(world: &World, model: &RobotModel, skin: &BorgSkin) -> Option<IconStateId> {
+    let dmi = skin.icon.as_deref().unwrap_or(ROBOTS_DMI);
+    let state = skin
+        .icon_state
+        .as_deref()
+        .unwrap_or(&model.cyborg_base_icon);
+    world.get_resource::<IconIndex>()?.get(dmi, state)
+}
+
+/// tg `be_transformed_to`: a model with `borg_skins` asks which one first (a radial around the
+/// cyborg); closing it keeps the default model.
+fn ask_skin(world: &mut World, client: Entity, borg: Entity, index: usize, model: &RobotModel) {
+    let choices = model
+        .skins
+        .iter()
+        .map(|skin| ss13_tgui::prompt::RadialChoice {
+            name: skin.name.clone(),
+            icon: skin_icon(world, model, skin),
+        })
+        .collect();
+    let prompt = crate::radial::show(
+        world,
+        crate::radial::RadialMenu {
             client,
-            Span::Notice,
-            format!("Выбрана модель: {}.", model.name),
-        );
-        crate::modpc::silicon::logevent(
-            world,
-            borg,
-            &format!("Chassis model has been set to {}.", model.name),
-        );
+            actor: borg,
+            anchor: borg,
+            title: model.name.clone(),
+            choices,
+            require_near: true,
+        },
+    );
+    if let Some(prompt) = prompt {
+        world
+            .entity_mut(prompt)
+            .insert(SkinPrompt { borg, model: index });
+    }
+}
+
+/// The skin picked: the model is taken again with every check of [`choose_model`].
+fn skin_answers(world: &mut World, mut answers: Local<MessageCursor<PromptAnswered>>) {
+    let pending: Vec<(Entity, Entity, Option<PromptAnswer>)> = answers
+        .read(world.resource::<Messages<PromptAnswered>>())
+        .map(|a| (a.prompt, a.client, a.answer.clone()))
+        .collect();
+    for (prompt, client, answer) in pending {
+        let Some(asked) = world.get::<SkinPrompt>(prompt).copied() else {
+            continue;
+        };
+        let Some(PromptAnswer::Item(choice)) = answer else {
+            continue;
+        };
+        let borg = asked.borg;
+        if world.get::<Cyborg>(borg).is_none_or(|c| c.model.is_some())
+            || world.get::<Stat>(borg) != Some(&Stat::Conscious)
+            || world
+                .get::<crate::server::PlayerMob>(borg)
+                .map(|p| p.client)
+                != Some(client)
+            || pick_refused(world, client, borg)
+        {
+            continue;
+        }
+        let Some(model) = world
+            .resource::<Silicons>()
+            .0
+            .models
+            .get(asked.model)
+            .cloned()
+        else {
+            continue;
+        };
+        let Some(skin) = model.skins.get(choice).cloned() else {
+            continue;
+        };
+        finish_pick(world, client, borg, asked.model, &model, Some(&skin));
+    }
+}
+
+/// `transform_to` with the picked skin's sprite, then the transform sequence.
+fn finish_pick(
+    world: &mut World,
+    client: Entity,
+    borg: Entity,
+    index: usize,
+    model: &RobotModel,
+    skin: Option<&BorgSkin>,
+) {
+    transform_to(world, borg, index, model);
+    if let Some(skin) = skin
+        && let Some(id) = skin_icon(world, model, skin)
+        && let Some(mut appearance) = world.get_mut::<Appearance>(borg)
+    {
+        appearance.icon_state = id;
+    }
+    world.entity_mut(borg).remove::<ListInput>();
+    notice(
+        world,
+        client,
+        Span::Notice,
+        format!("Выбрана модель: {}.", model.name),
+    );
+    start_transform(world, borg, &model.name);
+}
+
+/// The tool sounds of `do_transform_delay`.
+const TRANSFORM_SOUNDS: [&str; 5] = [
+    "sound/items/tools/drill_use.ogg",
+    "sound/items/tools/jaws_cut.ogg",
+    "sound/items/tools/jaws_pry.ogg",
+    "sound/items/tools/welder.ogg",
+    "sound/items/tools/ratchet.ogg",
+];
+/// `for(var/i in 1 to 4)`, `sleep(0.7 SECONDS)` apart, after `sleep(0.1 SECONDS)` twice.
+const TRANSFORM_STEPS: u8 = 4;
+const TRANSFORM_STEP_SECS: f64 = 0.7;
+const TRANSFORM_START_SECS: f64 = 0.2;
+
+/// tg `do_transform_animation` running: the step to come and when.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Transforming {
+    step: u8,
+    next_at: f64,
+}
+
+/// tg `do_transform_delay` (`locked_transform`): the cyborg is locked down by "the AI" (no
+/// self override) while four tool sounds play, each with BandaStation's sparks.
+pub fn start_transform(world: &mut World, borg: Entity, model_name: &str) {
+    if let Some(mut chassis) = world.get_mut::<super::chassis::Chassis>(borg) {
+        chassis.ai_lockdown = true;
+    }
+    super::chassis::set_lockdown(world, borg, true);
+    crate::modpc::silicon::logevent(
+        world,
+        borg,
+        &format!("Chassis model has been set to {model_name}."),
+    );
+    let next_at = crate::tools::now(world) + TRANSFORM_START_SECS;
+    world
+        .entity_mut(borg)
+        .insert(Transforming { step: 0, next_at });
+}
+
+fn transform_steps(world: &mut World) {
+    let time = crate::tools::now(world);
+    let due: Vec<(Entity, Transforming)> = world
+        .query::<(Entity, &Transforming)>()
+        .iter(world)
+        .filter(|(_, t)| t.next_at <= time)
+        .map(|(e, t)| (e, *t))
+        .collect();
+    for (borg, state) in due {
+        if state.step >= TRANSFORM_STEPS {
+            world.entity_mut(borg).remove::<Transforming>();
+            super::chassis::set_lockdown(world, borg, false);
+            if let Some(mut chassis) = world.get_mut::<super::chassis::Chassis>(borg) {
+                chassis.ai_lockdown = false;
+            }
+            continue;
+        }
+        if let Some(&pos) = world.get::<TilePos>(borg) {
+            let i = world
+                .resource_mut::<crate::combat::CombatRng>()
+                .range(0, TRANSFORM_SOUNDS.len() as u32 - 1) as usize;
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(pos, TRANSFORM_SOUNDS[i], 80.0, true),
+            );
+            crate::effects::particles::do_sparks(world, 2, false, pos);
+        }
+        world.entity_mut(borg).insert(Transforming {
+            step: state.step + 1,
+            next_at: time + TRANSFORM_STEP_SECS,
+        });
     }
 }
 

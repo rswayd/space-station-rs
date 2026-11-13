@@ -238,6 +238,7 @@ fn action(world: &mut World, def: &BorgUpgrade, borg: Entity) {
     {
         let model = world.resource::<Silicons>().0.models[index].clone();
         super::cyborg::transform_to(world, borg, index, &model);
+        super::cyborg::start_transform(world, borg, &model.name);
     }
 }
 
