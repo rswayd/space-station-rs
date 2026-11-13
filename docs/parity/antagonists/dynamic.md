@@ -51,7 +51,7 @@
 Периодические попытки заспавнить антагониста по ходу раунда: из живых игроков (предатель, массовые предатели, малф, блоб-инфекция, одержимый) или из призраков через опрос (маг, нюки, блоб, ксеноморфы, кровяные черви, кошмар, космический дракон, абдукторы, ниндзя, ревенант, генокрад, парадокс-клон, войдволкер, беглецы, морф, демон резни, пауки, пираты).
 
 - **Код:** [`/datum/dynamic_ruleset/midround`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic_ruleset_midround.dm#L1), [`/datum/dynamic_ruleset/midround/from_ghosts`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic_ruleset_midround.dm#L222), [`/datum/dynamic_ruleset/midround/from_living`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic_ruleset_midround.dm#L1113), [`/datum/controller/subsystem/dynamic/proc/try_spawn_midround()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic.dm#L329)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/midround.rs` (`RULESETS`, `try_spawn_midround`, `get_weight`, `force_midround`): все мидраунд-рулсеты BandaStation с весами конфига, шанс по доле мёртвых, лёгкие/тяжёлые; спавнят `Midround Traitor`, `Mass Traitors`, `Midround Nukeops`, `Nightmare` и `Morph` (призраки без опроса; маг и парадокс-клон — в своих файлах), остальные проваливают подготовку; нет окна отмены/переброса админом и ложных тревог
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/antag/midround.rs` (`RULESETS`, `try_spawn_midround`, `get_weight`, `force_midround`): все мидраунд-рулсеты BandaStation с весами конфига, шанс по доле мёртвых, лёгкие/тяжёлые; спавнят `Midround Traitor`, `Mass Traitors`, `Midround Nukeops`, `Nightmare`, `Morph` и `Voidwalker` (`crate::antag::voidwalker`; маг и парадокс-клон — в своих файлах), остальные проваливают подготовку; нет окна отмены/переброса админом и ложных тревог
 
 ### Латджойн-рулсеты
 Опоздавший игрок с шансом становится предателем, генокрадом или революционером.
@@ -64,7 +64,8 @@
 В начале раунда командование получает отчёт с примерным уровнем угрозы в зависимости от выпавшего тира.
 
 - **Код:** [`/datum/controller/subsystem/dynamic/proc/get_advisory_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic.dm#L307)
-- **Статус в ss13-rs:** ❌ нет
+- **BandaStation:** [`communications.dm#L79`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/communications.dm#L79) — отчёт на старте собирается по шаблону `modular_bandastation/paperwork/templates/station_report.md` (цели смены, отклонения станции, сноски, подпись); уровня угрозы в нём нет, и `get_advisory_report()` нигде не вызывается
+- **Статус в ss13-rs:** ✅ как в BandaStation — отчёт на старте раунда (`crates/ss13_game/src/announce.rs`, `queue_roundstart_report`, `crates/ss13_game/src/station_goals.rs`) идёт по шаблону BandaStation без уровня угрозы; мёртвый код tg `get_advisory_report` и тексты `advisory_report` тиров не переносятся
 
 ### Админ-панель Dynamic
 TGUI-панель: смена тира, постановка рулсетов в очередь, принудительный мидраунд, форс extended, просмотр кулдаунов и шансов.

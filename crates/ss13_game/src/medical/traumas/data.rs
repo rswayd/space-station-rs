@@ -378,6 +378,19 @@ impl Kind {
                     ),
                 )
             },
+            Self::Voided { stable } => Def {
+                path: if stable {
+                    "/datum/brain_trauma/voided/stable"
+                } else {
+                    "/datum/brain_trauma/voided"
+                },
+                scan_desc: if stable {
+                    "stable cosmic neural pattern"
+                } else {
+                    "cosmic neural pattern"
+                },
+                ..magic("", "Voided", "", (Notice, ""), (Notice, ""))
+            },
             Self::Kleptomaniac => severe(
                 "/datum/brain_trauma/severe/kleptomaniac",
                 "Клептомания",

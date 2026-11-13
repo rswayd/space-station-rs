@@ -220,6 +220,7 @@ fn add_obj_state(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Command
         || crate::tank_storage::breakable(&obj.path)
         || crate::displaycase::breakable(&obj.path)
         || crate::spawners::breakable(&obj.path)
+        || crate::antag::ashwalker::breakable(&obj.path)
         || crate::defenses::server::breakable(&obj.path)
         || is_under(&obj.path, crate::defenses::cameras::CAMERA_ROOT);
     if !breakable {
@@ -619,6 +620,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         || crate::flora::deconstruct(world, target, &obj)
         || crate::defenses::barricades::deconstruct(world, &obj, pos)
         || crate::chem_machines::separator::deconstruct(world, target, &obj, pos)
+        || crate::antag::ashwalker::deconstruct(world, &obj, pos)
         || (!disassembled && crate::defenses::cameras::destroyed(world, target, pos))
     {
         // A chair's, bed's, bathroom fixture's, decor's or flora's debris is out.

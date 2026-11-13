@@ -1900,6 +1900,10 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(antag::SPELL_RUNTIME_TYPES);
     // Spider eggs, cocoons, webs and the spiders' life stages (`ss13_game::antag::spiders`).
     out.extend(antag::SPIDER_RUNTIME_TYPES);
+    // Ash walker eggs and the nest's anomaly core (`ss13_game::antag::ashwalker`).
+    out.extend(antag::ASHWALKER_RUNTIME_TYPES);
+    // The voidwalker, its windows and drops (`ss13_game::antag::voidwalker`).
+    out.extend(antag::VOIDWALKER_RUNTIME_TYPES);
     // Completed golem shells and what they fall apart into (`ss13_game::golems`).
     out.extend(crate::mob_spawn::GOLEM_RUNTIME_TYPES);
     out.extend(crate::mob_spawn::GOLEM_STACK_FOOD);

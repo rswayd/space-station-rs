@@ -6,7 +6,7 @@ use super::*;
 pub fn scan_line(world: &World, mob: Entity) -> Option<String> {
     let mut all = of_mob(world, mob);
     // `known_trauma = FALSE`: scanners do not show it.
-    all.retain(|t| t.kind != Kind::Beepsky);
+    all.retain(|t| t.kind != Kind::Beepsky && !matches!(t.kind, Kind::Voided { .. }));
     if all.is_empty() {
         return None;
     }
@@ -94,6 +94,7 @@ pub fn refresh(world: &mut World, mob: Entity) {
             Kind::SpeechImpediment => speech.unintelligible = true,
             Kind::Mute => speech.mute = true,
             Kind::Pacifism => pacifist = true,
+            Kind::Voided { stable: false } => pacifist = true,
             Kind::Paralysis(p) => {
                 for zone in p.zones() {
                     paralyzed[zone.index()] = true;
