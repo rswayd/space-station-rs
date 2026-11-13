@@ -52,6 +52,7 @@ pub const ALWAYS_ROOTS: &[&str] = &[
     "/mob/living/basic/clown/fleshclown",
     "/mob/living/basic/cockroach",
     "/mob/living/basic/crab",
+    "/mob/living/basic/blood_worm/hatchling",
     "/mob/living/basic/drone",
     "/mob/living/basic/frog",
     "/mob/living/basic/garden_gnome",
