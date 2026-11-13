@@ -79,6 +79,9 @@ pub const GIFT_TYPES: &[&str] = &[
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `shuttle::create_ripples`: hyperspace ripples on a shuttle's landing tiles.
     "/obj/effect/abstract/ripple",
+    // `vehicles`: the dragon boat and the bottle it goes into.
+    "/obj/vehicle/ridden/lavaboat/dragon",
+    "/obj/item/ship_in_a_bottle",
     // `bows::arrow_drop`: the reusable arrows a shot leaves.
     "/obj/item/ammo_casing/arrow",
     "/obj/item/ammo_casing/arrow/sticky",
