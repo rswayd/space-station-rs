@@ -686,7 +686,10 @@ fn still_valid(world: &World, mob: Entity, action: &DoAfter) -> bool {
     let in_place = (moves || entity.get::<TilePos>() == Some(&action.user_pos))
         && entity.get::<Stat>() == Some(&Stat::Conscious)
         && !crate::status_effects::incapacitation(world, mob).incapacitated;
-    let holding = entity.get::<Inventory>().and_then(Inventory::active_item) == action.item;
+    let holding = entity.get::<Inventory>().and_then(Inventory::active_item) == action.item
+        // A base construction console's RCD works from the console while its user looks on.
+        || matches!(action.job, Job::Rcd(job) if job.remote
+            && action.item.is_some_and(|rcd| crate::base_construction::controls_rcd(world, mob, rcd)));
     let target = moves || world.get::<TilePos>(action.target) == Some(&action.target_pos);
     let tool = action.item.is_none_or(|item| {
         world.get::<Welder>(item).is_none_or(|w| w.usable(0.0))

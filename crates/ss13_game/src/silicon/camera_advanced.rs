@@ -120,10 +120,11 @@ impl Plugin for CameraAdvancedPlugin {
     }
 }
 
-/// The base console and the syndicate one; the other subtypes are their own machines
+/// The base console, the syndicate one and the base construction consoles
+/// (`crate::base_construction`); the other subtypes are their own machines
 /// (`crate::science::xenobio_console`, `crate::shuttle_docker`, ...).
 pub fn is_advanced_console(path: &str) -> bool {
-    path == ADVANCED || is_under(path, SYNDIE)
+    path == ADVANCED || is_under(path, SYNDIE) || crate::base_construction::is_base_console(path)
 }
 
 fn add_console(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
@@ -174,7 +175,17 @@ pub fn attack_hand(world: &mut World, client: Entity, mob: Entity, console: Enti
         .eye
         .and_then(|e| world.get::<RemoteEye>(e))
         .map(|e| e.pos);
-    let Some(pos) = kept.or_else(|| start_location(world, console, &state.network)) else {
+    let base = world
+        .get::<crate::base_construction::BaseConsole>(console)
+        .is_some();
+    let start = |world: &mut World| {
+        if base {
+            crate::base_construction::spawn_spot(world, console)
+        } else {
+            start_location(world, console, &state.network)
+        }
+    };
+    let Some(pos) = kept.or_else(|| start(world)) else {
         return true;
     };
     let eye = match state.eye.filter(|&e| world.get::<RemoteEye>(e).is_some()) {
@@ -341,7 +352,9 @@ fn move_eyes(world: &mut World, mut steps: Local<MessageCursor<RemoteEyeStep>>) 
             continue;
         };
         let to = eye.pos.step(dir);
-        if world.resource::<SpatialIndex>().in_bounds(to) {
+        if world.resource::<SpatialIndex>().in_bounds(to)
+            && crate::base_construction::may_move(world, user.console, to)
+        {
             move_eye(world, user.eye, to);
         }
     }
@@ -376,9 +389,13 @@ fn follow_eyes(world: &mut World, mut seen: Local<u64>) {
 }
 
 fn button(world: &World, id: &str, name: &str, state: &str) -> (ActionButton, f64) {
+    button_of(world, id, name, BUTTON_DMI, state)
+}
+
+fn button_of(world: &World, id: &str, name: &str, dmi: &str, state: &str) -> (ActionButton, f64) {
     let icon = world
         .get_resource::<IconIndex>()
-        .and_then(|i| i.get(BUTTON_DMI, state));
+        .and_then(|i| i.get(dmi, state));
     (
         ActionButton {
             id: id.to_owned(),
@@ -399,7 +416,8 @@ fn button(world: &World, id: &str, name: &str, state: &str) -> (ActionButton, f6
 fn refresh_buttons(world: &mut World, mob: Entity) {
     let current = world.get::<ActionButtons>(mob);
     let had = current.is_some_and(|b| b.0.iter().any(|(b, _)| b.id.starts_with(BUTTON)));
-    let using = world.get::<RemoteEyeUser>(mob).is_some();
+    let user = world.get::<RemoteEyeUser>(mob).copied();
+    let using = user.is_some();
     if !using && !had {
         return;
     }
@@ -411,7 +429,15 @@ fn refresh_buttons(world: &mut World, mob: Entity) {
                 .collect()
         })
         .unwrap_or_default();
-    if using {
+    let base = user
+        .map(|u| crate::base_construction::buttons(world, u.console))
+        .unwrap_or_default();
+    if !base.is_empty() {
+        buttons.extend(
+            base.into_iter()
+                .map(|(id, name, dmi, state)| button_of(world, id, name, dmi, state)),
+        );
+    } else if using {
         buttons.extend([
             button(world, OFF, "End Camera View", "camera_off"),
             button(world, JUMP, "Jump To Camera", "camera_jump"),
@@ -437,6 +463,9 @@ fn trigger_buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<Acti
         let Some(user) = world.get::<RemoteEyeUser>(actor).copied() else {
             continue;
         };
+        if crate::base_construction::trigger(world, client, actor, user, &id) {
+            continue;
+        }
         match id.as_str() {
             OFF => remove_control(world, user.console),
             JUMP => ask_jump(world, client, actor, user.console),

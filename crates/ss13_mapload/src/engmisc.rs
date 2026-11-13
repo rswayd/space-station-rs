@@ -99,6 +99,10 @@ pub const ENGMISC_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/stack/pipe_cleaner_coil",
     // The core every nuclear bomb holds (`ss13_game::antag::nukeop::core_theft`).
     "/obj/item/nuke_core",
+    // A base construction console's RCD and what it places (`ss13_game::base_construction`).
+    "/obj/item/construction/rcd/internal",
+    "/obj/structure/fans/tiny",
+    "/obj/machinery/porta_turret/aux_base",
     // Rods on a wall (`ss13_game::wall_support`).
     "/obj/structure/wall_support",
     // Transit tubes, their unattached parts and pods (`ss13_game::transit_tubes`).

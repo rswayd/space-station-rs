@@ -192,6 +192,11 @@ fn loose_cores(world: &mut World) {
         .filter(|(_, i)| is_under(&i.path, NUKE_CORE))
         .map(|(e, _)| e)
         .collect();
+    // A bomb's own core is spawned during the same pass: it stays dormant.
+    let cores: Vec<Entity> = cores
+        .into_iter()
+        .filter(|&c| world.get::<crate::storage::StoredIn>(c).is_none())
+        .collect();
     for core in cores {
         set_pulsing(world, core, true);
     }

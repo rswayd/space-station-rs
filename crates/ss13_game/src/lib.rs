@@ -213,6 +213,8 @@ pub mod bar;
 #[cfg(feature = "server")]
 pub mod barsign;
 #[cfg(feature = "server")]
+pub mod base_construction;
+#[cfg(feature = "server")]
 pub mod blackbox;
 #[cfg(feature = "server")]
 pub mod botany;

@@ -484,3 +484,67 @@ fn wall_support_takes_two_rods_and_comes_apart() {
     ));
     assert!(world.get_entity(support).is_err(), "cut apart");
 }
+
+/// Base construction consoles (`ss13_game::base_construction`): the aux console's buttons, its
+/// RCD answers only to the mob at its eye, and nothing is placed outside the aux base.
+#[test]
+fn aux_construction_console_builds_only_inside_the_base() {
+    use ss13_game::base_construction::{self, BaseConsole, FAN};
+    use ss13_game::silicon::camera_advanced::{AdvancedConsole, RemoteEye, RemoteEyeUser};
+    use ss13_mapload::DmObj;
+
+    let mut app = server("base_console");
+    let world = app.world_mut();
+    let mob = human(world, at(3));
+    let other = human(world, at(5));
+    let rcd = world
+        .spawn(DmItem {
+            path: "/obj/item/construction/rcd/internal".into(),
+            ..default()
+        })
+        .id();
+    let console = world
+        .spawn((
+            at(4),
+            DmObj {
+                path: "/obj/machinery/computer/camera_advanced/base_construction/aux".into(),
+                anchored: true,
+                ..default()
+            },
+        ))
+        .id();
+    // The console's own `AdvancedConsole` (an observer's command) lands first.
+    world.flush();
+    let eye = world
+        .spawn(RemoteEye {
+            console,
+            pos: at(6),
+        })
+        .id();
+    world.entity_mut(console).insert((
+        BaseConsole {
+            rcd: Some(rcd),
+            aux: true,
+            fans: 4,
+            turrets: 4,
+        },
+        AdvancedConsole {
+            network: vec!["ss13".into()],
+            eye: Some(eye),
+            user: Some(mob),
+        },
+    ));
+    let user = RemoteEyeUser {
+        console,
+        eye,
+        client: mob,
+    };
+    world.entity_mut(mob).insert(user);
+    assert_eq!(base_construction::buttons(world, console).len(), 5);
+    assert!(base_construction::controls_rcd(world, mob, rcd));
+    assert!(!base_construction::controls_rcd(world, other, rcd));
+    // The power fixture has no aux base area: refused, the stock stays.
+    assert!(base_construction::trigger(world, mob, mob, user, FAN));
+    assert_eq!(world.get::<BaseConsole>(console).unwrap().fans, 4);
+    assert!(!base_construction::may_move(world, console, at(6)));
+}
