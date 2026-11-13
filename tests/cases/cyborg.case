@@ -18,10 +18,15 @@ test picks_a_model
   expect bob.windows.ListInputModal.static.items ~ "Engineering"
   expect bob.windows.ListInputModal.static.items !~ "Security"
   bob act ListInputModal submit entry=Engineering
+  # BandaStation skins: the engineering model asks which one (a radial), then transforms.
+  until bob.windows.RadialMenu exists
+  bob act RadialMenu submit entry=Landmate
   until mob(bob).cyborg.model == "Engineering"
   until bob.windows.ListInputModal missing
 
 test modules_from_the_model
+  # The skin's transformation locks the cyborg for about 3 s.
+  wait 4
   bob slot back
   until bob.windows.Storage.data.items.len >= 10
   bob act Storage take key=@bob.windows.Storage.data.items[0].key
