@@ -59,29 +59,29 @@ struct ChannelPlayers(HashMap<u16, Entity>);
 /// The player's volume of each kind of sound, in percent (tg's volume preferences; their
 /// defaults until set).
 #[derive(Resource, Clone, Debug, Default, PartialEq)]
-pub struct SoundVolumes(HashMap<SoundCategory, u8>);
+pub struct SoundVolumes(HashMap<SoundCategory, f32>);
 
 impl SoundVolumes {
-    pub fn get(&self, category: SoundCategory) -> u8 {
+    pub fn get(&self, category: SoundCategory) -> f32 {
         match category {
-            SoundCategory::Game => 100,
+            SoundCategory::Game => 100.0,
             _ => self
                 .0
                 .get(&category)
                 .copied()
-                .unwrap_or_else(|| category.default_percent()),
+                .unwrap_or_else(|| f32::from(category.default_percent())),
         }
     }
 
-    pub fn set(&mut self, category: SoundCategory, percent: u8) {
+    pub fn set(&mut self, category: SoundCategory, percent: f32) {
         if category != SoundCategory::Game {
-            self.0.insert(category, percent.min(100));
+            self.0.insert(category, percent.clamp(0.0, 100.0));
         }
     }
 
     /// The linear factor of a sound of `category`.
     pub fn factor(&self, category: SoundCategory) -> f32 {
-        f32::from(self.get(category)) / 100.0
+        self.get(category) / 100.0
     }
 }
 
@@ -163,7 +163,7 @@ impl Plugin for SoundClientPlugin {
             .map_or(1.0, |v| (v / 100.0).clamp(0.0, 1.0));
         let mut volumes = SoundVolumes::default();
         for category in SoundCategory::PREFERENCES {
-            if let Some(percent) = settings.parsed::<u8>(&volume_key(category)) {
+            if let Some(percent) = settings.parsed::<f32>(&volume_key(category)) {
                 volumes.set(category, percent);
             }
         }

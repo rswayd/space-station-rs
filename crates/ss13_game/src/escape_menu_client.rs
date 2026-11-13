@@ -3,6 +3,7 @@
 //! another window took it (tgui modals cancel on Esc themselves). The menu sets the master volume
 //! and the volume of each kind of sound (tg's volume preferences, [`SoundVolumes`]).
 
+use bevy::app::Propagate;
 use bevy::audio::{
     AudioSink, AudioSinkPlayback, GlobalVolume, PlaybackSettings, SpatialAudioSink, Volume,
 };
@@ -92,16 +93,13 @@ fn escape_key(
 
 /// The menu's [`UiLocalState`] key for the master volume, in percent.
 const LOCAL_VOLUME: &str = "volume";
-const VOLUME_STEP: u32 = 5;
 
 /// The master volume, in percent.
-fn volume_percent(global: &GlobalVolume) -> u32 {
-    (global.volume.to_linear() * 100.0)
-        .round()
-        .clamp(0.0, 100.0) as u32
+fn volume_percent(global: &GlobalVolume) -> f32 {
+    (global.volume.to_linear() * 100.0).clamp(0.0, 100.0)
 }
 
-/// The menu's volume buttons set [`LOCAL_VOLUME`]; this applies it to [`GlobalVolume`] and to
+/// The menu's volume slider sets [`LOCAL_VOLUME`]; this applies it to [`GlobalVolume`] and to
 /// the sounds already playing (bevy reads `GlobalVolume` only when a sound starts). A freshly
 /// opened menu starts from the current volume.
 fn sync_volume(
@@ -116,16 +114,19 @@ fn sync_volume(
         }
         let Some(wanted) = local
             .value(LOCAL_VOLUME)
-            .and_then(|v| v.parse::<u32>().ok())
+            .and_then(|v| v.parse::<f32>().ok())
         else {
-            local.set(LOCAL_VOLUME, &volume_percent(&global).to_string());
+            local.set(
+                LOCAL_VOLUME,
+                &ss13_tgui::slider::stored(volume_percent(&global)),
+            );
             window.mark_dirty();
             continue;
         };
-        if wanted == volume_percent(&global) {
+        if (wanted - volume_percent(&global)).abs() < 0.01 {
             continue;
         }
-        let master = wanted.min(100) as f32 / 100.0;
+        let master = wanted.clamp(0.0, 100.0) / 100.0;
         global.volume = Volume::Linear(master);
         for (mut sink, settings) in &mut sinks {
             sink.set_volume(Volume::Linear(settings.volume.to_linear() * master));
@@ -153,37 +154,21 @@ fn sync_kind_volumes(
         }
         for category in SoundCategory::PREFERENCES {
             let key = kind_key(category);
-            let Some(wanted) = local.value(&key).and_then(|v| v.parse::<u8>().ok()) else {
-                local.set(&key, &volumes.get(category).to_string());
+            let Some(wanted) = local.value(&key).and_then(|v| v.parse::<f32>().ok()) else {
+                local.set(&key, &ss13_tgui::slider::stored(volumes.get(category)));
                 window.mark_dirty();
                 continue;
             };
-            if wanted.min(100) != volumes.get(category) {
+            if (wanted - volumes.get(category)).abs() >= 0.01 {
                 volumes.set(category, wanted);
             }
         }
     }
 }
 
-/// A volume slider writing `key` (0-100, steps of 5) with its percent beside it.
-fn volume_slider(key: String, value: u32) -> impl Scene + use<> {
-    let slider = EntityScene(ss13_tgui::slider::slider(
-        key,
-        value as f32,
-        0.0,
-        100.0,
-        VOLUME_STEP as f32,
-    ));
-    let shown = format!("{value}%");
-    bsn! {
-        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(8) }
-        Children [
-            {slider}
-            --
-            Node { width: px(36), justify_content: JustifyContent::FlexEnd }
-            Children [ Text(shown) ]
-        ]
-    }
+/// A volume slider writing `key` (0-100, continuous) with its percent beside it.
+fn volume_slider(key: String, value: f32) -> impl Scene + use<> {
+    ss13_tgui::slider::slider(key, value, 0.0, 100.0)
 }
 
 fn line(text: String) -> impl Scene + use<> {
@@ -195,16 +180,39 @@ fn kind_volume_row(category: SoundCategory, local: &UiLocalState) -> impl Scene 
     let key = kind_key(category);
     let value = local
         .get(&key)
-        .parse::<u32>()
-        .unwrap_or_else(|_| u32::from(category.default_percent()))
-        .min(100);
+        .parse::<f32>()
+        .unwrap_or_else(|_| f32::from(category.default_percent()))
+        .clamp(0.0, 100.0);
+    volume_row(category.label().to_owned(), key, value)
+}
+
+/// A volume row: its label on the left, the slider taking the rest of the window's width. A
+/// plain row, not a `LabeledList` (its value cell does not give a stretching child its width).
+fn volume_row(label: String, key: String, value: f32) -> impl Scene + use<> {
     let slider = EntityScene(volume_slider(key, value));
-    let label = category.label().to_owned();
+    let color = ss13_ui_kit::theme::UiColor::Label
+        .text()
+        .unwrap_or(ss13_ui_kit::theme::COLOR_TEXT);
     bsn! {
-        @LabeledListItem { @label: label }
-        Children [ {slider} ]
+        Node {
+            width: percent(100),
+            flex_direction: FlexDirection::Row,
+            align_items: AlignItems::Center,
+            column_gap: px(8),
+            padding: UiRect::vertical(px(2)),
+        }
+        Children [
+            Node { width: px(VOLUME_LABEL_PX), flex_shrink: 0.0 }
+            Propagate::<TextColor>(TextColor(color))
+            Children [ Text(label) ]
+            --
+            {slider}
+        ]
     }
 }
+
+/// The volume rows' label column: the longest preference name fits.
+const VOLUME_LABEL_PX: f32 = 170.0;
 
 impl ClientUi for EscapeMenuUi {
     const WIDTH: f32 = 420.0;
@@ -231,10 +239,14 @@ fn menu(data: &EscapeMenuData, local: &UiLocalState) -> impl Scene + use<> {
     let help = EntityScene(line("Админ-помощь: F1".to_owned()));
     let volume = local
         .get(LOCAL_VOLUME)
-        .parse::<u32>()
-        .unwrap_or(100)
-        .min(100);
-    let volume = EntityScene(volume_slider(LOCAL_VOLUME.to_owned(), volume));
+        .parse::<f32>()
+        .unwrap_or(100.0)
+        .clamp(0.0, 100.0);
+    let volume = EntityScene(volume_row(
+        "Общая громкость".to_owned(),
+        LOCAL_VOLUME.to_owned(),
+        volume,
+    ));
     let kinds: Vec<_> = SoundCategory::PREFERENCES
         .into_iter()
         .map(|category| kind_volume_row(category, local))
@@ -252,16 +264,13 @@ fn menu(data: &EscapeMenuData, local: &UiLocalState) -> impl Scene + use<> {
                     --
                     @LabeledListItem { @label: "Игроков онлайн" }
                     Children [ {players} ]
-                    --
-                    @LabeledListItem { @label: "Громкость" }
-                    Children [ {volume} ]
                 ]
             ]
             --
             @Section { @title: "Звук" }
             Children [
-                @LabeledList
-                Children [ {kinds} ]
+                Node { width: percent(100), flex_direction: FlexDirection::Column }
+                Children [ {volume} -- {kinds} ]
             ]
             --
             @Section
