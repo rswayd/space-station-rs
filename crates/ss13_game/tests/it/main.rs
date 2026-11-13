@@ -85,6 +85,7 @@ mod jungle_fauna;
 mod kitchen;
 mod kitchen_machines;
 mod labor;
+mod language_items;
 mod languages;
 mod lava_elites;
 mod lava_fauna;

@@ -38,10 +38,14 @@ pub enum Animation {
     /// tg `/datum/chatmessage` (runechat): `text` over the entity, for one client. Stacked and
     /// aged by the client (`ss13_game::runechat_client`).
     Runechat {
+        /// Plain text with the player's emphasis marks (`|i|`, `_u_`, `^small^`), drawn by the
+        /// client (`apply_message_emphasis`, [`crate::chat::emphasis_runs`]).
         text: String,
         /// `chat_color` of the speaker (`colorize_string`), RGB.
         color: [u8; 3],
         style: RunechatStyle,
+        /// The `\icon` prefixes before the text, in order: radio or emote, then the language.
+        icons: Vec<RunechatIcon>,
     },
     /// tg `/datum/progressbar`: a bar over the entity that fills over `duration_ds`
     /// deciseconds, for the acting client only. Bars on one entity stack upwards.
@@ -65,6 +69,15 @@ pub struct RunechatStyle {
     pub yell: bool,
     /// BandaStation: the `[LOOC]` prefix.
     pub looc: bool,
+}
+
+/// A prefix icon of a [`Animation::Runechat`] (`CHAT_MESSAGE_ICON_SIZE`, 7 px): an icon
+/// state's first frame, with `overlay` drawn over it (the `unknown` mark of a partly
+/// understood language, `DISPLAY_LANGUAGE_ICON_PARTIAL`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunechatIcon {
+    pub state: IconStateId,
+    pub overlay: Option<IconStateId>,
 }
 
 /// Most characters of a [`Animation::Balloon`]; the server cuts longer texts.

@@ -680,6 +680,7 @@ pub fn run_emote(world: &mut World, mob: Entity, key: &str) -> bool {
                     name: name.clone(),
                     text: text.clone(),
                     kind: OverheadKind::Emote,
+                    language: None,
                 });
             }
         }

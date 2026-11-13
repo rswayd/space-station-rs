@@ -19,8 +19,9 @@
 // shortcut: no "1000 most common words" table (an English list: Russian speech never hits it),
 // so partial understanding of a word is the language's percentage - 5 (tg's value for a word
 // outside the list); codespeak scrambles with Galactic Common's syllables instead of ion-law
-// code phrases (no `ion_laws.json` strings); no random name generation, language icons (a text
-// tag instead) or spans (the robot font of machine languages).
+// code phrases (no `ion_laws.json` strings); no random name generation, chat-panel language
+// icons (a text tag instead; runechat draws [`LanguageId::icon`]) or spans (the robot font of
+// machine languages).
 
 use bevy::prelude::*;
 
@@ -115,6 +116,64 @@ impl LanguageId {
 
     pub fn from_path(path: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|l| l.def().path == path)
+    }
+
+    /// `icon` and `icon_state`: the language's chat icon (`.dmi` path, state).
+    pub fn icon(self) -> (&'static str, &'static str) {
+        const TG: &str = "icons/ui/chat/language.dmi";
+        let state = match self {
+            Self::Common => "galcom",
+            Self::Uncommon => "galuncom",
+            Self::Draconic => "lizard",
+            Self::Moffic => "moth",
+            Self::Nekomimetic => "neko",
+            Self::Sylvan => "plant",
+            Self::Terrum => "golem",
+            Self::Calcic => "calcic",
+            Self::Voltaic => "volt",
+            Self::Slime => "slime",
+            Self::Shadowtongue => "shadow",
+            // `/datum/language/mushroom` keeps the base `unknown`.
+            Self::Mushroom => "unknown",
+            Self::Machine => "eal",
+            Self::Drone => "drone",
+            Self::Xenocommon => "xeno",
+            Self::Narsie => "narsie",
+            Self::Aphasia => "aphasia",
+            Self::Beachbum => "beach",
+            Self::Buzzwords => "buzz",
+            Self::Carptongue => "fish",
+            Self::Codespeak => "codespeak",
+            Self::Monkey => "animal",
+            Self::Piratespeak => "pirate",
+            Self::Wormspeak => "wormspeak",
+            // BandaStation's own icon files.
+            Self::Spinwarder => {
+                return (
+                    "modular_bandastation/language_improvements/icons/language.dmi",
+                    "neorussian",
+                );
+            }
+            Self::Canilunzt => {
+                return (
+                    "icons/bandastation/mob/species/vulpkanin/lang.dmi",
+                    "vulptail",
+                );
+            }
+            Self::Qurvolious => {
+                return (
+                    "icons/bandastation/mob/species/skrell/lang.dmi",
+                    "skrell_face",
+                );
+            }
+            Self::Siiktajr => {
+                return (
+                    "icons/bandastation/mob/species/tajaran/lang.dmi",
+                    "taj_face",
+                );
+            }
+        };
+        (TG, state)
     }
 }
 

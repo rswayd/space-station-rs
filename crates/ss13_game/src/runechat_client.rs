@@ -1,19 +1,24 @@
 //! Client half of runechat ([`crate::runechat`], tg `/datum/chatmessage`): every
 //! [`Animation::Runechat`] becomes a line of text over its speaker. A speaker's lines stack, the
 //! newest at the bottom, and a new line shortens the older ones' lives (`CHAT_MESSAGE_EXP_DECAY`,
-//! `CHAT_MESSAGE_HEIGHT_DECAY`).
-// shortcut: a UI text node projected onto the map every frame, as `crate::balloon_client`, with
-// The UI's DejaVu Sans (no bold for `yell`, no italics: the server already darkens the color);
-// the prefix `[LOOC]` is in the line's own color.
+//! `CHAT_MESSAGE_HEIGHT_DECAY`). The prefix icons (radio, emote, language) stand before the
+//! text; the player's emphasis marks become italic, bold, underlined or small runs
+//! (`apply_message_emphasis`).
+// shortcut: UI nodes projected onto the map every frame, as `crate::balloon_client`, with the
+// UI's DejaVu Sans (`yell` is bold; `italics` keeps the font, the server already darkens the
+// color); the icons are a column before the text block rather than inline glyphs; the prefix
+// `[LOOC]` is in the line's own color.
 
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
-use bevy::text::{FontSize, Justify, TextLayout};
+use bevy::text::{FontSize, FontStyle, FontWeight, Justify, TextLayout, Underline};
 use ss13_net::animation::client::AnimationReceived;
 use ss13_net::client::NetEntityMap;
 use ss13_render::WorldCamera;
 use ss13_shared::TILE_SIZE;
-use ss13_shared::animation::Animation;
+use ss13_shared::animation::{Animation, RunechatIcon};
+use ss13_shared::chat::{Emphasis, emphasis_runs};
+use ss13_tgui::client::UiSprite;
 
 /// `CHAT_MESSAGE_SPAWN_TIME`, seconds.
 const SPAWN_SECS: f64 = 0.2;
@@ -34,6 +39,10 @@ const CHARS_PER_LINE: f32 = 22.0;
 /// How fast a line eases to its place in the stack (`CHAT_MESSAGE_SPAWN_TIME` per slide), per
 /// second.
 const SLIDE_RATE: f32 = 12.0;
+/// `CHAT_MESSAGE_ICON_SIZE`, icon pixels.
+const ICON_PX: f32 = 7.0;
+/// `<small>` of a `^small^` run against the line's size.
+const SMALL_RUN: f32 = 0.8;
 
 pub struct RunechatClientPlugin;
 
@@ -56,6 +65,15 @@ pub struct Runechat {
     pub small: bool,
     /// Current rise above the speaker, logical pixels.
     pub lifted: f32,
+}
+
+/// The parts of a line its fade and zoom reach: the text sections (the root, then the emphasis
+/// runs) with their size against the line's, and the prefix icons (an overlay is a child of
+/// its icon).
+#[derive(Component, Debug, Default)]
+pub struct RunechatParts {
+    pub texts: Vec<(Entity, f32)>,
+    pub icons: Vec<Entity>,
 }
 
 /// tg `approx_lines`.
@@ -104,7 +122,13 @@ fn spawn_lines(
 ) {
     let now = time.elapsed_secs_f64();
     for AnimationReceived(event) in received.read() {
-        let Animation::Runechat { text, color, style } = &event.animation else {
+        let Animation::Runechat {
+            text,
+            color,
+            style,
+            icons,
+        } = &event.animation
+        else {
             continue;
         };
         let Some(target) = map.get(event.target) else {
@@ -121,41 +145,135 @@ fn spawn_lines(
         older.sort_by(|a, b| a.born.total_cmp(&b.born));
         age_older(older.iter_mut().map(|l| &mut **l), new_lines, now);
         let [r, g, b] = *color;
-        commands.spawn((
-            Runechat {
-                target,
-                born: now,
-                fade_at: now + LIFESPAN_SECS - SPAWN_SECS - FADE_SECS,
-                lines: new_lines,
-                color: *color,
-                small: style.small,
-                lifted: 0.0,
+        let clear = Color::srgba_u8(r, g, b, 0);
+        let weight = if style.yell {
+            FontWeight::BOLD
+        } else {
+            FontWeight::NORMAL
+        };
+        let font = |emphasis: Option<Emphasis>| TextFont {
+            font_size: FontSize::Px(FONT_PX * 2.0),
+            // Bevy's default font has no Cyrillic: the bundled UI face (DejaVu Sans) does.
+            font: bevy::text::FontSource::Family(ss13_ui_kit::theme::FONT_FAMILY.into()),
+            weight: if emphasis == Some(Emphasis::Bold) {
+                FontWeight::BOLD
+            } else {
+                weight
             },
-            Name::new("runechat"),
-            Node {
-                position_type: PositionType::Absolute,
-                ..default()
+            style: if emphasis == Some(Emphasis::Italic) {
+                FontStyle::Italic
+            } else {
+                FontStyle::Normal
             },
-            Text::new(shown),
-            TextFont {
-                font_size: FontSize::Px(FONT_PX * 2.0),
-                // Bevy's default font has no Cyrillic: the bundled UI face (DejaVu Sans) does.
-                font: bevy::text::FontSource::Family(ss13_ui_kit::theme::FONT_FAMILY.into()),
-                ..default()
-            },
-            TextColor(Color::srgba_u8(r, g, b, 0)),
-            TextLayout::justify(Justify::Center),
-            TextShadow {
-                offset: Vec2::splat(1.0),
-                color: Color::srgba(0.0, 0.0, 0.0, 0.0),
-            },
-            Pickable::IGNORE,
-            GlobalZIndex(0),
-        ));
+            ..default()
+        };
+        let line = commands
+            .spawn((
+                Runechat {
+                    target,
+                    born: now,
+                    fade_at: now + LIFESPAN_SECS - SPAWN_SECS - FADE_SECS,
+                    lines: new_lines,
+                    color: *color,
+                    small: style.small,
+                    lifted: 0.0,
+                },
+                Name::new("runechat"),
+                Node {
+                    position_type: PositionType::Absolute,
+                    flex_direction: FlexDirection::Row,
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::FlexStart,
+                    ..default()
+                },
+                Pickable::IGNORE,
+                GlobalZIndex(0),
+            ))
+            .id();
+        let mut parts = RunechatParts::default();
+        for &RunechatIcon { state, overlay } in icons {
+            let icon = commands
+                .spawn((
+                    Node {
+                        width: px(ICON_PX * 2.0),
+                        height: px(ICON_PX * 2.0),
+                        flex_shrink: 0.0,
+                        margin: UiRect::right(px(2.0)),
+                        ..default()
+                    },
+                    UiSprite {
+                        icon_state: Some(state),
+                        color: Some([255, 255, 255, 0]),
+                        dir: None,
+                    },
+                    Pickable::IGNORE,
+                    ChildOf(line),
+                ))
+                .id();
+            parts.icons.push(icon);
+            if let Some(overlay) = overlay {
+                let mark = commands
+                    .spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            width: percent(100.0),
+                            height: percent(100.0),
+                            ..default()
+                        },
+                        UiSprite {
+                            icon_state: Some(overlay),
+                            color: Some([255, 255, 255, 0]),
+                            dir: None,
+                        },
+                        Pickable::IGNORE,
+                        ChildOf(icon),
+                    ))
+                    .id();
+                parts.icons.push(mark);
+            }
+        }
+        let root = commands
+            .spawn((
+                Text::new(""),
+                font(None),
+                TextColor(clear),
+                TextLayout::justify(Justify::Center),
+                TextShadow {
+                    offset: Vec2::splat(1.0),
+                    color: Color::srgba(0.0, 0.0, 0.0, 0.0),
+                },
+                Node {
+                    flex_shrink: 1.0,
+                    ..default()
+                },
+                Pickable::IGNORE,
+                ChildOf(line),
+            ))
+            .id();
+        parts.texts.push((root, 1.0));
+        for (emphasis, run) in emphasis_runs(&shown) {
+            let mut span = commands.spawn((
+                TextSpan::new(run),
+                font(emphasis),
+                TextColor(clear),
+                ChildOf(root),
+            ));
+            if emphasis == Some(Emphasis::Underline) {
+                span.insert(Underline);
+            }
+            let size = if emphasis == Some(Emphasis::Small) {
+                SMALL_RUN
+            } else {
+                1.0
+            };
+            parts.texts.push((span.id(), size));
+        }
+        commands.entity(line).insert(parts);
     }
 }
 
-/// Cost: per line on screen (a dozen at a crowded bar), one projection and a few writes a frame.
+/// Cost: per line on screen (a dozen at a crowded bar), one projection and a few writes a frame
+/// per text run and icon.
 fn place_lines(
     time: Res<Time>,
     cameras: Query<(&Camera, &GlobalTransform), With<WorldCamera>>,
@@ -164,11 +282,11 @@ fn place_lines(
         Entity,
         &mut Runechat,
         &mut Node,
-        &mut TextFont,
-        &mut TextColor,
-        &mut TextShadow,
+        &RunechatParts,
         &ComputedNode,
     )>,
+    mut texts: Query<(&mut TextFont, &mut TextColor, Option<&mut TextShadow>), Without<Runechat>>,
+    mut icons: Query<(&mut Node, Option<&mut ImageNode>), Without<Runechat>>,
     mut commands: Commands,
 ) {
     let now = time.elapsed_secs_f64();
@@ -176,7 +294,7 @@ fn place_lines(
     let camera = cameras.iter().next();
     // A speaker's lines, newest first: each stands on the ones born after it.
     let mut stacks: HashMap<Entity, Vec<(f64, Entity, f32)>> = HashMap::new();
-    for (entity, line, _, _, _, _, computed) in &lines {
+    for (entity, line, _, _, computed) in &lines {
         let height = computed.size().y * computed.inverse_scale_factor();
         stacks
             .entry(line.target)
@@ -192,7 +310,7 @@ fn place_lines(
             under += height;
         }
     }
-    for (entity, mut line, mut node, mut font, mut color, mut shadow, computed) in &mut lines {
+    for (entity, mut line, mut node, parts, computed) in &mut lines {
         let Ok(target) = targets.get(line.target) else {
             commands.entity(entity).despawn();
             continue;
@@ -207,8 +325,7 @@ fn place_lines(
         line.lifted += (want - line.lifted) * step;
         let alpha = alpha_at(&line, now);
         let [r, g, b] = line.color;
-        color.0 = Color::srgba_u8(r, g, b, (alpha * 255.0) as u8);
-        shadow.color = Color::srgba(0.0, 0.0, 0.0, alpha * 0.8);
+        let faded = Color::srgba_u8(r, g, b, (alpha * 255.0) as u8);
         let Some((camera, view)) = camera else {
             continue;
         };
@@ -222,8 +339,31 @@ fn place_lines(
         };
         let scale = (right.x - at.x).abs().max(1.0);
         let size = (if line.small { SMALL_FONT_PX } else { FONT_PX }) * scale;
-        if !matches!(font.font_size, FontSize::Px(cur) if cur == size) {
-            font.font_size = FontSize::Px(size);
+        for &(part, factor) in &parts.texts {
+            let Ok((mut font, mut color, shadow)) = texts.get_mut(part) else {
+                continue;
+            };
+            color.0 = faded;
+            if let Some(mut shadow) = shadow {
+                shadow.color = Color::srgba(0.0, 0.0, 0.0, alpha * 0.8);
+            }
+            let want = size * factor;
+            if !matches!(font.font_size, FontSize::Px(cur) if cur == want) {
+                font.font_size = FontSize::Px(want);
+            }
+        }
+        for &icon in &parts.icons {
+            let Ok((mut icon_node, image)) = icons.get_mut(icon) else {
+                continue;
+            };
+            if let Some(mut image) = image {
+                image.color = Color::srgba(1.0, 1.0, 1.0, alpha);
+            }
+            // An overlay fills its icon; an icon is `CHAT_MESSAGE_ICON_SIZE` at this zoom.
+            if icon_node.position_type != PositionType::Absolute {
+                icon_node.width = px(ICON_PX * scale);
+                icon_node.height = px(ICON_PX * scale);
+            }
         }
         let width = WIDTH_PX * scale;
         let height = computed.size().y * computed.inverse_scale_factor();

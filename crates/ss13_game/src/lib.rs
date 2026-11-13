@@ -484,6 +484,8 @@ pub mod keycard_client;
 pub mod kitchen;
 #[cfg(feature = "server")]
 pub mod kitchen_ware;
+#[cfg(feature = "server")]
+pub mod language_manuals;
 pub mod language_menu;
 #[cfg(feature = "client")]
 pub mod language_menu_client;
@@ -701,6 +703,8 @@ pub mod spawners;
 pub mod species;
 #[cfg(feature = "server")]
 pub mod speech;
+#[cfg(feature = "server")]
+pub mod speechmods;
 #[cfg(feature = "server")]
 pub mod spells;
 #[cfg(feature = "server")]

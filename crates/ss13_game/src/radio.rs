@@ -287,6 +287,7 @@ impl Plugin for RadioServerPlugin {
         app.add_plugins(crate::telecomms::TelecommsPlugin)
             .add_message::<Spoke>()
             .add_message::<SendChat>()
+            .add_message::<ss13_chat::server::Overhead>()
             .add_message::<MachineRadio>()
             .add_message::<RadioTalked>()
             .init_resource::<Listeners>()
@@ -619,6 +620,8 @@ struct Transmission {
     superspace: bool,
     /// What the server logs make of the speaker (`mobtype`).
     race: &'static str,
+    /// `virt.source`: the mob whose words these are; listeners see them over it (runechat).
+    speaker: Option<Entity>,
 }
 
 /// Which radios a transmission reaches, and its words.
@@ -747,7 +750,7 @@ fn transmit_speech(
         understanding,
         mut server_logs,
         implant_radios,
-        (controls, codewords),
+        (controls, codewords, mut overhead),
         mut talked,
         jammers,
     ): (
@@ -762,6 +765,7 @@ fn transmit_speech(
         (
             Query<&ss13_net::server::ControlledEntity>,
             Query<&ss13_chat::server::Codewords>,
+            MessageWriter<ss13_chat::server::Overhead>,
         ),
         MessageWriter<RadioTalked>,
         Option<Res<crate::devices::jammer::JammerZones>>,
@@ -898,6 +902,7 @@ fn transmit_speech(
                 subspace: radio.subspace(),
                 superspace,
                 race,
+                speaker: Some(spoke.speaker),
             });
         }
         // Broadcasting radios that heard the words relay them (`/obj/item/radio/Hear`); the
@@ -963,6 +968,7 @@ fn transmit_speech(
                 superspace: radio.special_channels & RADIO_SPECIAL_CENTCOM != 0
                     && (radio.frequency == FREQ_CENTCOM || radio.frequency == FREQ_STATUS_DISPLAYS),
                 race,
+                speaker: Some(spoke.speaker),
             });
         }
         sent.extend(transmissions.into_iter().map(|tx| (spoke.name.clone(), tx)));
@@ -982,6 +988,7 @@ fn transmit_speech(
                 subspace: false,
                 superspace: false,
                 race: "Machinery",
+                speaker: None,
             },
         )
     }));
@@ -1054,6 +1061,22 @@ fn transmit_speech(
         }
         info!(target: "say", "radio {} from {}: {}", tx.freq, name, reach.text);
         for heard in understanding.split(clients, tx.language, &reach.text) {
+            // `create_chat_message` of a virtual speaker: over its source, never one's own.
+            if let Some(speaker) = tx.speaker {
+                for &client in &heard.clients {
+                    if controls.get(client).is_ok_and(|body| body.0 == speaker) {
+                        continue;
+                    }
+                    overhead.write(ss13_chat::server::Overhead {
+                        client,
+                        speaker,
+                        name: name.clone(),
+                        text: heard.text.clone(),
+                        kind: ss13_chat::server::OverheadKind::Radio,
+                        language: tx.language,
+                    });
+                }
+            }
             let mut message = radio_message(reach.freq, &name, tx.verb, &heard.text, tx.italics);
             // After the channel, before the name (tg `compose_message`'s `languageicon`).
             if let Some(tag) = heard.tag {
