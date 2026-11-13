@@ -29,6 +29,7 @@ pub mod clothing;
 pub mod construct;
 pub mod contents;
 pub mod convert;
+pub mod crafting;
 pub mod dispenser;
 pub mod disposal;
 pub mod dock;

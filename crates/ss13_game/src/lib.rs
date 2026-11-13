@@ -266,6 +266,9 @@ pub mod comms_server;
 pub mod construction;
 #[cfg(feature = "server")]
 pub mod cooking;
+pub mod crafting;
+#[cfg(feature = "client")]
+pub mod crafting_client;
 #[cfg(feature = "server")]
 pub mod crayons;
 pub mod cryosleep;

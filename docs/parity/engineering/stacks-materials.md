@@ -78,7 +78,7 @@
 `custom_materials` и слоты материалов: предметы, стены, полы, двери, статуи, сделанные из любого материала, получают его цвет, имя и свойства.
 
 - **Код:** [`proc/on_applied()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/materials/_material.dm#L109), [`/datum/material_slot`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/materials/material_slots/_slot.dm#L2), [`material_slots`](https://github.com/ss220club/BandaStation/tree/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/materials/material_slots)
-- **Статус в ss13-rs:** ❌ нет — сюда же стационарные баки из других материалов (обшивка рамы `tank_frame` любым жёстким материалом: прочность и предел давления, цвет, приставка к имени; сейчас только железо, `crates/ss13_game/src/atmos_machinery/tank_frame.rs`)
+- **Статус в ss13-rs:** ❌ нет — сюда же стационарные баки из других материалов (обшивка рамы `tank_frame` любым жёстким материалом: прочность и предел давления, цвет, приставка к имени; сейчас только железо, `crates/ss13_game/src/atmos_machinery/tank_frame.rs`); меню крафта (`crates/ss13_game/src/crafting.rs`) и меню стаков материалы ингредиентов результату тоже не передают (`set_custom_materials`) — ждут этот механизм
 
 ### Хранилища материалов машин и рудный силос
 `material_container` хранит листы в машинах (автолат, протолат, ...), `remote_materials` связывает машины с общим рудным силосом.

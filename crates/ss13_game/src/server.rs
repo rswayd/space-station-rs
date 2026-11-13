@@ -313,6 +313,7 @@ impl Plugin for GameServerPlugin {
             crate::transform::TransformPlugin,
         ))
         .add_plugins(crate::language_menu::LanguageMenuServerPlugin)
+        .add_plugins(crate::crafting::CraftingServerPlugin)
         .add_plugins(crate::statpanel::StatPanelServerPlugin)
         .add_plugins((crate::votes::VotesPlugin, crate::cryosleep::CryosleepPlugin))
         .add_plugins((

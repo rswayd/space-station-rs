@@ -26,6 +26,7 @@ usage:
       and <assets>/antag.ron (uplink catalog, steal objective targets)
       and <assets>/cargo.ron (supply packs, exports), <assets>/research.ron (techweb)
       and <assets>/plants.ron (seeds, plant traits, hydroponics trays)
+      and <assets>/crafting.ron (crafting menu recipes)
       and <assets>/mobs.ron (basic mob types)
       and <assets>/sfx.ron (SFX keys), <assets>/sound/ (referenced .ogg files, attributions)
       and <assets>/nanomap/ (station map images of the camera and crew monitor maps)
@@ -220,6 +221,15 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
     let research = ss13_mapload::research::resolve(&types);
     // Printed designs and ejected sheets are spawned at runtime; every design shows its icon.
     used.extend(research.prototype_types().into_iter().map(str::to_owned));
+    let crafting = ss13_mapload::crafting::resolve(&types);
+    // Crafting menu results are spawned at runtime.
+    used.extend(
+        crafting
+            .prototype_types()
+            .into_iter()
+            .filter(|p| types.types.contains_key(*p))
+            .map(str::to_owned),
+    );
     let modsuits = ss13_mapload::modsuit::resolve(&types);
     // MODsuit control units, their parts, modules, cores and cells are spawned at runtime.
     used.extend(
@@ -442,6 +452,14 @@ fn convert_cmd(config: &MapLoadPlugin, mut map_dirs: Vec<PathBuf>) -> anyhow::Re
         "{} basic mob types -> {}",
         mobs.mobs.len(),
         mobs_out.display()
+    );
+    let crafting_out = config.assets.join(ss13_mapload::crafting::CRAFTING_FILE);
+    std::fs::write(&crafting_out, crafting.to_ron())
+        .with_context(|| format!("writing {}", crafting_out.display()))?;
+    println!(
+        "{} crafting recipes -> {}",
+        crafting.recipes.len(),
+        crafting_out.display()
     );
     let restaurant = ss13_mapload::restaurant::resolve(&types, &config.source);
     let restaurant_out = config

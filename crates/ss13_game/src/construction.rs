@@ -260,6 +260,8 @@ pub enum Job {
     Table(crate::tables::TableJob),
     /// Taking an item off someone or putting one on them ([`crate::strip`]).
     Strip(crate::strip::StripJob),
+    /// A crafting menu recipe ([`crate::crafting`]).
+    Craft(crate::crafting::CraftJob),
     /// Wrenching or welding an emitter ([`crate::power::emitter`]).
     Emitter(crate::power::emitter::EmitterJob),
     /// Blood samples, IV drips, surgery, buckling, defibrillators, wound treatments
@@ -1576,6 +1578,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         Job::PlatePress => crate::brig::labor::complete_press(world, mob, target),
         &Job::Table(job) => crate::tables::complete(world, mob, action, job),
         Job::Strip(job) => crate::strip::complete(world, mob, action, *job),
+        &Job::Craft(job) => crate::crafting::complete(world, mob, action, job),
         Job::Medical(job) => crate::medical::complete_med(world, mob, action, *job),
         &Job::Mecha(job) => crate::mecha::core::complete(world, mob, action, job),
         Job::Disposal(job) => crate::disposals::complete(world, mob, action, *job),

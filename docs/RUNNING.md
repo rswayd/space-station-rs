@@ -1666,7 +1666,9 @@ with 50 water at 450 K a soup reacts (`reagents.ron` soups, started by the game)
 the bare floor rots (5/7/10 minutes) into moldy food; drying racks dry what is dryable ("Dry"
 in their window). A thrown glass smashes; a bar sign takes a sign from someone with bar access.
 `ss13-dm-extract` dumps the `dryable` element calls; `convert` emits `dm_glass`, `dm_barsign`
-and the new `dm_food` fields. There is no crafting menu, grill or juicing yet.
+and the new `dm_food` fields. There is no grill or juicing yet. The crafting menu (HUD button
+next to the language button, `crafting.ron` from `convert`) cooks in its "Готовка" mode from
+what lies within a tile and what the cook holds.
 
 ```sh
 cargo test -p ss13_mapload --lib food                 # microwave/processable/processor data
