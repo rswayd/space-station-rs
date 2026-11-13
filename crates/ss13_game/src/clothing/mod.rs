@@ -32,6 +32,8 @@ pub mod gear;
 #[cfg(feature = "server")]
 pub mod holsters;
 #[cfg(feature = "server")]
+pub mod laces;
+#[cfg(feature = "server")]
 pub mod lasertag;
 #[cfg(feature = "server")]
 pub mod muzzle;
@@ -183,6 +185,7 @@ mod server {
             toggles::build(app);
             crate::clothing::gear::build(app);
             reskin::build(app);
+            super::laces::build(app);
         }
     }
 
@@ -243,6 +246,7 @@ mod server {
         accessories::examine_lines(world, item, lines);
         envirosuit::examine_lines(world, item, lines);
         super::collar_bomb::examine_lines(world, item, lines);
+        super::laces::examine_lines(world, item, lines);
     }
 
     /// What the worn look needs from the clothing (`crate::inventory`'s `refresh_mobs`).

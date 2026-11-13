@@ -19,7 +19,11 @@
 //! The window's `ui_status` is tg's: closed beyond reach, update-only with blocked hands,
 //! disabled when the user is incapacitated or unconscious. The slot the user works on is
 //! highlighted (`interacting`).
-// shortcut: no alternate actions (internals valves, suit sensors, shoelaces, item cuffs),
+//!
+//! The shoes entry offers tg's alternate action on laced shoes (`feet/get_alternate_actions`):
+//! "knot", "untie" or "unknot" by their state; the `alt` act runs `handle_tying`
+//! (`crate::clothing::laces`).
+// shortcut: no other alternate actions (internals valves, suit sensors, item cuffs),
 // per-item `strip_delay` and `equip_delay_other` are tg's defaults (4 s and 2 s: not converted
 // per type yet), no AFK theft log, no fireman carry exception (`should_strip`).
 
@@ -41,8 +45,8 @@ use crate::hud::HudIcon;
 use crate::inventory::{CarriedBy, Inventory, can_equip, unequip};
 use crate::legcuffs::Legcuffed;
 use crate::panels::{
-    OBSCURING_COMPLETELY, OBSCURING_HIDDEN, OBSCURING_INACCESSIBLE, OBSCURING_NONE, STRIP_USE,
-    StripItem, StripMenuData, StripMenuUi, StripSlot,
+    OBSCURING_COMPLETELY, OBSCURING_HIDDEN, OBSCURING_INACCESSIBLE, OBSCURING_NONE, STRIP_ALT,
+    STRIP_USE, StripItem, StripMenuData, StripMenuUi, StripSlot,
 };
 use crate::restraints::Handcuffed;
 use crate::security::{name_of, show};
@@ -169,7 +173,15 @@ type UserQueries = (
     Query<'static, 'static, (Option<&'static Appearance>, Option<&'static DmName>)>,
     Query<'static, 'static, &'static DoAfter>,
     Query<'static, 'static, &'static DmClothing>,
+    Query<'static, 'static, &'static crate::clothing::laces::Laces>,
 );
+
+/// A strip menu act on an entry of [`ENTRIES`]: `use`, or `alt` (its alternate action).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StripAct {
+    Use(u8),
+    Alt(u8),
+}
 
 impl ServerUi for StripMenuUi {
     type Source = (
@@ -180,7 +192,7 @@ impl ServerUi for StripMenuUi {
         Option<&'static Legcuffed>,
     );
     type UserParam = UserQueries;
-    type Act = u8;
+    type Act = StripAct;
 
     fn static_data(
         _: (
@@ -202,7 +214,7 @@ impl ServerUi for StripMenuUi {
             Option<&Legcuffed>,
         ),
         user: Entity,
-        (items, actions, clothing): &SystemParamItem<'_, '_, UserQueries>,
+        (items, actions, clothing, laces): &SystemParamItem<'_, '_, UserQueries>,
     ) -> StripMenuData {
         let working = actions
             .get(user)
@@ -225,7 +237,25 @@ impl ServerUi for StripMenuUi {
                 });
                 // An inaccessible slot still shows its item.
                 let shown = matches!(obscured, OBSCURING_NONE | OBSCURING_INACCESSIBLE);
-                let item = item.filter(|_| shown).map(|e| {
+                let shown_item = item.filter(|_| shown);
+                // `feet/get_alternate_actions`.
+                let alternate = match (reach, shown_item.and_then(|e| laces.get(e).ok())) {
+                    (Reach::Slot(InventorySlot::Shoes), Some(l))
+                        if l.fastening != crate::clothing::laces::Fastening::SlipOn =>
+                    {
+                        use crate::clothing::laces::Tied;
+                        vec![
+                            match l.tied {
+                                Tied::Untied => "knot",
+                                Tied::Tied => "untie",
+                                Tied::Knotted => "unknot",
+                            }
+                            .to_owned(),
+                        ]
+                    }
+                    _ => Vec::new(),
+                };
+                let item = shown_item.map(|e| {
                     let (appearance, dm) = items.get(e).unwrap_or((None, None));
                     StripItem {
                         name: dm.map(|n| n.name.clone()).unwrap_or_default(),
@@ -240,6 +270,7 @@ impl ServerUi for StripMenuUi {
                     item,
                     obscured,
                     interacting: working == Some(i as u8),
+                    alternate,
                 }
             })
             .collect();
@@ -249,15 +280,17 @@ impl ServerUi for StripMenuUi {
         }
     }
 
-    fn parse_act(action: &str, params: &UiParams) -> Result<u8, UiReject> {
-        if action != STRIP_USE {
-            return Err(UiReject::UnknownAction);
-        }
+    fn parse_act(action: &str, params: &UiParams) -> Result<StripAct, UiReject> {
+        let act: fn(u8) -> StripAct = match action {
+            STRIP_USE => StripAct::Use,
+            STRIP_ALT => StripAct::Alt,
+            _ => return Err(UiReject::UnknownAction),
+        };
         let key = params.get("key").unwrap_or_default();
         ENTRIES
             .iter()
             .position(|(k, _)| *k == key)
-            .map(|i| i as u8)
+            .map(|i| act(i as u8))
             .ok_or_else(|| UiReject::BadParams("key: not a strippable slot".into()))
     }
 }
@@ -327,13 +360,41 @@ fn strip_status(
 
 /// tg `/datum/strip_menu/ui_act` `use`, for acts that passed the window's status this tick.
 fn strip_acts(world: &mut World, mut acts: Local<MessageCursor<UiActed<StripMenuUi>>>) {
-    let acts: Vec<(Entity, Entity, Entity, u8)> = acts
+    let acts: Vec<(Entity, Entity, Entity, StripAct)> = acts
         .read(world.resource::<Messages<UiActed<StripMenuUi>>>())
         .map(|a| (a.client, a.actor, a.source, a.act))
         .collect();
-    for (client, user, owner, entry) in acts {
-        use_slot(world, client, user, owner, entry);
+    for (client, user, owner, act) in acts {
+        match act {
+            StripAct::Use(entry) => use_slot(world, client, user, owner, entry),
+            StripAct::Alt(entry) => alternate_action(world, client, user, owner, entry),
+        }
     }
+}
+
+/// tg `feet/perform_alternate_action` ("knot", "untie", "unknot"): `handle_tying` of the shoes
+/// in a slot the clothing leaves reachable.
+fn alternate_action(world: &mut World, client: Entity, user: Entity, owner: Entity, entry: u8) {
+    let Some(&(_, reach)) = ENTRIES.get(usize::from(entry)) else {
+        return;
+    };
+    if reach != Reach::Slot(InventorySlot::Shoes) {
+        return;
+    }
+    let Some(inventory) = world.get::<Inventory>(owner).cloned() else {
+        return;
+    };
+    let Some(shoes) = inventory.shoes else {
+        return;
+    };
+    let obscured = obscuring(&inventory, reach, Some(shoes), |e| {
+        clothing_flags(world.get::<DmClothing>(e))
+    });
+    if obscured != OBSCURING_NONE || crate::clothing::laces::worn_laces(world, shoes).is_none() {
+        return;
+    }
+    crate::clothing::laces::handle_tying(world, user, shoes);
+    refresh(world, client, user, owner);
 }
 
 fn use_slot(world: &mut World, client: Entity, user: Entity, owner: Entity, entry: u8) {
@@ -667,7 +728,7 @@ mod tests {
                 &UiParams::new(&[("key".into(), "left_pocket".into())])
             )
             .unwrap(),
-            13
+            StripAct::Use(13)
         );
         assert_eq!(
             StripMenuUi::parse_act(
@@ -675,7 +736,12 @@ mod tests {
                 &UiParams::new(&[("key".into(), "legcuffs".into())])
             )
             .unwrap(),
-            18
+            StripAct::Use(18)
+        );
+        assert_eq!(
+            StripMenuUi::parse_act(STRIP_ALT, &UiParams::new(&[("key".into(), "shoes".into())]))
+                .unwrap(),
+            StripAct::Alt(9)
         );
         assert!(StripMenuUi::parse_act("alt", &UiParams::new(&[])).is_err());
         assert!(is_pocket(ENTRIES[13].1) && is_pocket(ENTRIES[14].1) && !is_pocket(ENTRIES[15].1));

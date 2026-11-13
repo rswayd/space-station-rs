@@ -63,6 +63,7 @@
 //! | 1763 | `devices::broadcast_camera::attack_self` (live or offline) |
 //! | 1767 | `clothing::gear::toggle_magboots` |
 //! | 1773 | `devices::door_remote::attack_self` (the next mode) |
+//! | 1777 | `devices::jammer::attack_self` (the disruptor wave) |
 //! | 1800 | `explosions::sources::c4_attack_self` |
 //! | 1897 | `science::relics::attack_self` (a strange object: the hint, or its power) |
 //! | 1900 | `assemblies::server::attack_self` |
@@ -131,6 +132,7 @@
 //! | 3367 | `science::bitrunning::help::host_monitor` (the host health of an avatar) |
 //! | 3369 | `hookah::mouthpiece_attack_self` (a lit hookah's mouthpiece: a draw) |
 //! | 3377 | `science::bitrunning::disks::attack_self` (a bitrunning disk's program choice) |
+//! | 3387 | `clothing::laces::attack_self` (shoes in hand tied or untied) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -417,6 +419,7 @@
 //! | 1487 | `gun_pins::pin_interaction` (a firing pin into a gun, the DNA pin keyed on a carbon) |
 //! | 1500 | `bots::construction::item_interaction` |
 //! | 1505 | `extinguisher::refill_click` (a tank refills it) |
+//! | 1537 | `devices::jammer::interact_with_atom` (the directed disruptor wave) |
 //! | 1527 | `science::ordnance_machines::item_interaction` (data disks into the doppler array and tank compressor, tanks into the compressor, doppler wrench) |
 //! | 1535 | `chem_machines::item_interaction` (containers, fuel, condensers, droppers and syringes, tools refused while working, wrenches) |
 //! | 1549 | `eng_machines::manufactorio::item_interaction` (wrench, router, unloader, lathe and sorter multitool, sorter item filter, storage unit screwdriver) |

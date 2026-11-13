@@ -16,7 +16,7 @@ use ss13_ui_kit::prelude::*;
 
 use crate::panels::{
     LOOT_GRAB, LootEntry, LootPanelData, LootPanelUi, OBSCURING_COMPLETELY, OBSCURING_HIDDEN,
-    OBSCURING_INACCESSIBLE, STRIP_USE, StripMenuData, StripMenuUi, StripSlot,
+    OBSCURING_INACCESSIBLE, STRIP_ALT, STRIP_USE, StripMenuData, StripMenuUi, StripSlot,
 };
 
 /// The HUD style the slot sprites come from (`crate::inventory_client`).
@@ -248,19 +248,74 @@ fn strip_button(look: &SlotLook, slot: &StripSlot) -> impl Scene + use<> {
         EntityScene(bsn! { node Children [ Text({text.to_owned()}) ] })
     });
     let params = ActParams(vec![("key".to_owned(), look.key.to_owned())]);
+    let alternates: Vec<_> = slot
+        .alternate
+        .iter()
+        .take(3)
+        .enumerate()
+        .filter_map(|(idx, key)| alternate_button(look.key, idx, key, disabled))
+        .collect();
     bsn! {
-        @ss13_ui_kit::Button { @tooltip: tooltip, @fluid: true }
-        ss13_ui_kit::Button { color: color, disabled: disabled }
-        Node {
-            width: px(BUTTON_PX),
-            height: px(BUTTON_PX),
-            min_height: px(BUTTON_PX),
-            padding: UiRect::ZERO,
-        }
-        Act({STRIP_USE.to_owned()})
-        params
-        Children [ {background} -- {item} -- {hidden} -- {corner} ]
+        Node { position_type: PositionType::Relative, width: px(BUTTON_PX), height: px(BUTTON_PX) }
+        Children [
+            @ss13_ui_kit::Button { @tooltip: tooltip, @fluid: true }
+            ss13_ui_kit::Button { color: color, disabled: disabled }
+            Node {
+                width: px(BUTTON_PX),
+                height: px(BUTTON_PX),
+                min_height: px(BUTTON_PX),
+                padding: UiRect::ZERO,
+            }
+            Act({STRIP_USE.to_owned()})
+            params
+            Children [ {background} -- {item} -- {hidden} -- {corner} ]
+            --
+            {alternates}
+        ]
     }
+}
+
+/// tg `ALTERNATE_ACTIONS`: the icon and tooltip of an alternate action key.
+fn alternate_look(key: &str) -> Option<(&'static str, &'static str)> {
+    match key {
+        "knot" => Some(("shoe-prints", "Связать шнурки")),
+        "untie" => Some(("shoe-prints", "Развязать шнурки")),
+        "unknot" => Some(("shoe-prints", "Распутать шнурки")),
+        _ => None,
+    }
+}
+
+/// One alternate action: a 20 px button in a corner of the slot, `act('alt', { key })`.
+fn alternate_button(
+    slot_key: &str,
+    idx: usize,
+    key: &str,
+    disabled: bool,
+) -> Option<impl Scene + use<>> {
+    let (icon, text) = alternate_look(key).map(|(i, t)| (i.to_owned(), t.to_owned()))?;
+    let node = Node {
+        position_type: PositionType::Absolute,
+        left: if idx == 0 { px(0) } else { Val::Auto },
+        right: if idx == 1 { px(0) } else { Val::Auto },
+        top: if idx == 2 { px(0) } else { Val::Auto },
+        bottom: px(0),
+        width: px(20),
+        height: px(20),
+        min_height: px(20),
+        padding: UiRect::ZERO,
+        ..default()
+    };
+    let params = ActParams(vec![
+        ("key".to_owned(), slot_key.to_owned()),
+        ("alternate_action".to_owned(), key.to_owned()),
+    ]);
+    Some(bsn! {
+        @ss13_ui_kit::Button { @tooltip: text, @icon: icon }
+        ss13_ui_kit::Button { disabled: disabled }
+        node
+        Act({STRIP_ALT.to_owned()})
+        params
+    })
 }
 
 /// `contentsByPathName`: objs of one type and name share an entry, in first-seen order.

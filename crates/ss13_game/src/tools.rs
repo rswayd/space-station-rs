@@ -665,6 +665,9 @@ fn run_do_afters(world: &mut World) {
             if let Job::GunSuicide = action.job {
                 crate::guns::suicide_interrupted(world, mob, action.target);
             }
+            if let Job::Clothing(crate::clothing::ClothingJob::Laces { shoes, job }) = action.job {
+                crate::clothing::laces::interrupted(world, mob, shoes, job);
+            }
             continue;
         }
         if now >= action.ends_at {

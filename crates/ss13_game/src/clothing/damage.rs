@@ -85,6 +85,11 @@ pub enum ClothingJob {
     TapeMouth { tape: Entity },
     /// The collar bomb's button pressed (`crate::clothing::collar_bomb`).
     CollarButton { button: Entity },
+    /// Tying, untying or knotting shoelaces (`crate::clothing::laces`).
+    Laces {
+        shoes: Entity,
+        job: super::laces::LaceJob,
+    },
 }
 
 /// `body_zone2cover_flags`.
@@ -483,6 +488,10 @@ pub fn complete(world: &mut World, mob: Entity, action: &crate::tools::DoAfter, 
         }
         ClothingJob::CollarButton { button } => {
             super::collar_bomb::complete_press(world, mob, button);
+            return;
+        }
+        ClothingJob::Laces { shoes, job } => {
+            super::laces::complete(world, mob, shoes, job);
             return;
         }
     };

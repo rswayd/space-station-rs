@@ -24,7 +24,7 @@
 
 - **Код:** [`/obj/item/jammer/nt`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/devices/nanotrasen_radio_jammer.dm#L1)
 - **BandaStation:** [`traitordevices.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/items/devices/traitordevices.dm#L325) — белый список частот
-- **Статус в ss13-rs:** ❌ нет — глушилок нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/devices/jammer.rs`: глушилки синдиката, самодельная и НТ (радиус 12/5/18), ПКМ по глушилке в руке включает и выключает, активная не даёт рациям в радиусе на своём уровне передавать (`crates/ss13_game/src/radio.rs`, `talk_into` и ретрансляция), кроме белого списка частот (синдикат; у НТ — ЦК); у синдикатской и самодельной — волна помех в руке (микрофоны раций в поле зрения выключаются, синдикатские не трогает, перезарядка 15 с) и направленная волна по цели; у НТ их нет; нет глушения PDA-мессенджера и внутренних раций машин, осмотра «examine_more»
 
 _«Напитки и реагенты-напитки форка» описано в [../kitchen/drinks-bar.md](../kitchen/drinks-bar.md)._
 
