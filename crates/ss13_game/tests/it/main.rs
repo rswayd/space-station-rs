@@ -79,6 +79,7 @@ mod labor;
 mod languages;
 mod lava_fauna;
 mod lavaland;
+mod lazarus;
 mod loopback;
 mod los;
 mod machine_frame;
