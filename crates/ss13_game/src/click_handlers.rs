@@ -156,6 +156,7 @@
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
 //! | 469 | `electric_chair::item_interaction` (a helmet on the electropack, a wrench on the shock kit in the other hand) |
+//! | 471 | `antag::nukeop::core_theft::other_hand` (a core and a core container on each other) |
 //! | 473 | `cargo::money::item_interaction` (cash onto the ID in the other hand) |
 //! | 477 | `instruments::boombox::other_hand` (a music tape into the boombox in the other hand, its menu) |
 //! | 479 | `toys::item_on_item` (caps into a cap gun, toy sword tools, filling and bursting balloons, emagging a Mini-Meteor) |
@@ -375,6 +376,7 @@
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 239 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a hookah; the mouthpiece on oneself: a draw) |
+//! | 261 | `antag::nukeop::core_theft::held_on_target` (the nuclear bomb's deconstruction tools, cores and containers, a core and a container on each other) |
 //! | 271 | `power::turbine::item_interaction` (turbine tools and parts, sheets on a part, a multitool on the console) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |

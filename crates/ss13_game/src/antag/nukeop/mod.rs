@@ -18,6 +18,8 @@ pub mod bomb;
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "server")]
+pub mod core_theft;
+#[cfg(feature = "server")]
 pub mod lone;
 #[cfg(feature = "server")]
 pub mod reinforcements;

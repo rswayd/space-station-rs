@@ -453,6 +453,8 @@ pub enum Job {
     StackRecipe(crate::stack_recipes::StackJob),
     /// Cutting the hair off a hide ([`crate::sheets`]).
     Sheet(crate::sheets::SheetJob),
+    /// The nuclear bomb's deconstruction to its core ([`crate::antag::nukeop::core_theft`]).
+    NukeCore(crate::antag::nukeop::core_theft::CoreJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1606,6 +1608,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Ventcrawl(job) => crate::ventcrawl::complete(world, mob, action, job),
         &Job::StackRecipe(job) => crate::stack_recipes::complete(world, client, mob, job),
         &Job::Sheet(job) => crate::sheets::complete(world, client, mob, job),
+        &Job::NukeCore(job) => crate::antag::nukeop::core_theft::complete(world, mob, action, job),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::Device(job) => crate::devices::complete_job(world, client, mob, target, job),
         &Job::EngMachine(job) => crate::eng_machines::complete(world, client, target, job),

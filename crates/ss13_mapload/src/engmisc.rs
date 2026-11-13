@@ -97,6 +97,8 @@ pub const ENGMISC_RUNTIME_TYPES: &[&str] = &[
     // Pipe cleaners a coil lays and the coil a cut piece drops (`ss13_game::power::pipe_cleaner`).
     "/obj/structure/pipe_cleaner",
     "/obj/item/stack/pipe_cleaner_coil",
+    // The core every nuclear bomb holds (`ss13_game::antag::nukeop::core_theft`).
+    "/obj/item/nuke_core",
 ];
 
 /// Paths of the [`DISPOSAL_RECIPES`] for the runtime type registry.

@@ -190,3 +190,143 @@ fn inducer_charges_a_battery_by_its_rating() {
     assert_eq!(charge(&app, own), 0.0);
     assert!(app.world().get::<DoAfter>(mob).is_none(), "out of charge");
 }
+
+fn held(world: &mut World, mob: Entity, path: &str, tool: Option<(&str, f32)>) -> Entity {
+    let item = world
+        .spawn(DmItem {
+            path: path.into(),
+            ..default()
+        })
+        .id();
+    if let Some((behaviour, speed)) = tool {
+        world.entity_mut(item).insert(ss13_mapload::DmTool {
+            behaviour: behaviour.into(),
+            speed,
+            ..default()
+        });
+    }
+    world.entity_mut(item).insert(CarriedBy(mob));
+    world.get_mut::<Inventory>(mob).unwrap().hands[0] = Some(item);
+    item
+}
+
+/// Nuke core theft (`ss13_game::antag::nukeop::core_theft`): the ultra-thin screwdriver
+/// (toolspeed 0.5) unscrews the panel in 3 s, a plain one does nothing; a crowbar pries the
+/// panel; prying the cut plate exposes the pulsing core; a container takes it in 5 s and seals
+/// 5 s later, which stops the radiation.
+#[test]
+fn nuke_core_is_stolen_into_a_sealed_container() {
+    use ss13_game::antag::nukeop::bomb::NuclearBomb;
+    use ss13_game::antag::nukeop::core_theft::{
+        CoreContainer, Decon, NUKE_CORE, NUKE_SCREWDRIVER, NukeInterior,
+    };
+    use ss13_game::radiation::RadioactiveEmitter;
+
+    let mut app = server("nuke_core");
+    let world = app.world_mut();
+    let mob = human(world, at(3));
+    let core = world
+        .spawn(DmItem {
+            path: NUKE_CORE.into(),
+            ..default()
+        })
+        .id();
+    let bomb = world
+        .spawn((
+            at(4),
+            NuclearBomb {
+                state: default(),
+                disk: None,
+                syndicate: false,
+                actually_explode_at: None,
+                previous_level: default(),
+            },
+            NukeInterior {
+                state: Decon::Intact,
+                core: Some(core),
+            },
+        ))
+        .id();
+    ss13_game::storage::put_inside(world, core, bomb);
+    let ctx = |held: Entity| ClickCtx {
+        client: mob,
+        mob,
+        mob_pos: at(3),
+        held: Some(held),
+        target: bomb,
+        pos: at(4),
+        modifiers: ClickModifiers::default(),
+        active_hand: 0,
+    };
+    let state = |app: &App| app.world().get::<NukeInterior>(bomb).unwrap().state;
+
+    let plain = held(
+        world,
+        mob,
+        "/obj/item/screwdriver",
+        Some(("screwdriver", 1.0)),
+    );
+    assert!(!click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(plain)
+    ));
+    world.despawn(plain);
+
+    let screwdriver = held(world, mob, NUKE_SCREWDRIVER, Some(("screwdriver", 0.5)));
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(screwdriver)
+    ));
+    run(&mut app, 3.2);
+    assert_eq!(state(&app), Decon::Unscrewed);
+
+    let world = app.world_mut();
+    world.despawn(screwdriver);
+    let crowbar = held(world, mob, "/obj/item/crowbar", Some(("crowbar", 1.0)));
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(crowbar)
+    ));
+    run(&mut app, 3.2);
+    assert_eq!(state(&app), Decon::PanelRemoved);
+
+    // The welder's cut is the same kind of step; skip to the cut plate.
+    let world = app.world_mut();
+    world.get_mut::<NukeInterior>(bomb).unwrap().state = Decon::Welded;
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(crowbar)
+    ));
+    run(&mut app, 3.2);
+    assert_eq!(state(&app), Decon::CoreExposed);
+    assert!(
+        app.world().get::<RadioactiveEmitter>(core).is_some(),
+        "exposed: pulsing"
+    );
+
+    let world = app.world_mut();
+    world.despawn(crowbar);
+    let container = held(world, mob, "/obj/item/nuke_core_container", None);
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(container)
+    ));
+    run(&mut app, 5.2);
+    assert_eq!(state(&app), Decon::CoreRemoved);
+    assert_eq!(app.world().get::<NukeInterior>(bomb).unwrap().core, None);
+    let loaded = *app.world().get::<CoreContainer>(container).unwrap();
+    assert_eq!(loaded.core, Some(core));
+    assert!(!loaded.sealed);
+    assert!(app.world().get::<RadioactiveEmitter>(core).is_some());
+    run(&mut app, 5.2);
+    assert!(app.world().get::<CoreContainer>(container).unwrap().sealed);
+    assert!(
+        app.world().get::<RadioactiveEmitter>(core).is_none(),
+        "sealed"
+    );
+}
