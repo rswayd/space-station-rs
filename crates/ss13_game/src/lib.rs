@@ -183,6 +183,8 @@ pub mod airlock_security;
 #[cfg(feature = "server")]
 pub mod alt_appearance;
 #[cfg(feature = "server")]
+pub mod ambience;
+#[cfg(feature = "server")]
 pub mod animation;
 #[cfg(feature = "client")]
 pub mod animation_client;

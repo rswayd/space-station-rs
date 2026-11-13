@@ -12,6 +12,7 @@
 //! once per distinct (type, var edits): regenerating assets never leaves stale ids in prototypes.
 
 pub mod airlock_control;
+pub mod ambience;
 pub mod antag;
 pub mod atmos;
 pub mod atmos_handbook;

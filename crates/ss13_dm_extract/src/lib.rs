@@ -38,13 +38,30 @@ pub const DUMPED_VARS: [&str; 16] = [
 
 /// `GLOBAL_LIST_INIT` globals whose constant value is dumped (top-level `globals`): the footstep
 /// tables of `code/__DEFINES/footsteps.dm`.
-pub const DUMPED_GLOBALS: [&str; 5] = [
+pub const DUMPED_GLOBALS: [&str; 20] = [
     "footstep",
     "barefootstep",
     "clawfootstep",
     "heavyfootstep",
     // `atmos_computers/__identifiers.dm`: chamber id -> name.
     "station_gas_chambers",
+    // `_globalvars/lists/ambience.dm`: the lists of `GLOB.ambience_assoc`
+    // (`ss13_mapload::ambience::AMBIENCE_ASSOC`).
+    "away_ambience",
+    "creepy_ambience",
+    "danger_ambience",
+    "engi_ambience",
+    "generic_ambience",
+    "holy_ambience",
+    "maint_ambience",
+    "medical_ambience",
+    "virology_ambience",
+    "mining_ambience",
+    "icemoon_ambience",
+    "reebe_ambience",
+    "ruins_ambience",
+    "space_ambience",
+    "spooky_ambience",
 ];
 
 /// Map directories (relative to the source root) checked by the acceptance scan.

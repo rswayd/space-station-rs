@@ -1227,6 +1227,7 @@ pub fn referenced<'a>(
     out.extend(files::GAME_CODE.map(str::to_owned));
     out.extend(files::RESTAURANT.map(str::to_owned));
     out.extend(files::DECOR.map(str::to_owned));
+    out.extend(crate::ambience::referenced(types));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);
