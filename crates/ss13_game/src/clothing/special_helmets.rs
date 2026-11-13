@@ -332,7 +332,7 @@ fn fail(world: &mut World, helmet: Entity, monkey: Entity, rage_chance: i32) {
             );
             sparks(world, helmet, 2);
         }
-        14..=20 => {
+        14..=21 => {
             visible(
                 world,
                 monkey,
@@ -345,7 +345,7 @@ fn fail(world: &mut World, helmet: Entity, monkey: Entity, rage_chance: i32) {
             sparks(world, helmet, 4);
             sound_at(world, helmet, "shatter", 30.0, true);
         }
-        21.. => {
+        22.. => {
             visible(
                 world,
                 monkey,

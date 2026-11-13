@@ -19,9 +19,8 @@
 //!   the greentext is `quiet`).
 // shortcut: no RPG Loot (the fantasy component with its affixes and the fortification scrolls
 // is not ported). Cursed Items does not change the kitty ears' victims' gender (pronouns are not
-// ported). The greentext's warning for holders with other objectives, the deletion of a
-// greentext destroyed mid-round and its point of interest are missing; a destroyed greentext
-// frees its victims quietly the next tick.
+// ported). The greentext's warning for holders with other objectives and its point of interest
+// are missing; a destroyed greentext frees its victims the next tick.
 
 use bevy::prelude::*;
 use ss13_mapload::fidelity::is_under;
@@ -424,7 +423,7 @@ fn watch_greentexts(world: &mut World) {
         let item = states[i].item;
         if world.get_entity(item).is_err() {
             let state = states.remove(i);
-            release(world, &state.victims, true, &states);
+            release(world, &state.victims, state.quiet, &states);
             continue;
         }
         let holder = world
