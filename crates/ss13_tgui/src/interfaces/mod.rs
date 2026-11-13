@@ -25,6 +25,7 @@ pub mod gas_analyzer;
 pub mod gps;
 pub mod gravity_generator;
 pub mod holodeck;
+pub mod hypertorus;
 pub mod implant_chair;
 pub mod implant_pad;
 #[cfg(feature = "client")]

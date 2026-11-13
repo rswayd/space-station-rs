@@ -265,6 +265,7 @@ impl Plugin for AtmosMachineryPlugin {
                 consoles::plugin,
                 control::plugin,
                 space_heater::plugin,
+                hfr::plugin,
             ));
     }
 }
@@ -799,6 +800,7 @@ pub mod dispenser;
 pub mod electrolyzer;
 pub mod fitting;
 pub mod gas_visuals;
+pub mod hfr;
 pub mod meter;
 pub mod miner;
 pub mod overclock;
@@ -826,6 +828,7 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<(ss13_chat::
     canister::examine_lines(world, target, lines);
     electrolyzer::examine_lines(world, target, lines);
     space_heater::examine_lines(world, target, lines);
+    hfr::examine_lines(world, target, lines);
     thermo::examine_lines(world, target, lines);
     tank_frame::examine_lines(world, target, lines);
     fitting::examine_lines(world, target, lines);

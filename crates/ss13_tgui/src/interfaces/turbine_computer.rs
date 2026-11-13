@@ -41,7 +41,7 @@ mod client_side {
     use ss13_ui_kit::prelude::*;
 
     use super::{TurbineComputerData, TurbineComputerUi};
-    use crate::client::ClientUi;
+    use crate::client::{ActOnChange, ClientUi};
     use crate::interfaces::solar_control::format_power;
 
     impl ClientUi for TurbineComputerUi {

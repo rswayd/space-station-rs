@@ -239,6 +239,7 @@
 //! | 1510 | `teapot::interact` |
 //! | 1600 | `botany::interact` |
 //! | 1700 | `multiz::interact` |
+//! | 1781 | `atmos_machinery::hfr::interact` (the HFR interface's `Hypertorus` window) |
 //! | 1787 | `science::ordnance_machines::interact` (the `DopplerArray` and `TankCompressor` windows) |
 //! | 1790 | `atmos_machinery::space_heater::interact` |
 //! | 1800 | `atmos_machinery::windows::interact` |
@@ -530,6 +531,7 @@
 //! | 3809 | `medical::surgery::notes_interaction` (research notes onto research notes) |
 //! | 3900 | `multiz::interact` (out of combat mode) |
 //! | 3985 | `atmos_machinery::space_heater::item_interaction` |
+//! | 3991 | `atmos_machinery::hfr::item_interaction` (multitool on the core box and the interface, panel, rotation, welding cracks) |
 //! | 3995 | `power::cable_coil::held_on_target` (laying, cutting, the multitool readout, robotic limb repair) |
 //! | 4000 | `atmos_machinery::windows::item_interaction` |
 //! | 4100 | `modpc::pda::item_interaction_secondary` (right click) |
