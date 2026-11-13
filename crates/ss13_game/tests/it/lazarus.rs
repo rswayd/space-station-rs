@@ -152,10 +152,13 @@ impl Station {
     }
 
     fn kill(&mut self, mob: Entity) {
-        let world = self.0.server.world_mut();
-        let mut health = world.get::<Health>(mob).unwrap().clone();
-        health.adjust(ss13_game::health::DamageType::Brute, 10_000.0);
-        world.entity_mut(mob).insert(health);
+        ss13_game::mobs::defense::hurt(
+            self.0.server.world_mut(),
+            mob,
+            ss13_game::health::DamageType::Brute,
+            10_000.0,
+            None,
+        );
         self.run_until_for(2.0, "dead", |s| *s.get::<Stat>(mob) == Stat::Dead);
     }
 }

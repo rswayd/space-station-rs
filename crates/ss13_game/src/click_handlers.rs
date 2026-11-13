@@ -327,6 +327,7 @@
 //! | 3491 | `antag::xeno::reproduction::empty_hand` (an awake facehugger jumps at the hand) |
 //! | 3493 | `holodeck::interact` (the `Holodeck` window, ready buttons) |
 //! | 3497 | `telecomms_config::interact` (telecomms machine, monitor and log browser windows) |
+//! | 3501 | `cargo::bank_machine` (the vault bank machine window) |
 //! | 3507 | `blackbox::attack_hand` (the blackbox out of its recorder) |
 //! | 3517 | `ntnet_relay::interact` (the `NtnetRelay` window) |
 //! | 3529 | `cannons::attack_hand` (a mounted gun fires, the repeater winds) |
