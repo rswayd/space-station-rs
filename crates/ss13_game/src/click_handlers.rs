@@ -339,6 +339,7 @@
 //! | 3497 | `telecomms_config::interact` (telecomms machine, monitor and log browser windows) |
 //! | 3501 | `cargo::bank_machine` (the vault bank machine window) |
 //! | 3507 | `blackbox::attack_hand` (the blackbox out of its recorder) |
+//! | 3511 | `transit_tubes::attack_hand` (a transit tube station opens, closes or has its pod emptied) |
 //! | 3517 | `ntnet_relay::interact` (the `NtnetRelay` window) |
 //! | 3529 | `cannons::attack_hand` (a mounted gun fires, the repeater winds) |
 //! | 3539 | `gym::punch` (the punching bag) |
@@ -381,6 +382,7 @@
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
+//! | 291 | `transit_tubes::held_on_target` (wrench and crowbar on tubes, stations, pods and unattached tubes) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |

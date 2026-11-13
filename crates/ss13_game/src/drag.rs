@@ -317,6 +317,12 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `transit_tube/station/mouse_drop_receive`: an unattached pod onto a station.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && crate::transit_tubes::mouse_drop_receive(world, actor, over, dragged)
+    {
+        return;
+    }
     // `mulebot/mouse_drop_receive`: loading a MULEbot.
     if let (End::World(over), End::World(_)) = (to, from)
         && crate::bots::mule::mouse_drop_receive(world, actor, over, dragged)

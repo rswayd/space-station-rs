@@ -330,3 +330,73 @@ fn nuke_core_is_stolen_into_a_sealed_container() {
         "sealed"
     );
 }
+
+/// Transit tubes (`ss13_game::transit_tubes`): a station launches the pod resting in it (it
+/// closes first), the pod rides the straight tubes to a terminus, which opens and pushes the
+/// cargo out, then turns the pod around for the way back.
+#[test]
+fn transit_pod_rides_to_the_terminus() {
+    use ss13_game::transit_tubes::{self, Status, TubePod, TubeStation};
+    use ss13_mapload::DmObj;
+    use ss13_shared::{Dir, Facing};
+
+    let mut app = server("transit");
+    let world = app.world_mut();
+    let place = |world: &mut World, path: &str, x: i32, dir: Dir| {
+        let e = world
+            .spawn((
+                at(x),
+                Facing(dir),
+                DmObj {
+                    path: path.into(),
+                    anchored: true,
+                    ..default()
+                },
+            ))
+            .id();
+        transit_tubes::init(world, e);
+        e
+    };
+    // A through station (south: tubes east and west), three tubes, a terminus (south: west).
+    let start = place(world, "/obj/structure/transit_tube/station", 3, Dir::South);
+    for x in 4..=6 {
+        place(world, "/obj/structure/transit_tube", x, Dir::East);
+    }
+    let end = place(
+        world,
+        "/obj/structure/transit_tube/station/reverse",
+        7,
+        Dir::South,
+    );
+    let pod = place(world, "/obj/structure/transit_tube_pod", 3, Dir::East);
+    let cargo = world
+        .spawn((
+            at(3),
+            DmItem {
+                path: "/obj/item/crowbar".into(),
+                ..default()
+            },
+        ))
+        .id();
+    ss13_game::storage::put_inside(world, cargo, pod);
+    assert!(app.world().get::<TubePod>(pod).is_some());
+
+    // Process, 0.8 s closing, then 0.1 s per tube and 0.3 s into the terminus.
+    run(&mut app, 2.0);
+    assert_eq!(
+        app.world().get::<TilePos>(pod),
+        Some(&at(7)),
+        "at the terminus"
+    );
+    assert_eq!(
+        app.world().get::<TubeStation>(start).unwrap().status,
+        Status::Closed
+    );
+    // 0.5 s, then the 0.6 s opening pushes the item out; the pod faces back west.
+    run(&mut app, 1.5);
+    let world = app.world();
+    assert_eq!(world.get::<TubeStation>(end).unwrap().status, Status::Open);
+    assert_eq!(world.get::<TilePos>(cargo), Some(&at(7)));
+    assert_eq!(world.get::<TubePod>(pod).unwrap().dir, Dir::West as u8);
+    assert!(!world.get::<TubePod>(pod).unwrap().moving);
+}

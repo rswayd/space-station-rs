@@ -257,6 +257,7 @@ impl Plugin for GameServerPlugin {
             crate::cannons::CannonsPlugin,
             crate::gym::GymPlugin,
             crate::instruments::InstrumentsPlugin,
+            crate::transit_tubes::TransitTubePlugin,
         ))
         .add_plugins((
             (

@@ -455,6 +455,8 @@ pub enum Job {
     Sheet(crate::sheets::SheetJob),
     /// The nuclear bomb's deconstruction to its core ([`crate::antag::nukeop::core_theft`]).
     NukeCore(crate::antag::nukeop::core_theft::CoreJob),
+    /// Wrenching transit tubes, emptying a pod at a station ([`crate::transit_tubes`]).
+    TransitTube(crate::transit_tubes::TubeJob),
 }
 
 /// A turf's baseturf stack, bottom first (tg `baseturfs`). Absent: assembled from the type's
@@ -1608,6 +1610,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Ventcrawl(job) => crate::ventcrawl::complete(world, mob, action, job),
         &Job::StackRecipe(job) => crate::stack_recipes::complete(world, client, mob, job),
         &Job::Sheet(job) => crate::sheets::complete(world, client, mob, job),
+        &Job::TransitTube(job) => crate::transit_tubes::complete(world, action, job),
         &Job::NukeCore(job) => crate::antag::nukeop::core_theft::complete(world, mob, action, job),
         &Job::QuantumPad(job) => crate::science::quantum_pad::complete(world, client, target, job),
         &Job::Device(job) => crate::devices::complete_job(world, client, mob, target, job),

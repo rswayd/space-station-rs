@@ -731,6 +731,8 @@ pub mod toys;
 #[cfg(feature = "server")]
 pub mod transform;
 #[cfg(feature = "server")]
+pub mod transit_tubes;
+#[cfg(feature = "server")]
 pub mod transport;
 pub mod transport_ui;
 #[cfg(feature = "client")]
