@@ -57,6 +57,7 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::language_menu_client::LanguageMenuClientPlugin);
         app.add_plugins(crate::crafting_client::CraftingClientPlugin);
         app.add_plugins(crate::ghost_menu_client::GhostMenuClientPlugin);
+        app.add_plugins(crate::minigames_client::MinigamesClientPlugin);
         app.add_plugins(crate::statpanel_client::StatPanelClientPlugin);
         app.add_plugins((
             crate::votes_client::VotesClientPlugin,

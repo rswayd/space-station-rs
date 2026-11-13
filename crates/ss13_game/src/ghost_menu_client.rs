@@ -1,5 +1,5 @@
 //! Client half of the ghost's windows ([`crate::ghost_menu`]): the observer HUD buttons (tg
-//! `/datum/hud/ghost`: Orbit, ghost menu, spawners, re-enter corpse, respawn) along the bottom of
+//! `/datum/hud/ghost`: Orbit, ghost menu, spawners, minigames, re-enter corpse, respawn) along the bottom of
 //! the map while the server keeps [`GhostHudUi`] open, the ghost's lighting cutoff (its darkness
 //! setting) into the renderer, and the `Orbit`, `GhostMenu` and `SpawnersMenu` windows.
 // shortcut: the HUD buttons are text labels, not tg's `icons/hud/screen_ghost.dmi` sprites; the
@@ -57,10 +57,11 @@ struct HudButton {
     needs_body: bool,
 }
 
-const BUTTONS: [(&str, &str, bool); 5] = [
+const BUTTONS: [(&str, &str, bool); 6] = [
     (HUD_ORBIT, "Orbit", false),
     (HUD_GHOST_MENU, "Меню призрака", false),
     (HUD_SPAWNERS, "Спавнеры", false),
+    (HUD_MINIGAMES, "Мини-игры", false),
     (HUD_REENTER, "В тело", true),
     (HUD_RESPAWN, "Респаун", false),
 ];

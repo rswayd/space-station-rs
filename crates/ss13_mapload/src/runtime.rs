@@ -1730,6 +1730,47 @@ pub const EXPLORATION_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/wirecutters",
 ];
 
+/// `ss13_game::minigames::basketball`: the team and referee outfits (`/datum/outfit/basketball/*`).
+pub const MINIGAME_RUNTIME_TYPES: &[&str] = &[
+    "/obj/item/bedsheet/cosmos",
+    "/obj/item/bedsheet/patriot",
+    "/obj/item/card/id/away",
+    "/obj/item/clothing/glasses/sunglasses",
+    "/obj/item/clothing/gloves/color/brown",
+    "/obj/item/clothing/gloves/color/fyellow",
+    "/obj/item/clothing/gloves/latex",
+    "/obj/item/clothing/head/costume/ushanka",
+    "/obj/item/clothing/head/costume/xenos",
+    "/obj/item/clothing/head/helmet/gladiator",
+    "/obj/item/clothing/head/helmet/space",
+    "/obj/item/clothing/head/soft/black",
+    "/obj/item/clothing/mask/breath",
+    "/obj/item/clothing/mask/chameleon",
+    "/obj/item/clothing/mask/gas/prop",
+    "/obj/item/clothing/mask/whistle/minigame",
+    "/obj/item/clothing/shoes/laceup",
+    "/obj/item/clothing/shoes/magboots/basketball",
+    "/obj/item/clothing/shoes/sandal",
+    "/obj/item/clothing/shoes/sneakers/black",
+    "/obj/item/clothing/shoes/sneakers/brown",
+    "/obj/item/clothing/shoes/sneakers/red",
+    "/obj/item/clothing/shoes/sneakers/white",
+    "/obj/item/clothing/shoes/winterboots",
+    "/obj/item/clothing/suit/costume/xenos",
+    "/obj/item/clothing/suit/jacket/letterman_nanotrasen",
+    "/obj/item/clothing/suit/space/basketball",
+    "/obj/item/clothing/under/color/black",
+    "/obj/item/clothing/under/color/grey/ancient",
+    "/obj/item/clothing/under/costume/gladiator/ash_walker",
+    "/obj/item/clothing/under/costume/referee",
+    "/obj/item/clothing/under/costume/soviet",
+    "/obj/item/clothing/under/misc/patriotsuit",
+    "/obj/item/clothing/under/shorts/blue",
+    "/obj/item/clothing/under/shorts/red",
+    "/obj/item/spear",
+    "/obj/item/storage/belt/utility",
+];
+
 /// `ss13_game::science::bitrunning`: the domain's cache and exit, the byteforge's reward crate,
 /// its certificate, ores and the domains' `completion_loot`, the avatar's backpack.
 pub const BITRUNNING_RUNTIME_TYPES: &[&str] = &[
@@ -1965,7 +2006,7 @@ pub const CARGO_FLORA_RUNTIME_TYPES: &[&str] = &[
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
-    let tables: [&[&'static str]; 35] = [
+    let tables: [&[&'static str]; 36] = [
         &crate::RUNTIME_TYPES,
         &crate::RUNTIME_CONTAINER_TYPES,
         &crate::CONSTRUCTION_TYPES,
@@ -2000,6 +2041,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         EXPLORATION_RUNTIME_TYPES,
         BITRUNNING_RUNTIME_TYPES,
         BITRUNNING_DISK_TYPES,
+        MINIGAME_RUNTIME_TYPES,
         GIFT_TYPES,
         SECDEF_RUNTIME_TYPES,
         SKILLCHIP_RUNTIME_TYPES,

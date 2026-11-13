@@ -881,7 +881,7 @@ fn make_encrypted(world: &mut World, e: Entity) {
 }
 
 /// Everything on `levels`.
-fn level_entities(world: &World, levels: &[u16]) -> Vec<Entity> {
+pub(crate) fn level_entities(world: &World, levels: &[u16]) -> Vec<Entity> {
     let index = world.resource::<SpatialIndex>();
     let mut out = Vec::new();
     for &z in levels {
@@ -898,7 +898,7 @@ fn level_entities(world: &World, levels: &[u16]) -> Vec<Entity> {
 /// `scrub_vdom`'s release of the reservation: everything on `levels` but the turfs, areas and
 /// ghosts is deleted; players there become ghosts first.
 // Cost: one pass over the domain's tiles per scrub (once per boot).
-fn scrub_levels(world: &mut World, levels: &[u16]) {
+pub(crate) fn scrub_levels(world: &mut World, levels: &[u16]) {
     for e in level_entities(world, levels) {
         let Ok(entity) = world.get_entity(e) else {
             continue;

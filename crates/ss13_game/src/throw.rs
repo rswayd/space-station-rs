@@ -698,6 +698,12 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
         crate::security::thrown(world, item, Some(hit), thrown.thrower);
     }
     if world.get::<Health>(hit).is_some() {
+        // A basketball lands in a carbon's hands instead (`basketball/throw_impact`).
+        if world.get::<Inventory>(hit).is_some()
+            && crate::minigames::basketball::ball_hit(world, item, hit)
+        {
+            return;
+        }
         hit_living(world, item, thrown, hit);
         crate::holodeck::dodgeball_hit(world, item, hit);
         // `security/throw_impact` (not caught), a boomerang's rebound.
@@ -736,7 +742,9 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     } else if crate::effects::frozen::shatter(world, item) {
         // `COMSIG_MOVABLE_IMPACT` comes before the hit thing's `hitby`.
         return;
-    } else if crate::disposals::hitby(world, item, hit) {
+    } else if crate::minigames::basketball::hoop_hitby(world, item, hit, thrown)
+        || crate::disposals::hitby(world, item, hit)
+    {
     } else if world.get::<DmCloset>(hit).is_some_and(|c| !c.wall_mounted) {
         push(world, hit, thrown);
     }

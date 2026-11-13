@@ -39,6 +39,8 @@ pub const HUD_GHOST_MENU: &str = "ghost_menu";
 pub const HUD_SPAWNERS: &str = "spawners";
 pub const HUD_REENTER: &str = "reenter_corpse";
 pub const HUD_RESPAWN: &str = "respawn";
+/// tg `/atom/movable/screen/ghost/minigames_menu`: the minigames menu (`crate::minigames`).
+pub const HUD_MINIGAMES: &str = "minigames";
 
 /// tgui `Orbit`.
 pub struct OrbitUi;

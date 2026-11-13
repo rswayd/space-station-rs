@@ -13,13 +13,13 @@
 //!   minute) and Possess (a living mob without a mind, not megafauna).
 //! - Spawners ([`SpawnersMenuUi`]): the ghost roles other modules place ([`GhostRoleSpawner`]);
 //!   taking one gives the client a new human at it.
+//! - Minigames ([`HUD_MINIGAMES`]): the minigames menu (`crate::minigames`).
 //! - Respawn ([`HUD_RESPAWN`]): back to the lobby when [`RespawnConfig`] allows it, after its
 //!   delay since death.
 // shortcut: no view range, data HUDs or chem/gas scans in the ghost menu, no
 // notification (poll ignore) list, no pAI sign-up, no crew manifest button; settings do not
 // outlive the ghost (tg keeps darkness in the preferences). Spawners hold no outfit and the map's
-// `/obj/effect/mob_spawn/ghost_role` objects are not converted into them yet. No minigames menu:
-// the port has no minigames.
+// `/obj/effect/mob_spawn/ghost_role` objects are not converted into them yet.
 
 use std::collections::HashSet;
 
@@ -778,6 +778,7 @@ pub enum HudAct {
     Spawners,
     Reenter,
     Respawn,
+    Minigames,
 }
 
 impl ServerUi for GhostHudUi {
@@ -803,6 +804,7 @@ impl ServerUi for GhostHudUi {
             HUD_SPAWNERS => HudAct::Spawners,
             HUD_REENTER => HudAct::Reenter,
             HUD_RESPAWN => HudAct::Respawn,
+            HUD_MINIGAMES => HudAct::Minigames,
             _ => return Err(UiReject::UnknownAction),
         })
     }
@@ -1003,6 +1005,14 @@ fn ghost_acts(
             }
             HudAct::Respawn => {
                 respawn(world, client, ghost);
+            }
+            HudAct::Minigames => {
+                world.write_message(OpenUi::new::<crate::minigames_ui::MinigamesMenuUi>(
+                    client,
+                    ghost,
+                    ghost,
+                    "Minigames Menu",
+                ));
             }
         }
     }

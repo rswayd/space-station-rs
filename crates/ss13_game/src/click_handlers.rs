@@ -365,6 +365,7 @@
 //! | 3585 | `cargo::black_market::ltsrbt_hand` (the LTSRBT opens and closes; right click: its window) |
 //! | 3595 | `furniture::fold_emergency_bed` (right click: an empty emergency bed folds into the hands) |
 //! | 3605 | `genetics::dna_vault` (the DNA vault's window) |
+//! | 3613 | `minigames::basketball::empty_hand` (a ball its scorer may not pick up yet, a grabbed mob dunked into a hoop) |
 //!
 //! [`ClickPhase::HeldOnTarget`] (a world click with the active hand's item; tg
 //! `item_interaction`, `interact_with_atom`, `pre_attack`, `attackby`):
@@ -571,6 +572,7 @@
 //! | 3657 | `toy_mechs::item_interaction`, `attack` (a toy mech on another: a brawl; on a human: the battle offer) |
 //! | 3649 | `toys::held_on_target` (caps, toy swords, balloons, the Mini-Meteor; water balloons never hit mobs) |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
+//! | 3663 | `minigames::basketball::held_on_target` (a ball passed to a carbon out of combat mode, an item dunked into a hoop) |
 //! | 3700 | `chem::item_interaction` |
 //! | 3800 | `medical::item_interaction` |
 //! | 3809 | `medical::surgery::notes_interaction` (research notes onto research notes) |

@@ -43,7 +43,8 @@
 //!   management console (`BrigTimer`, `PrisonerManagement`).
 //! - `ghost` (feature `server`): a dead player's ghost, invisible to the living. `ghost_verbs`
 //!   (feature `server`) and `ghost_menu`: its HUD, Orbit/Observe, the ghost and spawners menus,
-//!   Boo, Possess, respawn.
+//!   Boo, Possess, respawn. `minigames` (feature `server`) and `minigames_ui`: the ghosts'
+//!   minigames menu and basketball.
 //! - `atmos` (feature `server`): gas overlays replicate, gas analyzers print their readout.
 //!   `atmos_machinery` (feature `server`): pipe networks, vents, scrubbers, pumps, valves,
 //!   filters, mixers, thermomachines, canisters and portable machines, air alarms and their
@@ -509,6 +510,11 @@ pub mod mecha;
 pub mod medical;
 #[cfg(feature = "server")]
 pub mod mind;
+#[cfg(feature = "server")]
+pub mod minigames;
+#[cfg(feature = "client")]
+pub mod minigames_client;
+pub mod minigames_ui;
 pub mod mining;
 #[cfg(feature = "server")]
 pub mod mining_shuttles;
