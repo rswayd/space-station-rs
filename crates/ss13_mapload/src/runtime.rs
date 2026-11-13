@@ -1732,8 +1732,20 @@ pub const EXPLORATION_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/wirecutters",
 ];
 
-/// `ss13_game::minigames::basketball`: the team and referee outfits (`/datum/outfit/basketball/*`).
+/// `ss13_game::minigames::basketball`: the team and referee outfits (`/datum/outfit/basketball/*`);
+/// `ss13_game::minigames::deathmatch`: the loadouts (`/datum/outfit/deathmatch_loadout/*`).
 pub const MINIGAME_RUNTIME_TYPES: &[&str] = &[
+    "/obj/item/clothing/gloves/the_sleeping_carp",
+    "/obj/item/clothing/head/utility/chefhat",
+    "/obj/item/clothing/mask/fakemoustache/italian",
+    "/obj/item/clothing/suit/toggle/chef",
+    "/obj/item/clothing/under/color/grey",
+    "/obj/item/clothing/under/costume/buttondown/slacks/service",
+    "/obj/item/clothing/under/costume/gi",
+    "/obj/item/flashlight",
+    "/obj/item/katana",
+    "/obj/item/storage/backpack",
+    "/obj/item/storage/toolbox/mechanical",
     "/obj/item/bedsheet/cosmos",
     "/obj/item/bedsheet/patriot",
     "/obj/item/card/id/away",
