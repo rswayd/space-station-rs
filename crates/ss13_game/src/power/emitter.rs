@@ -37,6 +37,8 @@ use crate::zone::BodyZone;
 
 pub const EMITTER_ROOT: &str = "/obj/machinery/power/emitter";
 pub const EMITTER_WELDED: &str = "/obj/machinery/power/emitter/welded";
+pub const ENERGY_CANNON: &str = "/obj/machinery/power/emitter/energycannon";
+pub const MAGICAL_CANNON: &str = "/obj/machinery/power/emitter/energycannon/magical";
 pub const REFLECTOR_ROOT: &str = "/obj/structure/reflector";
 
 /// `RefreshParts` with the board's tier 1 micro-laser and servo: 350 - 50 W.
@@ -72,6 +74,12 @@ pub struct Emitter {
     pub layer: u8,
     /// `emitter_overlay`.
     overlay: Option<IconStateId>,
+    /// `/obj/machinery/power/emitter/energycannon` (`use_power = NO_POWER_USE`): fires with no
+    /// powernet.
+    pub no_power: bool,
+    /// The wabbajack statue (`energycannon/magical`): its eyes open with the altars
+    /// (`crate::shuttle_special`) and it never fires a beam.
+    pub magical: bool,
 }
 
 impl Emitter {
@@ -87,6 +95,8 @@ impl Emitter {
             dir,
             layer,
             overlay: None,
+            no_power: false,
+            magical: false,
         }
     }
 
@@ -99,19 +109,28 @@ impl Emitter {
         rng: &mut CombatRng,
     ) -> bool {
         let usage = EMITTER_POWER_USAGE * dt;
-        let Some(net) = net.filter(|_| self.welded) else {
-            self.active = false;
-            return false;
-        };
-        if !self.active {
-            return false;
+        if self.no_power {
+            // shortcut: the wabbajack statue's `/obj/projectile/magic/change` (polymorph) is not
+            // ported, so it fires nothing; add with the wabbajack.
+            if !self.welded || !self.active || self.magical {
+                return false;
+            }
+            self.powered = true;
+        } else {
+            let Some(net) = net.filter(|_| self.welded) else {
+                self.active = false;
+                return false;
+            };
+            if !self.active {
+                return false;
+            }
+            if net.surplus() < usage {
+                self.powered = false;
+                return false;
+            }
+            net.load += usage;
+            self.powered = true;
         }
-        if net.surplus() < usage {
-            self.powered = false;
-            return false;
-        }
-        net.load += usage;
-        self.powered = true;
         if self.last_shot + self.fire_delay > now {
             return false;
         }
@@ -285,10 +304,20 @@ fn init_emitters(world: &mut World) {
         })
         .collect();
     for (e, path, pos, dir, icon) in found {
-        let welded = is_under(&path, EMITTER_WELDED);
+        // `/obj/machinery/power/emitter/energycannon` (`code/modules/shuttle/misc/special.dm`):
+        // welded, locked, firing without power; the wabbajack statue starts asleep.
+        let cannon = is_under(&path, ENERGY_CANNON);
+        let welded = cannon || is_under(&path, EMITTER_WELDED);
         let layer = world.get::<super::DmPower>(e).map_or(2, super::layer);
         let mut emitter = Emitter::new(Dir::from_bits(dir).unwrap_or_default(), welded, layer);
         emitter.overlay = icon.and_then(|icon| index.as_ref()?.get(&icon, "emitter_overlay"));
+        if cannon {
+            emitter.no_power = true;
+            emitter.magical = is_under(&path, MAGICAL_CANNON);
+            emitter.active = !emitter.magical;
+            emitter.locked = true;
+            set_anchored(world, e, true);
+        }
         if welded {
             // `/obj/machinery/power/emitter/welded/Initialize`: anchored, `connect_to_network`.
             set_anchored(world, e, true);

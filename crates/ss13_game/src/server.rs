@@ -377,6 +377,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::mecha::MechaServerPlugin)
         .add_plugins(crate::vehicles::VehiclesPlugin)
         .add_plugins(crate::cars::CarsPlugin)
+        .add_plugins(crate::shuttle_special::ShuttleSpecialPlugin)
         .add_plugins(crate::modsuit::server::ModSuitPlugin)
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::recycling::RecyclingServerPlugin)

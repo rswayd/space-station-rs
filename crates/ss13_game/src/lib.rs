@@ -648,6 +648,8 @@ pub mod shuttle_events;
 pub mod shuttle_nav;
 #[cfg(feature = "server")]
 pub mod shuttle_remote;
+#[cfg(feature = "server")]
+pub mod shuttle_special;
 pub mod silicon;
 #[cfg(feature = "server")]
 pub mod skills;
