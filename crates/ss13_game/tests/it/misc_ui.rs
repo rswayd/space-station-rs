@@ -1,7 +1,8 @@
 //! Misc UI over a loopback server: A's screentip over B names B with the carbon contexts (hug or
 //! attack, shove, pull); B leaves and its body gets the SSD `zzz_glow` and falls asleep; Esc's
 //! menu opens the Who window with both keys; balloon alerts reach only their viewers; a sleeper
-//! dreams in fragments.
+//! dreams in fragments; A's typing bubble shows while A types and goes with speech, sleep and
+//! death; a forced say blurts A's typed line out.
 
 use std::path::{Path, PathBuf};
 
@@ -14,12 +15,13 @@ use ss13_game::screentips::Screentip;
 use ss13_game::ssd::{SSD_DMI, SSD_STATE, Ssd};
 use ss13_game::status_effects::{Incap, StatusEffects};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
+use ss13_game::typing::{SayDraft, TALK_DMI};
 use ss13_mapload::IconIndex;
 use ss13_net::animation::client::AnimationReceived;
 use ss13_net::chat::client::ChatReceived;
 use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::animation::Animation;
-use ss13_shared::protocol::ClientIntent;
+use ss13_shared::protocol::{ClientIntent, TypingState};
 use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Appearance, TilePos};
 use ss13_tgui::{UiInterface, decode};
@@ -86,13 +88,15 @@ wwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 6] = [
+const STATES: [(&str, &str); 8] = [
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
     ("h.dmi", "human_basic"),
     ("i.dmi", "card_grey"),
     (SSD_DMI, SSD_STATE),
+    (TALK_DMI, "default0"),
+    (TALK_DMI, "default3"),
 ];
 
 fn fixture_assets(test: &str) -> PathBuf {
@@ -366,4 +370,93 @@ fn a_sleeper_dreams_in_fragments() {
     s.run_until_for(5.0, "the dream is cut short", |s| {
         s.try_get::<Dreaming>(b).is_none()
     });
+}
+
+#[test]
+fn typing_bubble_follows_the_say_line_and_ends_with_speech_sleep_and_death() {
+    let mut s = Station::start("typing_bubble_follows_the_say_line");
+    let a = s.players[0].mob;
+    let icons = s.server.world().resource::<IconIndex>();
+    let typing = icons.get(TALK_DMI, "default0").unwrap();
+    let thinking = icons.get(TALK_DMI, "default3").unwrap();
+    let top = |s: &Station| s.get::<Appearance>(a).overlays.last().map(|o| o.icon_state);
+    let bubbles = |s: &Station| {
+        s.get::<Appearance>(a)
+            .overlays
+            .iter()
+            .filter(|o| o.icon_state == typing || o.icon_state == thinking)
+            .count()
+    };
+
+    s.send(0, ClientIntent::Typing(TypingState::Thinking));
+    s.run_until("A thinks", |s| top(s) == Some(thinking));
+    s.send(0, ClientIntent::Typing(TypingState::Typing));
+    s.run_until("A types", |s| top(s) == Some(typing));
+    assert_eq!(bubbles(&s), 1, "one bubble at a time");
+    // B's own say line does not touch A.
+    s.send(1, ClientIntent::Typing(TypingState::Off));
+    s.send(0, ClientIntent::Say("привет".into()));
+    s.run_until("speech ends it", |s| bubbles(s) == 0);
+
+    // Asleep: hidden while asleep, back on waking if the line is still in use.
+    s.send(0, ClientIntent::Typing(TypingState::Thinking));
+    s.run_until("A thinks again", |s| top(s) == Some(thinking));
+    ss13_game::status_effects::set(s.server.world_mut(), a, Incap::Sleeping, 2.0);
+    s.run_until("sleep hides it", |s| bubbles(s) == 0);
+    s.run_until("waking shows it", |s| top(s) == Some(thinking));
+
+    // Dead: gone, and a dead mob's player typing shows nothing.
+    let world = s.server.world_mut();
+    let mut health = world.get::<ss13_game::health::Health>(a).unwrap().clone();
+    let mut stat = *world.get::<ss13_game::health::Stat>(a).unwrap();
+    ss13_game::health::apply_damage(
+        &mut health,
+        &mut stat,
+        ss13_game::health::DamageType::Brute,
+        300.0,
+    );
+    world.entity_mut(a).insert((health, stat));
+    s.run_until("death ends it", |s| bubbles(s) == 0);
+    s.send(0, ClientIntent::Typing(TypingState::Typing));
+    s.run_for(1.0);
+    assert_eq!(bubbles(&s), 0);
+}
+
+#[test]
+fn a_forced_say_blurts_the_typed_line_and_closes_it() {
+    let mut s = Station::start("a_forced_say_blurts_the_typed_line");
+    let a = s.players[0].mob;
+    s.send(0, ClientIntent::Typing(TypingState::Typing));
+    s.send(0, ClientIntent::SayDraft("помогите мне".into()));
+    s.run_until("A's line is kept", |s| {
+        s.try_get::<SayDraft>(a)
+            .is_some_and(|d| d.0 == "помогите мне")
+    });
+    // A hit too weak to force anything.
+    ss13_game::typing::item_hit(s.server.world_mut(), a, 4.0);
+    assert!(s.try_get::<SayDraft>(a).is_some());
+    // tg `try_force_say` of a stun: the line, cut, with a hurt phrase.
+    assert!(ss13_game::typing::force_say(
+        s.server.world_mut(),
+        a,
+        None,
+        true
+    ));
+    assert!(s.try_get::<SayDraft>(a).is_none());
+    s.run_until("B hears the cut line", |s| {
+        s.players[1]
+            .app
+            .world()
+            .resource::<Lines>()
+            .0
+            .iter()
+            .any(|l| l.contains("омогите мн-"))
+    });
+    // Closed: nothing more is forced.
+    assert!(!ss13_game::typing::force_say(
+        s.server.world_mut(),
+        a,
+        None,
+        true
+    ));
 }

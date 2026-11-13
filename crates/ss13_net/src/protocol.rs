@@ -111,6 +111,8 @@ pub(crate) enum ServerMessage {
     Sound(ss13_shared::protocol::SoundEvent),
     Animation(ss13_shared::animation::AnimationEvent),
     ChannelSound(ss13_shared::protocol::ChannelSound),
+    /// tgui-say's `close` after a forced say: the client drops its say line.
+    CloseSay,
 }
 
 /// An encoded frame, length prefix included; shared when one message goes to many clients.

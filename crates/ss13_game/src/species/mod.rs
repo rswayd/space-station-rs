@@ -112,6 +112,8 @@ pub enum Trait {
     GhostlyMob,
     HardlyWounded,
     HatedByDogs,
+    /// `TRAIT_HIDE_THINKING_INDICATOR` (the abductor's superlingual matrix): no typing bubble.
+    HideThinkingIndicator,
     Holy,
     LavaImmune,
     LesserHumanoid,
@@ -1401,9 +1403,13 @@ pub static SPECIES: [SpeciesDef; 33] = [
 ];
 
 /// Organ types that carry traits of their own (`organ_traits`).
-const ORGAN_TRAITS: [(&str, &[Trait]); 1] = [
+const ORGAN_TRAITS: [(&str, &[Trait]); 2] = [
     // "A fresh breakfast of plasma is a great start to any morning."
     ("/obj/item/organ/lungs/plasmaman", &[Trait::NoHunger]),
+    (
+        "/obj/item/organ/tongue/abductor",
+        &[Trait::HideThinkingIndicator],
+    ),
 ];
 
 /// The `organ_traits` of an organ type.

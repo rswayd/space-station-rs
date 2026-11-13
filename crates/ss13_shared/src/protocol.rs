@@ -122,6 +122,26 @@ pub enum ClientIntent {
     ReconnectShell,
     /// tg `/datum/keybinding/robot/undeploy` (key =): the shell's AI back into its core.
     UndeployShell,
+    /// tgui-say's `thinking`/`typing` messages (`/client/proc/start_thinking`, `start_typing`):
+    /// the own mob's indicator over its head. Sent only on a change; the server shows it on a
+    /// living, conscious mob and caps how often it changes.
+    Typing(TypingState),
+    /// tgui-say's `save`: the in-character text in the say line, as [`Self::Say`] would carry
+    /// it, at most once a second. The server says it, cut short, when the mob is hurt or
+    /// stunned while typing (tg `force_say`).
+    SayDraft(String),
+}
+
+/// What the say line is doing ([`ClientIntent::Typing`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TypingState {
+    /// Closed, empty of focus, or in a channel nobody sees (OOC, LOOC, pray, admin).
+    #[default]
+    Off,
+    /// Open in an in-character channel (tg `create_thinking_indicator`, `[bubble_icon]3`).
+    Thinking,
+    /// A key pressed in the last 5 s (tg `create_typing_indicator`, `[bubble_icon]0`).
+    Typing,
 }
 
 /// One end of a [`ClientIntent::Drag`].

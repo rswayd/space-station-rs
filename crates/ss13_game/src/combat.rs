@@ -568,6 +568,7 @@ fn melee(
                         weapon_entity,
                         zone,
                     );
+                    crate::typing::item_hit(world, target, force);
                 });
                 // tg `attacked_by`, `BODY_ZONE_HEAD`: blunt brute force may deconvert a rev.
                 if hit == BodyZone::Head && kind == DamageType::Brute && wounding.sharpness == 0 {

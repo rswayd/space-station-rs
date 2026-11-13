@@ -418,7 +418,10 @@ fn receive(
     mut inbox: ResMut<ReplicationInbox>,
     mut notices: MessageWriter<NoticeReceived>,
     mut ui: MessageWriter<UiMessageReceived>,
-    mut chat: MessageWriter<ChatReceived>,
+    (mut chat, mut close_say): (
+        MessageWriter<ChatReceived>,
+        MessageWriter<crate::chat::client::CloseSayReceived>,
+    ),
     (mut acks, mut camera, mut sounds, mut animations, mut channel_sounds): (
         MessageWriter<MoveAckReceived>,
         MessageWriter<crate::camera::client::CameraEffectReceived>,
@@ -485,6 +488,9 @@ fn receive(
                 }
                 ServerMessage::Chat(message) => {
                     chat.write(ChatReceived(message));
+                }
+                ServerMessage::CloseSay => {
+                    close_say.write(crate::chat::client::CloseSayReceived);
                 }
                 ServerMessage::Camera(effect) => {
                     camera.write(crate::camera::client::CameraEffectReceived(effect));
