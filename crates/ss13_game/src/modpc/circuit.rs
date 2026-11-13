@@ -183,6 +183,7 @@ mod tests {
             name_of: &names,
             id_of: &crate::wiremod::circuit::no_id,
             id_card: &crate::wiremod::circuit::no_card,
+            ntnet: false,
             effects: Vec::new(),
         };
         c.attach_shell(&[Kind::Modpc], &mut ctx);

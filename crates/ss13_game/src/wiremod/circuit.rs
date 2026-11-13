@@ -292,6 +292,13 @@ pub enum Kind {
     IdAccessReader,
     IdInfoReader,
     AccessChecker,
+    // `wiremod/components/ntnet/` and `wirenet/`.
+    NtnetSend,
+    NtnetSendLiteral,
+    NtnetReceive,
+    WirenetSend,
+    WirenetSendLiteral,
+    WirenetReceive,
 }
 
 pub struct KindDef {
@@ -319,7 +326,7 @@ const fn def(
     }
 }
 
-pub static KINDS: [KindDef; 36] = [
+pub static KINDS: [KindDef; 42] = [
     def(
         Kind::Arithmetic,
         "/obj/item/circuit_component/arithmetic",
@@ -572,7 +579,58 @@ pub static KINDS: [KindDef; 36] = [
         "ID",
         "Performs a basic comparison between two lists of strings, with additional functions that help in using it to check access on IDs.",
     ),
+    def(
+        Kind::NtnetSend,
+        "/obj/item/circuit_component/ntnet_send",
+        "NTNet Transmitter",
+        "NTNet",
+        "Sends a data package through NTNet. If Encryption Key is set then transmitted data will be only picked up by receivers with the same Encryption Key.",
+    ),
+    def(
+        Kind::NtnetSendLiteral,
+        "/obj/item/circuit_component/list_literal/ntnet_send",
+        "NTNet Transmitter List Literal",
+        "NTNet",
+        "Creates a list literal data package and sends it through NTNet. If Encryption Key is set then transmitted data will be only picked up by receivers with the same Encryption Key.",
+    ),
+    def(
+        Kind::NtnetReceive,
+        "/obj/item/circuit_component/ntnet_receive",
+        "NTNet Receiver",
+        "NTNet",
+        "Receives data packages through NTNet. If Encryption Key is set then only signals with the same Encryption Key will be received.",
+    ),
+    def(
+        Kind::WirenetSend,
+        "/obj/item/circuit_component/wirenet_send",
+        "Wirenet Transmitter",
+        "Utility",
+        "Sends a data package through the connected cable network. If Encryption Key is set then transmitted data will be only picked up by receivers with the same Encryption Key.",
+    ),
+    def(
+        Kind::WirenetSendLiteral,
+        "/obj/item/circuit_component/list_literal/wirenet_send",
+        "Wirenet Transmitter List Literal",
+        "Utility",
+        "Creates a list literal data package and sends it through the connected cable network. If Encryption Key is set then transmitted data will be only picked up by receivers with the same Encryption Key.",
+    ),
+    def(
+        Kind::WirenetReceive,
+        "/obj/item/circuit_component/wirenet_receive",
+        "Wirenet Receiver",
+        "Utility",
+        "Receives data packets through the connected cable network. If Encryption Key is set then only signals with the same Encryption Key will be received.",
+    ),
 ];
+
+/// `CABLE_LAYER_*_NAME`: the wirenet components' layer buttons (`ui_buttons`), by layer bit.
+pub const CABLE_LAYERS: [(u8, &str, &str); 3] = [
+    (1, "1", "Red Power Line"),
+    (2, "2", "Yellow Power Line"),
+    (4, "3", "Blue Power Line"),
+];
+/// `circuit_component_wirenet_connection` `cable_layer`.
+pub const DEFAULT_CABLE_LAYER: u8 = 2;
 
 pub const TRIGONOMETRY: [&str; 6] = [
     "Sine",
@@ -600,7 +658,9 @@ impl Kind {
     fn extra_ports(self) -> Option<(usize, usize, &'static str)> {
         match self {
             Kind::Arithmetic | Kind::Logic | Kind::Concat => Some((2, 10, "Port")),
-            Kind::ListLiteral => Some((1, 20, "Index")),
+            Kind::ListLiteral | Kind::NtnetSendLiteral | Kind::WirenetSendLiteral => {
+                Some((1, 20, "Index"))
+            }
             _ => None,
         }
     }
@@ -619,6 +679,8 @@ pub struct NodeState {
     pub numeric: bool,
     /// The toggle component's `toggle_state`.
     pub toggle: bool,
+    /// A wirenet component's `cable_layer` bit.
+    pub cable_layer: u8,
 }
 
 /// A component in a circuit.
@@ -953,6 +1015,32 @@ impl Node {
                 compare_outs(),
                 0,
             ),
+            Kind::NtnetSend | Kind::WirenetSend => (
+                vec![
+                    opt("List Type", &BASIC_TYPES),
+                    inp("Data Package", Ty::List(Box::new(Ty::Any)), Input),
+                    inp("Encryption Key", Ty::String, Input),
+                ],
+                Vec::new(),
+                IN_SIGNAL,
+            ),
+            Kind::NtnetSendLiteral | Kind::WirenetSendLiteral => (
+                vec![
+                    opt("List Type", &BASIC_TYPES),
+                    extra("Index", 1, Ty::Any),
+                    inp("Encryption Key", Ty::String, Input),
+                ],
+                vec![out("Value", Ty::List(Box::new(Ty::Any)))],
+                both,
+            ),
+            Kind::NtnetReceive | Kind::WirenetReceive => (
+                vec![
+                    opt("List Type", &BASIC_TYPES),
+                    inp("Encryption Key", Ty::String, Input),
+                ],
+                vec![out("Data Package", Ty::List(Box::new(Ty::Any)))],
+                OUT_SIGNAL,
+            ),
             // Its ports come with the shell's wires ([`Circuit::set_bundle_ports`]).
             Kind::WireBundle => (Vec::new(), Vec::new(), 0),
             Kind::Controller => (
@@ -991,8 +1079,16 @@ impl Node {
             flags,
             trigger_in,
             trigger_out,
-            state: NodeState::default(),
+            state: NodeState {
+                cable_layer: DEFAULT_CABLE_LAYER,
+                ..NodeState::default()
+            },
         }
+    }
+
+    /// The encryption key port of a network component (after the variable ports).
+    pub fn key_port(&self) -> Option<usize> {
+        self.inputs.iter().position(|p| p.name == "Encryption Key")
     }
 
     /// The `Compare` port of the compare components (their last input).
@@ -1036,6 +1132,22 @@ pub enum Effect {
     /// A machine's USB component or the airlock component got an input
     /// ([`super::devices::device_input`]).
     Device { node: u32, port: usize },
+    /// A transmitter sends a data package: through NTNet (`send_ntnet_data`) or the cable
+    /// network under the shell (`powernet/data_transmission`).
+    Network {
+        node: u32,
+        wirenet: bool,
+        packet: Packet,
+    },
+}
+
+/// A sent data package (`list("data", "enc_key", "port")`): the port's datatype stands for the
+/// port.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Packet {
+    pub data: Value,
+    pub key: Value,
+    pub ty: Ty,
 }
 
 /// What the modular computer component asks of its computer.
@@ -1064,6 +1176,8 @@ pub struct Ctx<'a> {
     pub id_of: &'a dyn Fn(Entity, bool) -> Option<Entity>,
     /// What the ID components read off an ID card within 1 tile of the circuit.
     pub id_card: &'a dyn Fn(Entity) -> Option<IdInfo>,
+    /// `find_functional_ntnet_relay()`.
+    pub ntnet: bool,
     pub effects: Vec<Effect>,
 }
 
@@ -1331,6 +1445,10 @@ impl Circuit {
         if !self.on {
             return false;
         }
+        // "If the server is down, don't use power or attempt to send data".
+        if matches!(self.nodes[i].kind, Kind::NtnetSend | Kind::NtnetSendLiteral) && !ctx.ntnet {
+            return false;
+        }
         match &mut ctx.charge {
             Some(c) if *c >= ENERGY_PER_INPUT => *c -= ENERGY_PER_INPUT,
             _ => return false,
@@ -1362,7 +1480,9 @@ impl Circuit {
                     self.set_input_type(i, 2, ty);
                 }
             }
-            Kind::ListLiteral if port == Some(0) => {
+            Kind::ListLiteral | Kind::NtnetSendLiteral | Kind::WirenetSendLiteral
+                if port == Some(0) =>
+            {
                 let ty = Ty::parse(&n.option(0)).unwrap_or(Ty::Any);
                 let extras: Vec<usize> =
                     (0..n.inputs.len()).filter(|&p| n.inputs[p].extra).collect();
@@ -1370,6 +1490,14 @@ impl Circuit {
                 for p in extras {
                     self.set_input_type(i, p, ty.clone());
                 }
+            }
+            Kind::NtnetSend | Kind::WirenetSend if port == Some(0) => {
+                let ty = Ty::parse(&n.option(0)).unwrap_or(Ty::Any);
+                self.set_input_type(i, 1, Ty::List(Box::new(ty)));
+            }
+            Kind::NtnetReceive | Kind::WirenetReceive if port == Some(0) => {
+                let ty = Ty::parse(&n.option(0)).unwrap_or(Ty::Any);
+                self.set_output_type(i, 0, Ty::List(Box::new(ty)));
             }
             Kind::Index if port == Some(0) => {
                 let ty = Ty::parse(&n.option(0)).unwrap_or(Ty::Any);
@@ -1504,14 +1632,37 @@ impl Circuit {
                     outs.push((0, Value::Str(s)));
                 }
             }
-            Kind::ListLiteral => {
+            Kind::ListLiteral | Kind::NtnetSendLiteral | Kind::WirenetSendLiteral => {
                 let ty = Ty::parse(&n.option(0)).unwrap_or(Ty::Any);
-                let items = n
+                let items: Vec<Value> = n
                     .extras()
                     .into_iter()
                     .map(|v| convert(&ty, v, &[]))
                     .collect();
+                if kind != Kind::ListLiteral {
+                    let key = n.key_port().map_or(Value::Null, |k| n.value(k).clone());
+                    ctx.effects.push(Effect::Network {
+                        node: id,
+                        wirenet: kind == Kind::WirenetSendLiteral,
+                        packet: Packet {
+                            data: Value::List(items.clone()),
+                            key,
+                            ty: n.outputs[0].ty.clone(),
+                        },
+                    });
+                }
                 outs.push((0, Value::List(items)));
+            }
+            Kind::NtnetSend | Kind::WirenetSend => {
+                ctx.effects.push(Effect::Network {
+                    node: id,
+                    wirenet: kind == Kind::WirenetSend,
+                    packet: Packet {
+                        data: n.value(1).clone(),
+                        key: n.value(2).clone(),
+                        ty: n.inputs[1].ty.clone(),
+                    },
+                });
             }
             Kind::Index => {
                 let v = match (n.value(1), n.value(2)) {
@@ -1679,6 +1830,8 @@ impl Circuit {
                 }
             }
             Kind::Delay
+            | Kind::NtnetReceive
+            | Kind::WirenetReceive
             | Kind::Hear
             | Kind::CompactRemote
             | Kind::Controller
@@ -1825,6 +1978,50 @@ impl Circuit {
         }
     }
 
+    /// `ntnet_receive`/`on_circuit_transmission` of the receivers `ids`: the key must match and
+    /// the receiver's list type take the sender's.
+    pub fn network_receive(&mut self, ids: &[u32], packet: &Packet, now: f64) {
+        let hits: Vec<u32> = self
+            .nodes
+            .iter()
+            .filter(|n| {
+                ids.contains(&n.id)
+                    && matches!(n.kind, Kind::NtnetReceive | Kind::WirenetReceive)
+                    && n.key_port().map(|k| n.value(k)) == Some(&packet.key)
+                    && n.outputs[0].ty.can_receive_from(&packet.ty)
+            })
+            .map(|n| n.id)
+            .collect();
+        for id in hits {
+            self.set_output(id, 0, packet.data.clone());
+            if let Some(t) = self
+                .nodes
+                .iter()
+                .find(|n| n.id == id)
+                .and_then(|n| n.trigger_out)
+            {
+                self.set_output(id, t, signal(now));
+            }
+        }
+    }
+
+    /// The receivers of a kind (`NtnetReceive`, `WirenetReceive`) with their cable layer.
+    pub fn receivers(&self, kind: Kind) -> Vec<(u32, u8)> {
+        self.nodes
+            .iter()
+            .filter(|n| n.kind == kind)
+            .map(|n| (n.id, n.state.cable_layer))
+            .collect()
+    }
+
+    /// A wirenet component's cable layer.
+    pub fn cable_layer(&self, id: u32) -> Option<u8> {
+        self.nodes
+            .iter()
+            .find(|n| n.id == id)
+            .map(|n| n.state.cable_layer)
+    }
+
     /// Voice activators: `Hear`.
     pub fn hear(
         &mut self,
@@ -1906,6 +2103,13 @@ impl Circuit {
         let Some(n) = self.nodes.get_mut(component) else {
             return false;
         };
+        // `circuit_component_wirenet_connection/on_action`.
+        if is_wirenet(n.kind)
+            && let Some(&(layer, _, _)) = CABLE_LAYERS.iter().find(|(_, _, name)| *name == action)
+        {
+            n.state.cable_layer = layer;
+            return true;
+        }
         let Some((min, max, prefix)) = n.kind.extra_ports() else {
             return false;
         };
@@ -2011,18 +2215,33 @@ impl Circuit {
                             port_ref: format!("o{}.{j}", n.id),
                         })
                         .collect(),
-                    ui_buttons: if n.kind.extra_ports().is_some() {
-                        vec![
-                            ("plus".to_owned(), "add".to_owned()),
-                            ("minus".to_owned(), "remove".to_owned()),
-                        ]
-                    } else {
-                        Vec::new()
+                    ui_buttons: {
+                        let mut buttons = Vec::new();
+                        if is_wirenet(n.kind) {
+                            buttons.extend(
+                                CABLE_LAYERS
+                                    .iter()
+                                    .map(|&(_, icon, name)| (icon.to_owned(), name.to_owned())),
+                            );
+                        }
+                        if n.kind.extra_ports().is_some() {
+                            buttons.push(("plus".to_owned(), "add".to_owned()));
+                            buttons.push(("minus".to_owned(), "remove".to_owned()));
+                        }
+                        buttons
                     },
                 }
             })
             .collect()
     }
+}
+
+/// The components with a cable layer (`circuit_component_wirenet_connection`).
+pub fn is_wirenet(kind: Kind) -> bool {
+    matches!(
+        kind,
+        Kind::WirenetSend | Kind::WirenetSendLiteral | Kind::WirenetReceive
+    )
 }
 
 /// The arithmetic component: null ports are skipped; a division by zero gives null.
@@ -2183,6 +2402,7 @@ mod tests {
                 name_of: &no_names,
                 id_of: &no_id,
                 id_card: &no_card,
+                ntnet: true,
                 effects: Vec::new(),
             };
             let r = f(&mut self.circuit, &mut ctx);
@@ -2328,6 +2548,52 @@ mod tests {
             &Value::Str("LO".into()),
             &Value::Str("hello".into())
         ));
+    }
+
+    #[test]
+    fn network_packages_reach_receivers_with_the_key() {
+        let mut b = Bench::new();
+        let send = b.add(Kind::NtnetSendLiteral);
+        let recv = b.add(Kind::NtnetReceive);
+        let other = b.add(Kind::NtnetReceive);
+        b.input(send, 0, "number");
+        b.input(send, 1, "7");
+        b.input(send, 2, "k");
+        b.input(recv, 0, "number");
+        b.input(recv, 1, "k");
+        b.input(other, 1, "x");
+        assert!(b.effects.is_empty(), "only the trigger sends");
+        b.input(send, 3, "");
+        let packet = b
+            .effects
+            .iter()
+            .find_map(|e| match e {
+                Effect::Network {
+                    wirenet: false,
+                    packet,
+                    ..
+                } => Some(packet.clone()),
+                _ => None,
+            })
+            .expect("sent");
+        assert_eq!(packet.data, Value::List(vec![Value::Num(7.0)]));
+        assert_eq!(packet.ty, Ty::List(Box::new(Ty::Number)));
+        let ids = [b.circuit.nodes[recv].id, b.circuit.nodes[other].id];
+        b.circuit.network_receive(&ids, &packet, 12.0);
+        assert_eq!(*b.out(recv, 0), Value::List(vec![Value::Num(7.0)]));
+        assert_eq!(*b.out(recv, 1), Value::Num(12.0), "Triggered");
+        assert_eq!(*b.out(other, 0), Value::Null, "another key");
+        // An entity list receiver cannot take a number list.
+        b.input(other, 0, "entity");
+        b.input(other, 1, "k");
+        b.circuit.network_receive(&ids, &packet, 13.0);
+        assert_eq!(*b.out(other, 0), Value::Null);
+        // The wirenet layer buttons.
+        let wire = b.add(Kind::WirenetReceive);
+        assert_eq!(b.circuit.cable_layer(b.circuit.nodes[wire].id), Some(2));
+        assert!(b.circuit.perform_action(wire, "Blue Power Line"));
+        assert_eq!(b.circuit.cable_layer(b.circuit.nodes[wire].id), Some(4));
+        assert!(!b.circuit.perform_action(recv, "Blue Power Line"));
     }
 
     #[test]

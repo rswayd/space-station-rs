@@ -438,11 +438,8 @@ pub fn mining_closure<'a>(
         if is_under(path, ORE_ROOT) {
             ores.push(path.to_owned());
         }
-        // What the order consoles sell (`ss13_game::mining::console`; the bitrunning vendor has no
-        // server half).
-        if !is_under(path, BITRUNNING_CONSOLE)
-            && let Some(console) = order_console(types, path)
-        {
+        // What the order consoles sell (`ss13_game::mining::console`).
+        if let Some(console) = order_console(types, path) {
             out.extend(console.items.into_iter().map(|i| i.purchase_path));
             out.extend(console.vouchers.into_iter().flat_map(|v| v.items));
         }

@@ -128,6 +128,8 @@
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
 //! | 3357 | `clothing::collar_bomb::press` (the collar bomb's button) |
+//! | 3367 | `science::bitrunning::help::host_monitor` (the host health of an avatar) |
+//! | 3377 | `science::bitrunning::disks::attack_self` (a bitrunning disk's program choice) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):

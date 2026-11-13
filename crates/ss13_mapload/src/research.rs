@@ -166,8 +166,18 @@ pub enum ExperimentKind {
     /// `subject` is the subtype's last path part (`human`, `nonhuman`, `xenomorph`; empty for
     /// the root, any corpse).
     Autopsy { subject: String },
+    /// `/datum/experiment/exploration_scan`: a site of `site_type` (empty: any) with
+    /// `condition` (empty: any) scanned with `scan_type` (`point`/`deep`); the `random`
+    /// subtypes pick one of `random_sites`/`random_conditions` in `New()`.
+    Exploration {
+        site_type: String,
+        condition: String,
+        scan_type: String,
+        random_sites: Vec<String>,
+        random_conditions: Vec<String>,
+    },
     /// Experiments whose checks need systems the port does not model here (people, plants,
-    /// materials, mechs, cytology, fish, ordnance, physical events, exploration).
+    /// materials, mechs, cytology, fish, ordnance, physical events).
     Unsupported,
 }
 
@@ -499,7 +509,7 @@ pub fn resolve(types: &DmTypes) -> ResearchData {
 }
 
 /// The checks of `/datum/experiment` subtypes, most specific first; `None`: unsupported.
-const EXPERIMENT_KINDS: [(&str, Option<&str>); 16] = [
+const EXPERIMENT_KINDS: [(&str, Option<&str>); 17] = [
     (
         "/datum/experiment/scanning/points/machinery_tiered_scan",
         Some("tiered"),
@@ -525,6 +535,7 @@ const EXPERIMENT_KINDS: [(&str, Option<&str>); 16] = [
     ("/datum/experiment/autopsy", Some("autopsy")),
     ("/datum/experiment/ordnance", None),
     ("/datum/experiment/physical", None),
+    ("/datum/experiment/exploration_scan", Some("exploration")),
 ];
 
 fn experiment(types: &DmTypes, p: &str) -> ExperimentDef {
@@ -559,6 +570,13 @@ fn experiment(types: &DmTypes, p: &str) -> ExperimentDef {
                 min_purity: num(types.resolved(p, "min_purity")),
             }
         }
+        Some("exploration") => ExperimentKind::Exploration {
+            site_type: path(types.resolved(p, "required_site_type")).unwrap_or_default(),
+            condition: path(types.resolved(p, "required_condition")).unwrap_or_default(),
+            scan_type: text(types.resolved(p, "required_scan_type")),
+            random_sites: paths(types.resolved(p, "possible_random_site_types")),
+            random_conditions: paths(types.resolved(p, "possible_random_conditions")),
+        },
         Some(_) => ExperimentKind::Scanning,
         None => ExperimentKind::Unsupported,
     };

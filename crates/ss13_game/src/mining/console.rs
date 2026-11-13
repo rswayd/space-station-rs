@@ -5,14 +5,16 @@
 //! credits, or its mining points on the mining consoles (`order_console/mining` and the golem
 //! ship's `mining/golem`, express only).
 //!
+//! - The bitrunning vendor (`order_console/bitrunning`) takes the account's bitrunning points and
+//!   ships in a "bitrunning delivery crate" (`/datum/supply_pack/bitrunning`, `ACCESS_BIT_DEN`).
 //! - `purchase`: at least `CARGO_CRATE_VALUE` (200) worth, at `cargo_cost_multiplier`; the items
 //!   ship in a crate on the next supply shuttle from CentCom ([`ship_orders`]; the cook's in the
 //!   "kitchen produce freezer"), and the console's `announcement_line` goes out on the supply
 //!   channel through the announcement system.
 //! - `express`: at `express_cost_multiplier`, a supply pod onto the buyer's tile
 //!   (`crate::cargo::supplypod`); the console then rests `cooldown_time × express_cost_multiplier`.
-// shortcut: no free uses or cooking vouchers of the cook's console (../kitchen/) and no
-// bitrunning vendor (its points are ../science/'s); add them with their groups.
+// shortcut: no free uses or cooking vouchers of the cook's console (../kitchen/); the bitrunning
+// vendor's crate is not locked to its access and does not flick `vendor_off` on a refused act.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;
@@ -41,6 +43,7 @@ use crate::power::Unpowered;
 const ORDER_CONSOLE: &str = ss13_mapload::mining::ORDER_CONSOLE_ROOT;
 const MINING_CONSOLE: &str = ss13_mapload::mining::MINING_CONSOLE;
 const COOK_CONSOLE: &str = "/obj/machinery/computer/order_console/cook";
+const BITRUNNING_CONSOLE: &str = ss13_mapload::mining::BITRUNNING_CONSOLE;
 const CRATE: &str = "/obj/structure/closet/crate";
 const FREEZER: &str = "/obj/structure/closet/crate/freezer";
 
@@ -54,6 +57,8 @@ pub struct OrderConsole {
     pub mining_points: bool,
     /// The cook's console: its orders come in the kitchen's freezer (`SSshuttle.chef_groceries`).
     pub kitchen: bool,
+    /// The bitrunning vendor: pays with bitrunning points (`bitrunning/subtract_points`).
+    pub bitrunning_points: bool,
     window: ProduceStatic,
 }
 
@@ -63,6 +68,8 @@ pub struct Shipment {
     pub items: Vec<String>,
     /// The "kitchen produce freezer" instead of a plain crate.
     pub kitchen: bool,
+    /// The "bitrunning delivery crate" (`/datum/supply_pack/bitrunning`).
+    pub bitrunning: bool,
 }
 
 /// Paid cargo orders waiting for the supply shuttle (`SSshuttle.shopping_list` disposable
@@ -135,10 +142,7 @@ fn setup_consoles(world: &mut World) {
         world.query_filtered::<(Entity, &DmObj, &DmOrderConsole), With<ss13_world::Mapped>>();
     let found: Vec<(Entity, String, DmOrderConsole)> = query
         .iter(world)
-        .filter(|(_, obj, _)| {
-            is_under(&obj.path, ORDER_CONSOLE)
-                && !is_under(&obj.path, ss13_mapload::mining::BITRUNNING_CONSOLE)
-        })
+        .filter(|(_, obj, _)| is_under(&obj.path, ORDER_CONSOLE))
         .map(|(e, obj, dm)| (e, obj.path.clone(), dm.clone()))
         .collect();
     for (e, path, dm) in found {
@@ -147,6 +151,7 @@ fn setup_consoles(world: &mut World) {
             window,
             mining_points: is_under(&path, MINING_CONSOLE),
             kitchen: is_under(&path, COOK_CONSOLE),
+            bitrunning_points: is_under(&path, BITRUNNING_CONSOLE),
             ..default()
         });
     }
@@ -219,6 +224,8 @@ impl ServerUi for ProduceConsoleUi {
                 .map_or(0, |a| {
                     if console.mining_points {
                         a.mining_points
+                    } else if console.bitrunning_points {
+                        a.bitrunning_points
                     } else {
                         a.balance
                     }
@@ -380,13 +387,18 @@ fn order(
     };
     // `purchase_items` -> `subtract_points`.
     let cost = (total as f32 * multiplier).round() as i64;
-    let mining_points = state.mining_points;
+    let (mining_points, bitrunning_points) = (state.mining_points, state.bitrunning_points);
     let paid = world.get_resource_mut::<Economy>().is_some_and(|mut e| {
         e.account_mut(account).is_some_and(|a| {
-            if !mining_points {
-                a.adjust_money(-cost)
-            } else if cost <= a.mining_points {
-                a.mining_points -= cost;
+            let points = if mining_points {
+                &mut a.mining_points
+            } else if bitrunning_points {
+                &mut a.bitrunning_points
+            } else {
+                return a.adjust_money(-cost);
+            };
+            if cost <= *points {
+                *points -= cost;
                 true
             } else {
                 false
@@ -432,12 +444,15 @@ fn order(
         world.resource_mut::<MiningShipments>().0.push(Shipment {
             items: paths,
             kitchen: state.kitchen,
+            bitrunning: state.bitrunning_points,
         });
-        machine_say(
-            world,
-            console,
-            "Thank you for your purchase! It will arrive on the next cargo shuttle!",
-        );
+        // `bitrunning/order_groceries` says its own line.
+        let thanks = if state.bitrunning_points {
+            "Благодарим вас за покупку! Товар прибудет следующим грузовым рейсом!"
+        } else {
+            "Thank you for your purchase! It will arrive on the next cargo shuttle!"
+        };
+        machine_say(world, console, thanks);
         // `aas_config_announce(/datum/aas_config_entry/order_console, ..., RADIO_CHANNEL_SUPPLY)`.
         if !dm.announcement_line.is_empty() {
             crate::arrivals::aas_announce_on(
@@ -481,6 +496,15 @@ pub fn ship_orders(world: &mut World, turfs: &mut Vec<TilePos>) {
             world.entity_mut(crate_entity).insert(DmName {
                 name: "kitchen produce freezer".to_owned(),
                 desc: "Produce order for the Kitchen, deliver to the chef ASAP.".to_owned(),
+            });
+        } else if shipment.bitrunning {
+            let desc = world
+                .get::<DmName>(crate_entity)
+                .map(|n| n.desc.clone())
+                .unwrap_or_default();
+            world.entity_mut(crate_entity).insert(DmName {
+                name: "bitrunning delivery crate".to_owned(),
+                desc,
             });
         }
         // As `supply::generate`: closets get their state at round start, a new crate here.

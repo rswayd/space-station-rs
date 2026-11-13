@@ -301,6 +301,16 @@ impl Grid {
         self.nodes.get(&entity)?.net
     }
 
+    /// The net of the first cable on `pos` sharing a bit of `layer` (tg `get_cable_node`).
+    pub fn cable_net_at(&self, pos: TilePos, layer: u8) -> Option<NetId> {
+        self.by_tile
+            .get(&pos)?
+            .iter()
+            .map(|&c| self.cable(c))
+            .find(|c| c.layer & layer != 0)
+            .map(|c| c.net)
+    }
+
     pub fn cable_net(&self, entity: Entity) -> Option<NetId> {
         self.cable_of.get(&entity).map(|&id| self.cable(id).net)
     }
