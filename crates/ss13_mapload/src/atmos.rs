@@ -257,10 +257,19 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             let on = num(Some(v)).is_some_and(|n| n != 0.0);
             out.push(ext("dm_area", "outdoors", on.to_string()));
         }
-        if let Some(n) = num(ty.declared_vars.get("mood_bonus")) {
+        // Only what the type declares: an undeclared var would write 0 over its parent's.
+        if let Some(n) = ty
+            .declared_vars
+            .get("mood_bonus")
+            .and_then(|v| num(Some(v)))
+        {
             out.push(ext("dm_area", "mood_bonus", format!("{:?}", n as f32)));
         }
-        if let Some(n) = num(ty.declared_vars.get("sound_environment")) {
+        if let Some(n) = ty
+            .declared_vars
+            .get("sound_environment")
+            .and_then(|v| num(Some(v)))
+        {
             out.push(ext("dm_area", "sound_environment", (n as i8).to_string()));
         }
         for var in ["mood_message", "mood_trait"] {
@@ -272,7 +281,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         }
     } else if is_under(path, "/obj") {
         if is_under(path, crate::CLEANABLE_ROOT)
-            && let Some(n) = num(ty.declared_vars.get("beauty"))
+            && let Some(n) = ty.declared_vars.get("beauty").and_then(|v| num(Some(v)))
         {
             out.push(ext("dm_beauty", "beauty", format!("{:?}", n as f32)));
         }
@@ -400,8 +409,23 @@ mod tests {
     fn area_sound_environment() {
         let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
         let e = |v: &str| ext("dm_area", "sound_environment", v);
-        assert_eq!(type_fields(&types, "/area"), [e("-1")]);
-        assert_eq!(type_fields(&types, "/area/station"), [e("20")]);
+        // Only the reverb fields (the root area also writes its other defaults).
+        let env = |path| -> Vec<Field> {
+            type_fields(&types, path)
+                .into_iter()
+                .filter(|f| {
+                    matches!(
+                        f,
+                        Field::Ext {
+                            key: "sound_environment",
+                            ..
+                        }
+                    )
+                })
+                .collect()
+        };
+        assert_eq!(env("/area"), [e("-1")]);
+        assert_eq!(env("/area/station"), [e("20")]);
         assert!(type_fields(&types, "/area/station/hallway").is_empty());
     }
 

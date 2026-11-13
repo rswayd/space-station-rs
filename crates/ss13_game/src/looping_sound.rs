@@ -1140,6 +1140,9 @@ mod tests {
             round.sort();
             assert_eq!(round, ["a.ogg", "b.ogg", "c.ogg"]);
         }
+        // The first loop stops (no end sound) so only the ordered one plays below.
+        world.entity_mut(e).despawn();
+        world.flush();
         let o = spawn(&mut world);
         start(&mut world, o, &ORDER);
         let mut got = played(&mut world);
