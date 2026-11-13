@@ -386,19 +386,44 @@ pub fn building_checks(
     if stack_amount(world, stack) < recipe.req * multiplier {
         return fail(world, "Недостаточно материала!");
     }
+    placement_checks(
+        world,
+        client,
+        mob,
+        recipe.result,
+        recipe.flags,
+        recipe.placement,
+    )
+}
+
+/// The placement half of tg `building_checks` (and of the crafting menu's
+/// `perform_all_checks`): `result` built on `mob`'s tile with these `CRAFT_*` flags and
+/// `STACK_CHECK_*` placement checks.
+pub fn placement_checks(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    result: &str,
+    flags: u16,
+    placement: u8,
+) -> bool {
+    let fail = |world: &mut World, text: &str| {
+        tell(world, client, Span::Warning, text);
+        false
+    };
     let Some(&pos) = world.get::<TilePos>(mob) else {
         return false;
     };
-    if recipe.flags & CRAFT_ONE_PER_TURF != 0 && any_of(world, pos, recipe.result) {
+    if flags & CRAFT_ONE_PER_TURF != 0 && any_of(world, pos, result) {
         return fail(world, "Здесь такое уже есть!");
     }
     let dir = world.get::<Facing>(mob).map_or(Dir::South, |f| f.0);
-    if recipe.flags & CRAFT_CHECK_DIRECTION != 0
-        && !valid_build_direction(world, pos, dir, recipe.flags & CRAFT_IS_FULLTILE != 0)
+    if flags & CRAFT_CHECK_DIRECTION != 0
+        && !valid_build_direction(world, pos, dir, flags & CRAFT_IS_FULLTILE != 0)
     {
         return fail(world, "Сюда не поместится!");
     }
-    if recipe.flags & CRAFT_ON_SOLID_GROUND != 0 {
+    if flags & CRAFT_ON_SOLID_GROUND != 0 {
         let (closed, groundless) = crate::construction::turf_at(world, pos)
             .and_then(|t| world.get::<DmTurf>(t))
             .map_or((false, false), |t| (t.closed, t.groundless));
@@ -410,7 +435,7 @@ pub fn building_checks(
             return fail(world, "Нужна твёрдая поверхность!");
         }
     }
-    if recipe.flags & CRAFT_CHECK_DENSITY != 0 {
+    if flags & CRAFT_CHECK_DENSITY != 0 {
         let blocked = world
             .resource::<SpatialIndex>()
             .on_tile(pos)
@@ -424,29 +449,23 @@ pub fn building_checks(
             return fail(world, "Что-то мешает!");
         }
     }
-    if recipe.placement & STACK_CHECK_CARDINALS != 0
+    if placement & STACK_CHECK_CARDINALS != 0
         && Dir::CARDINALS
             .iter()
-            .any(|&d| any_of(world, pos.step(d), recipe.result))
+            .any(|&d| any_of(world, pos.step(d), result))
     {
         return fail(world, "Нельзя строить вплотную к другому такому же!");
     }
-    if recipe.placement & STACK_CHECK_ADJACENT != 0 {
+    if placement & STACK_CHECK_ADJACENT != 0 {
         let near = (-1..=1).any(|dx| {
-            (-1..=1).any(|dy| {
-                any_of(
-                    world,
-                    TilePos::new(pos.x + dx, pos.y + dy, pos.z),
-                    recipe.result,
-                )
-            })
+            (-1..=1).any(|dy| any_of(world, TilePos::new(pos.x + dx, pos.y + dy, pos.z), result))
         });
         if near {
             return fail(world, "Нельзя строить рядом с другим таким же!");
         }
     }
     // There are no trams: `STACK_CHECK_TRAM_FORBIDDEN` always passes.
-    if recipe.placement & STACK_CHECK_TRAM_EXCLUSIVE != 0 {
+    if placement & STACK_CHECK_TRAM_EXCLUSIVE != 0 {
         return fail(world, "Это строится только на трамвае!");
     }
     true

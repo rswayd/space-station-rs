@@ -29,6 +29,7 @@ mod clothing_core;
 mod combat;
 mod comms;
 mod construction;
+mod crafting;
 mod crayons;
 mod cult;
 mod decor;
