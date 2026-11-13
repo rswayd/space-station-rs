@@ -634,7 +634,38 @@ pub fn insert_from_hand(world: &mut World, held: Entity, storage: Entity) -> boo
         return false;
     }
     put_inside(world, held, storage);
+    // `item_insertion_feedback`.
+    storage_sound(world, storage, StorageSound::Insert);
     true
+}
+
+/// When a `/datum/storage` makes a sound.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StorageSound {
+    /// `item_insertion_feedback`, a dump into another storage: `rustle_sound`.
+    Insert,
+    /// `open_storage`: `open_sound`, else `SFX_RUSTLE`.
+    Open,
+}
+
+/// `playsound(parent, sound, 50, vary, -5)` of `storage` when `do_rustle` is set.
+// shortcut: storages the code makes without a `DmStorage` (holsters, pockets, MOD storage,
+// safes) are silent; give them their datum's sounds when they get one.
+pub fn storage_sound(world: &mut World, storage: Entity, which: StorageSound) {
+    let Some(dm) = world.get::<DmStorage>(storage).filter(|d| d.do_rustle) else {
+        return;
+    };
+    let (sound, vary) = match which {
+        StorageSound::Insert => (dm.rustle_sound.clone(), dm.rustle_vary),
+        StorageSound::Open if dm.open_sound.is_empty() => ("rustle".to_owned(), dm.open_sound_vary),
+        StorageSound::Open => (dm.open_sound.clone(), dm.open_sound_vary),
+    };
+    if let Some(at) = crate::explosions::turf_of(world, storage) {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(at, sound, 50.0, vary).extrarange(-5.0),
+        );
+    }
 }
 
 /// tg `open_storage`: shows `storage` to `mob` if it can reach it.
@@ -659,6 +690,7 @@ pub fn open_view(world: &mut World, client: Entity, mob: Entity, storage: Entity
     world
         .resource_mut::<Messages<OpenUi>>()
         .write(OpenUi::new::<StorageUi>(client, mob, mob, title));
+    storage_sound(world, storage, StorageSound::Open);
 }
 
 /// Whether `mob` can reach into `storage` right now: it holds or wears it, or it lies on a tile
@@ -965,6 +997,18 @@ fn dump_content_at(
             ss13_shared::chat::Span::Notice,
             format!("Вы вытряхиваете содержимое {what} в {onto}."),
         );
+        // tg plays it with `vary = TRUE` whatever `rustle_vary` says.
+        if let Some(sound) = world
+            .get::<DmStorage>(storage)
+            .filter(|d| d.do_rustle)
+            .map(|d| d.rustle_sound.clone())
+            && let Some(at) = crate::explosions::turf_of(world, storage)
+        {
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::new(at, sound, 50.0, true).extrarange(-5.0),
+            );
+        }
         let items: Vec<Entity> = world
             .get::<Stored>(storage)
             .map(|s| s.items().to_vec())
@@ -1073,6 +1117,50 @@ pub(crate) fn put_in_hands(world: &mut World, mob: Entity, inventory: &Inventory
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn storages_rustle_with_their_datum_sounds() {
+        use crate::sound::PlaySound;
+        let mut world = World::new();
+        world.init_resource::<Messages<PlaySound>>();
+        let at = TilePos::new(1, 1, 1);
+        let medkit = DmStorage {
+            rustle_sound: "medkit_rustle.ogg".into(),
+            open_sound: "medkit_open.ogg".into(),
+            ..default()
+        };
+        let medkit = world.spawn((medkit, at)).id();
+        let bag = world.spawn((DmStorage::default(), at)).id();
+        let pocket = world
+            .spawn((
+                DmStorage {
+                    do_rustle: false,
+                    ..default()
+                },
+                at,
+            ))
+            .id();
+        for storage in [medkit, bag, pocket] {
+            storage_sound(&mut world, storage, StorageSound::Insert);
+            storage_sound(&mut world, storage, StorageSound::Open);
+        }
+        let played: Vec<(String, f32, f32)> = world
+            .resource_mut::<Messages<PlaySound>>()
+            .drain()
+            .map(|s| (s.sound, s.vol, s.extrarange))
+            .collect();
+        let at50 = |s: &str| (s.to_owned(), 50.0, -5.0);
+        // `SFX_RUSTLE` both ways for a plain bag; `do_rustle = FALSE` is silent.
+        assert_eq!(
+            played,
+            [
+                at50("medkit_rustle.ogg"),
+                at50("medkit_open.ogg"),
+                at50("rustle"),
+                at50("rustle"),
+            ]
+        );
+    }
 
     const BACKPACK: Storage = Storage {
         max_slots: 21,

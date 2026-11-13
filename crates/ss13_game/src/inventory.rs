@@ -456,7 +456,84 @@ impl Plugin for InventoryServerPlugin {
                     .after(crate::medical::MedicalClicks)
                     .before(UiSystems::Open),
             )
+            .add_systems(Update, handling_sounds.after(refresh_mobs))
             .add_observer(forget_carried);
+    }
+}
+
+/// `PICKUP_SOUND_VOLUME`, `DROP_SOUND_VOLUME`, `EQUIP_SOUND_VOLUME`, `YEET_SOUND_VOLUME`
+/// (`code/__DEFINES/sound.dm`).
+const PICKUP_SOUND_VOLUME: f32 = 15.0;
+const DROP_SOUND_VOLUME: f32 = 20.0;
+const EQUIP_SOUND_VOLUME: f32 = 30.0;
+pub(crate) const YEET_SOUND_VOLUME: f32 = 90.0;
+
+/// tg `sound_chain`: `playsound(src, sound, volume, sound_vary, ignore_walls = FALSE)`;
+/// nothing without a sound.
+pub(crate) fn item_sound(world: &mut World, at: TilePos, item: Entity, sound: &str, volume: f32) {
+    let vary = world.get::<DmItem>(item).is_some_and(|d| d.sound_vary);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(at, sound, volume, vary).ignore_walls(false),
+    );
+}
+
+/// What every slot of a mob held when [`handling_sounds`] last looked.
+#[derive(Component, Debug, Default)]
+struct SlotsHeard([Option<Entity>; ALL_SLOTS.len()]);
+
+/// tg `/obj/item/equipped`: an item newly in a slot it fits plays its `equip_sound`, else one
+/// newly in a hand its `pickup_sound`. A mob seen for the first time records its slots
+/// silently (tg `initial`: the outfit it spawned with).
+// shortcut: `equipped` is seen from the slot contents, so an item put back into the slot it
+// left in the same tick is not heard; add a per-move hook if that ever matters.
+fn handling_sounds(
+    mut commands: Commands,
+    mut mobs: Query<
+        (
+            Entity,
+            &Inventory,
+            Option<&mut SlotsHeard>,
+            Option<&TilePos>,
+        ),
+        Changed<Inventory>,
+    >,
+    items: Query<&DmItem>,
+    mut sounds: Option<ResMut<Messages<crate::sound::PlaySound>>>,
+) {
+    for (mob, inventory, heard, at) in &mut mobs {
+        let now = ALL_SLOTS.map(|s| inventory.slot(s));
+        let Some(mut heard) = heard else {
+            commands.entity(mob).insert(SlotsHeard(now));
+            continue;
+        };
+        let before = std::mem::replace(&mut heard.0, now);
+        let (Some(&at), Some(sounds)) = (at, sounds.as_mut()) else {
+            continue;
+        };
+        for (i, slot) in ALL_SLOTS.into_iter().enumerate() {
+            let Some(item) = now[i].filter(|&e| before[i] != Some(e)) else {
+                continue;
+            };
+            let Ok(dm) = items.get(item) else {
+                continue;
+            };
+            let hand = matches!(slot, InventorySlot::LeftHand | InventorySlot::RightHand);
+            let (sound, volume) =
+                if dm.slot_flags & slot_bit(slot) != 0 && !dm.equip_sound.is_empty() {
+                    (&dm.equip_sound, EQUIP_SOUND_VOLUME)
+                } else if hand {
+                    (&dm.pickup_sound, PICKUP_SOUND_VOLUME)
+                } else {
+                    continue;
+                };
+            if !sound.is_empty() {
+                sounds.write(
+                    crate::sound::PlaySound::new(at, sound.clone(), volume, dm.sound_vary)
+                        .ignore_walls(false),
+                );
+            }
+        }
     }
 }
 
@@ -886,6 +963,14 @@ pub(crate) fn put_down_at(world: &mut World, item: Entity, pos: TilePos, offset:
     let base = world
         .get::<DmAtom>(item)
         .map_or([0, 0], |a| [a.pixel_x, a.pixel_y]);
+    // tg `dropped(silent = FALSE)`: `drop_sound`.
+    if world.get::<CarriedBy>(item).is_some() {
+        let sound = world
+            .get::<DmItem>(item)
+            .map(|d| d.drop_sound.clone())
+            .unwrap_or_default();
+        item_sound(world, pos, item, &sound, DROP_SOUND_VOLUME);
+    }
     let mut entity = world.entity_mut(item);
     entity.remove::<CarriedBy>().insert(pos);
     if let Some(mut look) = entity.get_mut::<Appearance>() {
@@ -1528,6 +1613,72 @@ mod tests {
         assert!(!check_access(&none, &list(&["armory"]), &assistant));
         assert!(check_access(&brig, &one, &officer));
         assert!(!check_access(&brig, &one, &list(&["brig"])));
+    }
+
+    #[test]
+    fn handling_sounds_follow_the_slots() {
+        use crate::sound::PlaySound;
+        let mut app = App::new();
+        app.add_message::<PlaySound>()
+            .add_systems(Update, handling_sounds);
+        let at = TilePos::new(1, 1, 1);
+        let belt = app
+            .world_mut()
+            .spawn(DmItem {
+                slot_flags: slot_bit(InventorySlot::Belt),
+                pickup_sound: "pickup.ogg".into(),
+                equip_sound: "equip.ogg".into(),
+                drop_sound: "drop.ogg".into(),
+                ..default()
+            })
+            .id();
+        let mob = app.world_mut().spawn((at, Inventory::default())).id();
+        let step = |app: &mut App, f: &dyn Fn(&mut Inventory)| {
+            f(&mut app.world_mut().get_mut::<Inventory>(mob).unwrap());
+            app.update();
+            app.world_mut()
+                .resource_mut::<Messages<PlaySound>>()
+                .drain()
+                .map(|s| (s.sound, s.vol))
+                .collect::<Vec<_>>()
+        };
+        // The first look is the outfit it spawned with (tg `initial`): silent.
+        assert!(step(&mut app, &|inv| inv.belt = Some(belt)).is_empty());
+        assert_eq!(
+            step(&mut app, &|inv| {
+                inv.belt = None;
+                inv.hands[0] = Some(belt);
+            }),
+            [("pickup.ogg".to_owned(), 15.0)]
+        );
+        assert_eq!(
+            step(&mut app, &|inv| {
+                inv.hands[0] = None;
+                inv.belt = Some(belt);
+            }),
+            [("equip.ogg".to_owned(), 30.0)]
+        );
+        // Not its slot: no equip sound, and only hands pick up.
+        assert!(
+            step(&mut app, &|inv| {
+                inv.belt = None;
+                inv.pockets[0] = Some(belt);
+            })
+            .is_empty()
+        );
+        // Swapping hands changes nothing it holds.
+        assert!(step(&mut app, &|inv| inv.active = 1).is_empty());
+
+        // Dropped (`put_down`): its `drop_sound` where it lands.
+        app.world_mut().entity_mut(belt).insert(CarriedBy(mob));
+        put_down(app.world_mut(), belt, at);
+        let dropped: Vec<_> = app
+            .world_mut()
+            .resource_mut::<Messages<PlaySound>>()
+            .drain()
+            .map(|s| (s.sound, s.vol, s.ignore_walls))
+            .collect();
+        assert_eq!(dropped, [("drop.ogg".to_owned(), 20.0, false)]);
     }
 
     #[test]

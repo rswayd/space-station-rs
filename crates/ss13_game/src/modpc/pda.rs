@@ -415,6 +415,44 @@ pub fn turf_of(world: &World, item: Entity) -> Option<TilePos> {
     None
 }
 
+/// `playsound(src, file, volume, vary)` of a computer: from the tile it is on.
+pub fn play(world: &mut World, pc: Entity, file: &str, volume: f32, vary: bool) {
+    if let Some(at) = turf_of(world, pc) {
+        crate::sound::playsound(world, crate::sound::PlaySound::new(at, file, volume, vary));
+    }
+}
+
+/// `insert_id`, `remove_id` and their secondary-slot versions.
+const ID_SLOT_SOUND: &str = "sound/machines/terminal/terminal_insert_disc.ogg";
+/// `PC_Eject_Disk` of the ID or the data disk.
+const CARD_SLIDE: &str = "sound/machines/card_slide.ogg";
+/// `PC_Imprint_ID`.
+const TERMINAL_PROCESSING: &str = "sound/machines/terminal/terminal_processing.ogg";
+/// `shutdown_computer(loud = TRUE)`.
+const TERMINAL_OFF: &str = "sound/machines/terminal/terminal_off.ogg";
+
+/// The loud part of `shutdown_computer`: the sound and "выключается." to those around it.
+pub fn shutdown_effects(world: &mut World, pc: Entity) {
+    play(world, pc, TERMINAL_OFF, 25.0, false);
+    let Some(at) = turf_of(world, pc) else {
+        return;
+    };
+    let name = crate::security::name_of(world, pc);
+    let sends = crate::pull::visible_message(
+        world,
+        at,
+        ChatChannel::Local,
+        (
+            Span::Notice,
+            format!("{} выключается.", ss13_shared::capitalize(&name)),
+        ),
+        &[],
+    );
+    for send in sends.into_iter().filter(|s| !s.clients.is_empty()) {
+        world.write_message(send);
+    }
+}
+
 fn chat(world: &mut World, client: Option<Entity>, span: Span, text: impl Into<String>) {
     if let Some(client) = client {
         world.write_message(SendChat {
@@ -541,6 +579,7 @@ pub fn insert_id(
     } else {
         computer.stored_id = Some(card);
     }
+    play(world, pda, ID_SLOT_SOUND, 50.0, false);
     let name = world
         .get::<DmName>(card)
         .map(|n| n.name.clone())
@@ -600,6 +639,8 @@ pub fn remove_id(
         // Nowhere to put it: it stays in.
         (None, None) => return false,
     }
+    // Silent or not: `silent` only skips the chat.
+    play(world, pda, ID_SLOT_SOUND, 50.0, false);
     if !silent && let Some(user) = user {
         let name = world
             .get::<DmName>(card)
@@ -1282,6 +1323,7 @@ fn apply_act(
                 super::programs::card_mod::on_kill(world, pda);
             }
             pc!().shutdown();
+            shutdown_effects(world, pda);
         }
         NtosAct::Minimize => pc!().minimize(),
         NtosAct::Kill(program) => {
@@ -1353,13 +1395,20 @@ fn apply_act(
             }
         }
         NtosAct::EjectId => {
-            remove_id(world, pda, Some(actor), false, false);
+            if remove_id(world, pda, Some(actor), false, false) {
+                play(world, pda, CARD_SLIDE, 50.0, false);
+            }
         }
         NtosAct::EjectDisk => {
-            super::files::eject_disk(world, pda, Some(actor));
+            if super::files::eject_disk(world, pda, Some(actor)) {
+                play(world, pda, CARD_SLIDE, 50.0, false);
+            }
         }
         NtosAct::Files(act) => return super::files::apply(world, pda, computer, act),
-        NtosAct::ImprintId => imprint_id(world, pda, None, None),
+        NtosAct::ImprintId => {
+            imprint_id(world, pda, None, None);
+            play(world, pda, TERMINAL_PROCESSING, 15.0, true);
+        }
         NtosAct::UpdateNote(note) => {
             if computer.active != Some(ProgramKind::Notepad) {
                 return Err("notepad not in front");
@@ -1615,6 +1664,38 @@ mod tests {
             .insert(CarriedBy(mob));
         app.update();
         assert_eq!(app.world().get::<Optics>(mob), Some(&fire));
+    }
+
+    #[test]
+    fn the_id_slot_clicks_in_and_out() {
+        use crate::sound::PlaySound;
+        let mut world = World::new();
+        world.init_resource::<Messages<SendChat>>();
+        world.init_resource::<Messages<PlaySound>>();
+        let at = TilePos::new(1, 1, 1);
+        let client = world.spawn_empty().id();
+        let mob = world.spawn(at).id();
+        let card = world.spawn((DmName::default(), CarriedBy(mob))).id();
+        world.entity_mut(mob).insert(Inventory {
+            hands: [Some(card), None],
+            ..default()
+        });
+        let pda = world
+            .spawn((ModularComputer::pda(PDA_ROOT, "pda"), at))
+            .id();
+        insert_id(&mut world, client, mob, card, pda, false);
+        assert_eq!(
+            world.get::<ModularComputer>(pda).unwrap().stored_id,
+            Some(card)
+        );
+        assert!(remove_id(&mut world, pda, Some(mob), false, false));
+        let played: Vec<(String, f32, bool)> = world
+            .resource_mut::<Messages<PlaySound>>()
+            .drain()
+            .map(|s| (s.sound, s.vol, s.vary))
+            .collect();
+        let click = (ID_SLOT_SOUND.to_owned(), 50.0, false);
+        assert_eq!(played, [click.clone(), click]);
     }
 
     #[test]

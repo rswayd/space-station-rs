@@ -450,11 +450,17 @@ pub fn send_automated(
     true
 }
 
-/// `/obj/item/modular_computer/proc/ring`: `*ringtone*` to everyone who hears the PDA.
+/// `/obj/item/modular_computer/proc/ring`: the beep and `*ringtone*` to everyone who hears
+/// the PDA.
+// shortcut: no `STATION_TRAIT_PDA_GLITCHED` voice beeps; add with station traits.
 fn ring(world: &mut World, pda: Entity, ringtone: &str) {
     let Some(at) = turf_of(world, pda) else {
         return;
     };
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(at, "sound/machines/beep/twobeep_high.ogg", 50.0, true),
+    );
     let sends = crate::pull::visible_message(
         world,
         at,

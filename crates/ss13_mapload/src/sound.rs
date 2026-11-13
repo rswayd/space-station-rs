@@ -29,7 +29,7 @@ pub const SOUND_DIR: &str = "sound";
 const SFX_ROOT: &str = "/datum/sound_effect";
 
 /// Vars holding a sound file (or an SFX key) on the types the game ports.
-pub const SOUND_VARS: [&str; 22] = [
+pub const SOUND_VARS: [&str; 28] = [
     "fire_sound",
     "dry_fire_sound",
     "load_sound",
@@ -53,6 +53,14 @@ pub const SOUND_VARS: [&str; 22] = [
     "empty_alarm_sound",
     "stun_projectile_sound",
     "lethal_projectile_sound",
+    // Closets and crates.
+    "open_sound",
+    "close_sound",
+    // `/obj/item` handling.
+    "pickup_sound",
+    "drop_sound",
+    "equip_sound",
+    "throw_drop_sound",
 ];
 
 /// Literal `playsound` files of the ported procs.
@@ -1527,6 +1535,14 @@ pub fn referenced<'a>(
             if s.ends_with(".ogg") {
                 out.insert(s);
             }
+        }
+        // The `/datum/storage` of a storage item: its rustle and open sounds.
+        if is_under(path, crate::contents::STORAGE_ROOT) {
+            out.extend(
+                crate::contents::storage_sounds(types, path)
+                    .into_iter()
+                    .filter(|s| s.ends_with(".ogg")),
+            );
         }
     }
     out

@@ -88,6 +88,9 @@ pub struct Closet {
     pub mob_capacity: usize,
     /// Dense once closed (body bags are not).
     pub dense_when_closed: bool,
+    /// `open_sound` / `close_sound` (empty: silent) with their volumes.
+    open_sound: (String, f32),
+    close_sound: (String, f32),
 }
 
 impl Closet {
@@ -115,6 +118,8 @@ impl Closet {
             kind: ClosetKind::Plain,
             mob_capacity: MOB_STORAGE_CAPACITY,
             dense_when_closed: true,
+            open_sound: (dm.open_sound.clone(), dm.open_sound_volume),
+            close_sound: (dm.close_sound.clone(), dm.close_sound_volume),
         }
     }
 
@@ -379,7 +384,7 @@ fn init_closets(world: &mut World) {
         }
         if opened {
             // tg `Initialize`: closets mapped open open without effects (and fill now).
-            open(world, entity);
+            open_with(world, entity, false);
             report.opened_at_start += 1;
         } else {
             report.taken_at_start += take_contents(world, entity);
@@ -408,6 +413,20 @@ pub(crate) fn refresh_look(world: &mut World, closet: Entity) {
 /// tg `open()` (`force` skips the lock and weld checks). Fills on the first opening, then
 /// moves the contents onto the closet's tile.
 pub fn open(world: &mut World, closet: Entity) -> bool {
+    open_with(world, closet, true)
+}
+
+/// tg `playsound(loc, sound, volume, TRUE, -3)` of `open()` / `close()`.
+fn door_sound(world: &mut World, pos: TilePos, (sound, volume): (String, f32)) {
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::new(pos, sound, volume, true).extrarange(-3.0),
+    );
+}
+
+/// [`open`]; `special_effects` false: without the door sound (tg `open(special_effects =
+/// FALSE)`: mapped open, `bust_open`).
+pub(crate) fn open_with(world: &mut World, closet: Entity, special_effects: bool) -> bool {
     let Some(state) = world.get::<Closet>(closet) else {
         return false;
     };
@@ -419,6 +438,10 @@ pub fn open(world: &mut World, closet: Entity) -> bool {
     };
     let dense_when_open = state.dense_when_open;
     let initialized = state.contents_initialized;
+    if special_effects {
+        let sound = state.open_sound.clone();
+        door_sound(world, pos, sound);
+    }
     {
         let mut state = world.get_mut::<Closet>(closet).expect("checked above");
         state.welded = false;
@@ -742,7 +765,9 @@ pub fn close(world: &mut World, closet: Entity) -> bool {
     if !state.opened || !can_close(world, closet, pos) {
         return false;
     }
+    let sound = state.close_sound.clone();
     take_contents(world, closet);
+    door_sound(world, pos, sound);
     world
         .get_mut::<Closet>(closet)
         .expect("checked above")
@@ -1237,6 +1262,47 @@ mod tests {
         assert!(close(&mut world, c));
         assert!(world.entity(c).contains::<Density>());
         assert_eq!(world.get::<Stored>(c).unwrap().items().len(), 2);
+    }
+
+    #[test]
+    fn doors_play_the_type_sounds_unless_opened_quietly() {
+        use crate::sound::PlaySound;
+        let mut world = world();
+        world.init_resource::<Messages<PlaySound>>();
+        let dm = DmCloset {
+            open_sound: "sound/machines/crate/crate_open.ogg".into(),
+            open_sound_volume: 35.0,
+            close_sound: "sound/machines/crate/crate_close.ogg".into(),
+            close_sound_volume: 50.0,
+            ..default()
+        };
+        let c = closet(&mut world, dm.clone());
+        assert!(open(&mut world, c));
+        assert!(close(&mut world, c));
+        let played: Vec<(String, f32, f32)> = world
+            .resource_mut::<Messages<PlaySound>>()
+            .drain()
+            .map(|s| (s.sound, s.vol, s.extrarange))
+            .collect();
+        assert_eq!(
+            played,
+            [
+                ("sound/machines/crate/crate_open.ogg".to_owned(), 35.0, -3.0),
+                (
+                    "sound/machines/crate/crate_close.ogg".to_owned(),
+                    50.0,
+                    -3.0
+                ),
+            ]
+        );
+        // Mapped open (`special_effects = FALSE`): no sound.
+        world.despawn(c);
+        let quiet = closet(&mut world, dm);
+        assert!(open_with(&mut world, quiet, false));
+        assert_eq!(
+            world.resource_mut::<Messages<PlaySound>>().drain().count(),
+            0
+        );
     }
 
     #[test]

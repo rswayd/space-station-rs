@@ -180,6 +180,7 @@ pub fn power_failure(world: &mut World, pc: Entity) {
         computer.light_on = false;
         computer.shutdown();
     }
+    super::pda::shutdown_effects(world, pc);
 }
 
 /// One `SSobj` tick of `dt` seconds: `handle_power` of every enabled computer, then
