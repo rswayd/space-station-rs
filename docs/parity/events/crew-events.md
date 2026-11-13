@@ -97,7 +97,7 @@
 Случайное животное или бот обретает разум и отдаётся призраку-добровольцу; станционный вариант (только админы) — все сразу.
 
 - **Код:** [`/datum/round_event_control/sentience`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/sentience.dm#L25), [`/datum/round_event_control/sentience/all`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/sentience.dm#L125), [`/datum/round_event/ghost_role`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/events/ghost_role/_ghost_role.dm#L4)
-- **Статус в ss13-rs:** ❌ нет — базовые мобы и боты теперь есть (`crates/ss13_game/src/mobs/`, `crates/ss13_bots`), опрос призраков есть (`crates/ss13_game/src/ghost_poll.rs`), нет самого события и вселения призрака в моба с выдачей разума
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/events/sentience.rs`: оба события (вес 10 и 0), опрос призраков «random animal», безмозглые живые базовые мобы станции (не голограммы), сначала `high_priority_sentience`, каждая группа перемешана; моб понимает все языки, не исчезает при смерти, max health ≥ 200 и полное лечение, сообщения «Hello world!»; объявление только после успешного вселения (ложная тревога — сразу); нет simple_animal-кандидатов (мегафауна), повторов через 30/60/120 с (без мобов событие сразу не идёт), бана по ролям и оповещения призраков
 
 ## Вторжения
 
