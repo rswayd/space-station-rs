@@ -26,6 +26,8 @@ pub mod ashwalker;
 #[cfg(feature = "server")]
 pub mod blob;
 #[cfg(feature = "server")]
+pub mod blood_worm;
+#[cfg(feature = "server")]
 pub mod brainwashed;
 #[cfg(feature = "server")]
 pub mod brother;
@@ -132,6 +134,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             santa::SantaPlugin,
             ashwalker::AshwalkerPlugin,
             voidwalker::VoidwalkerPlugin,
+            blood_worm::BloodWormPlugin,
             separatist::SeparatistPlugin,
             minions::MinionsPlugin,
             contractor::ContractorPlugin,
@@ -180,6 +183,8 @@ pub const ROLE_NINJA: &str = "Space Ninja";
 pub const ROLE_SPY: &str = "Spy";
 /// tg `ROLE_VOIDWALKER` (`voidwalker`).
 pub const ROLE_VOIDWALKER: &str = "Voidwalker";
+/// tg `ROLE_BLOOD_WORM_INFESTATION`: the blood worm midround's `be_special` key (`blood_worm`).
+pub const ROLE_BLOOD_WORM_INFESTATION: &str = "Blood Worm Infestation";
 /// tg `ROLE_FUGITIVE` (`raiders::fugitive`).
 pub const ROLE_FUGITIVE: &str = "Fugitive";
 

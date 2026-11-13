@@ -1191,6 +1191,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // The nightmare's light eater and the morph (`ss13_game::antag`).
     "/obj/item/light_eater",
     "/mob/living/basic/morph",
+    // Blood worms (`ss13_game::antag::blood_worm`).
+    "/mob/living/basic/blood_worm/hatchling",
+    "/mob/living/basic/blood_worm/juvenile",
+    "/mob/living/basic/blood_worm/adult",
     // Xenomorphs, their structures and the neurotoxin spit (`ss13_game::antag::xeno`).
     "/mob/living/carbon/alien/larva",
     "/mob/living/carbon/alien/adult/hunter",

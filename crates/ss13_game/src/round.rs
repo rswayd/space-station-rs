@@ -1831,6 +1831,7 @@ fn preference_acts(
                     crate::antag::changeling::ROLE_CHANGELING_MIDROUND,
                     crate::antag::ROLE_SPY,
                     crate::antag::ROLE_VOIDWALKER,
+                    crate::antag::ROLE_BLOOD_WORM_INFESTATION,
                 ]
                 .contains(&role.as_str()) =>
             {

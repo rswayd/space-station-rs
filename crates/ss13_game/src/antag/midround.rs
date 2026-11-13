@@ -27,7 +27,7 @@
 // morph (`super::morph`), the space dragon (`super::space_dragon`), the revenant
 // (`super::revenant`), the slaughter demon (`super::slaughter`), the abductors
 // (`super::abductor`), the blob and blob infection (`super::blob`), the xenomorphs
-// (`super::xeno`), the spiders' egg clusters (`super::spiders`), the space and mass space changelings (`super::changeling`), the space ninja, the fugitives and the light and heavy pirates
+// (`super::xeno`), the blood worms (`super::blood_worm`), the spiders' egg clusters (`super::spiders`), the space and mass space changelings (`super::changeling`), the space ninja, the fugitives and the light and heavy pirates
 // (`super::raiders`) spawn anyone;
 // the others keep their weights, are logged and fail preparation, as tg's do without candidates.
 // There is no admin cancel or reroll window before a midround, no false alarms, no AFK checks,
@@ -154,6 +154,7 @@ pub const MIDROUND_CHANGELING: &str = "Midround Changeling";
 pub const MASS_CHANGELINGS: &str = "Mass Changelings";
 pub const SPIDERS: &str = "Spiders";
 pub const VOIDWALKER: &str = "Voidwalker";
+pub const BLOOD_WORMS: &str = "Midround Blood Worm";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -221,7 +222,11 @@ pub const RULESETS: [Ruleset; 30] = {
             candidates: Candidates::Nobody,
             ..other(LIGHT_PIRATES, Light, flat(3), 15)
         },
-        other("Midround Blood Worm", Light, flat(2), 20),
+        Ruleset {
+            role: Some(super::ROLE_BLOOD_WORM_INFESTATION),
+            caps: (Cap::Fixed(1), Cap::Fixed(2)),
+            ..other(BLOOD_WORMS, Light, flat(2), 20)
+        },
         Ruleset {
             role: Some(super::ROLE_NIGHTMARE),
             ..other(NIGHTMARE, Light, flat(5), 15)
@@ -637,6 +642,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         SPIDERS => super::spiders::can_spawn(world),
         // A space spawn.
         VOIDWALKER => super::voidwalker::can_spawn(world),
+        // A vent to crawl out of.
+        BLOOD_WORMS => super::blood_worm::can_spawn(world),
         _ => true,
     }
 }
@@ -921,6 +928,7 @@ fn poll_role_name(r: &Ruleset) -> &'static str {
         FUGITIVES => "Беглец",
         MIDROUND_CHANGELING | MASS_CHANGELINGS => "Генокрад",
         VOIDWALKER => "Войдволкер",
+        BLOOD_WORMS => "Кровяной червь",
         tag => tag,
     }
 }
@@ -1164,6 +1172,15 @@ fn select_and_run(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
                 .collect();
             if super::voidwalker::spawn_voidwalkers(world, &ghosts).is_empty() {
+                return Vec::new();
+            }
+        }
+        BLOOD_WORMS => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::blood_worm::spawn_worms(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }
