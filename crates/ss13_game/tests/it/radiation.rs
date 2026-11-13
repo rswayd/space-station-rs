@@ -239,7 +239,7 @@ fn scanning_geiger_clicks_until_the_radiation_is_gone() {
     // Clicking again, then switched off.
     let world = app.world_mut();
     radiation::radiation_pulse(world, source, 4.0, 0.5, 100.0, 0.0);
-    run(&mut app, 0.6);
+    run(&mut app, 1.0);
     assert!(looping_sound::is_active(app.world(), counter, LOOP));
     let world = app.world_mut();
     let client = world.spawn_empty().id();

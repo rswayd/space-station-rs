@@ -729,7 +729,8 @@ fn now(world: &World) -> f64 {
 }
 
 fn rng(world: &mut World) -> CombatRng {
-    std::mem::take(&mut world.resource_mut::<SoundRng>().0)
+    // A world without the sound plugin (unit tests of a loop's owner) gets a seeded one.
+    std::mem::take(&mut world.get_resource_or_init::<SoundRng>().0)
 }
 
 /// `new /datum/looping_sound(parent, start_immediately = TRUE)`.
@@ -1067,7 +1068,7 @@ fn play(
         None
     } else {
         let Some(c) = world
-            .resource_mut::<crate::sound::SoundChannels>()
+            .get_resource_or_init::<crate::sound::SoundChannels>()
             .reserve(None)
         else {
             warn!("looping sound {path}: no sound channels left");
@@ -1155,7 +1156,7 @@ fn silence(world: &mut World, token: &Token) {
         world.write_message(stop_message(client, token.channel));
     }
     world
-        .resource_mut::<crate::sound::SoundChannels>()
+        .get_resource_or_init::<crate::sound::SoundChannels>()
         .free(token.channel);
 }
 

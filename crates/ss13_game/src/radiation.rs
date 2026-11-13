@@ -393,7 +393,17 @@ fn is_geiger(world: &World, e: Entity) -> bool {
 
 /// `TRAIT_BYPASS_EARLY_IRRADIATED_CHECK`: a scanning counter (`geiger_sound`).
 fn bypasses_irradiated_check(world: &World, e: Entity) -> bool {
-    world.get::<Geiger>(e).is_some_and(|g| g.scanning)
+    let scanning = |c: Entity| world.get::<Geiger>(c).is_some_and(|g| g.scanning);
+    // tg gives the trait to the counter only, so an irradiated holder's counter falls silent
+    // (the pulse skips the holder before `COMSIG_IN_RANGE_OF_IRRADIATION`); the MOD geiger
+    // module gives it to the wearer. A carried scanning counter keeps its holder notified.
+    scanning(e)
+        || world.get::<Inventory>(e).is_some_and(|inventory| {
+            ALL_SLOTS
+                .iter()
+                .filter_map(|&s| inventory.slot(s))
+                .any(scanning)
+        })
 }
 
 /// `SSradiation.can_irradiate_basic`.
