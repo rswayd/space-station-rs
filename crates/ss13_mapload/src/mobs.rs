@@ -25,6 +25,8 @@ pub const MEGAFAUNA_ROOT: &str = "/mob/living/simple_animal/hostile/megafauna";
 /// tg `/mob/living/carbon/alien`: the xenomorph castes, read as basic mobs with their icon
 /// states as the living and dead sprites and tox and stamina immune.
 pub const ALIEN_ROOT: &str = "/mob/living/carbon/alien";
+/// tg `/mob/living/simple_animal/hostile/ooze`: read as basic mobs like the megafauna.
+pub const OOZE_ROOT: &str = "/mob/living/simple_animal/hostile/ooze";
 const COMPONENT: &str = "dm_mob";
 /// `CANPUSH` of `status_flags`; `MOVE_RESIST_DEFAULT`.
 const CANPUSH: u32 = 1 << 3;
@@ -404,7 +406,10 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
 
 /// A type read as a basic mob: `/mob/living/basic` and the megafauna.
 fn is_basic(path: &str) -> bool {
-    is_under(path, BASIC_ROOT) || is_under(path, MEGAFAUNA_ROOT) || is_under(path, ALIEN_ROOT)
+    is_under(path, BASIC_ROOT)
+        || is_under(path, MEGAFAUNA_ROOT)
+        || is_under(path, ALIEN_ROOT)
+        || is_under(path, OOZE_ROOT)
 }
 
 /// Every `/mob/living/basic` type and the megafauna.
@@ -570,7 +575,7 @@ fn mob_def(
         .collect();
     let max_health = num("maxHealth", 20.0);
     // `/mob/living/simple_animal` names for the same things.
-    let simple = is_under(path, MEGAFAUNA_ROOT);
+    let simple = is_under(path, MEGAFAUNA_ROOT) || is_under(path, OOZE_ROOT);
     let basic_mob_flags = if simple {
         // `del_on_death` -> `DEL_ON_DEATH`.
         u32::from(num("del_on_death", 0.0) != 0.0)

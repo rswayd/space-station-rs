@@ -37,6 +37,7 @@ pub mod illusion;
 pub mod lavaland;
 pub mod megafauna;
 pub mod oneoffs;
+pub mod oozes;
 pub mod parrot;
 pub mod pets;
 pub mod ranged;
@@ -182,6 +183,7 @@ impl Plugin for MobsServerPlugin {
         bees::build(app);
         swarming::build(app);
         riding::build(app);
+        oozes::build(app);
     }
 }
 
@@ -345,6 +347,7 @@ fn attach(world: &mut World, entity: Entity) {
     gorilla::attach(world, entity, &def);
     bees::attach(world, entity, &def);
     swarming::attach(world, entity, &def);
+    oozes::attach(world, entity, &def);
     crate::antag::xeno::attach(world, entity, &def);
     crate::antag::spiders::attach(world, entity, &def);
     set_look(world, entity, false);
@@ -594,6 +597,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     space_fauna::on_death(world, def, pos);
     bees::on_death(world, mob, pos);
     cult_pets::on_death(world, mob, pos);
+    oozes::on_death(world, mob);
     crate::antag::slaughter::on_death(world, mob, def, pos);
     crate::spells::shapeshift::on_shape_death(world, mob);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
