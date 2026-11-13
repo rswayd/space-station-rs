@@ -63,7 +63,7 @@ type ConsoleKind = (
 );
 
 /// The console types claimed here, most specific first.
-pub const CONSOLES: [ConsoleKind; 8] = [
+pub const CONSOLES: [ConsoleKind; 12] = [
     // `/obj/machinery/computer/shuttle/pod`; `_lavaland` is added when it connects.
     (POD_CONSOLE, None, &["pod_asteroid"], &[]),
     // `code/modules/mining/mine_items.dm` (`crate::mining_shuttles`).
@@ -103,6 +103,40 @@ pub const CONSOLES: [ConsoleKind; 8] = [
         &["laborcamp_home", "laborcamp_away"],
         &["brig"],
     ),
+    // BandaStation's SIT and SST recall terminals (`modular_bandastation/shuttles`): the
+    // syndicate console's access without the war declaration check (`launch_check`).
+    (
+        "/obj/machinery/computer/shuttle/syndicate/sit",
+        Some("syndicate_sit"),
+        &[
+            "syndicate_sit",
+            "syndicate_z5",
+            "syndicate_ne",
+            "syndicate_nw",
+            "syndicate_n",
+            "syndicate_se",
+            "syndicate_sw",
+            "syndicate_s",
+            "syndicate_custom",
+        ],
+        &["syndicate"],
+    ),
+    (
+        "/obj/machinery/computer/shuttle/syndicate/sst",
+        Some("syndicate_sst"),
+        &[
+            "syndicate_sst",
+            "syndicate_z5",
+            "syndicate_ne",
+            "syndicate_nw",
+            "syndicate_n",
+            "syndicate_se",
+            "syndicate_sw",
+            "syndicate_s",
+            "syndicate_custom",
+        ],
+        &["syndicate"],
+    ),
     // `/obj/machinery/computer/shuttle/syndicate`.
     (
         "/obj/machinery/computer/shuttle/syndicate",
@@ -133,6 +167,19 @@ pub const CONSOLES: [ConsoleKind; 8] = [
             "whiteship_custom",
         ],
         &[],
+    ),
+    // BandaStation's transport consoles (`crate::away_shuttles`).
+    (
+        "/obj/machinery/computer/shuttle/argos",
+        Some("argos"),
+        &["argos_home", "argos_trurl", "argos_custom"],
+        &["cent_general"],
+    ),
+    (
+        "/obj/machinery/computer/shuttle/specops",
+        Some("specops"),
+        &["specops_home", "specops_trurl", "specops_custom"],
+        &["cent_general"],
     ),
     // `mobile_port/variants/ferry.dm`; `crate::away_shuttles`.
     (
