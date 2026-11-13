@@ -536,9 +536,7 @@ fn obj_on(world: &World, pos: TilePos, root: &str) -> Option<Entity> {
 }
 
 fn turf_path(world: &World, e: Entity) -> Option<String> {
-    if world.get::<Turf>(e).is_none() {
-        return None;
-    }
+    world.get::<Turf>(e)?;
     path_of(world, e)
 }
 

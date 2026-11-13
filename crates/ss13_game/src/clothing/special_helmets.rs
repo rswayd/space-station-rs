@@ -33,7 +33,7 @@ use ss13_shared::chat::{ChatChannel, Span};
 
 use crate::balloon::balloon_alert;
 use crate::construction::Job;
-use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Stat};
+use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType};
 use crate::inventory::{CarriedBy, Inventory};
 use crate::security::{name_of, show};
 use crate::server::PlayerMob;

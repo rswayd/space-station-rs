@@ -335,7 +335,14 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 426] = [
+    pub const GAME_CODE: [&str; 433] = [
+        "sound/effects/confirmdropoff.ogg",
+        "sound/items/basketball_bounce.ogg",
+        "sound/items/weapons/shove.ogg",
+        "sound/machines/blender.ogg",
+        "sound/machines/crate/crate_open.ogg",
+        "sound/machines/uplink/uplinkerror.ogg",
+        "sound/music/antag/contractstartup.ogg",
         "sound/effects/cartoon_sfx/cartoon_splat.ogg",
         "sound/effects/seedling_chargeup.ogg",
         "sound/items/carhorn.ogg",

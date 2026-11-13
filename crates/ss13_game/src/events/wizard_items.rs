@@ -607,7 +607,16 @@ mod tests {
         let mob = world
             .spawn((
                 Stat::Conscious,
-                ss13_shared::Appearance::new(ss13_shared::IconStateId(0)),
+                ss13_shared::Appearance {
+                    icon_state: ss13_shared::IconStateId(0),
+                    layer: ss13_shared::Layer(3.0),
+                    plane: -6,
+                    color: None,
+                    pixel_offset: [0, 0],
+                    rotation: 0,
+                    mouse_opacity: Default::default(),
+                    overlays: Vec::new(),
+                },
             ))
             .id();
         let item = world.spawn(CarriedBy(mob)).id();
