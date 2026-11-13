@@ -22,6 +22,8 @@ use ss13_tgui::interfaces::vending::ProductIcon;
 
 pub mod abductor;
 #[cfg(feature = "server")]
+pub mod ashwalker;
+#[cfg(feature = "server")]
 pub mod blob;
 #[cfg(feature = "server")]
 pub mod brainwashed;
@@ -120,6 +122,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             ert::ErtPlugin,
             raiders::RaidersPlugin,
             santa::SantaPlugin,
+            ashwalker::AshwalkerPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);

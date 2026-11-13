@@ -691,6 +691,9 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     if !crate::antag::nukeop::battlecruiser::allow_spawn(world, client, s.def.as_deref()) {
         return None;
     }
+    if !crate::antag::ashwalker::allow_spawn(world, client, spawner) {
+        return None;
+    }
     let mob = match &def {
         Some(d) => {
             let name = match crate::golems::forced_name(world, spawner) {
@@ -721,6 +724,7 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     // The spawner type's `special` (the battlecruiser's crew).
     crate::antag::nukeop::battlecruiser::special(world, mob, client, s.def.as_deref());
     crate::golems::special(world, mob, spawner);
+    crate::antag::ashwalker::special(world, mob, client, spawner);
     if !infinite {
         let left = s.uses - 1;
         let deletes = def.as_ref().is_none_or(|d| d.deletes_on_zero_uses_left);

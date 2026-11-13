@@ -978,6 +978,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::brainwashed::roundend_report(world, end));
     antags.extend(crate::antag::valentine::roundend_report(world, end));
     antags.extend(crate::antag::survivalist::roundend_report(world, end));
+    antags.extend(crate::antag::ashwalker::roundend_report(world, end));
     antags.extend(crate::antag::spy::roundend_report(world, end));
     antags.extend(crate::antag::revolution::server::roundend_report(
         world, end,

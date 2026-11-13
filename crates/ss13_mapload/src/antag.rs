@@ -268,6 +268,22 @@ pub const RAIDER_OUTFITS: [&str; 7] = [
     "/datum/outfit/santa",
 ];
 
+/// What the ash walkers' nest makes at runtime (`ss13_game::antag::ashwalker`): the egg shells
+/// and the anomaly core a destroyed nest drops.
+pub const ASHWALKER_RUNTIME_TYPES: [&str; 11] = [
+    "/obj/structure/ash_walker_eggshell",
+    "/obj/item/assembly/signaler/anomaly/pyro",
+    "/obj/item/assembly/signaler/anomaly/grav",
+    "/obj/item/assembly/signaler/anomaly/flux",
+    "/obj/item/assembly/signaler/anomaly/bluespace",
+    "/obj/item/assembly/signaler/anomaly/vortex",
+    "/obj/item/assembly/signaler/anomaly/bioscrambler",
+    "/obj/item/assembly/signaler/anomaly/hallucination",
+    "/obj/item/assembly/signaler/anomaly/dimensional",
+    "/obj/item/assembly/signaler/anomaly/ectoplasm",
+    "/obj/item/assembly/signaler/anomaly/weather",
+];
+
 /// What the raiders make at runtime (`ss13_game::antag::raiders`, `ss13_game::modsuit::ninja`):
 /// the ninja's katana (when the sheath came empty), MOD and spider charge, the star
 /// dispenser's stars, the energy net, the fugitive leader's toolbox and the synth's augments,
