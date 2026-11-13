@@ -383,7 +383,7 @@ impl ClientUi for AvatarHelpUi {
                 let (a, b) = (box_help(i), box_help(i + 1));
                 bsn! {
                     Node { flex_grow: 1.0, flex_direction: FlexDirection::Row, column_gap: px(4) }
-                    Children [ {a} -- {b} ]
+                    Children [ {EntityScene(a)} -- {EntityScene(b)} ]
                 }
             })
             .collect();
