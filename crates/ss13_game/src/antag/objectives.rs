@@ -50,6 +50,10 @@ pub enum ObjectiveKind {
     Hijack,
     /// `/datum/objective/convert_brother`: the team has more than one member.
     ConvertBrother,
+    /// `/datum/objective/protect` (and `protect/nonhuman`: the targets here are crew bodies).
+    Protect { target: Option<Entity> },
+    /// `/datum/objective/exile`.
+    Exile,
     /// `/datum/objective/custom` a player wrote (`submit_player_objective`): `completed`, and
     /// `no_failure` (the report prints no verdict).
     Custom,
@@ -73,7 +77,9 @@ impl Objective {
     pub fn martyr_compatible(&self) -> bool {
         matches!(
             self.kind,
-            ObjectiveKind::Assassinate { .. } | ObjectiveKind::Maroon { .. }
+            ObjectiveKind::Assassinate { .. }
+                | ObjectiveKind::Maroon { .. }
+                | ObjectiveKind::Protect { .. }
         )
     }
 
@@ -83,7 +89,10 @@ impl Objective {
                 ObjectiveKind::Assassinate { target: a },
                 ObjectiveKind::Assassinate { target: b },
             )
-            | (ObjectiveKind::Maroon { target: a }, ObjectiveKind::Maroon { target: b }) => a == b,
+            | (ObjectiveKind::Maroon { target: a }, ObjectiveKind::Maroon { target: b })
+            | (ObjectiveKind::Protect { target: a }, ObjectiveKind::Protect { target: b }) => {
+                a == b
+            }
             (ObjectiveKind::Steal { item: a }, ObjectiveKind::Steal { item: b }) => {
                 a.as_ref().map(|i| &i.targetitem) == b.as_ref().map(|i| &i.targetitem)
             }
@@ -121,6 +130,18 @@ impl Objective {
                     && crate::shuttle::hijacked(world)
             }
             ObjectiveKind::ConvertBrother => owners.len() > 1,
+            // shortcut: `TRAIT_SUICIDED` is not tracked, a suicide is a death here.
+            ObjectiveKind::Protect { target } => target.is_some_and(|t| considered_alive(world, t)),
+            // "went to centcom or ended round on station".
+            ObjectiveKind::Exile => owners.iter().all(|&owner| {
+                considered_alive(world, owner)
+                    && crate::explosions::turf_of(world, owner).is_some_and(|pos| {
+                        !crate::comms_server::on_station_level(world, pos)
+                            && world
+                                .get_resource::<crate::shuttle::EmergencyShuttle>()
+                                .is_none_or(|s| s.centcom_z != pos.z)
+                    })
+            }),
             ObjectiveKind::Custom => true,
         }
     }
@@ -204,8 +225,13 @@ impl ObjectiveKind {
                 target_text(world, *t)
             ),
             Self::Steal { item: Some(item) } => format!("Украдите {}", item.name),
+            Self::Protect { target: Some(t) } => {
+                format!("Защитите {}.", target_text(world, *t))
+            }
+            Self::Exile => "Оставайтесь в живых за пределами станции. Не улетайте на ЦК.".to_owned(),
             Self::Assassinate { target: None }
             | Self::Maroon { target: None }
+            | Self::Protect { target: None }
             | Self::Steal { item: None } => FREE_OBJECTIVE.to_owned(),
             Self::Escape => {
                 "Сбегите живым на эвакуационном шаттле или челноке, при этом не являясь в заключении."
@@ -225,7 +251,7 @@ impl ObjectiveKind {
     }
 }
 
-fn objective(world: &World, kind: ObjectiveKind) -> Objective {
+pub(crate) fn objective(world: &World, kind: ObjectiveKind) -> Objective {
     Objective {
         explanation: kind.explanation(world),
         kind,
@@ -319,6 +345,10 @@ fn forge_single(
 
 fn assassinate(target: Option<Entity>) -> ObjectiveKind {
     ObjectiveKind::Assassinate { target }
+}
+
+pub(crate) fn protect(target: Option<Entity>) -> ObjectiveKind {
+    ObjectiveKind::Protect { target }
 }
 
 fn maroon(target: Option<Entity>) -> ObjectiveKind {

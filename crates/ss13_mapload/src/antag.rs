@@ -161,6 +161,8 @@ pub const UPLINK_TRAITORS: u32 = 1 << 0;
 pub const UPLINK_NUKE_OPS: u32 = 1 << 1;
 /// tg `UPLINK_CLOWN_OPS`.
 pub const UPLINK_CLOWN_OPS: u32 = 1 << 2;
+/// tg `UPLINK_SPY`.
+pub const UPLINK_SPY: u32 = 1 << 3;
 /// tg `UPLINK_LONE_OP`.
 pub const UPLINK_LONE_OP: u32 = 1 << 4;
 /// tg `UPLINK_ALL_SYNDIE_OPS`.
@@ -469,7 +471,7 @@ pub const ABDUCTOR_RUNTIME_TYPES: [&str; 38] = [
 /// The uplink items sold here: the ones whose item exists in this codebase. The rest of tg's
 /// catalog needs mechanics that are not modelled yet (see `docs/parity/antagonists/uplink.md`).
 // shortcut: a curated list; grow it as the items' mechanics land.
-pub const UPLINK_ITEMS: [&str; 102] = [
+pub const UPLINK_ITEMS: [&str; 126] = [
     // Guns that fire (`ss13_game::guns`): the traitors' Makarov case and .357 revolver, the
     // operatives' C-20r case, and their ammunition.
     "/datum/uplink_item/dangerous/pistol",
@@ -610,6 +612,34 @@ pub const UPLINK_ITEMS: [&str; 102] = [
     "/datum/uplink_item/reinforcements/assault_borg",
     "/datum/uplink_item/reinforcements/medical_borg",
     "/datum/uplink_item/reinforcements/saboteur_borg",
+    // `UPLINK_SPY` only: spy bounty rewards (`ss13_game::antag::spy`). Left out: the kudzu
+    // seeds, the toy pistol, the stealth belt, the pen flashbang, the dagger boots, the spider
+    // bite scroll (no mechanics yet), the katana and the sleeping carp copy (their cost and item
+    // are `parent::var` reads the dump does not resolve).
+    "/datum/uplink_item/spy_unique/syndie_bowman",
+    "/datum/uplink_item/spy_unique/megaphone",
+    "/datum/uplink_item/spy_unique/combat_gloves",
+    "/datum/uplink_item/spy_unique/kaza_ruk",
+    "/datum/uplink_item/spy_unique/tackle_gloves",
+    "/datum/uplink_item/spy_unique/big_knife",
+    "/datum/uplink_item/spy_unique/switchblade",
+    "/datum/uplink_item/spy_unique/sechud_implant",
+    "/datum/uplink_item/spy_unique/rifle_prime",
+    "/datum/uplink_item/spy_unique/cycler_shotgun",
+    "/datum/uplink_item/spy_unique/bulldog_shotgun",
+    "/datum/uplink_item/spy_unique/ansem_pistol",
+    "/datum/uplink_item/spy_unique/makarov_pistol",
+    "/datum/uplink_item/spy_unique/rocket_launcher",
+    "/datum/uplink_item/spy_unique/shotgun_ammo",
+    "/datum/uplink_item/spy_unique/shotgun_ammo/breacher_slug",
+    "/datum/uplink_item/spy_unique/shotgun_ammo/slugs",
+    "/datum/uplink_item/spy_unique/medkit_lite",
+    "/datum/uplink_item/spy_unique/antistun",
+    "/datum/uplink_item/spy_unique/reviver",
+    "/datum/uplink_item/spy_unique/thermals",
+    "/datum/uplink_item/spy_unique/nunchaku",
+    "/datum/uplink_item/spy_unique/cameraflash",
+    "/datum/uplink_item/spy_unique/monster_cube_box",
 ];
 
 /// tg `/datum/uplink_category/discounts`: the category of an uplink's sales.
@@ -640,6 +670,10 @@ pub struct UplinkItemDef {
     /// `uplink_item_flags` (`SYNDIE_ILLEGAL_TECH`, `SYNDIE_TRIPS_CONTRABAND`).
     #[serde(default = "default_uplink_flags")]
     pub uplink_item_flags: u32,
+    /// `relevant_child_items`: uplink items (ammunition) a spy bounty pool holds back until this
+    /// one is rewarded.
+    #[serde(default)]
+    pub relevant_child_items: Vec<String>,
 }
 
 /// `SYNDIE_TRIPS_CONTRABAND`: the item counts as contraband (`is_contraband`).
@@ -665,6 +699,15 @@ pub struct StealItemDef {
     /// The type has its own `check_special_completion`, `target_exists` or `New` (an AI in the
     /// card, a supermatter engine, extraction kits handed out).
     pub special: bool,
+    /// `difficulty` (1-5; spy bounties sort targets by it, 0: never a bounty).
+    #[serde(default)]
+    pub difficulty: i32,
+    /// `steal_hint`.
+    #[serde(default)]
+    pub steal_hint: String,
+    /// `special_equipment` is not empty.
+    #[serde(default)]
+    pub special_equipment: bool,
 }
 
 /// One employer of `strings/antagonist_flavor/traitor_flavor.json`.
@@ -921,6 +964,7 @@ pub fn resolve(types: &DmTypes) -> AntagData {
                 uplink_item_flags: types
                     .resolved(p, "uplink_item_flags")
                     .map_or_else(default_uplink_flags, |v| int(Some(v)) as u32),
+                relevant_child_items: strings(types.resolved(p, "relevant_child_items")),
             })
         })
         .collect();
@@ -940,6 +984,9 @@ pub fn resolve(types: &DmTypes) -> AntagData {
                 special: ty.procs.iter().any(|f| {
                     ["check_special_completion", "target_exists", "New"].contains(&f.as_str())
                 }),
+                difficulty: int(types.resolved(p, "difficulty")) as i32,
+                steal_hint: text(types.resolved(p, "steal_hint")),
+                special_equipment: !strings(types.resolved(p, "special_equipment")).is_empty(),
             })
         })
         .collect();

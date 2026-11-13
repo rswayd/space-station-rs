@@ -63,6 +63,8 @@ pub mod space_dragon;
 #[cfg(feature = "server")]
 pub mod spiders;
 #[cfg(feature = "server")]
+pub mod spy;
+#[cfg(feature = "server")]
 pub mod survivalist;
 #[cfg(feature = "server")]
 pub mod syndie_items;
@@ -111,6 +113,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             revenant::RevenantPlugin,
             slaughter::SlaughterPlugin,
             spiders::SpidersPlugin,
+            spy::SpyPlugin,
         ))
         .add_plugins((
             zombie::ZombiePlugin,
@@ -158,6 +161,8 @@ pub const ROLE_BLOB: &str = "Blob";
 pub const ROLE_BLOB_INFECTION: &str = "Blob Infection";
 /// tg `ROLE_NINJA` (`raiders::ninja`).
 pub const ROLE_NINJA: &str = "Space Ninja";
+/// tg `ROLE_SPY` (`spy`).
+pub const ROLE_SPY: &str = "Spy";
 /// tg `ROLE_FUGITIVE` (`raiders::fugitive`).
 pub const ROLE_FUGITIVE: &str = "Fugitive";
 
@@ -228,6 +233,53 @@ pub struct TraitorInfo {
     pub uplink_intro: String,
     pub uplink_unlock_info: String,
     pub objectives: Vec<ObjectiveInfo>,
+}
+
+/// The spy's info panel.
+pub struct AntagInfoSpyUi;
+
+impl UiInterface for AntagInfoSpyUi {
+    const NAME: &'static str = "AntagInfoSpy";
+    type Data = ();
+    type StaticData = SpyInfo;
+}
+
+/// `/datum/antagonist/spy/ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpyInfo {
+    pub antag_name: String,
+    /// Where the uplink hides ("ваш КПК"); `None`: "что-то".
+    pub uplink_location: Option<String>,
+    pub objectives: Vec<ObjectiveInfo>,
+}
+
+/// The spy uplink's bounty list.
+pub struct SpyUplinkUi;
+
+impl UiInterface for SpyUplinkUi {
+    const NAME: &'static str = "SpyUplink";
+    type Data = SpyUplinkData;
+    type StaticData = ();
+}
+
+/// `/datum/spy_bounty/to_ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpyBountyRecord {
+    pub name: String,
+    pub help: String,
+    /// `Easy`, `Medium`, `Hard`.
+    pub difficulty: String,
+    pub reward: String,
+    pub claimed: bool,
+    pub can_claim: bool,
+}
+
+/// `/datum/component/spy_uplink/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpyUplinkData {
+    pub bounties: Vec<SpyBountyRecord>,
+    /// Deciseconds to the next refresh.
+    pub time_left: u32,
 }
 
 /// The syndicate uplink.

@@ -16,7 +16,7 @@
 //! Admins can queue rulesets instead of the roll ([`DynamicConfig::forced_rulesets`]); tests use
 //! that to get deterministic antagonists.
 // shortcut: only the traitor, blood brothers, the vampire, the changeling, the nuclear
-// operatives (and the clown operatives), the blood cult, the heretics, the revolution, the wizard and the malfunctioning
+// operatives (and the clown operatives), the blood cult, the heretics, the revolution, the wizard, the spies and the malfunctioning
 // AI (forced into the AI job, `crate::silicon::malf`) are implemented; other picked
 // rulesets spawn nobody (logged). Midround and latejoin rulesets: [`super::midround`]. BandaStation's weighted
 // selection by antag history (`ANTAG_WEIGHTED_SELECTION`) is off in its config and needs a
@@ -301,6 +301,11 @@ pub const REVOLUTION_CAPS: (u32, u32) = (3, 1);
 pub const MALF_RULESET: &str = "Roundstart Malfunctioning AI";
 /// `/datum/dynamic_ruleset/roundstart/heretic` `max_antag_cap = list("denominator" = 24)`.
 pub const HERETIC_CAP_DENOMINATOR: u32 = 24;
+pub const SPY_RULESET: &str = "Roundstart Spies";
+/// `/datum/dynamic_ruleset/roundstart/spies` `min_antag_cap = list("denominator" = 20,
+/// "offset" = 1)`, no `max_antag_cap`: exactly that many or nothing.
+pub const SPY_CAP_DENOMINATOR: u32 = 20;
+pub const SPY_CAP_OFFSET: u32 = 1;
 
 /// The `pref_flag` and the cap denominator of an implemented ruleset (`min_antag_cap` is 1 for
 /// both); `None` for the rest.
@@ -312,6 +317,7 @@ pub fn implemented(config_tag: &str) -> Option<(&'static str, u32)> {
         CHANGELING_RULESET => Some((ROLE_CHANGELING, CHANGELING_CAP_DENOMINATOR)),
         CULT_RULESET => Some((ROLE_CULTIST, CULT_CAP_DENOMINATOR)),
         HERETIC_RULESET => Some((ROLE_HERETIC, HERETIC_CAP_DENOMINATOR)),
+        SPY_RULESET => Some((super::ROLE_SPY, SPY_CAP_DENOMINATOR)),
         // Fixed caps ([`ruleset_caps`]).
         REVOLUTION_RULESET => Some((super::revolution::ROLE_REV_HEAD, 1)),
         _ => None,
@@ -422,7 +428,7 @@ pub const ROUNDSTART_RULESETS: [Ruleset; 13] = [
         high_impact: true,
     },
     Ruleset {
-        config_tag: "Roundstart Spies",
+        config_tag: SPY_RULESET,
         weight: [0, 1, 3, 3],
         min_pop: 10,
         repeatable: true,
@@ -478,6 +484,10 @@ pub fn ruleset_caps(config_tag: &str, population: u32, denominator: u32) -> (u32
     match config_tag {
         CULT_RULESET => {
             let cap = antag_cap(population, denominator) + CULT_CAP_OFFSET;
+            (cap, cap)
+        }
+        SPY_RULESET => {
+            let cap = antag_cap(population, denominator) + SPY_CAP_OFFSET;
             (cap, cap)
         }
         REVOLUTION_RULESET => REVOLUTION_CAPS,
@@ -698,6 +708,9 @@ pub fn execute_roundstart(world: &mut World, selected: &[(Entity, &'static str)]
                 super::heretic::server::add_heretic(world, mob);
             }
             REVOLUTION_RULESET => super::revolution::server::make_dormant(world, mob, false),
+            SPY_RULESET => {
+                super::spy::add_spy(world, mob);
+            }
             _ => {
                 super::traitor::add_traitor(world, mob);
             }
@@ -850,6 +863,20 @@ mod tests {
         assert!(heretics.repeatable && !heretics.high_impact);
         assert_eq!(ruleset_caps(HERETIC_RULESET, 30, 24), (2, 1));
         assert_eq!(ruleset_caps(HERETIC_RULESET, 49, 24), (3, 1));
+    }
+
+    #[test]
+    fn spy_ruleset_follows_its_config() {
+        // `min_antag_cap = list("denominator" = 20, "offset" = 1)`, weights 0/1/3/3, min_pop 10.
+        assert_eq!(implemented(SPY_RULESET), Some((crate::antag::ROLE_SPY, 20)));
+        assert_eq!(ruleset_caps(SPY_RULESET, 10, 20), (2, 2));
+        assert_eq!(ruleset_caps(SPY_RULESET, 21, 20), (3, 3));
+        let spies = ROUNDSTART_RULESETS
+            .iter()
+            .find(|r| r.config_tag == SPY_RULESET)
+            .unwrap();
+        assert_eq!((spies.weight, spies.min_pop), ([0, 1, 3, 3], 10));
+        assert!(spies.repeatable && !spies.high_impact);
     }
 
     #[test]
