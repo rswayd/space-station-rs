@@ -127,6 +127,7 @@
 //! | 3327 | `talking_toys::attack_self` (action figures, pull-string toys, the big red button, the toy nuke) |
 //! | 3329 | `brig::sentence::attack_self` (a prisoner ID tells its points) |
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
+//! | 3337 | `toy_mechs::attack_self` (playing with a toy mech) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
 //! | 3357 | `clothing::collar_bomb::press` (the collar bomb's button) |
 //! | 3367 | `science::bitrunning::help::host_monitor` (the host health of an avatar) |
@@ -150,6 +151,7 @@
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 409 | `medical::surgery::notes_interaction` (research notes onto the notes in the other hand) |
 //! | 419 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a held hookah) |
+//! | 427 | `toy_mechs::item_interaction` (a toy mech on the one in the other hand: a brawl) |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
@@ -539,6 +541,7 @@
 //! | 3510 | `janitor::washer_item_interaction` (a load into a washing machine) |
 //! | 3600 | `genetics::console::item_interaction` |
 //! | 3647 | `talking_toys` emag on a toy nuke |
+//! | 3657 | `toy_mechs::item_interaction`, `attack` (a toy mech on another: a brawl; on a human: the battle offer) |
 //! | 3649 | `toys::held_on_target` (caps, toy swords, balloons, the Mini-Meteor; water balloons never hit mobs) |
 //! | 3660 | `mobs::farm` milking, `mobs::critters::turtle_drink` (before `chem::item_interaction`) |
 //! | 3700 | `chem::item_interaction` |

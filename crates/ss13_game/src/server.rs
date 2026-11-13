@@ -427,6 +427,7 @@ impl Plugin for GameServerPlugin {
             crate::kitchen_ware::KitchenWarePlugin,
             crate::toys::ToysPlugin,
             crate::talking_toys::TalkingToysPlugin,
+            crate::toy_mechs::ToyMechsPlugin,
         ))
         .add_plugins((
             crate::projectile::ProjectileServerPlugin,

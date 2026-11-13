@@ -727,6 +727,8 @@ pub mod throw;
 #[cfg(feature = "server")]
 pub mod tools;
 #[cfg(feature = "server")]
+pub mod toy_mechs;
+#[cfg(feature = "server")]
 pub mod toys;
 #[cfg(feature = "server")]
 pub mod transform;
