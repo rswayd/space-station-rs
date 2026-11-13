@@ -650,6 +650,30 @@ fn a_shot_stops_at_a_wall() {
     s.hold(1.0, "B is not hit", |s| s.effects(b).stamina == 0.0);
 }
 
+/// tg `fire` -> `last_projectile_move`: a shot is first seen on the firer's tile, not one move
+/// ahead, and carries its speed as the glide rate clients draw it with (1.6 tiles/ds = 512 px/s).
+#[test]
+fn a_shot_starts_at_the_firer_and_glides_at_its_speed() {
+    let mut s = Station::start("a_shot_starts_at_the_firer_and_glides_at_its_speed");
+    let a = s.players[0].mob;
+    s.0.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(TilePos::new(2, 5, 1));
+    s.give(0, "/obj/item/gun/energy/e_gun");
+    let wall = s.turf_at(TilePos::new(5, 5, 1));
+    s.shoot(0, wall);
+    s.run_until("the beam flies", |s| s.projectiles() == 1);
+    let world = s.0.server.world_mut();
+    let (pos, look) = world
+        .query_filtered::<(&TilePos, &ss13_shared::Appearance), With<Projectile>>()
+        .single(world)
+        .unwrap();
+    assert_eq!((*pos, look.pixel_offset), (TilePos::new(2, 5, 1), [0, 0]));
+    assert_eq!(look.glide, 512);
+    assert_eq!(look.glide, ss13_game::projectile::glide_rate(1.6));
+}
+
 #[test]
 fn a_shot_aimed_at_a_tile_corner_flies_to_that_pixel() {
     let mut s = Station::start("a_shot_aimed_at_a_tile_corner_flies_to_that_pixel");

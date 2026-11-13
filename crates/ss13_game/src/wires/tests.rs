@@ -59,6 +59,7 @@ fn world_with_airlock(req_access: &[&str]) -> (World, Entity) {
                 rotation: 0,
                 overlays: vec![],
                 mouse_opacity: default(),
+                glide: 0,
             },
             TilePos::new(5, 5, 1),
         ))

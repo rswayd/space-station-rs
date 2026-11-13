@@ -111,6 +111,11 @@ impl Plugin for GameClientPlugin {
                 apply_glides
                     .after(sync_tile_pos)
                     .before(ss13_render::camera::follow_target),
+                mark_point_glides,
+                apply_point_glides
+                    .after(mark_point_glides)
+                    .after(sync_tile_pos)
+                    .before(ss13_render::camera::follow_target),
                 apply_camera_effects.before(ss13_render::camera::follow_target),
             )
                 .in_set(RenderSystems),
@@ -773,15 +778,28 @@ impl Glide {
 }
 
 /// Runs before `sync_tile_pos` snaps the sprite, so the drawn (old) position is still known.
-// shortcut: every mover glides at human run speed; replicate a per-entity glide rate (BYOND sets
-// `glide_size` from the mover's delay) when slower or faster movers appear.
+/// Sprites with an [`Appearance::glide`] rate are [`PointGlide`]s instead.
+// shortcut: every mob glides at human run speed; set `Appearance::glide` from the mover's delay
+// (BYOND `glide_size`) when slower or faster mobs appear.
 fn start_glides(
     time: Res<Time>,
-    moved: Query<(Entity, &TilePos, &Transform, Option<&Glide>), Changed<TilePos>>,
+    moved: Query<
+        (
+            Entity,
+            &TilePos,
+            &Transform,
+            Option<&Glide>,
+            Option<&Appearance>,
+        ),
+        Changed<TilePos>,
+    >,
     mut commands: Commands,
 ) {
     let now = time.elapsed_secs_f64();
-    for (entity, pos, transform, glide) in &moved {
+    for (entity, pos, transform, glide, look) in &moved {
+        if look.is_some_and(|a| a.glide > 0) {
+            continue;
+        }
         let from = glide.map_or(transform.translation.xy(), |g| g.at(now).0);
         let to = tile_translation(*pos);
         let distance = from.distance(to);
@@ -813,6 +831,105 @@ fn apply_glides(
         if done {
             commands.entity(entity).remove::<Glide>();
         }
+    }
+}
+
+/// A sprite with a nonzero [`Appearance::glide`]: its drawn point (tile plus `pixel_offset`, as
+/// tg projectiles animate `pixel_x`/`pixel_y`) follows the server's at that rate, so tile changes
+/// and sub-tile offsets make one line. Tile and offset come in separate messages (motion
+/// datagrams, reliable appearances) and may land a frame apart; a point behind the way it was
+/// going is waited for one server tick before it is followed, so that never draws a step back.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct PointGlide {
+    at: Vec2,
+    heading: Vec2,
+    held_since: Option<f64>,
+}
+
+impl PointGlide {
+    pub fn new(at: Vec2) -> Self {
+        Self {
+            at,
+            heading: Vec2::ZERO,
+            held_since: None,
+        }
+    }
+
+    /// The drawn point after `dt` seconds of moving toward `target` at `rate` pixels per second,
+    /// or faster, covering the rest of the way in one `tick` (tg `animate(time = world.tick_lag)`),
+    /// when it fell behind.
+    pub fn advance(&mut self, target: Vec2, rate: f32, dt: f32, now: f64, tick: f32) -> Vec2 {
+        let to = target - self.at;
+        let distance = to.length();
+        if distance > (rate * tick * 4.0).max(MAX_GLIDE_PX) {
+            self.at = target;
+            self.held_since = None;
+            return target;
+        }
+        if distance == 0.0 {
+            self.held_since = None;
+            return self.at;
+        }
+        if to.dot(self.heading) < 0.0 {
+            let since = *self.held_since.get_or_insert(now);
+            if now - since < f64::from(tick) {
+                return self.at;
+            }
+        }
+        self.held_since = None;
+        let dir = to / distance;
+        self.at += dir * (rate.max(distance / tick) * dt).min(distance);
+        self.heading = dir;
+        self.at
+    }
+}
+
+fn mark_point_glides(
+    looks: Query<(Entity, &TilePos, &Appearance, Has<PointGlide>), Changed<Appearance>>,
+    mut commands: Commands,
+) {
+    for (entity, pos, look, has) in &looks {
+        match (look.glide > 0, has) {
+            (true, false) => {
+                let offset = Vec2::new(
+                    f32::from(look.pixel_offset[0]),
+                    f32::from(look.pixel_offset[1]),
+                );
+                commands
+                    .entity(entity)
+                    .try_insert(PointGlide::new(tile_translation(*pos) + offset));
+            }
+            (false, true) => {
+                commands.entity(entity).try_remove::<PointGlide>();
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The sprite's translation is the drawn point less its `pixel_offset`, which `ss13_render` puts
+/// in the anchor.
+fn apply_point_glides(
+    time: Res<Time>,
+    mut gliding: Query<(&TilePos, &Appearance, &mut PointGlide, &mut Transform)>,
+) {
+    let (now, dt) = (time.elapsed_secs_f64(), time.delta_secs());
+    let tick = ss13_shared::protocol::TICK_DURATION.as_secs_f32();
+    for (pos, look, mut glide, mut transform) in &mut gliding {
+        if look.glide == 0 {
+            continue;
+        }
+        let offset = Vec2::new(
+            f32::from(look.pixel_offset[0]),
+            f32::from(look.pixel_offset[1]),
+        );
+        let target = tile_translation(*pos) + offset;
+        let xy = glide
+            .advance(target, f32::from(look.glide), dt, now, tick)
+            .round()
+            - offset;
+        transform.translation.x = xy.x;
+        transform.translation.y = xy.y;
     }
 }
 
@@ -1057,6 +1174,70 @@ mod tests {
         assert_eq!(
             on_release(press(atom(bag), 0.0), None, far, 1.0, Some(me)),
             Release::Nothing
+        );
+    }
+
+    #[test]
+    /// A laser (400 px/s) seen at 20 Hz: the tile and the sub-tile offset change together, the
+    /// offset jumping back by a tile; with the tile a frame late, then the offset a frame late,
+    /// the drawn point still only goes forward, and keeps up.
+    #[test]
+    fn point_glide_goes_forward_across_tiles() {
+        let (rate, tick, dt) = (400.0, 0.05, 1.0 / 60.0);
+        let mut glide = PointGlide::new(Vec2::ZERO);
+        let mut last = 0.0f32;
+        let mut now = 0.0f64;
+        for server_tick in 1..=12u32 {
+            let truth = 20.0 * server_tick as f32;
+            let tile = (truth / 32.0).round() * 32.0;
+            let offset = truth - tile;
+            let old_truth = truth - 20.0;
+            let old_tile = (old_truth / 32.0).round() * 32.0;
+            let old_offset = old_truth - old_tile;
+            for frame in 0..3 {
+                now += f64::from(dt);
+                let x = match (server_tick % 3, frame) {
+                    // The tile came first, the offset next frame.
+                    (1, 0) => tile + old_offset,
+                    // The offset came first, the tile next frame.
+                    (2, 0) => old_tile + offset,
+                    _ => truth,
+                };
+                let at = glide.advance(Vec2::new(x, 0.0), rate, dt, now, tick);
+                assert!(
+                    at.x >= last,
+                    "tick {server_tick} frame {frame}: {} < {last}",
+                    at.x
+                );
+                assert_eq!(at.y, 0.0);
+                last = at.x;
+            }
+        }
+        assert!(240.0 - last < 40.0, "fell behind: {last}");
+    }
+
+    #[test]
+    fn point_glide_snaps_a_teleport_and_follows_a_ricochet() {
+        let mut glide = PointGlide::new(Vec2::ZERO);
+        let _ = glide.advance(Vec2::new(20.0, 0.0), 400.0, 0.05, 0.05, 0.05);
+        assert_eq!(
+            glide
+                .advance(Vec2::new(800.0, 0.0), 400.0, 0.01, 0.06, 0.05)
+                .x,
+            800.0
+        );
+        // Bounced back: held for one tick, then followed.
+        assert_eq!(
+            glide
+                .advance(Vec2::new(780.0, 0.0), 400.0, 0.01, 0.07, 0.05)
+                .x,
+            800.0
+        );
+        assert!(
+            glide
+                .advance(Vec2::new(780.0, 0.0), 400.0, 0.01, 0.13, 0.05)
+                .x
+                < 800.0
         );
     }
 

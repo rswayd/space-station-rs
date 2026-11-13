@@ -562,6 +562,7 @@ mod tests {
             rotation: 0,
             overlays: vec![Overlay::new(IconStateId(9))],
             mouse_opacity: MouseOpacity::Icon,
+            glide: 0,
         };
         let tint = Some([200, 200, 200, 255]);
         let out = statue_overlays(&model, tint);

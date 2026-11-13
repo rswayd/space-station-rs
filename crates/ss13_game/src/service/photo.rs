@@ -1338,6 +1338,7 @@ mod tests {
             rotation: 0,
             overlays: Vec::new(),
             mouse_opacity: ss13_shared::MouseOpacity::default(),
+            glide: 0,
         }
     }
 

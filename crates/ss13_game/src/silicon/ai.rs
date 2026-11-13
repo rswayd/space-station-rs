@@ -261,6 +261,7 @@ pub(crate) fn spawn_ai(
                 pixel_offset: [0, 0],
                 rotation: 0,
                 mouse_opacity: ss13_shared::MouseOpacity::Transparent,
+                glide: 0,
                 overlays: vec![],
             },
             Invisibility(AI_EYE_INVISIBILITY),

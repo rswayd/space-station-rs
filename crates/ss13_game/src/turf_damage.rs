@@ -172,6 +172,7 @@ mod tests {
                     pixel_offset: [0, 0],
                     rotation: 0,
                     mouse_opacity: MouseOpacity::default(),
+                    glide: 0,
                     overlays: Vec::new(),
                 },
                 TilePos::new(2, 2, 1),

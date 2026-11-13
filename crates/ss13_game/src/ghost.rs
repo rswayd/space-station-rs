@@ -158,6 +158,7 @@ pub(crate) fn spawn_ghost(
                 pixel_offset: [0, 0],
                 rotation: 0,
                 mouse_opacity: Default::default(),
+                glide: 0,
                 overlays: vec![],
             },
             Invisibility(INVISIBILITY_OBSERVER),

@@ -41,6 +41,7 @@ fn main() -> AppExit {
         pixel_offset: [0, 0],
         rotation: 0,
         mouse_opacity: Default::default(),
+        glide: 0,
         overlays: vec![],
     };
     let mut humans = HumanAppearances::new(&manifest, mob);
@@ -110,6 +111,7 @@ fn floor_appearance(floor: ss13_shared::IconStateId) -> Appearance {
         pixel_offset: [0, 0],
         rotation: 0,
         mouse_opacity: Default::default(),
+        glide: 0,
         overlays: vec![],
     }
 }

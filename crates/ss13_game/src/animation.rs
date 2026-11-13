@@ -236,6 +236,7 @@ fn do_item_attack_animation(
                 rotation: 0,
                 overlays: vec![],
                 mouse_opacity: ss13_shared::MouseOpacity::Transparent,
+                glide: 0,
             };
             (look, Dir::South, vec![effect_sweep()])
         }

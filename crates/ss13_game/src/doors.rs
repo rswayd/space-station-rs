@@ -2277,6 +2277,7 @@ mod tests {
             pixel_offset: [0, 0],
             rotation: 0,
             mouse_opacity: default(),
+            glide: 0,
             overlays: vec![],
         };
         let airlock = (test_airlock(&[]), look, pos, Unpowered);
@@ -2341,6 +2342,7 @@ mod tests {
             pixel_offset: [0, 0],
             rotation: 0,
             mouse_opacity: default(),
+            glide: 0,
             overlays: vec![],
         };
         let env = DoorEnv {

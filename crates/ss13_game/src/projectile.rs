@@ -4,8 +4,9 @@
 //!
 //! A fired projectile is an entity with its type's sprite, turned to its angle (tg `angle`: 0 is
 //! north, clockwise) and moved every tick by `speed` tiles per decisecond
-//! (`SSprojectiles.pixels_per_decisecond` is one tile), in eighth-tile steps; its sprite carries
-//! the sub-tile offset, so clients see it fly. Entering a tile (tg `scan_moved_turf` ->
+//! (`SSprojectiles.pixels_per_decisecond` is one tile), in eighth-tile steps, the first one only
+//! for the time since it was fired; its sprite carries the sub-tile offset and its speed as
+//! [`Appearance::glide`], so clients draw it flying in a straight line. Entering a tile (tg `scan_moved_turf` ->
 //! `select_target`) it hits, in order: what it was fired at, a living mob standing there (lying
 //! ones only when the firer was in combat mode, within 10 tiles; dead ones never), then the
 //! first dense thing it cannot pass (`PASSTABLE`/`PASSGLASS`/`PASSGRILLE` against tables,
@@ -189,6 +190,7 @@ pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<En
     if let Some(mut look) = world.get_mut::<Appearance>(entity) {
         look.rotation = angle.round() as u16 % 360;
         look.mouse_opacity = ss13_shared::MouseOpacity::Transparent;
+        look.glide = glide_rate(shot.data.speed);
     }
     // `kinetic/prehit_pierce`: a modkit's ignored mob is passed through.
     let direct = direct.filter(|&t| !crate::mining::modkits::phases(world, &projectile, t));
@@ -202,15 +204,32 @@ pub fn fire_with(world: &mut World, shot: Shot, extra: impl Bundle) -> Option<En
         }
         return None;
     }
-    world.entity_mut(entity).insert(projectile);
+    let now = world.resource::<Time>().elapsed_secs();
+    world.entity_mut(entity).insert((projectile, FiredAt(now)));
     Some(entity)
 }
 
+/// tg `last_projectile_move` at `fire`: the first move covers only the time since it was fired
+/// (`Time::elapsed_secs`), so one fired before this tick's move is first seen at the firer.
+#[derive(Component, Clone, Copy, Debug)]
+struct FiredAt(f32);
+
+/// [`Appearance::glide`] of a projectile of `speed` tiles per decisecond: the client draws it
+/// flying as fast as the server moves it.
+pub fn glide_rate(speed: f32) -> u16 {
+    (speed * PX * 10.0).round().clamp(0.0, f32::from(u16::MAX)) as u16
+}
+
 fn move_projectiles(world: &mut World) {
-    let dt = world.resource::<Time>().delta_secs();
+    let time = world.resource::<Time>();
+    let (now, dt) = (time.elapsed_secs(), time.delta_secs());
     let mut query = world.query::<(Entity, &Projectile)>();
     let flying: Vec<Entity> = query.iter(world).map(|(e, _)| e).collect();
     for e in flying {
+        let dt = match world.entity_mut(e).take::<FiredAt>() {
+            Some(FiredAt(at)) => (now - at).clamp(0.0, dt),
+            None => dt,
+        };
         step(world, e, dt);
     }
 }
@@ -874,6 +893,14 @@ mod tests {
         let fire = world.get::<crate::fire::FireStacks>(carbon).unwrap();
         assert_eq!((fire.stacks, fire.on_fire), (2.0, true));
         assert!(world.get::<crate::fire::FireStacks>(simple).is_none());
+    }
+
+    /// `SSprojectiles.pixels_per_decisecond` × `speed`, per second: a laser (1.25) 400 px/s.
+    #[test]
+    fn glide_rate_is_the_flight_speed_in_pixels() {
+        assert_eq!(glide_rate(1.25), 400);
+        assert_eq!(glide_rate(0.9), 288);
+        assert_eq!(glide_rate(0.0), 0);
     }
 
     #[test]

@@ -491,6 +491,7 @@ fn spawn_visual(world: &mut World, pos: TilePos, state: &str, secs: f64) {
             rotation: 0,
             overlays: vec![],
             mouse_opacity: MouseOpacity::Transparent,
+            glide: 0,
         },
         Networked,
         EmpVisual { until },

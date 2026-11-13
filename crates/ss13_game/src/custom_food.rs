@@ -576,6 +576,7 @@ mod tests {
                     pixel_offset: [0, 0],
                     rotation: 0,
                     mouse_opacity: Default::default(),
+                    glide: 0,
                     overlays: Vec::new(),
                 },
             ))
@@ -607,6 +608,7 @@ mod tests {
                 pixel_offset: [0, 0],
                 rotation: 0,
                 mouse_opacity: Default::default(),
+                glide: 0,
                 overlays: Vec::new(),
             })
             .id();

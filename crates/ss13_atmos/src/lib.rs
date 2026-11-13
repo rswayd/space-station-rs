@@ -973,6 +973,7 @@ pub fn gas_overlay_appearance(
         pixel_offset: [0, 0],
         rotation: 0,
         mouse_opacity: MouseOpacity::Transparent,
+        glide: 0,
         overlays: visible
             .map(|(icon_state, step)| Overlay {
                 icon_state,
@@ -1129,6 +1130,7 @@ pub fn hotspot_look(icons: &HotspotIcons, hotspot: &Hotspot) -> Option<(Appearan
         pixel_offset: [0, 0],
         rotation: 0,
         mouse_opacity: MouseOpacity::Transparent,
+        glide: 0,
         overlays: icons.glow[stage]
             .map(|glow| Overlay {
                 icon_state: glow,

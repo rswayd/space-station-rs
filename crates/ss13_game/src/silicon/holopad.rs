@@ -202,6 +202,7 @@ pub fn activate_holo(world: &mut World, client: Entity, ai: Entity, pad: Entity)
                 pixel_offset: [0, 0],
                 rotation: 0,
                 mouse_opacity: MouseOpacity::Transparent,
+                glide: 0,
                 overlays: vec![],
             },
             Networked,

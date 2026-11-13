@@ -526,6 +526,7 @@ fn draw_component(
         rotation: 0,
         overlays,
         mouse_opacity: appearance.mouse_opacity,
+        glide: 0,
     };
     if *appearance != new {
         *appearance = new;

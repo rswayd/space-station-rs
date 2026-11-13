@@ -157,6 +157,7 @@ mod tests {
             rotation: 0,
             overlays: vec![],
             mouse_opacity: MouseOpacity::Icon,
+            glide: 0,
         }
     }
 

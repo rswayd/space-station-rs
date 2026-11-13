@@ -334,6 +334,7 @@ pub fn spawn_influence(world: &mut World, pos: TilePos) -> Option<Entity> {
                     rotation: 0,
                     overlays: Vec::new(),
                     mouse_opacity: ss13_shared::MouseOpacity::Icon,
+                    glide: 0,
                 });
             }
         }
