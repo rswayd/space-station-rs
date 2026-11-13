@@ -7,6 +7,7 @@
 //!   quantum console (tgui `QuantumConsole`), the byteforge and the domain's caches.
 //! - [`avatar`]: netpods, avatars and their connection (`/datum/component/avatar_connection`),
 //!   hololadders.
+//! - [`disks`]: the bitrunning disks and the gear they load onto new avatars.
 //! - [`help`]: the avatar's domain information (tgui `AvatarHelp`) and the host monitor.
 //! - [`client`]: the console and domain information windows.
 //!
@@ -19,6 +20,8 @@ use ss13_tgui::UiInterface;
 pub mod avatar;
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "server")]
+pub mod disks;
 #[cfg(feature = "server")]
 pub mod domains;
 #[cfg(feature = "server")]

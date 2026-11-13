@@ -149,6 +149,11 @@ const TYPES: &str = r##"{
         "name": "produce orders console", "order_categories": { "list": [ "Mining" ] },
         "credit_type": "cr", "cargo_cost_multiplier": 0.65,
         "announcement_line": "The kitchen has ordered groceries." } },
+    "/obj/machinery/computer/order_console/bitrunning": {
+        "parent": "/obj/machinery/computer/order_console", "declared_vars": {
+        "name": "bitrunning supplies order console", "order_categories": { "list": [ "Mining" ] },
+        "credit_type": "np", "cargo_cost_multiplier": 0.65, "express_cost_multiplier": 1,
+        "cooldown_time": 100 } },
     "/obj/structure/closet": { "parent": "/obj/structure" },
     "/obj/structure/closet/crate": { "parent": "/obj/structure/closet" },
     "/obj/structure/closet/crate/freezer": { "parent": "/obj/structure/closet/crate" },
@@ -196,6 +201,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "O" = (/obj/machinery/ore_silo,/turf/open/floor,/area/space)
 "C" = (/obj/machinery/computer/order_console/mining,/turf/open/floor,/area/space)
 "P" = (/obj/machinery/computer/order_console/cook,/turf/open/floor,/area/space)
+"V" = (/obj/machinery/computer/order_console/bitrunning,/turf/open/floor,/area/space)
 "S" = (/obj/machinery/mineral/stacking_machine,/turf/open/floor,/area/space)
 "K" = (/obj/machinery/mineral/stacking_unit_console,/turf/open/floor,/area/space)
 
@@ -203,7 +209,7 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 wwwwwwwww
 wGffSfOPw
 wsIffffff
-wBMfKfCfw
+wBMfKVCfw
 wwwwwwwww
 "}
 "##;
@@ -215,6 +221,7 @@ const ORE_BOX: TilePos = TilePos::new(2, 2, 1);
 const ORM: TilePos = TilePos::new(3, 2, 1);
 const CONSOLE: TilePos = TilePos::new(7, 2, 1);
 const COOK_CONSOLE: TilePos = TilePos::new(8, 4, 1);
+const BITRUNNING_CONSOLE: TilePos = TilePos::new(6, 2, 1);
 const IRON: &str = "/datum/material/iron";
 
 const STATES: [(&str, &str); 10] = [
@@ -242,6 +249,7 @@ fn fixture_assets() -> PathBuf {
         "/obj/machinery/mineral/ore_redemption",
         "/obj/machinery/computer/order_console/mining",
         "/obj/machinery/computer/order_console/cook",
+        "/obj/machinery/computer/order_console/bitrunning",
         "/obj/machinery/mineral/stacking_machine",
         "/obj/machinery/mineral/stacking_unit_console",
         "/obj/item/mining_voucher",
@@ -852,4 +860,48 @@ fn the_cook_console_pays_with_credits() {
     let economy = s.server.world().resource::<Economy>();
     assert_eq!(economy.account(id).unwrap().balance, 805);
     assert_eq!(economy.account(id).unwrap().mining_points, 10_000);
+}
+
+/// The bitrunning vendor pays with the account's bitrunning points only and ships in a
+/// "bitrunning delivery crate".
+#[test]
+fn the_bitrunning_vendor_pays_with_bitrunning_points() {
+    let mut s = Station::start();
+    let mob = s.mob();
+    let console = s.obj(
+        BITRUNNING_CONSOLE,
+        "/obj/machinery/computer/order_console/bitrunning",
+    );
+    let state = s.server.world().get::<OrderConsole>(console).unwrap();
+    assert!(state.bitrunning_points && !state.mining_points && !state.kitchen);
+    let id = s.account();
+    let set_points = |s: &mut Station, n: i64| {
+        let mut economy = s.server.world_mut().resource_mut::<Economy>();
+        let account = economy.account_mut(id).unwrap();
+        account.balance = 10_000;
+        account.mining_points = 10_000;
+        account.bitrunning_points = n;
+    };
+    set_points(&mut s, 100);
+    apply(s.server.world_mut(), console, mob, ConsoleAct::AddOne(0));
+    apply(s.server.world_mut(), console, mob, ConsoleAct::Purchase);
+    assert!(
+        s.server.world().resource::<MiningShipments>().0.is_empty(),
+        "195 points, 100 on the account: credits and mining points do not pay here"
+    );
+    set_points(&mut s, 1000);
+    apply(s.server.world_mut(), console, mob, ConsoleAct::Purchase);
+    let shipments = &s.server.world().resource::<MiningShipments>().0;
+    assert_eq!(shipments.len(), 1);
+    assert!(shipments[0].bitrunning && !shipments[0].kitchen);
+    let economy = s.server.world().resource::<Economy>();
+    let account = economy.account(id).unwrap();
+    assert_eq!(
+        (
+            account.bitrunning_points,
+            account.balance,
+            account.mining_points
+        ),
+        (805, 10_000, 10_000)
+    );
 }

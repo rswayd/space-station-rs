@@ -403,6 +403,7 @@ impl Plugin for BitrunningServerPlugin {
             );
         avatar::build(app);
         super::help::build(app);
+        super::disks::build(app);
     }
 }
 
@@ -1204,6 +1205,22 @@ pub fn generate_loot(world: &mut World, server: Entity, cache: Entity) -> bool {
         s.points += domain.reward_points;
         s.threat += score;
         s.complete = true;
+    }
+    // `netpod/on_domain_complete`: each connected occupant's card account.
+    for &a in &state.connections {
+        let Some(body) = world.get::<avatar::AvatarConnection>(a).map(|c| c.body) else {
+            continue;
+        };
+        let account = world
+            .get::<crate::inventory::Inventory>(body)
+            .and_then(|i| i.id_card(world))
+            .and_then(|c| crate::cargo::economy::account_of(world, c));
+        if let Some(account) = account
+            && let Some(mut economy) = world.get_resource_mut::<crate::cargo::economy::Economy>()
+            && let Some(acc) = economy.account_mut(account)
+        {
+            acc.bitrunning_points += i64::from(domain.reward_points) * 100;
+        }
     }
     {
         let mut grades = world.resource_mut::<DomainGrades>();

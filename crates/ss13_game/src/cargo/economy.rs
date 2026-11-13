@@ -106,6 +106,9 @@ pub struct BankAccount {
     pub job: String,
     /// `mining_points`: earned at the ore redemption machine, spent at the mining vendor.
     pub mining_points: i64,
+    /// `bitrunning_points`: earned by completing virtual domains, spent at the bitrunning
+    /// vendor.
+    pub bitrunning_points: i64,
     /// `transaction_history`: (adjusted money, reason), oldest first.
     pub history: Vec<(i64, String)>,
 }
@@ -250,6 +253,7 @@ impl Economy {
                 paycheck_department: department.to_owned(),
                 job: String::new(),
                 mining_points: 0,
+                bitrunning_points: 0,
                 history: Vec::new(),
             },
         );
