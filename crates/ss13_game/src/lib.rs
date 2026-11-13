@@ -757,6 +757,8 @@ pub mod votes_client;
 #[cfg(feature = "server")]
 pub mod wall_damage;
 #[cfg(feature = "server")]
+pub mod wall_support;
+#[cfg(feature = "server")]
 pub mod wallmount;
 #[cfg(feature = "server")]
 pub mod watertank;

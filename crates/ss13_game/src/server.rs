@@ -258,6 +258,7 @@ impl Plugin for GameServerPlugin {
             crate::gym::GymPlugin,
             crate::instruments::InstrumentsPlugin,
             crate::transit_tubes::TransitTubePlugin,
+            crate::wall_support::WallSupportPlugin,
         ))
         .add_plugins((
             (

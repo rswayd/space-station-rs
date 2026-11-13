@@ -6,7 +6,7 @@
 
 - **Код:** [`/turf/closed/wall`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L1), [`proc/try_decon()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L234), [`proc/dismantle_wall()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L99)
 - **BandaStation:** [`modular_bandastation/aesthetics/walls/code/walls.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/walls/code/walls.dm) — свои спрайты стен
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`: стена из 2 листов на балке за 4 с, разрезка сваркой за 10 с; вмятины, ржавчина и разрушение — «Повреждение стен»
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/construction.rs`: стена из 2 листов на балке за 4 с, разрезка сваркой за 10 с; вмятины, ржавчина и разрушение — «Повреждение стен»; нет падения висящего на стене оборудования при её сносе (`/datum/component/atom_mounted`: `drop_wallmount`, перевешивание на опору `wall_support`)
 
 ### Укреплённая стена: многошаговая разборка
 `r_wall` разбирается в 7 шагов (`d_state`): кусачки → отвёртка → сварка → лом → гаечный ключ → сварка → лом, каждый шаг обратим; не режется обычной сваркой за один раз, устойчива к взрывам.
@@ -25,7 +25,7 @@
 Временная опора (`wall_support`) позволяет разобрать стену, не роняя APC, лампы и прочее висящее на ней.
 
 - **Код:** [`/obj/structure/wall_support`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/objects/structures/wall_support.dm#L7), [`proc/try_build_support()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/game/turfs/closed/walls.dm#L249)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/wall_support.rs`: 2 прута на стене (2 с, прутья перепроверяются в конце) ставят опору на тайл стены, меньше 2 — отказ; отвёртка прикручивает/откручивает её, кусачки правым кликом разрезают в 2 прута (сломанная — 1); строки осмотра. Проверено: `crates/ss13_game/tests/it/eng_tools.rs` (`wall_support_takes_two_rods_and_comes_apart`). Нет: урона и поломки опоры (`atom_break`, звуки решётки), горения выше 1500 °C. Само падение настенного оборудования со снесённой стены (`atom_mounted`, которое опора предотвращает) в порте не перенесено — пункт «Обычная стена: постройка и разборка»
 
 ### Минеральные и материальные стены
 Стены из золота, серебра, алмаза, урана (фонит), плазмы (горит), бананиума, песчаника, дерева, бамбука, титана, пластитана, снега, культа и т. д.; материальные стены из любого материала наследуют его свойства.

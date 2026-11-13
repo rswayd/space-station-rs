@@ -400,3 +400,87 @@ fn transit_pod_rides_to_the_terminus() {
     assert_eq!(world.get::<TubePod>(pod).unwrap().dir, Dir::West as u8);
     assert!(!world.get::<TubePod>(pod).unwrap().moving);
 }
+
+/// Wall supports (`ss13_game::wall_support`): one rod is refused, two of five go into a support
+/// after 2 s; a screwdriver unfastens a support, right-click wirecutters cut it into rods.
+#[test]
+fn wall_support_takes_two_rods_and_comes_apart() {
+    use ss13_game::obj_damage::Anchored;
+    use ss13_game::tools::Stack;
+    use ss13_mapload::DmObj;
+    use ss13_mapload::construct::DmTurfBuild;
+
+    let mut app = server("wall_support");
+    let world = app.world_mut();
+    let mob = human(world, at(3));
+    let wall = world
+        .spawn((
+            at(4),
+            DmTurfBuild {
+                path: "/turf/closed/wall".into(),
+                ..default()
+            },
+        ))
+        .id();
+    let rods = held(world, mob, "/obj/item/stack/rods", None);
+    world.entity_mut(rods).insert(Stack { amount: 1 });
+    let ctx = |held: Entity, target: Entity, right: bool| ClickCtx {
+        client: mob,
+        mob,
+        mob_pos: at(3),
+        held: Some(held),
+        target,
+        pos: at(4),
+        modifiers: ClickModifiers { right, ..default() },
+        active_hand: 0,
+    };
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(rods, wall, false)
+    ));
+    assert!(world.get::<DoAfter>(mob).is_none(), "one rod is not enough");
+    world.get_mut::<Stack>(rods).unwrap().amount = 5;
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(rods, wall, false)
+    ));
+    assert!(world.get::<DoAfter>(mob).is_some());
+    run(&mut app, 2.2);
+    assert_eq!(app.world().get::<Stack>(rods).unwrap().amount, 3);
+
+    let world = app.world_mut();
+    let support = world
+        .spawn((
+            at(4),
+            Anchored(true),
+            DmObj {
+                path: "/obj/structure/wall_support".into(),
+                anchored: true,
+                ..default()
+            },
+        ))
+        .id();
+    world.despawn(rods);
+    let screwdriver = held(
+        world,
+        mob,
+        "/obj/item/screwdriver",
+        Some(("screwdriver", 1.0)),
+    );
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(screwdriver, support, false)
+    ));
+    assert_eq!(world.get::<Anchored>(support), Some(&Anchored(false)));
+    world.despawn(screwdriver);
+    let cutters = held(world, mob, "/obj/item/wirecutters", Some(("cutters", 1.0)));
+    assert!(click_handlers::run(
+        world,
+        ClickPhase::HeldOnTarget,
+        &ctx(cutters, support, true)
+    ));
+    assert!(world.get_entity(support).is_err(), "cut apart");
+}

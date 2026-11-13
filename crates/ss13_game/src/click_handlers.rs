@@ -503,6 +503,7 @@
 //! | 2950 | `vehicles::item_interaction` |
 //! | 2959 | `electric_chair::item_interaction` (a helmet on an electropack, a shock kit on a chair, its screwdriver, wrenches on the kit and the electric chair) |
 //! | 2960 | `flora::item_interaction` |
+//! | 2961 | `wall_support::held_on_target` (rods on a wall; a screwdriver or right-click wirecutters on a wall support) |
 //! | 2969 | `wall_damage::item_interaction` (a welder on a dented wall, rust scraped or burnt off, tiles refused by rusty floors) |
 //! | 2970 | `cargo::mail_sorter::item_interaction` |
 //! | 2975 | `cargo::coupon::attack_atom` (supply consoles) |

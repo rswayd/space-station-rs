@@ -237,6 +237,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::reinforced::examine_lines(world, target, &mut lines);
     crate::reinforced_floor::examine_lines(world, target, &mut lines);
     crate::wall_damage::examine_lines(world, target, &mut lines);
+    crate::wall_support::examine_lines(world, target, &mut lines);
     crate::vending::examine_lines(world, target, &mut lines);
     crate::wallmount::examine_lines(world, target, &mut lines);
     crate::antag::nukeop::core_theft::examine_lines(world, target, &mut lines);
