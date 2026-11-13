@@ -372,6 +372,11 @@ pub(super) fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: 
             format!("{user} начинает копаться в мозге у {target}..."),
             "Ваша голова разрывается от невообразимой боли!".into(),
         ),
+        Op::TuneVocalCords => (
+            format!("Вы начинаете настраивать голосовые связки {target}..."),
+            format!("{user} начинает настраивать голосовые связки {target}."),
+            String::new(),
+        ),
         Op::FilterBlood => (
             format!("Вы начинаете оперировать {target}..."),
             format!("{user} начинает оперировать {target}."),

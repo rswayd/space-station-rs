@@ -673,6 +673,8 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
             };
             holds(Slot::Brain) && !holds(Slot::Zombie)
         }
+        // `tune_vocal_cords/state_check`.
+        Op::TuneVocalCords => body == BodyZone::Head,
         // `bioware/state_check`: its zone, no bioware of the same kind yet.
         Op::Bioware(kind) => {
             body == kind.zone().check_zone() && super::super::bioware::can_gain(world, mob, kind)
