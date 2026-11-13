@@ -293,7 +293,10 @@ fn conveyable(world: &World, e: Entity, pos: TilePos) -> bool {
 fn convey_step(world: &mut World, e: Entity, dir: Dir) {
     // `MOVEMENT_LOOP_NO_DIR_UPDATE`: the step leaves the thing facing as it was.
     let facing = world.get::<Facing>(e).copied();
-    let _ = crate::pull::step_passing(world, e, dir, |_, _| false);
+    // Boulder machines let boulders ride through (`CanAllowThrough`).
+    let _ = crate::pull::step_passing(world, e, dir, |w, blocker| {
+        crate::mining::boulders::lets_through(w, e, blocker, dir)
+    });
     if let Some(facing) = facing
         && let Some(mut current) = world.get_mut::<Facing>(e)
     {

@@ -17,8 +17,8 @@
 // shortcut: no minebot gun (the kinetic accelerator shots and keeping its shooting distance;
 // its modkits are `crate::mining::modkits`), missiles, landmines, light and meson toggles, the
 // `MineBot` UI, pet commands, colours, mining walls, the
-// SOS for downed miners, sentience; the drone has no ore vent to latch onto (vents and their
-// wave defense are `docs/parity/cargo/mining-ores.md`), no fly-in/escape animation.
+// SOS for downed miners, sentience; the drone does not seek out a vent by itself (vents land
+// theirs, `crate::mining::vents`), no fly-in/escape animation.
 
 use bevy::prelude::*;
 use ss13_mapload::DmItem;

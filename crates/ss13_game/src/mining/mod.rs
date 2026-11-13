@@ -7,13 +7,15 @@
 //! the fauna's monster cores with the stabilizing serum ([`cores`]), the resonator
 //! ([`resonator`]), bluespace shelter capsules ([`capsule`]), marker beacons ([`beacons`]), the explorer gear's
 //! armour plates ([`explorer`]), fulton extraction ([`fulton`]) and the necropolis tendrils with
-//! their chests ([`necropolis`]), the lazarus injector ([`devices`]).
+//! their chests ([`necropolis`]), the lazarus injector ([`devices`]), the ore vents with their
+//! wave defense ([`vents`]), boulders with the BRM, the refinery and the smelter
+//! ([`boulders`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
 //! The mining level loads with the station (`ss13_mapload::MiningLevel`) and the mining
-//! shuttles fly there (`crate::mining_shuttles`). Ore vents, boulders and their machines (BRM,
-//! refinery, smelter), the processing unit and the unloading machine are not ported.
+//! shuttles fly there (`crate::mining_shuttles`). The processing unit and the unloading machine
+//! are not ported.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;
@@ -21,6 +23,8 @@ use ss13_tgui::interfaces::vending::ProductIcon;
 
 #[cfg(feature = "server")]
 pub mod beacons;
+#[cfg(feature = "server")]
+pub mod boulders;
 #[cfg(feature = "server")]
 pub mod capsule;
 #[cfg(feature = "client")]
@@ -51,6 +55,8 @@ pub mod resonator;
 pub mod rocks;
 #[cfg(feature = "server")]
 pub mod stacking;
+#[cfg(feature = "server")]
+pub mod vents;
 
 #[cfg(feature = "server")]
 pub use rocks::{MiningJob, complete};
@@ -114,7 +120,8 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             crusher::CrusherPlugin,
             necropolis::NecropolisPlugin,
             devices::DevicesPlugin,
-        ));
+        ))
+        .add_plugins((vents::VentsPlugin, boulders::BouldersPlugin));
     }
 }
 
@@ -146,6 +153,8 @@ pub fn item_interaction(
     target: bevy::prelude::Entity,
 ) -> bool {
     orm::item_interaction(world, held, target)
+        || vents::item_interaction(world, client, mob, held, target)
+        || boulders::item_interaction(world, client, mob, held, target)
         || devices::item_interaction(world, mob, held, target)
         || cores::item_interaction(world, client, mob, held, target)
         || resonator::item_interaction(world, mob, held, target)
@@ -190,6 +199,8 @@ pub fn examine_lines(
     equipment::examine_lines(world, target, lines);
     rocks::examine_lines(world, target, lines);
     devices::examine_lines(world, target, lines);
+    vents::examine_lines(world, target, lines);
+    boulders::examine_lines(world, target, lines);
 }
 
 /// The mining `click_alt`s: rotating an open ORM's input and output. True when handled.

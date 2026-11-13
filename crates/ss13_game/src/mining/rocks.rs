@@ -67,7 +67,7 @@ use crate::tools::{Actor, DoAfter, Stack, ToolKind, do_after, tell, tool_of, use
 pub const ORE_BOX: &str = "/obj/structure/ore_box";
 const ORE_BAG: &str = "/obj/item/storage/bag/ore";
 const WOOD: &str = "/obj/item/stack/sheet/mineral/wood";
-const MINING_SCANNERS: [&str; 2] = [
+pub(super) const MINING_SCANNERS: [&str; 2] = [
     "/obj/item/mining_scanner",
     "/obj/item/t_scanner/adv_mining_scanner",
 ];
@@ -107,6 +107,10 @@ pub enum MiningJob {
     FoldFultonBeacon,
     /// A fulton pack attaching to a thing.
     Fulton,
+    /// The first mining scanner scan of an ore vent ([`super::vents`]).
+    ScanVent,
+    /// A step of a mining tool on a boulder ([`super::boulders`]).
+    CrushBoulder,
 }
 
 /// tg `GIBTONITE_*` stages.
@@ -400,6 +404,8 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter, job: MiningJob
         MiningJob::UnfoldFultonBeacon | MiningJob::FoldFultonBeacon | MiningJob::Fulton => {
             super::fulton::complete(world, mob, action, job);
         }
+        MiningJob::ScanVent => super::vents::complete_scan(world, mob, action),
+        MiningJob::CrushBoulder => super::boulders::complete_crush(world, mob, action),
     }
 }
 
@@ -1281,7 +1287,7 @@ fn strike_thing(
 }
 
 /// `get_skill_modifier(/datum/skill/mining, SKILL_SPEED_MODIFIER)`.
-fn mining_speed(world: &World, mob: Entity) -> f32 {
+pub(super) fn mining_speed(world: &World, mob: Entity) -> f32 {
     crate::skills::modifier(
         world,
         mob,
