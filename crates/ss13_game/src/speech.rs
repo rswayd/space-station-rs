@@ -136,6 +136,7 @@ pub fn emote_user(
         silicon_emotes,
         robotic,
         in_processor,
+        tail: None,
     }
 }
 
@@ -193,12 +194,19 @@ fn sync_emote_user(
         } else {
             EmoteBody::Human
         };
-        let wanted = emote_user(
-            body,
-            species.map(|s| s.0),
-            look.is_some_and(|l| l.female),
-            tongue == Some(&Tongue::Robot),
-        );
+        let wanted = EmoteUser {
+            // The drawn tail is the wag-able one (`crate::medical::organs::tail_sprite`).
+            tail: look
+                .and_then(|l| l.tail)
+                .filter(|_| body == EmoteBody::Human)
+                .map(|t| t.wagging),
+            ..emote_user(
+                body,
+                species.map(|s| s.0),
+                look.is_some_and(|l| l.female),
+                tongue == Some(&Tongue::Robot),
+            )
+        };
         if current != Some(&wanted) {
             commands.entity(e).try_insert(wanted);
         }

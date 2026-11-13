@@ -101,6 +101,8 @@ pub struct EmoteUser {
     pub robotic: bool,
     /// A brain mob inside a brain processor (`/datum/emote/brain/can_run_emote`).
     pub in_processor: bool,
+    /// A tail with `WAG_ABLE` (`ORGAN_SLOT_EXTERNAL_TAIL`): whether it is wagging.
+    pub tail: Option<bool>,
 }
 
 /// The sound an emote makes: one of `files` (files or SFX keys) is played.
@@ -318,6 +320,9 @@ pub const EMOTES: &[Emote] = &[
     emote("shake", "качает своей головой.", 0),
     emote("shiver", "дрожит.", 0),
     only(HUMAN, emote("shrug", "пожимает плечами.", 0)),
+    // `/datum/emote/living/carbon/human/wag`: only with a wag-able tail; the game toggles the
+    // wagging on [`crate::server::Emoted`] (`ss13_game::medical::organs`).
+    only(HUMAN, emote("wag", "начинает вилять хвостом.", 0)),
     emote("sigh", "вздыхает.", AUDIBLE),
     emote("smile", "улыбается.", 0),
     emote("sneeze", "чихает.", AUDIBLE),
@@ -622,10 +627,15 @@ pub fn allowed(emote: &Emote, user: &EmoteUser) -> bool {
         && (!emote.silicon || user.silicon_emotes)
         && emote.species.is_none_or(|s| s == user.species)
         && (user.mob != EmoteMob::Brain || user.in_processor)
+        && (emote.key != "wag" || user.tail.is_some())
 }
 
 /// tg `select_message_type` (no mime: the vow does not reach emotes yet).
 fn select_message(emote: &Emote, user: &EmoteUser) -> &'static str {
+    // BandaStation's `wag/select_message_type`: stopping is its own line.
+    if emote.key == "wag" && user.tail == Some(true) {
+        return "перестаёт вилять хвостом.";
+    }
     let pick = |m: &'static str| (!m.is_empty()).then_some(m);
     let special = match user.mob {
         EmoteMob::AlienAdult => pick(emote.message_alien),
@@ -977,6 +987,7 @@ mod tests {
         silicon_emotes: false,
         robotic: false,
         in_processor: false,
+        tail: None,
     };
 
     fn user(mob: EmoteMob) -> EmoteUser {
@@ -1024,6 +1035,21 @@ mod tests {
         );
         assert_eq!(run("wave", C, h, |_, _| true), EmoteOutcome::Silent);
         assert!(matches!(run_as("help", h), EmoteOutcome::Help(m) if m.contains("scream")));
+    }
+
+    #[test]
+    fn wag_needs_a_tail_and_toggles_its_line() {
+        assert!(refused(&run_as("wag", &HUMAN_USER)));
+        let still = EmoteUser {
+            tail: Some(false),
+            ..HUMAN_USER
+        };
+        assert_eq!(ran(run_as("wag", &still)), "начинает вилять хвостом.");
+        let wagging = EmoteUser {
+            tail: Some(true),
+            ..HUMAN_USER
+        };
+        assert_eq!(ran(run_as("wag", &wagging)), "перестаёт вилять хвостом.");
     }
 
     #[test]

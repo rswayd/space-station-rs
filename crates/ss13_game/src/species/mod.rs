@@ -201,6 +201,8 @@ pub struct OrganSet {
     pub liver: Option<&'static str>,
     pub stomach: Option<&'static str>,
     pub appendix: Option<&'static str>,
+    /// `mutant_organs`' tail (`ORGAN_SLOT_EXTERNAL_TAIL`).
+    pub tail: Option<&'static str>,
 }
 
 impl OrganSet {
@@ -216,6 +218,7 @@ impl OrganSet {
             Slot::Liver => self.liver,
             Slot::Stomach => self.stomach,
             Slot::Appendix => self.appendix,
+            Slot::Tail => self.tail,
             Slot::Zombie => None,
         }
     }
@@ -232,6 +235,7 @@ const HUMAN_ORGANS: OrganSet = OrganSet {
     liver: Some("/obj/item/organ/liver"),
     stomach: Some("/obj/item/organ/stomach"),
     appendix: Some("/obj/item/organ/appendix"),
+    tail: None,
 };
 
 /// How a species' limbs are colored (`should_draw_greyscale` and the color source).
@@ -396,6 +400,7 @@ const LIZARD: SpeciesDef = SpeciesDef {
         eyes: Some("/obj/item/organ/eyes/lizard"),
         tongue: Some("/obj/item/organ/tongue/lizard"),
         liver: Some("/obj/item/organ/liver/lizard"),
+        tail: Some("/obj/item/organ/tail/lizard"),
         ..HUMAN_ORGANS
     },
     limbs: LIZARD_LIMBS,
@@ -510,6 +515,7 @@ const SPIRIT: SpeciesDef = SpeciesDef {
         liver: Some("/obj/item/organ/liver/ghost"),
         stomach: Some("/obj/item/organ/stomach/ghost"),
         appendix: None,
+        tail: None,
     },
     limbs: Limbs {
         dmi: "icons/mob/human/species/ghost.dmi",
@@ -786,6 +792,7 @@ pub static SPECIES: [SpeciesDef; 33] = [
             tongue: Some("/obj/item/organ/tongue/tajaran"),
             liver: Some("/obj/item/organ/liver/tajaran"),
             stomach: Some("/obj/item/organ/stomach/tajaran"),
+            tail: Some("/obj/item/organ/tail/tajaran"),
             ..HUMAN_ORGANS
         },
         limbs: Limbs {
@@ -820,6 +827,7 @@ pub static SPECIES: [SpeciesDef; 33] = [
             tongue: Some("/obj/item/organ/tongue/vulpkanin"),
             liver: Some("/obj/item/organ/liver/vulpkanin"),
             stomach: Some("/obj/item/organ/stomach/vulpkanin"),
+            tail: Some("/obj/item/organ/tail/vulpkanin"),
             ..HUMAN_ORGANS
         },
         limbs: Limbs {
@@ -932,6 +940,7 @@ pub static SPECIES: [SpeciesDef; 33] = [
             liver: Some("/obj/item/organ/liver/pod"),
             stomach: Some("/obj/item/organ/stomach/pod"),
             appendix: Some("/obj/item/organ/appendix/pod"),
+            tail: None,
         },
         limbs: Limbs {
             id: "pod",
@@ -1192,6 +1201,7 @@ pub static SPECIES: [SpeciesDef; 33] = [
             liver: None,
             stomach: None,
             appendix: None,
+            tail: None,
         },
         limbs: Limbs {
             dmi: "icons/mob/augmentation/augments.dmi",

@@ -480,6 +480,7 @@ pub fn create_profile(world: &mut World, mob: Entity) -> CloneRecord {
             missing: 0,
             robotic: 0,
             eyeless: false,
+            tail: None,
             ..look
         })
         .unwrap_or_else(|| crate::human::AppearancePrefs::random(0).body());

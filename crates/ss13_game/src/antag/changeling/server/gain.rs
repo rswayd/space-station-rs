@@ -24,6 +24,7 @@ pub(super) fn dna_of(world: &World, mob: Entity) -> (String, Option<HumanLook>) 
         missing: 0,
         robotic: 0,
         eyeless: false,
+        tail: None,
         ..l.clone()
     });
     (name_of(world, mob), look)

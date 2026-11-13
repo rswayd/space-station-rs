@@ -419,3 +419,49 @@ fn equipment_and_mutations_follow_the_species() {
     species::set_species(&mut world, mob, SpeciesId::Plasmaman);
     assert!(!species::can_mutate(&world, mob), "mineral and geneless");
 }
+
+#[test]
+fn tails_come_with_the_species_and_wag() {
+    let mut world = World::new();
+    let mob = human(&mut world);
+    assert!(organs::organ(&world, mob, Slot::Tail).is_none());
+    assert_eq!(world.get::<HumanLook>(mob).unwrap().tail, None);
+
+    species::set_species(&mut world, mob, SpeciesId::Tajaran);
+    assert_eq!(
+        organ_path(&world, mob, Slot::Tail).as_deref(),
+        Some("/obj/item/organ/tail/tajaran")
+    );
+    let tail = world.get::<HumanLook>(mob).unwrap().tail.unwrap();
+    assert_eq!(
+        (tail.key, tail.style, tail.wagging),
+        ("tail_tajaran", "wingertail", false)
+    );
+    let states: Vec<String> = parts(world.get::<HumanLook>(mob).unwrap())
+        .unwrap()
+        .into_iter()
+        .map(|p| p.state)
+        .collect();
+    assert!(states.contains(&"m_tail_tajaran_wingertail_BEHIND".to_owned()));
+
+    // `*wag` toggles; a removed tail stops wagging and is no longer drawn.
+    organs::set_wagging(&mut world, mob, None);
+    assert!(world.get::<HumanLook>(mob).unwrap().tail.unwrap().wagging);
+    organs::set_wagging(&mut world, mob, None);
+    assert!(!world.get::<HumanLook>(mob).unwrap().tail.unwrap().wagging);
+    organs::set_wagging(&mut world, mob, Some(true));
+    let organ = organs::organ(&world, mob, Slot::Tail).unwrap();
+    organs::remove(&mut world, organ, false);
+    assert!(!world.get::<Organ>(organ).unwrap().wagging);
+    assert_eq!(world.get::<HumanLook>(mob).unwrap().tail, None);
+
+    // The species change gives the lizard's tail; back to human it goes (`regenerate_organs`).
+    species::set_species(&mut world, mob, SpeciesId::Lizard);
+    assert_eq!(
+        world.get::<HumanLook>(mob).unwrap().tail.map(|t| t.key),
+        Some("tail_lizard")
+    );
+    species::set_species(&mut world, mob, SpeciesId::Human);
+    assert!(organs::organ(&world, mob, Slot::Tail).is_none());
+    assert_eq!(world.get::<HumanLook>(mob).unwrap().tail, None);
+}

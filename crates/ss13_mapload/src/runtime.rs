@@ -1589,6 +1589,9 @@ pub const SPECIES_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/organ/tongue/snail",
     "/obj/item/organ/tongue/tajaran",
     "/obj/item/organ/tongue/vulpkanin",
+    "/obj/item/organ/tail/lizard",
+    "/obj/item/organ/tail/tajaran",
+    "/obj/item/organ/tail/vulpkanin",
     "/obj/item/tank/internals/plasmaman/belt/full",
 ];
 

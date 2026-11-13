@@ -80,6 +80,8 @@ pub enum Slot {
     Tongue,
     /// `ORGAN_SLOT_ZOMBIE`: the zombie infection (`crate::antag::zombie`), no species' own organ.
     Zombie,
+    /// `ORGAN_SLOT_EXTERNAL_TAIL` (`ORGAN_EXTERNAL`): drawn on the body, not processed.
+    Tail,
 }
 
 /// The static part of an organ type (tg vars).
@@ -128,7 +130,7 @@ const BASE: Spec = Spec {
 };
 
 impl Slot {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Brain,
         Self::Appendix,
         Self::Stomach,
@@ -139,6 +141,7 @@ impl Slot {
         Self::Liver,
         Self::Tongue,
         Self::Zombie,
+        Self::Tail,
     ];
 
     /// The slot of an organ type (its root type).
@@ -270,6 +273,13 @@ impl Slot {
                 ru: ("гнойную массу", "гнойной массы"),
                 ..BASE
             },
+            Self::Tail => Spec {
+                path: "/obj/item/organ/tail",
+                name: "tail",
+                zone: TargetZone::Groin,
+                ru: ("хвост", "хвоста"),
+                ..BASE
+            },
         }
     }
 
@@ -328,6 +338,8 @@ pub struct Organ {
     pub lungs_failed: bool,
     /// `ORGAN_EMP`: a synthetic organ an EMP broke; it decays until repaired or replaced.
     pub emped: bool,
+    /// The tail's `wag_flags & WAG_WAGGING`.
+    pub wagging: bool,
 }
 
 impl Organ {
@@ -346,6 +358,7 @@ impl Organ {
             deafness: 0.0,
             lungs_failed: false,
             emped: false,
+            wagging: false,
         }
     }
 
@@ -594,6 +607,7 @@ fn give_organs(
                 }
             }
         }
+        refresh_look(world, mob);
     });
 }
 
@@ -638,7 +652,7 @@ fn on_insert(world: &mut World, organ: Entity, mob: Entity, slot: Slot) {
             super::brainmob::brain_inserted(world, organ, mob);
         }
         Slot::Stomach => crate::chem::stomach_inserted(world, organ, mob),
-        Slot::Eyes => refresh_look(world, mob),
+        Slot::Eyes | Slot::Tail => refresh_look(world, mob),
         Slot::Heart => crate::antag::abductor::server::gland_inserted(world, organ, mob),
         Slot::Zombie => crate::antag::zombie::infection_inserted(world, organ),
         Slot::Tongue => {
@@ -712,6 +726,13 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         Slot::Stomach => crate::chem::stomach_removed(world, organ, mob),
         Slot::Zombie => crate::antag::zombie::infection_removed(world, organ, mob),
         Slot::Eyes => refresh_look(world, mob),
+        // `on_mob_remove`: `stop_wag`.
+        Slot::Tail => {
+            if let Some(mut tail) = world.get_mut::<Organ>(organ) {
+                tail.wagging = false;
+            }
+            refresh_look(world, mob);
+        }
         Slot::Tongue => {
             use ss13_chat::language::{LanguageHolder, LanguageId, LanguageSource, Tongue};
             world
@@ -752,12 +773,123 @@ pub fn kill(world: &mut World, mob: Entity) {
 /// The body is drawn again (tg `update_body_parts`): eyes follow the organ.
 fn refresh_look(world: &mut World, mob: Entity) {
     let eyeless = organ(world, mob, Slot::Eyes).is_none();
+    let tail = tail_look(world, mob);
     if let Some(mut look) = world.get_mut::<crate::human::HumanLook>(mob)
-        && look.eyeless != eyeless
+        && (look.eyeless != eyeless || look.tail != tail)
     {
         look.eyeless = eyeless;
+        look.tail = tail;
     }
     crate::inventory::refresh_look(world, mob);
+}
+
+/// tg `/datum/sprite_accessory/tails/<kind>` of a tail type with the species' default style
+/// (`mutant_organs`): the icon, `feature_key` and `icon_state`.
+// shortcut: no tail style preference (every tail has its species' default style) and no cat,
+// monkey, xeno or fish tail sprites; those tails are organs without a look.
+pub fn tail_sprite(path: &str) -> Option<(&'static str, &'static str, &'static str)> {
+    [
+        (
+            "/obj/item/organ/tail/lizard",
+            (crate::human::TAIL_DMIS[0], "tail_lizard", "smooth"),
+        ),
+        (
+            "/obj/item/organ/tail/tajaran",
+            (crate::human::TAIL_DMIS[1], "tail_tajaran", "wingertail"),
+        ),
+        (
+            "/obj/item/organ/tail/vulpkanin",
+            (crate::human::TAIL_DMIS[2], "tail_vulpkanin", "default"),
+        ),
+    ]
+    .into_iter()
+    .find(|(root, _)| is_under(path, root))
+    .map(|(_, sprite)| sprite)
+}
+
+/// How `mob`'s tail organ is drawn (`bodypart_overlay`), if it has a drawn one.
+fn tail_look(world: &World, mob: Entity) -> Option<crate::human::TailLook> {
+    let tail = state(world, mob, Slot::Tail)?;
+    let (dmi, key, style) = tail_sprite(&tail.path)?;
+    Some(crate::human::TailLook {
+        dmi,
+        key,
+        style,
+        wagging: tail.wagging,
+    })
+}
+
+/// A body given a new look (a spawn, a changeling's transformation) keeps drawing its tail.
+fn tail_follows_look(add: On<Insert<crate::human::HumanLook>>, mut commands: Commands) {
+    let mob = add.entity;
+    commands.queue(move |world: &mut World| {
+        let tail = tail_look(world, mob);
+        if let Some(mut look) = world.get_mut::<crate::human::HumanLook>(mob)
+            && look.tail != tail
+        {
+            look.tail = tail;
+            crate::inventory::refresh_look(world, mob);
+        }
+    });
+}
+
+/// tg `start_wag` / `stop_wag`: the `wag` emote toggles a wag-able tail
+/// (`/datum/emote/living/carbon/human/wag`); falling unconscious or into crit stops it
+/// (`owner_kod`).
+fn wag_tails(
+    mut emotes: MessageReader<ss13_chat::server::Emoted>,
+    stats: Query<
+        (Entity, &ss13_chat::speech::SpeakerStat),
+        Changed<ss13_chat::speech::SpeakerStat>,
+    >,
+    mut commands: Commands,
+) {
+    let mut toggles: Vec<(Entity, Option<bool>)> = emotes
+        .read()
+        .filter(|e| e.key == "wag")
+        .map(|e| (e.speaker, None))
+        .collect();
+    toggles.extend(
+        stats
+            .iter()
+            .filter(|(_, s)| **s >= ss13_chat::speech::SpeakerStat::SoftCrit)
+            .map(|(mob, _)| (mob, Some(false))),
+    );
+    if toggles.is_empty() {
+        return;
+    }
+    commands.queue(move |world: &mut World| {
+        for (mob, wanted) in toggles {
+            set_wagging(world, mob, wanted);
+        }
+    });
+}
+
+/// Sets (`Some`) or toggles (`None`) the wagging of `mob`'s drawn tail.
+pub fn set_wagging(world: &mut World, mob: Entity, wanted: Option<bool>) {
+    let Some(tail) = organ(world, mob, Slot::Tail) else {
+        return;
+    };
+    let Some(state) = world.get::<Organ>(tail) else {
+        return;
+    };
+    // `WAG_ABLE`: the tails with a wagging sprite.
+    if tail_sprite(&state.path).is_none() {
+        return;
+    }
+    let wagging = wanted.unwrap_or(!state.wagging);
+    // `start_wag`: no wagging when unconscious or in crit.
+    let conscious = world
+        .get::<ss13_chat::speech::SpeakerStat>(mob)
+        .is_none_or(|s| *s < ss13_chat::speech::SpeakerStat::SoftCrit);
+    let wagging = wagging && conscious;
+    let Some(mut state) = world.get_mut::<Organ>(tail) else {
+        return;
+    };
+    if state.wagging != wagging {
+        state.wagging = wagging;
+        refresh_look(world, mob);
+    }
 }
 
 /// tg `needs_heart()` of a human (not with `TRAIT_STABLEHEART`, [`super::bioware`]),
@@ -1221,7 +1353,11 @@ fn organ_items(
 pub(super) fn build(app: &mut App) {
     app.add_observer(give_organs)
         .add_observer(organ_items)
-        .add_systems(Update, loose_organs.before(crate::health::HealthSystems));
+        .add_observer(tail_follows_look)
+        .add_systems(
+            Update,
+            (loose_organs.before(crate::health::HealthSystems), wag_tails),
+        );
 }
 
 #[cfg(test)]

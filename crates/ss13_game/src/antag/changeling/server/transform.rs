@@ -87,6 +87,7 @@ pub fn transform(world: &mut World, mob: Entity, profile: &Profile) {
             missing: body.missing,
             robotic: body.robotic,
             eyeless: body.eyeless,
+            tail: body.tail,
             ..look.clone()
         };
     }
