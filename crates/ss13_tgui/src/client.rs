@@ -531,6 +531,7 @@ impl Plugin for TguiClientPlugin {
             .register_ui_view::<crate::interfaces::cryo::CryoUi>()
             .register_ui_view::<crate::interfaces::medical_kiosk::MedicalKioskUi>()
             .register_ui_view::<crate::interfaces::limbgrower::LimbgrowerUi>()
+            .register_ui_view::<crate::interfaces::biogenerator::BiogeneratorUi>()
             .register_ui_view::<crate::interfaces::iv_drip::IvDripUi>();
         app.init_resource::<ClientWindows>()
             .init_resource::<HeadlessUis>()

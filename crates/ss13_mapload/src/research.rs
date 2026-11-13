@@ -117,6 +117,9 @@ pub struct DesignDef {
     /// `create_buildpath`).
     #[serde(default)]
     pub variants: Vec<String>,
+    /// `make_reagent`: the reagent a biogenerator design pours into the container.
+    #[serde(default)]
+    pub make_reagent: Option<String>,
 }
 
 /// A `/datum/techweb_node`.
@@ -638,6 +641,7 @@ fn design(types: &DmTypes, p: &str) -> DesignDef {
         build_type,
         reagents: amounts(types.resolved(p, "reagents_list")),
         variants,
+        make_reagent: path(types.resolved(p, "make_reagent")),
         stack: build_path
             .as_deref()
             .is_some_and(|b| is_under(b, STACK_ROOT)),

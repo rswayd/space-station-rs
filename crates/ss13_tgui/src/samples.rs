@@ -27,6 +27,9 @@ use crate::interfaces::atmos_alert::{AtmosAlertData, AtmosAlertUi};
 use crate::interfaces::atmos_control::{
     AtmosControlData, AtmosControlStatic, AtmosControlUi, Chamber, PortInfo,
 };
+use crate::interfaces::biogenerator::{
+    BiogeneratorCategory, BiogeneratorData, BiogeneratorDesign, BiogeneratorStatic, BiogeneratorUi,
+};
 use crate::interfaces::checkbox_input::{CheckboxInputStatic, CheckboxInputUi};
 use crate::interfaces::chem_dispenser::{
     ChemDispenserData, ChemDispenserUi, DispensableReagent, DispenserBeaker,
@@ -1085,6 +1088,36 @@ pub fn sample(name: &str) -> Option<Sample> {
                 hallucinating_status: "Patient is not hallucinating.".into(),
                 active: [true, true, false, false],
                 ..Default::default()
+            },
+        ),
+        BiogeneratorUi::NAME => of::<BiogeneratorUi>(
+            "biogenerator",
+            &BiogeneratorStatic {
+                categories: [("Еда", true), ("Химикаты", true), ("Материалы", false)]
+                    .iter()
+                    .map(|&(c, is_reagent)| BiogeneratorCategory {
+                        name: c.into(),
+                        items: ["Synthetic Milk", "Sheet of Leather"]
+                            .iter()
+                            .map(|&n| BiogeneratorDesign {
+                                path: format!("/datum/design/biogen/{}", n.to_lowercase()),
+                                name: n.into(),
+                                is_reagent,
+                                cost: 0.4,
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                max_visual_biomass: 5000.0,
+            },
+            &BiogeneratorData {
+                beaker: true,
+                beaker_current_volume: 20.0,
+                beaker_max_volume: 50.0,
+                biomass: 1240.0,
+                processing: false,
+                max_output: 50,
+                can_process: true,
             },
         ),
         LimbgrowerUi::NAME => of::<LimbgrowerUi>(

@@ -24,14 +24,16 @@
 //! - Fermenting barrels turn grown food into wine ([`barrel`]).
 //! - Apiaries, honey frames and honeycombs, the queen bee item and the bee smoker
 //!   ([`beekeeping`]).
+//! - The biogenerator turns food into biomass and prints its designs ([`biogenerator`]).
 //! - `SS13_HYDRO_SPEED` (dev): every hydroponics timer runs this many times faster (tests use
 //!   [`HydroSpeed`]), so a cycle keeps tg's ratios.
-// shortcut: no plant bags, seed storage in the extractor (its tgui), biogenerator, sprays
+// shortcut: no plant bags, seed storage in the extractor (its tgui), sprays
 // or right click nutrient emptying; the analyzer prints to chat instead of its
 // tgui; invasive spreading ignores windows between trays (tg `Adjacent`).
 
 pub mod barrel;
 pub mod beekeeping;
+pub mod biogenerator;
 pub mod crafts;
 pub mod genes;
 pub mod grafts;
@@ -217,6 +219,7 @@ impl Plugin for BotanyServerPlugin {
         shears::build(app);
         barrel::build(app);
         beekeeping::build(app);
+        biogenerator::build(app);
     }
 
     /// After every plugin's `build`: the map plugin's assets dir is known by now.
@@ -981,6 +984,7 @@ pub fn item_interaction(
     modifiers: ClickModifiers,
 ) -> bool {
     if beekeeping::item_interaction(world, client, mob, held, target)
+        || biogenerator::item_interaction(world, client, mob, held, target)
         || beekeeping::smoker_use(world, mob, held, target)
         || beekeeping::smoker_refuel(world, mob, held, target)
     {
@@ -1083,7 +1087,10 @@ pub fn interact(
     if barrel::attack_hand(world, client, target, right) {
         return true;
     }
-    if !right && beekeeping::attack_hand(world, client, mob, target) {
+    if !right
+        && (beekeeping::attack_hand(world, client, mob, target)
+            || biogenerator::interact(world, client, mob, target))
+    {
         return true;
     }
     if right || world.get::<Tray>(target).is_none() {
