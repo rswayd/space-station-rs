@@ -290,7 +290,14 @@ pub fn soulstone_interaction(
     if !adjacent(world, user, target) {
         return false;
     }
-    let target_path = path_of(world, target).unwrap_or_default();
+    // A shade is a basic mob: its path is its definition's.
+    let target_path = path_of(world, target)
+        .or_else(|| {
+            world
+                .get::<crate::mobs::BasicMob>(target)
+                .map(|m| m.def.path.clone())
+        })
+        .unwrap_or_default();
     if is_under(&target_path, crate::mobs::constructs::SHADE) {
         capture_shade(world, kind, stone, target, Some(user));
         return true;

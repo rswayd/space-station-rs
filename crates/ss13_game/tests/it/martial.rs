@@ -243,6 +243,10 @@ fn plasma_fist_tornado_throws_back() {
         Origin::Learned
     ));
     s.punch();
+    // The first punch lands (and starts its cooldown) before the second is sent.
+    s.run_until("one punch in the streak", |s| {
+        s.get::<MartialArts>(a).0[0].streak == "H"
+    });
     s.punch();
     s.run_until("two punches in the streak", |s| {
         s.get::<MartialArts>(a).0[0].streak == "HH"
