@@ -99,7 +99,9 @@ pub enum BotKind {
     Hygiene,
     /// `dedbot`: the Donk exenteration drone.
     Ded,
-    /// Bots whose own behavior is not ported (repairbot, vibebot): the base bot tree.
+    /// `repairbot`: patches breaches, windows and floors ([`super::repair`]).
+    Repair,
+    /// Bots whose own behavior is not ported (vibebot): the base bot tree.
     Other,
 }
 
@@ -126,6 +128,8 @@ impl BotKind {
             Self::Hygiene
         } else if under("dedbot") {
             Self::Ded
+        } else if under("repairbot") {
+            Self::Repair
         } else {
             Self::Other
         }
@@ -185,6 +189,8 @@ pub enum BotJob {
     Tend,
     /// `stun_n_cuff/cuff_target` (`handcuff_timer` 4 s).
     Cuff,
+    /// The repairbot's steps ([`super::repair`]).
+    Repair(super::repair::RepairJob),
 }
 
 /// A station bot's live state (tg `/mob/living/basic/bot` vars).
@@ -232,6 +238,8 @@ pub struct Bot {
     pub stolen_valor: Vec<String>,
     /// The hygienebot sprays until this game time (`washing`, `WASH_PERIOD`).
     pub washing_until: f64,
+    /// The repairbot's stock and settings.
+    pub repair: Option<super::repair::RepairStock>,
 }
 
 impl Default for Bot {
@@ -263,6 +271,7 @@ impl Default for Bot {
             knife: None,
             stolen_valor: Vec::new(),
             washing_until: 0.0,
+            repair: None,
         }
     }
 }
@@ -362,6 +371,7 @@ impl Plugin for BotsServerPlugin {
         construction::build(app);
         super::mule::build(app);
         super::sec::build(app);
+        super::repair::build(app);
     }
 }
 
@@ -474,6 +484,7 @@ pub fn attach(world: &mut World, entity: Entity) {
         stun_ready_at: 0.0,
         threat: 0,
         medkit: "/obj/item/storage/medkit".to_owned(),
+        repair: (kind == BotKind::Repair).then(super::repair::RepairStock::default),
         ..Bot::default()
     };
     world.entity_mut(entity).insert(bot);
@@ -562,9 +573,15 @@ fn refresh_overlays(world: &mut World, mob: Entity, icon: &str) {
     } else {
         Vec::new()
     };
+    let extra = if kind == BotKind::Repair {
+        super::repair::overlays(world, mob, icon)
+    } else {
+        Vec::new()
+    };
     let mut overlays: Vec<ss13_shared::Overlay> =
         ids.into_iter().map(ss13_shared::Overlay::new).collect();
     overlays.extend(load);
+    overlays.extend(extra);
     let old = world
         .get::<BotOverlays>(mob)
         .map(|o| o.0.clone())
@@ -1054,6 +1071,15 @@ fn item_interaction(
         unlock_with_id(world, mob, user);
         return true;
     }
+    // `repairbot/item_interaction`: any stack goes to `attempt_merge`.
+    if world
+        .get::<Bot>(mob)
+        .is_some_and(|b| b.kind == BotKind::Repair)
+        && world.get::<crate::tools::Stack>(item).is_some()
+    {
+        super::repair::insert(world, mob, item, Some(user));
+        return true;
+    }
     if !combat
         && let Some(client) = world
             .get::<crate::server::PlayerMob>(user)
@@ -1235,6 +1261,7 @@ pub fn explode(world: &mut World, mob: Entity) {
         BotKind::Fire => drops.extend([PROX_SENSOR, "/obj/item/clothing/head/utility/hardhat/red"]),
         // The load comes off; the cell is lost with the bot (`QDEL_NULL(cell)`).
         BotKind::Mule => super::mule::unload(world, mob, None),
+        BotKind::Repair => drops.push(super::repair::TOOLBOX),
         BotKind::Hygiene | BotKind::Ded | BotKind::Other => {}
     }
     for path in drops {
@@ -1366,6 +1393,10 @@ mod tests {
         );
         assert!(BotKind::of("/mob/living/basic/bot/secbot/grievous/toy").is_sec());
         assert_eq!(BotKind::of("/mob/living/basic/bot/vibebot"), BotKind::Other);
+        assert_eq!(
+            BotKind::of("/mob/living/basic/bot/repairbot"),
+            BotKind::Repair
+        );
         assert_eq!(
             BotKind::of("/mob/living/basic/bot/medbot/autopatrol"),
             BotKind::Med

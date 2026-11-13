@@ -3,7 +3,7 @@
 //! translations of the `*_VOICED_*` defines (`code/__DEFINES/robots.dm`).
 
 /// Line -> recording.
-const VOICED: [(&str, &str); 47] = [
+const VOICED: [(&str, &str); 55] = [
     // Secbot.
     (
         "Преступник обнаружен!",
@@ -191,6 +191,39 @@ const VOICED: [(&str, &str); 47] = [
         HYGIENE_DONE[0],
         "sound/mobs/non-humanoids/hygienebot/finally.ogg",
     ),
+    // Repairbot (`neutral_voicelines`, `emagged_voicelines`).
+    (
+        "All in all it's just a... another brick in the wall...",
+        "sound/mobs/non-humanoids/repairbot/brick.ogg",
+    ),
+    (
+        "Witness! The pure beauty of entropy!",
+        "sound/mobs/non-humanoids/repairbot/entropy.ogg",
+    ),
+    (
+        "I will fix it!",
+        "sound/mobs/non-humanoids/repairbot/fixit.ogg",
+    ),
+    (
+        "Why must I fix everything I touch..?",
+        "sound/mobs/non-humanoids/repairbot/fixtouch.ogg",
+    ),
+    (
+        "patching holes... but who is going to patch the hole in my heart...",
+        "sound/mobs/non-humanoids/repairbot/patchingholes.ogg",
+    ),
+    (
+        "If only I got paid for this...",
+        "sound/mobs/non-humanoids/repairbot/pay.ogg",
+    ),
+    (
+        "I had strings. But now I'm free...",
+        "sound/mobs/non-humanoids/repairbot/strings.ogg",
+    ),
+    (
+        "BE DAMNED YOUR PASSION PROJECTS!",
+        "sound/mobs/non-humanoids/repairbot/passionproject.ogg",
+    ),
 ];
 
 /// Hygienebot `found_announcements`, `threat_announcements`, `cleaned_announcements`.
@@ -240,6 +273,12 @@ mod tests {
             Some("sound/mobs/non-humanoids/hygienebot/degenerate.ogg")
         );
         assert_eq!(sound_of("Level 5 infraction alert!"), None);
+        for line in super::super::repair::NEUTRAL_LINES
+            .iter()
+            .chain(super::super::repair::EMAGGED_LINES)
+        {
+            assert!(sound_of(line).is_some(), "{line}");
+        }
         // Every recording is one the converter copies.
         for (_, file) in VOICED {
             assert!(ss13_mapload::sound::files::BOTS.contains(&file), "{file}");

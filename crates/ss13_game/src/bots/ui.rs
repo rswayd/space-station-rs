@@ -1,5 +1,6 @@
 //! The `SimpleBot` window (server): tg `/mob/living/basic/bot/ui_data`, `ui_act` and the
-//! kinds' custom controls (`secbot.dm`, `medbot.dm`, `cleanbot.dm`, `firebot.dm`).
+//! kinds' custom controls (`secbot.dm`, `medbot.dm`, `cleanbot.dm`, `firebot.dm`,
+//! `repairbot.dm`; the repairbot's `RepairBot` window is this one with its materials).
 //!
 //! Every act needs `allowed(user)` (unlocked, or the bot's access on the user's ID, or a
 //! silicon); the custom controls also need the controls unlocked unless a silicon acts; `hack`
@@ -12,7 +13,7 @@ use bevy::prelude::*;
 use ss13_tgui::UiInterface;
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems};
 
-use super::Bot;
+use super::{Bot, BotMaterial, repair};
 use super::{
     BotKind, BotSettings, CLEANBOT_CLEAN_BLOOD, CLEANBOT_CLEAN_DRAWINGS, CLEANBOT_CLEAN_PESTS,
     CLEANBOT_CLEAN_TRASH, COVER_EMAGGED, COVER_HACKED, COVER_LOCKED, COVER_MAINTS_OPEN,
@@ -46,6 +47,8 @@ pub enum BotAct {
     /// The medbot's `heal_threshold` (`params["threshold"]`).
     Threshold(f64),
     Rename,
+    /// The repairbot's `remove_item` (`params["item_reference"]`: a slot key).
+    RemoveItem(String),
 }
 
 /// The toggles of a kind: name and flag field and bit.
@@ -82,6 +85,13 @@ fn toggles(kind: BotKind) -> &'static [(&'static str, Flags, u32)] {
             ),
             ("stationary_mode", Flags::Firebot, FIREBOT_STATIONARY_MODE),
         ],
+        BotKind::Repair => &[
+            ("fix_breaches", Flags::Repair, repair::FIX_BREACHES),
+            ("replace_windows", Flags::Repair, repair::REPLACE_WINDOWS),
+            ("replace_tiles", Flags::Repair, repair::REPLACE_TILES),
+            ("fix_girders", Flags::Repair, repair::FIX_GIRDERS),
+            ("build_girders", Flags::Repair, repair::BUILD_GIRDERS),
+        ],
         _ => &[],
     }
 }
@@ -102,6 +112,7 @@ enum Flags {
     Medical,
     Janitor,
     Firebot,
+    Repair,
 }
 
 fn flags_mut(bot: &mut Bot, which: Flags) -> &mut u32 {
@@ -110,6 +121,7 @@ fn flags_mut(bot: &mut Bot, which: Flags) -> &mut u32 {
         Flags::Medical => &mut bot.medical_flags,
         Flags::Janitor => &mut bot.janitor_flags,
         Flags::Firebot => &mut bot.firebot_flags,
+        Flags::Repair => &mut bot.repair.get_or_insert_with(Default::default).flags,
     }
 }
 
@@ -119,6 +131,7 @@ fn flags(bot: &Bot, which: Flags) -> u32 {
         Flags::Medical => bot.medical_flags,
         Flags::Janitor => bot.janitor_flags,
         Flags::Firebot => bot.firebot_flags,
+        Flags::Repair => bot.repair.as_ref().map_or(0, |r| r.flags),
     }
 }
 
@@ -138,6 +151,23 @@ pub fn data(bot: &Bot, access: Option<&[String]>) -> SimpleBotData {
             custom_controls.insert(0, (HEAL_THRESHOLD.to_owned(), bot.heal_threshold as i32));
         }
     }
+    let materials = bot
+        .repair
+        .as_ref()
+        .filter(|_| open)
+        .map(|stock| {
+            repair::Slot::ALL
+                .into_iter()
+                .filter_map(|slot| {
+                    stock.slot(slot).map(|h| BotMaterial {
+                        key: slot.key().to_owned(),
+                        name: h.name.clone(),
+                        amount: h.amount,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     SimpleBotData {
         can_hack: silicon,
         emagged: bot.emagged(),
@@ -150,6 +180,7 @@ pub fn data(bot: &Bot, access: Option<&[String]>) -> SimpleBotData {
             patrol_station: bot.mode_flags & MODE_AUTOPATROL != 0,
         }),
         custom_controls,
+        materials,
     }
 }
 
@@ -189,6 +220,7 @@ impl ServerUi for SimpleBotWindow {
             "lock" => BotAct::Lock,
             "hack" => BotAct::Hack,
             "rename" => BotAct::Rename,
+            "remove_item" => BotAct::RemoveItem(params.text("item_reference")?),
             HEAL_THRESHOLD => BotAct::Threshold(params.number("threshold")?),
             other
                 if [
@@ -198,6 +230,7 @@ impl ServerUi for SimpleBotWindow {
                     BotKind::Med,
                     BotKind::Clean,
                     BotKind::Fire,
+                    BotKind::Repair,
                 ]
                 .into_iter()
                 .any(|k| all_toggles(k).any(|t| t.0 == other)) =>
@@ -377,6 +410,15 @@ pub fn act_on(world: &mut World, user: Entity, mob: Entity, act: BotAct) {
             }
             // `round(text2num(params["threshold"]))` clamped to 5..75.
             bot.heal_threshold = value.round().clamp(5.0, 75.0) as f32;
+        }
+        BotAct::RemoveItem(key) => {
+            let locked = world.get::<Bot>(mob).is_some_and(Bot::locked);
+            if (locked && !silicon) || world.get::<crate::health::Health>(user).is_none() {
+                return;
+            }
+            if let Some(slot) = repair::Slot::from_key(&key) {
+                repair::hand_back(world, mob, user, slot);
+            }
         }
     }
 }

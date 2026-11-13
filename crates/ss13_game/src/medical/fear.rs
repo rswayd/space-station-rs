@@ -287,6 +287,7 @@ fn mob_path(world: &World, mob: Entity) -> Option<String> {
             BotKind::Mule => "/mulebot",
             BotKind::Hygiene => "/hygienebot",
             BotKind::Ded => "/dedbot",
+            BotKind::Repair => "/repairbot",
             BotKind::Other => "",
         };
         return Some(format!("/mob/living/basic/bot{sub}"));
