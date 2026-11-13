@@ -26,9 +26,10 @@
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
-use ss13_net::server::{ControlledEntity, SeeInvisible, Sight, Viewer};
+use ss13_net::server::{ControlledEntity, IntentReceived, SeeInvisible, Sight, Viewer};
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
+use ss13_shared::protocol::ClientIntent;
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems};
 use ss13_tgui::server::{OpenUi, UiActed, UiSystems};
 
@@ -87,6 +88,7 @@ impl Plugin for AiShellPlugin {
                     .in_set(UiSystems::Handle)
                     .after(PromptSystems::Answer),
                 forced_disconnects.run_if(any_with_component::<DeployedShell>),
+                silicon_keys,
             ),
         );
     }
@@ -436,6 +438,49 @@ fn buttons(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
                 world.entity_mut(ai).remove::<LastShell>();
                 remove_button(world, actor, DEPLOY_LAST);
             }
+        }
+    }
+}
+
+/// tg `/datum/keybinding/robot` (1, 2, 3 `toggle_module`, = `undeploy`) and
+/// `/datum/keybinding/artificial_intelligence/reconnect` (-): each only for its own mob type.
+fn silicon_keys(world: &mut World, mut intents: Local<MessageCursor<IntentReceived>>) {
+    let keys: Vec<(Entity, ClientIntent)> = intents
+        .read(world.resource::<Messages<IntentReceived>>())
+        .filter(|i| {
+            matches!(
+                i.intent,
+                ClientIntent::ToggleModule(_)
+                    | ClientIntent::ReconnectShell
+                    | ClientIntent::UndeployShell
+            )
+        })
+        .map(|i| (i.client, i.intent.clone()))
+        .collect();
+    for (client, intent) in keys {
+        let Some(mob) = world.resource::<Players>().mob(client) else {
+            continue;
+        };
+        match intent {
+            ClientIntent::ToggleModule(n @ 1..=3) if world.get::<Cyborg>(mob).is_some() => {
+                super::cyborg::toggle_module(world, mob, usize::from(n - 1));
+            }
+            ClientIntent::UndeployShell => {
+                if let Some(ai) = world.get::<AiShell>(mob).and_then(|s| s.mainframe) {
+                    undeploy(world, ai);
+                }
+            }
+            ClientIntent::ReconnectShell => {
+                let Some(ai) = world.get::<AiEye>(mob).map(|e| e.ai) else {
+                    continue;
+                };
+                let last = world
+                    .get::<LastShell>(ai)
+                    .map(|l| l.0)
+                    .filter(|&s| world.get::<AiShell>(s).is_some());
+                select_shell(world, ai, last);
+            }
+            _ => {}
         }
     }
 }

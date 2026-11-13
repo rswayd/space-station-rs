@@ -114,6 +114,14 @@ pub enum ClientIntent {
     /// A click on a chat link ([`crate::chat::Span::Link`]): BYOND's `Topic` of an href the
     /// server put in a chat line. The server checks the id was given to this client.
     ChatLink(u32),
+    /// tg `/datum/keybinding/robot` `toggle_module` (keys 1, 2, 3): the cyborg's module slot,
+    /// from 1.
+    ToggleModule(u8),
+    /// tg `/datum/keybinding/artificial_intelligence/reconnect` (key -): the AI back into its
+    /// last shell.
+    ReconnectShell,
+    /// tg `/datum/keybinding/robot/undeploy` (key =): the shell's AI back into its core.
+    UndeployShell,
 }
 
 /// One end of a [`ClientIntent::Drag`].

@@ -272,6 +272,8 @@ pub mod cryosleep_client;
 #[cfg(feature = "server")]
 pub mod curses;
 #[cfg(feature = "server")]
+pub mod custom_food;
+#[cfg(feature = "server")]
 pub mod death;
 #[cfg(feature = "server")]
 pub mod debuffs;
@@ -362,6 +364,8 @@ pub mod furniture;
 pub mod genetics;
 #[cfg(feature = "server")]
 pub mod ghost;
+#[cfg(feature = "server")]
+pub mod ghost_edible;
 pub mod ghost_menu;
 #[cfg(feature = "client")]
 pub mod ghost_menu_client;
@@ -417,6 +421,8 @@ pub mod health_scan;
 pub mod holodeck;
 #[cfg(feature = "server")]
 pub mod holosign;
+#[cfg(feature = "server")]
+pub mod hookah;
 pub mod hud;
 #[cfg(feature = "server")]
 pub mod human;

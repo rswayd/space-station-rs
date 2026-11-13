@@ -441,12 +441,13 @@ fn click_slot(
     }
 }
 
-/// X swaps hands, Q drops, unless a text field has the keyboard.
+/// X swaps hands, Q drops, 1-3 / - / = the silicon keys, unless a text field has the keyboard.
 fn send_inventory_keys(
     keys: Res<ButtonInput<KeyCode>>,
     focus: Option<Res<InputFocus>>,
     text_fields: Query<(), With<EditableText>>,
     map: Res<NetEntityMap>,
+    hud: Res<Hud>,
     mut intents: MessageWriter<SendIntent>,
 ) {
     let typing = focus
@@ -460,6 +461,16 @@ fn send_inventory_keys(
     let smart = |slot| SendIntent(ClientIntent::SmartEquip(slot));
     if keys.just_pressed(KeyCode::KeyX) {
         intents.write(SendIntent(ClientIntent::SwapHands));
+    }
+    // `keybinding/dextrous/activate_inhand` (tg `mode()`): the active hand's slot clicked uses
+    // its item (`attack_self`).
+    if keys.just_pressed(KeyCode::KeyZ) && hud.window.is_some() {
+        let hand = if hud.data.active == 1 {
+            InventorySlot::RightHand
+        } else {
+            InventorySlot::LeftHand
+        };
+        intents.write(SendIntent(ClientIntent::ClickSlot(hand)));
     }
     if keys.just_pressed(KeyCode::KeyQ) {
         // `keybinding/human/quick_equip_suit_storage`, else tg's drop.
@@ -492,6 +503,24 @@ fn send_inventory_keys(
     }
     if shift && keys.just_pressed(KeyCode::KeyF) {
         intents.write(SendIntent(ClientIntent::QuickAccessoryDraw));
+    }
+    // `keybinding/robot` and `keybinding/artificial_intelligence`: the server ignores them for
+    // other mobs (their `can_use`).
+    if !alt {
+        for (n, key) in [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3]
+            .into_iter()
+            .enumerate()
+        {
+            if keys.just_pressed(key) {
+                intents.write(SendIntent(ClientIntent::ToggleModule(n as u8 + 1)));
+            }
+        }
+    }
+    if keys.just_pressed(KeyCode::Minus) {
+        intents.write(SendIntent(ClientIntent::ReconnectShell));
+    }
+    if keys.just_pressed(KeyCode::Equal) {
+        intents.write(SendIntent(ClientIntent::UndeployShell));
     }
 }
 

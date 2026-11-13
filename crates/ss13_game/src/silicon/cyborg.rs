@@ -793,9 +793,37 @@ pub fn cycle_modules(world: &mut World, borg: Entity) {
         (_, true) => 2,
     };
     let items = slot_items(inventory, slots);
-    let Some(next) = (1..=2)
+    if let Some(next) = (1..=2)
         .map(|step| (current + step) % 3)
         .find(|&slot| items[slot].is_some())
+    {
+        show_slot(world, borg, next);
+    }
+}
+
+/// tg `toggle_module(module_num)` (keys 1, 2, 3; `slot` from 0): the module out in that slot
+/// becomes the active one. An empty slot: no change.
+// shortcut: the selected slot's key keeps it selected (tg `deselect_module` leaves no active
+// module, which the two-hand `Inventory` cannot express), until a cyborg HUD exists.
+pub fn toggle_module(world: &mut World, borg: Entity, slot: usize) {
+    let (Some(inventory), Some(&slots)) =
+        (world.get::<Inventory>(borg), world.get::<ModuleSlots>(borg))
+    else {
+        return;
+    };
+    if slot_items(inventory, slots)
+        .get(slot)
+        .is_some_and(Option::is_some)
+    {
+        show_slot(world, borg, slot);
+    }
+}
+
+/// Makes module slot `next` (0..3) the active hand, moving slot 3 into the right hand when
+/// it is the one picked.
+fn show_slot(world: &mut World, borg: Entity, next: usize) {
+    let (Some(inventory), Some(&slots)) =
+        (world.get::<Inventory>(borg), world.get::<ModuleSlots>(borg))
     else {
         return;
     };
@@ -1138,6 +1166,33 @@ mod tests {
         assert_eq!(world.get::<ModuleSlots>(borg).unwrap().spare, Some(two));
         cycle_modules(&mut world, borg);
         assert_eq!(active(&world), Some(one));
+    }
+
+    #[test]
+    fn number_keys_select_their_module_slot() {
+        let mut world = World::new();
+        let borg = test_borg(&mut world);
+        let one = world.spawn(RobotModule).id();
+        let three = world.spawn(RobotModule).id();
+        assert!(activate_module(&mut world, borg, one));
+        let two = world.spawn(RobotModule).id();
+        assert!(activate_module(&mut world, borg, two));
+        assert!(activate_module(&mut world, borg, three));
+        let active = |w: &World| w.get::<Inventory>(borg).unwrap().active_item();
+        toggle_module(&mut world, borg, 2);
+        assert_eq!(active(&world), Some(three));
+        toggle_module(&mut world, borg, 1);
+        assert_eq!(active(&world), Some(two));
+        assert_eq!(world.get::<ModuleSlots>(borg).unwrap().spare, Some(three));
+        toggle_module(&mut world, borg, 0);
+        assert_eq!(active(&world), Some(one));
+        // An empty slot (tg `select_module`: nothing there) and a slot past three change nothing.
+        let empty = test_borg(&mut world);
+        let only = world.spawn(RobotModule).id();
+        assert!(activate_module(&mut world, empty, only));
+        toggle_module(&mut world, empty, 1);
+        toggle_module(&mut world, empty, 5);
+        assert_eq!(world.get::<Inventory>(empty).unwrap().active, 0);
     }
 
     #[test]

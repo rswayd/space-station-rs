@@ -418,6 +418,9 @@ impl Plugin for GameServerPlugin {
             crate::grill::GrillPlugin,
             crate::food_storage::FoodStoragePlugin,
             crate::food_cart::FoodCartPlugin,
+            crate::ghost_edible::GhostEdiblePlugin,
+            crate::hookah::HookahPlugin,
+            crate::custom_food::CustomFoodPlugin,
         ))
         .add_plugins((
             crate::smoking::SmokingPlugin,

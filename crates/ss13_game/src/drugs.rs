@@ -74,7 +74,7 @@ const fn ev(id: &'static str, description: &'static str, change: f32, timeout: f
 }
 
 /// `/datum/mood_event/*` of `drug_events.dm` and `drink_events.dm` (BandaStation's texts).
-const SMOKED: MoodEvent = ev("smoked", "Я недавно курил.", 2.0, 360.0);
+pub(crate) const SMOKED: MoodEvent = ev("smoked", "Я недавно курил.", 2.0, 360.0);
 const NARCOTIC_HEAVY: MoodEvent = ev("narcotic_heavy", "Я как будто окутан в хлопок!", 9.0, 180.0);
 const STIMULANT_MEDIUM: MoodEvent = ev(
     "stimulant_medium",

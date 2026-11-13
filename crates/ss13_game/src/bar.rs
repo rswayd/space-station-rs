@@ -20,6 +20,10 @@ const BROKEN_BOTTLE: &str = "/obj/item/broken_bottle";
 
 /// `throw_impact` of a glass that was not caught; `target` is what it hit (`None`: it landed).
 pub fn glass_thrown(world: &mut World, item: Entity, target: Option<Entity>) {
+    // BandaStation's hookah breaks the same way (`crate::hookah::thrown`).
+    if crate::hookah::thrown(world, item) {
+        return;
+    }
     if !world.get::<DmGlass>(item).is_some_and(|g| g.is_glass) {
         return;
     }

@@ -129,6 +129,7 @@
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
 //! | 3357 | `clothing::collar_bomb::press` (the collar bomb's button) |
 //! | 3367 | `science::bitrunning::help::host_monitor` (the host health of an avatar) |
+//! | 3369 | `hookah::mouthpiece_attack_self` (a lit hookah's mouthpiece: a draw) |
 //! | 3377 | `science::bitrunning::disks::attack_self` (a bitrunning disk's program choice) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
@@ -146,9 +147,11 @@
 //! | 300 | `forensics::server::item_interaction` (scanner, evidence bag, forensics spoofer) |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 409 | `medical::surgery::notes_interaction` (research notes onto the notes in the other hand) |
+//! | 419 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a held hookah) |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
+//! | 459 | `custom_food::customizable_attack` (food onto a custom food base in the other hand) |
 //! | 460 | `devices::rcd::load` (matter or a disk onto the RCD) |
 //! | 465 | `devices::taperecorder::item_interaction` (tape in, respool), `attack_hand` (eject) |
 //! | 467 | `devices::laser_pointer::item_interaction` (diode, crystal lens, their removal) |
@@ -224,6 +227,7 @@
 //! | 500 | `kitchen::interact` |
 //! | 550 | `restaurant::attack_hand` |
 //! | 561 | `food_cart::attack_hand` (pack or unpack the food cart) |
+//! | 569 | `hookah` right click: the mouthpiece into the hand |
 //! | 591 | `grill::attack_hand` (the food off the grill) |
 //! | 600 | `cooking::interact` |
 //! | 700 | `smartfridge::interact` |
@@ -365,6 +369,7 @@
 //! | 229 | `smoking::held_on_target` (lighters and matches on mobs, lighting someone's cigarette, smokables, matchboxes, vapes, dipping) |
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
+//! | 239 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a hookah; the mouthpiece on oneself: a draw) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
@@ -502,6 +507,7 @@
 //! | 3260 | `mobs::farm::feed_egg_layer` |
 //! | 3291 | `food_storage::try_insert` (right click: an item hidden in bread, cake, cheese, cutlets) |
 //! | 3300 | `food::item_interaction` |
+//! | 3309 | `custom_food::customizable_attack` (food onto a custom food base: bread, bun, dough, bowl, ...) |
 //! | 3397 | `plumbing_net::item_interaction` (ducts, duct stacks, wrenches on machines) |
 //! | 3400 | `plumbing::item_interaction` |
 //! | 3419 | `secure_safes::item_interaction` (panel screwdriver, multitool hack, items into the storage) |

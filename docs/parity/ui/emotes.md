@@ -45,4 +45,4 @@
 Настраиваемые хоткеи для эмоций (категория «Emote» в кейбиндингах).
 
 - **Код:** [`emote.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/keybinding/emote.dm#L1)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ❌ нет — в tg/BandaStation у всех клавиш эмоций по умолчанию `UNBOUND_KEY` (`link_to_emote`), их назначают только переназначением в префах; в порте переназначения нет (группа «Система кейбиндингов», `docs/parity/ui/keybindings.md`), поэтому дефолтных привязок для переноса нет. Сам вызов по клавише — тот же путь, что `*key` (`crates/ss13_chat/src/emote.rs`)
