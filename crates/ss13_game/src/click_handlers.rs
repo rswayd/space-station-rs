@@ -128,6 +128,7 @@
 //! | 3335 | `implants::pad::attack_self` (the implant pad's window) |
 //! | 3345 | `clothing::secgear::attack_self` (a security helmet's straps) |
 //! | 3357 | `clothing::collar_bomb::press` (the collar bomb's button) |
+//! | 3369 | `hookah::mouthpiece_attack_self` (a lit hookah's mouthpiece: a draw) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -144,6 +145,7 @@
 //! | 300 | `forensics::server::item_interaction` (scanner, evidence bag, forensics spoofer) |
 //! | 400 | `medical::cyberimps::item_interaction` |
 //! | 409 | `medical::surgery::notes_interaction` (research notes onto the notes in the other hand) |
+//! | 419 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a held hookah) |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
@@ -222,6 +224,7 @@
 //! | 500 | `kitchen::interact` |
 //! | 550 | `restaurant::attack_hand` |
 //! | 561 | `food_cart::attack_hand` (pack or unpack the food cart) |
+//! | 569 | `hookah` right click: the mouthpiece into the hand |
 //! | 591 | `grill::attack_hand` (the food off the grill) |
 //! | 600 | `cooking::interact` |
 //! | 700 | `smartfridge::interact` |
@@ -362,6 +365,7 @@
 //! | 229 | `smoking::held_on_target` (lighters and matches on mobs, lighting someone's cigarette, smokables, matchboxes, vapes, dipping) |
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
+//! | 239 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a hookah; the mouthpiece on oneself: a draw) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |

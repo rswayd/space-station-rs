@@ -20,6 +20,10 @@ pub const CONTRABAND_CATEGORY: (&str, &str) = ("Contraband", "mask");
 pub const PREMIUM_CATEGORY: (&str, &str) = ("Premium", "coins");
 
 const COMPONENT: &str = "dm_vending";
+/// BandaStation `bar_hookahs`: `/obj/machinery/vending/cigarette/Initialize` adds
+/// `premium += list(/obj/item/hookah_coals = 3)` before the parent call.
+const HOOKAH_VENDOR: &str = "/obj/machinery/vending/cigarette";
+const HOOKAH_COALS: (&str, u32) = ("/obj/item/hookah_coals", 3);
 
 /// One `datum/data/vending_product` as `build_inventory` creates it.
 #[derive(Reflect, Default, Clone, Debug, PartialEq)]
@@ -197,6 +201,19 @@ pub fn vending(types: &DmTypes, path: &str) -> DmVending {
             Some(_) => {}
             None => unresolved.push(var),
         }
+    }
+    if is_under(path, HOOKAH_VENDOR) && types.types.contains_key(HOOKAH_COALS.0) {
+        let index = match v.premium.first() {
+            Some(p) => p.category,
+            None => {
+                v.categories.push(category(PREMIUM_CATEGORY));
+                v.categories.len() as u16 - 1
+            }
+        };
+        v.premium.push(record(
+            (HOOKAH_COALS.0.to_owned(), HOOKAH_COALS.1, index),
+            true,
+        ));
     }
     // Vendors that fill their lists in `Initialize` (AutoDrobe) declare none statically.
     let initialize_override = types

@@ -1318,6 +1318,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/machinery/smartfridge/food",
     "/obj/effect/food_cart_stand",
     "/obj/machinery/griddle/stand",
+    // BandaStation's hookah: its mouthpiece, the kit and coals (`ss13_game::hookah`).
+    "/obj/item/hookah",
+    "/obj/item/hookah_mouthpiece",
+    "/obj/item/hookah_coals",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman

@@ -207,6 +207,11 @@ fn alt_clicks(world: &mut World, mut clicks: Local<MessageCursor<AltClick>>) {
                     click.client,
                     click.mob,
                     click.target,
+                ) || crate::hookah::click_alt_secondary(
+                    world,
+                    click.client,
+                    click.mob,
+                    click.target,
                 );
             }
             continue;

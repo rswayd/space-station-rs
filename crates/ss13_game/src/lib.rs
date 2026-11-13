@@ -419,6 +419,8 @@ pub mod health_scan;
 pub mod holodeck;
 #[cfg(feature = "server")]
 pub mod holosign;
+#[cfg(feature = "server")]
+pub mod hookah;
 pub mod hud;
 #[cfg(feature = "server")]
 pub mod human;
