@@ -238,6 +238,8 @@ pub mod cannons;
 pub mod cargo;
 #[cfg(feature = "server")]
 pub mod cars;
+#[cfg(feature = "client")]
+pub mod chat_prefs_client;
 #[cfg(feature = "server")]
 pub mod chem;
 #[cfg(feature = "server")]

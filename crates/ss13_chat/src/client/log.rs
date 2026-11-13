@@ -29,6 +29,8 @@ pub struct ChatLog {
     entries: VecDeque<ChatEntry>,
     next_id: u64,
     capacity: usize,
+    /// Bumped when entries go from the middle ([`Self::remove_where`]), so views rebuild.
+    removals: u64,
 }
 
 impl Default for ChatLog {
@@ -43,6 +45,7 @@ impl ChatLog {
             entries: VecDeque::new(),
             next_id: 0,
             capacity: capacity.max(1),
+            removals: 0,
         }
     }
 
@@ -78,6 +81,35 @@ impl ChatLog {
         id
     }
 
+    /// Messages saved by an earlier session, after what is here: never combined with new ones.
+    pub fn restore(&mut self, messages: Vec<(ChatMessage, u32)>) {
+        for (message, times) in messages {
+            let id = self.next_id;
+            self.next_id += 1;
+            self.entries.push_back(ChatEntry {
+                id,
+                message,
+                times: times.max(1),
+                created: f64::NEG_INFINITY,
+            });
+        }
+        let excess = self.entries.len().saturating_sub(self.capacity);
+        self.entries.drain(..excess);
+    }
+
+    /// tgui-panel `clearChat`: drops the entries `remove` picks.
+    pub fn remove_where(&mut self, remove: impl Fn(&ChatEntry) -> bool) {
+        let before = self.entries.len();
+        self.entries.retain(|e| !remove(e));
+        if self.entries.len() != before {
+            self.removals += 1;
+        }
+    }
+
+    pub fn removals(&self) -> u64 {
+        self.removals
+    }
+
     pub fn entries(&self) -> &VecDeque<ChatEntry> {
         &self.entries
     }
@@ -91,10 +123,9 @@ impl ChatLog {
     }
 
     pub fn get(&self, id: u64) -> Option<&ChatEntry> {
-        let first = self.entries.front()?.id;
-        // Ids are dense from the oldest kept entry on.
-        self.entries
-            .get(usize::try_from(id.checked_sub(first)?).ok()?)
+        // Ids increase along the log (with gaps after `remove_where`).
+        let i = self.entries.binary_search_by_key(&id, |e| e.id).ok()?;
+        self.entries.get(i)
     }
 }
 

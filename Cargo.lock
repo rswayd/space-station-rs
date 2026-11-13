@@ -6212,9 +6212,11 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "parley",
+ "postcard",
  "regex",
  "ss13_net",
  "ss13_shared",
+ "ss13_tgui",
  "ss13_ui_kit",
  "ss13_world",
  "web-time",

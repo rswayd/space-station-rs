@@ -29,7 +29,7 @@ use ss13_shared::TilePos;
 use ss13_shared::chat::{
     ChatChannel, ChatMessage, ChatSegment, MAX_MESSAGE_LEN, MAX_NAME_LEN, Span,
 };
-use ss13_shared::protocol::ClientIntent;
+use ss13_shared::protocol::{ClientIntent, PanelEmote};
 use ss13_world::{SpatialIndex, WorldSystems};
 
 use crate::accents::TongueSpeech;
@@ -418,6 +418,54 @@ struct EmotesUsed(HashMap<&'static str, f64>);
 /// emote key has a space.
 const EMOTE_AUDIO: &str = "audio cooldown";
 
+/// BandaStation `next_sound_emote`: until when panel emotes with their own text are refused.
+#[derive(Component, Default, Debug)]
+struct PanelEmoteReady(f64);
+
+/// BandaStation `SHORT_EMOTE_MAX_LENGTH`: a longer panel text cools down longer.
+pub const SHORT_EMOTE_MAX_LENGTH: usize = 40;
+/// `CUSTOM_SHORT_EMOTE_COOLDOWN`, seconds.
+pub const CUSTOM_SHORT_EMOTE_COOLDOWN_SECS: f64 = 0.4;
+/// `CUSTOM_EMOTE_COOLDOWN`, seconds.
+pub const CUSTOM_EMOTE_COOLDOWN_SECS: f64 = 1.0;
+
+/// BandaStation `handle_panel_cooldown`: the cooldown a panel emote with `text` starts.
+pub fn panel_emote_cooldown(text: &str) -> f64 {
+    if text.chars().count() > SHORT_EMOTE_MAX_LENGTH {
+        CUSTOM_EMOTE_COOLDOWN_SECS
+    } else {
+        CUSTOM_SHORT_EMOTE_COOLDOWN_SECS
+    }
+}
+
+/// A panel emote's own text, cleaned as [`sanitize_say`] cleans speech; `None` when nothing is
+/// left or it is too long.
+pub fn sanitize_emote_text(text: &str) -> Option<String> {
+    let said = sanitize_say(&format!("*{text}")).ok()?;
+    let text = said.strip_prefix('*')?.trim_start();
+    (!text.is_empty()).then(|| text.to_owned())
+}
+
+/// What a say-path intent asks for: the text as said, the panel's message override and
+/// whether the panel's cooldown applies (BandaStation `emotes/execute`).
+fn say_request(intent: &ClientIntent) -> Option<(String, Option<String>, Option<f64>)> {
+    Some(match intent {
+        ClientIntent::Say(raw) => (raw.clone(), None, None),
+        ClientIntent::PanelEmote(PanelEmote::Default { key }) => (format!("*{key}"), None, None),
+        ClientIntent::PanelEmote(PanelEmote::Custom { key, text }) => (
+            format!("*{key}"),
+            Some(text.clone()),
+            Some(panel_emote_cooldown(text)),
+        ),
+        ClientIntent::PanelEmote(PanelEmote::Me { text }) => (
+            format!("*me {text}"),
+            None,
+            Some(panel_emote_cooldown(text)),
+        ),
+        _ => return None,
+    })
+}
+
 /// `prob`/`rand` for speech (stars, sing notes): splitmix64, seeded from the clock; the game
 /// reseeds it from the map seed (`ss13_game::server::seed_rngs`).
 #[derive(Resource)]
@@ -704,6 +752,7 @@ fn handle_say(
         tongue_speech,
         speech_filter,
         tokens,
+        panel_ready,
     ): (
         Query<&SeeInvisible>,
         Senses,
@@ -718,6 +767,7 @@ fn handle_say(
         Query<&TongueSpeech>,
         Option<Res<SpeechFilter>>,
         Query<&ClientToken>,
+        Query<&PanelEmoteReady>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -737,9 +787,17 @@ fn handle_say(
 ) {
     let now = time.elapsed_secs_f64();
     let seed = seed.as_deref().map_or(0, |s| s.0);
+    let mut panel_set: HashMap<Entity, f64> = HashMap::default();
     for IntentReceived { client, intent } in intents.read() {
-        let ClientIntent::Say(raw) = intent else {
+        let Some((raw, emote_override, panel_cooldown)) = say_request(intent) else {
             continue;
+        };
+        // The override is shown as the emote's message: checked as said text is, but not
+        // capitalized (it follows the name, as `*me` text does).
+        let emote_override = match emote_override.map(|t| sanitize_emote_text(&t)) {
+            Some(None) => continue,
+            Some(text) => text,
+            None => None,
         };
         let client = *client;
         let checked = rates
@@ -760,7 +818,7 @@ fn handle_say(
                     .ok_or((SayReject::NoBody, true))
             })
             .and_then(|body| {
-                sanitize_say(raw)
+                sanitize_say(&raw)
                     .map(|text| (body, text))
                     .map_err(|r| (r, true))
             });
@@ -813,6 +871,10 @@ fn handle_say(
         };
         let name = speaker_name(name);
         let stat = stat.copied().unwrap_or_default();
+        // BandaStation `emotes/execute`: only a living mob runs panel emotes.
+        if matches!(intent, ClientIntent::PanelEmote(_)) && stat == SpeakerStat::Dead {
+            continue;
+        }
         let notice = |text: String| SendChat {
             clients: vec![client],
             message: ChatMessage::simple(ChatChannel::Local, Span::Notice, text),
@@ -871,6 +933,25 @@ fn handle_say(
             hearers
         };
         if let Some(act) = text.strip_prefix('*') {
+            if let Some(cooldown) = panel_cooldown {
+                // `next_sound_emote >= world.time`, then `handle_panel_cooldown`.
+                // Two panel emotes in one frame: the first one's cooldown is not inserted yet.
+                let ready = panel_set
+                    .get(&speaker)
+                    .copied()
+                    .or_else(|| panel_ready.get(speaker).ok().map(|r| r.0))
+                    .unwrap_or(f64::NEG_INFINITY);
+                if now <= ready {
+                    chat.write(SendChat {
+                        clients: vec![client],
+                        message: warning("Не так быстро!"),
+                    });
+                    continue;
+                }
+                let next = ready.max(now + cooldown);
+                panel_set.insert(speaker, next);
+                commands.entity(speaker).try_insert(PanelEmoteReady(next));
+            }
             let mut used = emotes_used.get_mut(speaker).ok();
             let user = emote_user.copied().unwrap_or_default();
             let outcome = crate::emote::run(act, stat, &user, |key, cooldown| {
@@ -900,6 +981,8 @@ fn handle_say(
                     });
                 }
                 EmoteOutcome::Run { key, text, sound } => {
+                    // `message_override` of a panel emote.
+                    let text = emote_override.clone().unwrap_or(text);
                     // `should_play_sound`: a mute or tongueless mob makes no audible sound.
                     let silenced = impediments.is_some_and(|i| i.mute) || tongueless;
                     let sound = sound.filter(|s| !(s.audible && silenced));
@@ -1292,6 +1375,38 @@ mod tests {
                 .iter()
                 .any(|s| s.span == Span::Emoji(ss13_shared::IconStateId(5)) && s.text == ":ai:")
         );
+    }
+
+    #[test]
+    fn panel_emotes_go_the_say_path_with_their_text_and_cooldown() {
+        let custom = ClientIntent::PanelEmote(PanelEmote::Custom {
+            key: "scream".into(),
+            text: "вопит".into(),
+        });
+        assert_eq!(
+            say_request(&custom),
+            Some(("*scream".into(), Some("вопит".into()), Some(0.4)))
+        );
+        let long = "ч".repeat(SHORT_EMOTE_MAX_LENGTH + 1);
+        let me = ClientIntent::PanelEmote(PanelEmote::Me { text: long.clone() });
+        assert_eq!(
+            say_request(&me),
+            Some((
+                format!("*me {long}"),
+                None,
+                Some(CUSTOM_EMOTE_COOLDOWN_SECS)
+            ))
+        );
+        let plain = ClientIntent::PanelEmote(PanelEmote::Default { key: "nod".into() });
+        assert_eq!(say_request(&plain), Some(("*nod".into(), None, None)));
+        assert_eq!(say_request(&ClientIntent::SwapHands), None);
+        // The text keeps its case, loses controls, and must say something.
+        assert_eq!(
+            sanitize_emote_text(" вопит\nгромко ").as_deref(),
+            Some("вопит громко")
+        );
+        assert_eq!(sanitize_emote_text("   "), None);
+        assert_eq!(sanitize_emote_text(&"x".repeat(MAX_MESSAGE_LEN + 1)), None);
     }
 
     #[test]

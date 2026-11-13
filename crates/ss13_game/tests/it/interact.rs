@@ -18,7 +18,7 @@ use ss13_game::throw::{ThrowMode, Thrown};
 use ss13_mapload::DmItem;
 use ss13_net::chat::client::ChatReceived;
 use ss13_net::ui::client::UiMessageReceived;
-use ss13_shared::protocol::{ClickModifiers, ClientIntent};
+use ss13_shared::protocol::{ClickModifiers, ClientIntent, PanelEmote};
 use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{Dir, TilePos};
 use ss13_tgui::UiInterface;
@@ -531,5 +531,51 @@ fn examine_speech_emotes_and_deadchat() {
     s.run_until("P0 reads deadchat", |s| s.said(0, "МЕРТВ:"));
     s.hold(0.5, "the living never hear the dead", |s| {
         (1..4).all(|p| !s.said(p, "умер"))
+    });
+}
+
+/// BandaStation's chat emote panel: a standard emote, one with its own text (the emote's checks,
+/// the panel's text) and `*me`; panel texts cool down 0.4 s (short) between them.
+#[test]
+fn panel_emotes_run_with_their_texts_and_cool_down() {
+    let mut s = Station::start("panel_emotes_run_with_their_texts_and_cool_down", 2);
+    let name = s.name(1);
+    s.send(
+        1,
+        ClientIntent::PanelEmote(PanelEmote::Custom {
+            key: "scream".into(),
+            text: "вопит на свой лад!".into(),
+        }),
+    );
+    s.send(
+        1,
+        ClientIntent::PanelEmote(PanelEmote::Me {
+            text: "чешет нос".into(),
+        }),
+    );
+    s.run_until("the custom text replaces the message", |s| {
+        s.said(0, &format!("{name} вопит на свой лад!"))
+    });
+    assert!(!s.said(0, &format!("{name} кричит!")));
+    s.run_until("the second panel text is too soon", |s| {
+        s.said(1, "Не так быстро!")
+    });
+    assert!(!s.said(0, "чешет нос"));
+    s.run_for(0.5);
+    s.send(
+        1,
+        ClientIntent::PanelEmote(PanelEmote::Me {
+            text: "чешет нос".into(),
+        }),
+    );
+    s.run_until("after the cooldown", |s| {
+        s.said(0, &format!("{name} чешет нос"))
+    });
+    s.send(
+        1,
+        ClientIntent::PanelEmote(PanelEmote::Default { key: "nod".into() }),
+    );
+    s.run_until("a standard emote", |s| {
+        s.said(0, &format!("{name} кивает."))
     });
 }

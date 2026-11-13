@@ -46,6 +46,12 @@ impl ClientSettings {
         self.save_at = Some(now + SAVE_DELAY_SECS);
     }
 
+    /// A file kept next to the settings file (the chat history, saved chat logs); `None` when
+    /// there is no settings file (the browser client).
+    pub fn file_beside(&self, name: &str) -> Option<PathBuf> {
+        Some(self.path.as_ref()?.parent()?.join(name))
+    }
+
     /// Reads the settings file (empty when there is none or it cannot be read).
     pub fn load() -> Self {
         let path = settings_path();
@@ -106,29 +112,40 @@ fn settings_path() -> Option<PathBuf> {
     None
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn read(path: &std::path::Path) -> Option<String> {
-    std::fs::read_to_string(path).ok()
+    String::from_utf8(read_file(path)?).ok()
+}
+
+/// The bytes of a client file (none in the browser client).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn read_file(path: &std::path::Path) -> Option<Vec<u8>> {
+    std::fs::read(path).ok()
 }
 
 #[cfg(target_arch = "wasm32")]
-fn read(_: &std::path::Path) -> Option<String> {
+pub fn read_file(_: &std::path::Path) -> Option<Vec<u8>> {
     None
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 fn write(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+    write_file(path, text.as_bytes())
+}
+
+/// Writes a client file, its directory made first.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_file(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     // Written beside and renamed, so a crash mid-write never leaves half a file.
-    let tmp = path.with_extension("cfg.tmp");
-    std::fs::write(&tmp, text)?;
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path)
 }
 
 #[cfg(target_arch = "wasm32")]
-fn write(_: &std::path::Path, _: &str) -> std::io::Result<()> {
+pub fn write_file(_: &std::path::Path, _: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
