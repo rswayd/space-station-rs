@@ -44,7 +44,7 @@
 Разъём для извлечения скиллчипов; стартовый скиллчип.
 
 - **Код:** [`/datum/quirk/chip_connector`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/chip_connector.dm#L1), [`/datum/quirk/chipped`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/quirks/positive_quirks/chipped.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — в порте нет скиллчипов (`/obj/item/skillchip`, слоты чипов в мозге: `crate::medical::organs` — «no skillchips»); квирки ждут этой механики
+- **Статус в ss13-rs:** ✅ готово — `crates/ss13_game/src/quirks/lifecycle.rs` (`chip_connector`, `chipped`), `crates/ss13_game/src/skillchips.rs`: Chip Connector ставит в ЦНС имплант-коннектор (`crates/ss13_game/src/medical/cyberimps.rs` `Kind::Connector`) и печатает описание; кнопка импланта — 1,5 с возни, затем чип из активной руки вставляется и активируется (иначе причина и «buzz»), пустая рука — список чипов на извлечение в руки, «Your brain is empty!»; ЭМИ — сбой на 9/сила с, выпадает один (лёгкий) или два (тяжёлый) чипа, без чипов — 20×сила урона мозгу, отказавший мозг выпадает из головы; сломанный коннектор при нажатии роняет кусок мозга. Chipped — случайный чип из `GLOB.quirk_chipped_choice`, вставлен принудительно и активирован с сообщением; снятие квирков удаляет имплант/чип. Нет выбора чипа в настройках (всегда случайный), почтовых подарков, уменьшения `maxHealth` мозга и ошмётков при ЭМИ
 
 ### Хобби с предметами: Clown Enjoyer, Mime Fan, Musician, Poster Boy, Tagger, Pyromania
 Значки фаната (муд-бонус от клоуна/мима), инструмент и лечащая музыка, плакаты, баллончик с краской, радость от огня.

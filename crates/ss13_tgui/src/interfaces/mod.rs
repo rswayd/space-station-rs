@@ -46,6 +46,7 @@ pub mod power_monitor;
 pub mod radial;
 pub mod rapid_pipe_dispenser;
 pub mod ru_jobs;
+pub mod skill_station;
 pub mod sleeper;
 pub mod smart_vend;
 pub mod smes;

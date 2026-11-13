@@ -126,6 +126,7 @@ mod service;
 mod shuttle;
 mod silicon;
 mod singularity;
+mod skillchips;
 mod smoking;
 mod soulstones;
 mod sound;

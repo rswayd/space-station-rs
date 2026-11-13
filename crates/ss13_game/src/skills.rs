@@ -486,10 +486,19 @@ pub const EXAMINE_DEEPER_FISH: u8 = LEVEL_APPRENTICE;
 pub const EXAMINE_FISHING_SPOT: u8 = LEVEL_JOURNEYMAN;
 pub const REVEAL_FISH: u8 = LEVEL_MASTER;
 
-/// `HAS_MIND_TRAIT(mob, <fishing trait>)` for one of the levels above.
-// shortcut: only the skill grants them (no fish-infused organs or the fishing skillchip).
+/// `HAS_MIND_TRAIT(mob, <fishing trait>)` for one of the levels above: the skill, or the active
+/// angler skillchip (`crate::skillchips`), which grants all four.
+// shortcut: no fish-infused organs.
 pub fn fishing_insight(world: &World, mob: Entity, trait_level: u8) -> bool {
+    let chip_trait = match trait_level {
+        EXAMINE_FISH => Some(crate::skillchips::EXAMINE_FISH),
+        EXAMINE_DEEPER_FISH => Some(crate::skillchips::EXAMINE_DEEPER_FISH),
+        EXAMINE_FISHING_SPOT => Some(crate::skillchips::EXAMINE_FISHING_SPOT),
+        REVEAL_FISH => Some(crate::skillchips::REVEAL_FISH),
+        _ => None,
+    };
     level(world, mob, Skill::Fishing) >= trait_level
+        || chip_trait.is_some_and(|t| crate::skillchips::has_trait(world, mob, t))
 }
 
 /// The experience of a minigame (`/datum/fishing_challenge/complete`): `seconds` spent in it at

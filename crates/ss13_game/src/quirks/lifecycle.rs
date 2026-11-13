@@ -148,6 +148,8 @@ pub fn add_quirk(
                  прав на устраивание поджогов.",
             ),
         ),
+        // `chip_connector/post_add`: the description, in bold.
+        Quirk::ChipConnector => tell_mob(world, mob, (Span::BoldWarning, def.desc)),
         Quirk::SocialAnxiety => {
             let mood_mod = anxiety_mood_mod(world, mob);
             world.entity_mut(mob).insert(ss13_chat::speech::Anxiety {
@@ -207,6 +209,8 @@ pub fn add_quirk(
                 give_item(world, mob, CANE, &[Location::Hands, Location::Backpack]);
             }
             Quirk::TinMan => tin_man(world, mob),
+            Quirk::ChipConnector => chip_connector(world, mob),
+            Quirk::Chipped => chipped(world, mob),
             Quirk::Junkie | Quirk::Smoker | Quirk::Alcoholic => addict_items(world, mob, quirk),
             Quirk::MedicineAllergy | Quirk::FoodAllergy => allergy_items(world, mob, quirk),
             Quirk::ClownEnjoyer | Quirk::MimeFan | Quirk::Musician | Quirk::Tagger => {
@@ -364,6 +368,30 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
                 crate::inventory::refresh_look(world, mob);
             }
         }
+        // `chip_connector/remove`, `chipped/remove`: `qdel` of the implant or the chip.
+        Quirk::ChipConnector | Quirk::Chipped => {
+            let held = world.get::<QuirkChips>(mob).copied().unwrap_or_default();
+            let gone = if quirk == Quirk::ChipConnector {
+                held.connector
+            } else {
+                held.chip
+            };
+            if let Some(mut chips) = world.get_mut::<QuirkChips>(mob) {
+                if quirk == Quirk::ChipConnector {
+                    chips.connector = None;
+                } else {
+                    chips.chip = None;
+                }
+            }
+            if let Some(e) = gone.filter(|&e| world.get_entity(e).is_ok()) {
+                if quirk == Quirk::ChipConnector {
+                    crate::medical::cyberimps::remove(world, e);
+                } else {
+                    crate::skillchips::remove(world, e, true);
+                }
+                world.despawn(e);
+            }
+        }
         // `remove_all_languages(LANGUAGE_QUIRK)`, `remove_all_partial_languages(LANGUAGE_QUIRK)`.
         Quirk::Bilingual => {
             if let Some(mut holder) = world.get_mut::<ss13_chat::language::LanguageHolder>(mob) {
@@ -376,4 +404,44 @@ pub fn remove_quirk(world: &mut World, mob: Entity, quirk: Quirk) -> bool {
         tell_mob(world, mob, lose);
     }
     true
+}
+
+/// `chip_connector/add_unique`: a connector implant goes in (`special`).
+pub(super) fn chip_connector(world: &mut World, mob: Entity) {
+    use crate::medical::cyberimps::{ImplantSlot, insert, spawn_implant};
+    let Some(implant) = spawn_implant(world, crate::skillchips::CONNECTOR) else {
+        return;
+    };
+    if !insert(world, implant, mob, ImplantSlot::Cns) {
+        world.despawn(implant);
+        return;
+    }
+    let mut chips = world.get::<QuirkChips>(mob).copied().unwrap_or_default();
+    chips.connector = Some(implant);
+    world.entity_mut(mob).insert(chips);
+}
+
+/// `chipped/add_unique` with no chip preference: a random one of `GLOB.quirk_chipped_choice`,
+/// forced in and activated with its message.
+pub(super) fn chipped(world: &mut World, mob: Entity) {
+    use crate::skillchips::{CHIPPED_CHOICES, Skillchip, def_of, implant, try_activate};
+    let last = (CHIPPED_CHOICES.len() - 1) as u32;
+    let index = world.get_resource_or_init::<CombatRng>().range(0, last) as usize;
+    let path = CHIPPED_CHOICES[index];
+    let Some(chip) = crate::construction::spawn_detached(world, path) else {
+        return;
+    };
+    if world.get::<Skillchip>(chip).is_none()
+        && let Some(def) = def_of(path)
+    {
+        world.entity_mut(chip).insert(Skillchip::new(def));
+    }
+    if implant(world, mob, chip, true).is_err() {
+        world.despawn(chip);
+        return;
+    }
+    try_activate(world, chip, false, true);
+    let mut chips = world.get::<QuirkChips>(mob).copied().unwrap_or_default();
+    chips.chip = Some(chip);
+    world.entity_mut(mob).insert(chips);
 }
