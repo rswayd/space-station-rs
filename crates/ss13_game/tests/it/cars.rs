@@ -123,12 +123,18 @@ fn fixture_assets() -> PathBuf {
 struct Station(testing::Station);
 
 ss13_game::drive_station!(Station, 0);
+use crate::harness::Client;
+impl Client for Station {}
 
 impl Station {
     fn start() -> Self {
         let assets = fixture_assets();
         let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
-        s.join_all(1, |_| {});
+        // The client records what it receives, for the action buttons window.
+        s.join_all(1, |app| {
+            app.init_resource::<crate::harness::Received>()
+                .add_systems(Update, crate::harness::record);
+        });
         Self(s)
     }
 

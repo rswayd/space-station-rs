@@ -230,7 +230,7 @@ mod client_side {
         let empty = data
             .current
             .is_empty()
-            .then(|| EntityScene(bsn! { Text("No skillchips detected.") }));
+            .then_some(EntityScene(bsn! { Text("No skillchips detected.") }));
         bsn! {
             @Section { @title: "Implanted Skillchips" }
             Children [

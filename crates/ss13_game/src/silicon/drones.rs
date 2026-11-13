@@ -299,7 +299,7 @@ impl Plugin for DronesPlugin {
                         .before(crate::combat::MeleeSystems)
                         .after(ResolveClicks),
                     drone_chat.after(SaySystems),
-                    answers.after(PromptSystems::Answer).before(UiSystems::Open),
+                    answers.after(PromptSystems::Answer),
                     verbs.in_set(UiSystems::Handle),
                     (on_death, holder_loving, station_stuck),
                 ),

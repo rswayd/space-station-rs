@@ -327,7 +327,28 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 405] = [
+    pub const GAME_CODE: [&str; 426] = [
+        "sound/effects/cartoon_sfx/cartoon_splat.ogg",
+        "sound/effects/seedling_chargeup.ogg",
+        "sound/items/carhorn.ogg",
+        "sound/items/weapons/flash_ring.ogg",
+        "sound/misc/insane_low_laugh.ogg",
+        "sound/vehicles/carcannon1.ogg",
+        "sound/vehicles/carcannon2.ogg",
+        "sound/vehicles/carcannon3.ogg",
+        "sound/vehicles/carrev.ogg",
+        "sound/vehicles/clown_car/button_press.ogg",
+        "sound/vehicles/clown_car/clowncar_cannonmode1.ogg",
+        "sound/vehicles/clown_car/clowncar_cannonmode2.ogg",
+        "sound/vehicles/clown_car/clowncar_crash1.ogg",
+        "sound/vehicles/clown_car/clowncar_crash2.ogg",
+        "sound/vehicles/clown_car/clowncar_crashpins.ogg",
+        "sound/vehicles/clown_car/clowncar_fart.ogg",
+        "sound/vehicles/clown_car/clowncar_ram1.ogg",
+        "sound/vehicles/clown_car/clowncar_ram2.ogg",
+        "sound/vehicles/clown_car/clowncar_ram3.ogg",
+        "sound/vehicles/clown_car/door_close.ogg",
+        "sound/vehicles/clown_car/door_open.ogg",
         "sound/effects/node_drilling.ogg",
         "sound/effects/node_victory.ogg",
         "sound/items/tools/jaws_cut.ogg",
