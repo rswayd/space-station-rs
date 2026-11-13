@@ -350,7 +350,14 @@ mod server {
         if world.get::<crate::silicon::ai::AiCore>(mob).is_some()
             || world.get::<crate::silicon::ai::AiEye>(mob).is_some()
         {
-            tabs.push((AI_TAB, vec![AI_VERB_AUTOSAY, AI_VERB_UNLOAD]));
+            tabs.push((
+                AI_TAB,
+                vec![
+                    crate::silicon::law_change::VERB,
+                    AI_VERB_AUTOSAY,
+                    AI_VERB_UNLOAD,
+                ],
+            ));
         }
         tabs.push((OOC_TAB, ooc_verbs()));
         tabs

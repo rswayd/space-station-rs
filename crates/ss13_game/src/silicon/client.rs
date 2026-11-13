@@ -16,6 +16,9 @@
 //!   Begin Reconstruction button.
 //! - `StateLawUi`: a checkbox per law (hacked red, core blue, supplied green) and the State
 //!   Laws button, "On Cooldown" while locked.
+//! - `AiLawChangeRequest` (BandaStation): the notice (the requester for a reviewing admin), a
+//!   text area per law, the crew notification toggle and Confirm / Reject while reviewing, else
+//!   Submit.
 //! - `LawRack`: a row per slot (screw, weld, repair, insert or remove, by the tool in hand) and
 //!   the rack's links.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
@@ -39,7 +42,8 @@ use ss13_render::{ActiveZ, CameraTarget, RenderSystems};
 use ss13_shared::ui::UiServerMessage;
 use ss13_shared::{TILE_SIZE, TilePos};
 use ss13_tgui::client::{
-    AppTguiClientExt, ClientUi, LocalOnInput, SearchRow, SetLocal, UiLocalState,
+    ActWithLocal, ActWithLocals, AppTguiClientExt, ClientUi, LocalOnInput, SearchRow, SetLocal,
+    UiLocalState,
 };
 use ss13_tgui::{UiInterface, decode};
 use ss13_ui_kit::prelude::*;
@@ -65,6 +69,7 @@ impl Plugin for SiliconClientPlugin {
             .register_ui_view::<AiRestorerUi>()
             .register_ui_view::<LawRackUi>()
             .register_ui_view::<StateLawUi>()
+            .register_ui_view::<AiLawChangeUi>()
             .init_resource::<CameraView>()
             .add_systems(Startup, spawn_static)
             .add_systems(Update, receive_view)
@@ -1133,6 +1138,115 @@ impl ClientUi for StateLawUi {
                     ss13_ui_kit::Button { disabled: locked, color: UiColor::Blue }
                     Act({STATE_LAWS.to_owned()})
                 ]
+            ]
+        }
+    }
+}
+
+/// The local key of law `i`'s text area.
+fn law_key(i: usize) -> String {
+    format!("law{i}")
+}
+
+impl ClientUi for AiLawChangeUi {
+    const WIDTH: f32 = 480.0;
+    const HEIGHT: f32 = 480.0;
+
+    fn content(_: &(), data: &AiLawChangeData) -> impl Scene {
+        law_change_view(data, None)
+    }
+
+    fn content_local(_: &(), data: &AiLawChangeData, local: &UiLocalState) -> impl Scene {
+        law_change_view(data, Some(local))
+    }
+}
+
+/// tgui `AiLawChangeRequest`: the text areas keep what was typed (`useState`), starting from
+/// the request's laws.
+fn law_change_view(data: &AiLawChangeData, local: Option<&UiLocalState>) -> impl Scene + use<> {
+    {
+        let initial = |i: usize| data.laws.get(i).cloned().unwrap_or_default();
+        let notice: Vec<Box<dyn SceneList>> = vec![if data.reviewing {
+            let who = format!("{}/({})", data.requester_key, data.requester_name);
+            Box::new(EntityScene(bsn! { @NoticeBox Children [ Text(who) ] })) as Box<dyn SceneList>
+        } else {
+            Box::new(EntityScene(bsn! {
+                @NoticeBox { @info: true }
+                Children [ Text(
+                    "Ваш запрос будет проверен Центральным командованием. Просим не нарушать \
+                     рабочую этику и не использовать вульгарные, нецензурные, расистские, \
+                     ксенофобские, и иным образом порочащие Корпорацию выражения."
+                ) ]
+            }))
+        }];
+        let max = data.max_law_length as usize;
+        let areas: Vec<Box<dyn SceneList>> = (0..data.law_amount as usize)
+            .map(|i| {
+                let value = local
+                    .and_then(|l| l.value(&law_key(i)))
+                    .map_or_else(|| initial(i), str::to_owned);
+                let placeholder = format!("Закон {}", i + 1);
+                let key = law_key(i);
+                Box::new(EntityScene(bsn! {
+                    Node { margin: UiRect::bottom(px(5)) }
+                    Input { value: value, placeholder: placeholder, max_length: {Some(max)}, fluid: true }
+                    ss13_ui_kit::TextArea { rows: 5.0 }
+                    LocalOnInput(key)
+                })) as Box<dyn SceneList>
+            })
+            .collect();
+        let laws = ActWithLocals(
+            (0..data.law_amount as usize)
+                .map(|i| ActWithLocal {
+                    param: law_change_param(i),
+                    key: law_key(i),
+                    default: initial(i),
+                })
+                .collect(),
+        );
+        let buttons: Vec<Box<dyn SceneList>> = vec![if data.reviewing {
+            let notify_icon = if data.notify_crew {
+                "check-square"
+            } else {
+                "square"
+            };
+            let notify = data.notify_crew;
+            Box::new(EntityScene(bsn! {
+                Node { flex_direction: FlexDirection::Column, row_gap: px(4) }
+                Children [
+                    @ss13_ui_kit::Button { @icon: notify_icon, @content: "Оповестить о смене законов", @fluid: true }
+                    ss13_ui_kit::Button { selected: notify }
+                    Act({LAW_CHANGE_TOGGLE_NOTIFY.to_owned()})
+                    --
+                    Node { flex_direction: FlexDirection::Row, column_gap: px(4) }
+                    Children [
+                        @ss13_ui_kit::Button { @icon: "check", @content: "ПОДТВЕРДИТЬ", @fluid: true }
+                        ss13_ui_kit::Button { color: UiColor::Good }
+                        Act({LAW_CHANGE_CONFIRM.to_owned()})
+                        laws
+                        --
+                        @ss13_ui_kit::Button { @icon: "times", @content: "ОТКЛОНИТЬ", @fluid: true }
+                        ss13_ui_kit::Button { color: UiColor::Bad }
+                        Act({LAW_CHANGE_REJECT.to_owned()})
+                    ]
+                ]
+            })) as Box<dyn SceneList>
+        } else {
+            Box::new(EntityScene(bsn! {
+                @ss13_ui_kit::Button { @icon: "paper-plane", @content: "ОТПРАВИТЬ", @fluid: true }
+                ss13_ui_kit::Button { color: UiColor::Good }
+                Act({LAW_CHANGE_SUBMIT.to_owned()})
+                laws
+            }))
+        }];
+        bsn! {
+            @WindowContent
+            Children [
+                Node Children [ {notice} ]
+                --
+                @Section { @fill: true, @scrollable: true } Children [ {areas} ]
+                --
+                Node Children [ {buttons} ]
             ]
         }
     }

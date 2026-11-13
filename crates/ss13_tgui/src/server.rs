@@ -44,9 +44,11 @@ pub const REFRESH_SECS: f64 = 0.9;
 /// BYOND `SECOND_TOPIC_LIMIT` / `MINUTE_TOPIC_LIMIT` from the tg config, applied to UI acts.
 pub const ACTS_PER_SECOND: u32 = 10;
 pub const ACTS_PER_MINUTE: u32 = 200;
-/// Hostile-input caps; real acts are a word and a couple of short params.
+/// Hostile-input caps; real acts are a word and a couple of short params. The largest form,
+/// BandaStation's AI law change request, sends three laws of `MAX_LAW_LEN` (1024) characters:
+/// up to 24 chunks of `MAX_PARAM_LEN` bytes.
 pub const MAX_ACTION_LEN: usize = 64;
-pub const MAX_PARAMS: usize = 16;
+pub const MAX_PARAMS: usize = 32;
 pub const MAX_PARAM_LEN: usize = 256;
 
 /// The server side of a tgui interface: `ui_static_data`, `ui_data`, and the parsing half of
