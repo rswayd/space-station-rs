@@ -7,7 +7,8 @@
 //!   quantum console (tgui `QuantumConsole`), the byteforge and the domain's caches.
 //! - [`avatar`]: netpods, avatars and their connection (`/datum/component/avatar_connection`),
 //!   hololadders.
-//! - [`client`]: the console window.
+//! - [`help`]: the avatar's domain information (tgui `AvatarHelp`) and the host monitor.
+//! - [`client`]: the console and domain information windows.
 //!
 //! This module holds the window's data, which both halves share.
 
@@ -20,6 +21,8 @@ pub mod avatar;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod domains;
+#[cfg(feature = "server")]
+pub mod help;
 #[cfg(feature = "server")]
 pub mod server;
 
@@ -86,3 +89,18 @@ pub const DOMAIN_ID: &str = "id";
 pub const RANDOM_DOMAIN: &str = "random_domain";
 pub const STOP_DOMAIN: &str = "stop_domain";
 pub const REFRESH: &str = "refresh";
+
+/// tgui `AvatarHelp`: the domain's information (`/datum/avatar_help_text`).
+pub struct AvatarHelpUi;
+
+impl UiInterface for AvatarHelpUi {
+    const NAME: &'static str = "AvatarHelp";
+    type Data = ();
+    type StaticData = AvatarHelpStatic;
+}
+
+/// `ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AvatarHelpStatic {
+    pub help_text: String,
+}

@@ -402,6 +402,7 @@ impl Plugin for BitrunningServerPlugin {
                 ),
             );
         avatar::build(app);
+        super::help::build(app);
     }
 }
 

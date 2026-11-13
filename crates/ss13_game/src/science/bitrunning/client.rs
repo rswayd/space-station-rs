@@ -1,5 +1,6 @@
-//! The quantum console window (client): tgui `QuantumConsole.tsx`. The data is [`super`], the
-//! server half [`super::server`].
+//! The quantum console window (client): tgui `QuantumConsole.tsx`, and the avatar's domain
+//! information (`AvatarHelp.tsx`). The data is [`super`], the server halves [`super::server`]
+//! and [`super::help`].
 //!
 //! Client-only state (`useSharedState('tab')`): the difficulty tab ([`UiLocalState`] key).
 // shortcut: domains are plain sections (no `Collapsible`), no broadcast checkbox (no
@@ -7,6 +8,7 @@
 // "Остановить домен" stops on one click (no `Button.Confirm`), the cost and reward are numbers
 // instead of rows of icons, tooltips are left out.
 
+use bevy::app::Propagate;
 use bevy::scene::{EntityScene, SceneList};
 use ss13_tgui::client::{AppTguiClientExt, ClientUi, SetLocal, UiLocalState};
 use ss13_ui_kit::prelude::*;
@@ -19,7 +21,8 @@ pub struct BitrunningClientPlugin;
 
 impl Plugin for BitrunningClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<QuantumConsoleUi>();
+        app.register_ui_view::<QuantumConsoleUi>()
+            .register_ui_view::<AvatarHelpUi>();
     }
 }
 
@@ -311,5 +314,124 @@ mod tests {
         assert_eq!(difficulty_color(3), UiColor::Bad);
         assert_eq!(amount_text("0"), "Никакие");
         assert_eq!(amount_text(REDACTED), REDACTED);
+    }
+}
+
+/// `DEFAULT_HELP`.
+const DEFAULT_HELP: &str = "Информация отсутствует! Обратитесь за помощью при нужде.";
+
+/// `boxHelp`: `(color, text, icon, title)`.
+const BOX_HELP: [(UiColor, &str, &str, &str); 6] = [
+    (
+        UiColor::Purple,
+        "Изучите местность и принесите в убещиже ящик. Обращайте пристальное внимание на \
+         информацию о домене и на контекстные подсказки.",
+        "search-location",
+        "Поиск",
+    ),
+    (
+        UiColor::Green,
+        "Принесите ящик к обозначенной зоне в вашем убежище. Место отправки будет выглядеть \
+         необычно для окружения. Осмотрите убежище, чтобы найти его.",
+        "boxes",
+        "Ящик",
+    ),
+    (
+        UiColor::Blue,
+        "Лестница предоставляет самый безопасный способ выхода из домена, если ящик еще не \
+         вытащили. При разрыве соединения, ваш нетпод предоставляет ограниченную возможность к \
+         реанимации.",
+        "plug",
+        "Отключение",
+    ),
+    (
+        UiColor::Yellow,
+        "Пока вы подключены, вы в какой-то мере защищены от опасностей окружащей среды и \
+         опасности извне, но не полностью. Обращайте внимания на оповещения и тревоги.",
+        "id-badge",
+        "Безопасность",
+    ),
+    (
+        UiColor::Gold,
+        "Создание аватаров требует огромной пропускной способности. Не тратье их впустую.",
+        "coins",
+        "Ограниченные попытки",
+    ),
+    (
+        UiColor::Red,
+        "Помните, что вы физически связаны с вашим аватаром. Вы - чужой во враждебном \
+         окружении. Оно попытается силой изгнать вас.",
+        "skull-crossbones",
+        "Реальная опасность",
+    ),
+];
+
+impl ClientUi for AvatarHelpUi {
+    const WIDTH: f32 = 600.0;
+    const HEIGHT: f32 = 600.0;
+
+    fn content(help: &AvatarHelpStatic, _: &()) -> impl Scene {
+        let text = if help.help_text.is_empty() {
+            DEFAULT_HELP.to_owned()
+        } else {
+            help.help_text.clone()
+        };
+        let good = UiColor::Good.text().unwrap_or_default();
+        let rows: Vec<_> = [0, 2, 4]
+            .into_iter()
+            .map(|i| {
+                let (a, b) = (box_help(i), box_help(i + 1));
+                bsn! {
+                    Node { flex_grow: 1.0, flex_direction: FlexDirection::Row, column_gap: px(4) }
+                    Children [ {a} -- {b} ]
+                }
+            })
+            .collect();
+        bsn! {
+            @WindowContent
+            Children [
+                Node { flex_direction: FlexDirection::Column, height: percent(100), row_gap: px(4) }
+                Children [
+                    Node { flex_grow: 1.0, flex_direction: FlexDirection::Column }
+                    Children [
+                        @Section {
+                            @title: "Добро пожаловать в виртуальный домен.",
+                            @fill: true,
+                            @scrollable: true,
+                        }
+                        Propagate::<TextColor>(TextColor(good))
+                        Children [ Text(text) ]
+                    ]
+                    --
+                    Node { flex_grow: 4.0, flex_direction: FlexDirection::Column, row_gap: px(4) }
+                    Children [ {rows} ]
+                ]
+            ]
+        }
+    }
+}
+
+/// `BoxHelp`.
+fn box_help(index: usize) -> impl Scene + use<> {
+    let (color, text, icon, title) = BOX_HELP[index];
+    let (text, icon, title) = (text.to_owned(), icon.to_owned(), title.to_owned());
+    let label = UiColor::Label.text().unwrap_or_default();
+    bsn! {
+        Node { flex_grow: 1.0, flex_basis: px(0), flex_direction: FlexDirection::Column }
+        Children [
+            @Section { @fill: true, @scrollable: true }
+            Children [
+                Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center }
+                Children [
+                    Node { margin: UiRect::right(px(4)) }
+                    Children [ @Icon { @name: icon, @color: color } ]
+                    --
+                    Text(title)
+                ]
+                --
+                Node Propagate::<TextColor>(TextColor(label))
+                Children [ Text(text) ]
+            ]
+        ]
     }
 }

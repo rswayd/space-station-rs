@@ -21,7 +21,7 @@
 //!   (1 s, more when hurt) then opens; a dead or unpowered one opens at once.
 // shortcut: no outfit selection window (`NetpodOutfits`) or body scanning (`copy_body`), no
 // hacker alias, voice, skills, skillchips or disks loaded onto the avatar (`stock_gear`), no
-// avatar ID card or help action (the help text goes to chat), no stasis status
+// avatar ID card, no stasis status
 // effect, no red pill, no screen alerts (chat lines instead), no netpod integrity alert; the
 // avatar keeps the pod's occupant's name.
 
@@ -412,9 +412,7 @@ fn connect(world: &mut World, avatar: Entity, neo: Entity, pod: Entity, server: 
         .and_then(|s| s.domain.as_ref())
         .map(|d| d.domain.help_text)
         .unwrap_or_default();
-    if !help.is_empty() {
-        tell_mob(world, avatar, Span::Notice, help);
-    }
+    super::help::grant(world, avatar, help);
     info!("bitrunning: {neo} connected to avatar {avatar}");
 }
 

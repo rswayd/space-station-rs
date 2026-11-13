@@ -51,7 +51,7 @@ _«Профессия битраннера» описано в [../round/jobs-te
 Монитор показывает здоровье подключённых битраннеров; действие аватара показывает правила и информацию о домене.
 
 - **Код:** [`/obj/item/bitrunning_host_monitor`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/objects/host_monitor.dm#L1), [`/datum/action/avatar_domain_info`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/bitrunning/abilities.dm#L25); tgui: [`AvatarHelp.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AvatarHelp.tsx)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ `crates/ss13_game/src/science/bitrunning/help.rs`, окно — `crates/ss13_game/src/science/bitrunning/client.rs` (`AvatarHelpUi`): при каждом подключении аватар получает кнопку «Open Domain Information» (`round_end`), она открывает `AvatarHelp` с `help_text` домена (пустой — текст по умолчанию) и шестью блоками правил; монитор хоста в руке аватара пишет «Current host health: N%» тела в поде, иначе «данные не распознаны»/«хост не распознан». `// shortcut:` блоки правил — заголовок внутри секции, а не в её шапке
 
 ### Угрозы: глитчи и кибер-полиция
 Событие/угроза сервера: призрак вселяется в моба домена и становится кибер-полицейским, тактиком или Netguardian'ом, охотится на аватаров и может выйти на станцию через байтфорж.
