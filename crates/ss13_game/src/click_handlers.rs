@@ -131,6 +131,7 @@
 //! | 3367 | `science::bitrunning::help::host_monitor` (the host health of an avatar) |
 //! | 3369 | `hookah::mouthpiece_attack_self` (a lit hookah's mouthpiece: a draw) |
 //! | 3377 | `science::bitrunning::disks::attack_self` (a bitrunning disk's program choice) |
+//! | 3389 | `antag::voidwalker::use_skull` (the cosmic skull stared into) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):

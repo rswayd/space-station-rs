@@ -979,6 +979,7 @@ fn declare_completion(world: &mut World, now: f64) {
     antags.extend(crate::antag::valentine::roundend_report(world, end));
     antags.extend(crate::antag::survivalist::roundend_report(world, end));
     antags.extend(crate::antag::ashwalker::roundend_report(world, end));
+    antags.extend(crate::antag::voidwalker::roundend_report(world, end));
     antags.extend(crate::antag::spy::roundend_report(world, end));
     antags.extend(crate::antag::revolution::server::roundend_report(
         world, end,
@@ -1827,6 +1828,7 @@ fn preference_acts(
                     crate::antag::ROLE_FUGITIVE,
                     crate::antag::changeling::ROLE_CHANGELING_MIDROUND,
                     crate::antag::ROLE_SPY,
+                    crate::antag::ROLE_VOIDWALKER,
                 ]
                 .contains(&role.as_str()) =>
             {

@@ -220,6 +220,11 @@ pub enum Kind {
     Stalker {
         cosmic: bool,
     },
+    /// `/datum/brain_trauma/voided` (`stable`: its `/stable` subtype), the voidwalker's curse
+    /// ([`crate::antag::voidwalker`]).
+    Voided {
+        stable: bool,
+    },
 }
 
 /// Quantum alignment's entangled target.

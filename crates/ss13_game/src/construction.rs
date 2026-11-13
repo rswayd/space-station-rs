@@ -404,6 +404,8 @@ pub enum Job {
     SpaceDragon(crate::antag::space_dragon::DragonJob),
     /// A spy scanning a bounty's target ([`crate::antag::spy`]).
     Spy(crate::antag::spy::SpyJob),
+    /// A voidwalker's kidnapping or wall, the cosmic skull's stare ([`crate::antag::voidwalker`]).
+    Voidwalker(crate::antag::voidwalker::VoidJob),
     /// The Grand Ritual and the Scepter of Vendormancy.
     Wizard(crate::antag::wizard::server::WizardJob),
     /// The ninja's hacks and drains, the fugitive capture machine ([`crate::antag::raiders`]).
@@ -1642,6 +1644,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Spider(job) => crate::antag::spiders::complete(world, mob, action, job),
         &Job::SpaceDragon(job) => crate::antag::space_dragon::complete(world, mob, action, job),
         &Job::Spy(job) => crate::antag::spy::complete(world, mob, action, job),
+        &Job::Voidwalker(job) => crate::antag::voidwalker::complete(world, mob, action, job),
         &Job::Wizard(job) => crate::antag::wizard::server::complete(world, mob, action, job),
         &Job::Raiders(job) => crate::antag::raiders::complete(world, mob, action, job),
         &Job::Emitter(job) => crate::power::emitter::complete(world, client, target, job, consume),

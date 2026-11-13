@@ -626,6 +626,7 @@ impl ClientUi for JobPrefsUi {
             (crate::antag::ROLE_NINJA, "Космический ниндзя"),
             (crate::antag::ROLE_FUGITIVE, "Беглец"),
             (crate::antag::ROLE_SPY, "Шпион"),
+            (crate::antag::ROLE_VOIDWALKER, "Войдволкер"),
             (
                 crate::antag::changeling::ROLE_CHANGELING_MIDROUND,
                 "Генокрад (мидраунд)",

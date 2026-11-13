@@ -284,6 +284,23 @@ pub const ASHWALKER_RUNTIME_TYPES: [&str; 11] = [
     "/obj/item/assembly/signaler/anomaly/weather",
 ];
 
+/// What the voidwalker makes at runtime (`ss13_game::antag::voidwalker`): the mobs, the void
+/// windows on grilles, nebula vomit, the death drops (glass shards, the cosmic skull) and the
+/// void eater.
+pub const VOIDWALKER_RUNTIME_TYPES: [&str; 11] = [
+    "/mob/living/basic/voidwalker",
+    "/mob/living/basic/voidwalker/sunwalker",
+    "/obj/structure/window/fulltile/voidwalker",
+    "/obj/structure/grille",
+    "/obj/effect/decal/cleanable/vomit/nebula",
+    "/obj/item/shard",
+    "/obj/item/shard/plasma",
+    "/obj/item/shard/titanium",
+    "/obj/item/shard/plastitanium",
+    "/obj/item/clothing/head/helmet/skull/cosmic",
+    "/obj/item/void_eater",
+];
+
 /// What the raiders make at runtime (`ss13_game::antag::raiders`, `ss13_game::modsuit::ninja`):
 /// the ninja's katana (when the sheath came empty), MOD and spider charge, the star
 /// dispenser's stars, the energy net, the fugitive leader's toolbox and the synth's augments,

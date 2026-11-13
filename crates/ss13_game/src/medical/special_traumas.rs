@@ -294,6 +294,7 @@ pub fn on_life(
         Kind::Lumiphobia => lumiphobia(world, mob, trauma, secs),
         Kind::Poltergeist => poltergeist(world, mob, rng, secs),
         Kind::Stalker { cosmic } => stalker(world, mob, trauma, cosmic, rng, secs),
+        Kind::Voided { stable } => crate::antag::voidwalker::voided_life(world, mob, stable, rng),
         _ => {}
     }
 }

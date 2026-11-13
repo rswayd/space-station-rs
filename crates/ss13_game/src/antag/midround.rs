@@ -153,6 +153,7 @@ pub const SPACE_NINJA: &str = "Space Ninja";
 pub const MIDROUND_CHANGELING: &str = "Midround Changeling";
 pub const MASS_CHANGELINGS: &str = "Mass Changelings";
 pub const SPIDERS: &str = "Spiders";
+pub const VOIDWALKER: &str = "Voidwalker";
 
 const HOP: &[&str] = &["Head of Personnel"];
 const ONE: (Cap, Cap) = (Cap::Fixed(1), Cap::Fixed(1));
@@ -242,7 +243,10 @@ pub const RULESETS: [Ruleset; 30] = {
             role: Some(super::paradox_clone::ROLE_PARADOX_CLONE),
             ..other(PARADOX_CLONE, Light, flat(5), 10)
         },
-        other("Voidwalker", Light, flat(5), 30),
+        Ruleset {
+            role: Some(super::ROLE_VOIDWALKER),
+            ..other(VOIDWALKER, Light, flat(5), 30)
+        },
         Ruleset {
             role: Some(super::ROLE_FUGITIVE),
             caps: (
@@ -631,6 +635,8 @@ fn can_be_selected(world: &mut World, r: &Ruleset) -> bool {
         HEAVY_PIRATES => super::raiders::pirate::can_spawn(world, true),
         // A dark maintenance spawn.
         SPIDERS => super::spiders::can_spawn(world),
+        // A space spawn.
+        VOIDWALKER => super::voidwalker::can_spawn(world),
         _ => true,
     }
 }
@@ -914,6 +920,7 @@ fn poll_role_name(r: &Ruleset) -> &'static str {
         SPACE_NINJA => "Космический ниндзя",
         FUGITIVES => "Беглец",
         MIDROUND_CHANGELING | MASS_CHANGELINGS => "Генокрад",
+        VOIDWALKER => "Войдволкер",
         tag => tag,
     }
 }
@@ -1148,6 +1155,15 @@ fn select_and_run(
                 .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| p.client))
                 .collect();
             if super::changeling::server::spawn_space_changelings(world, &clients).is_empty() {
+                return Vec::new();
+            }
+        }
+        VOIDWALKER => {
+            let ghosts: Vec<(Entity, Entity)> = chosen
+                .iter()
+                .filter_map(|&g| world.get::<PlayerMob>(g).map(|p| (p.client, g)))
+                .collect();
+            if super::voidwalker::spawn_voidwalkers(world, &ghosts).is_empty() {
                 return Vec::new();
             }
         }

@@ -77,6 +77,8 @@ pub mod uplink;
 #[cfg(feature = "server")]
 pub mod valentine;
 pub mod vampire;
+#[cfg(feature = "server")]
+pub mod voidwalker;
 pub mod wizard;
 #[cfg(feature = "server")]
 pub mod xeno;
@@ -123,6 +125,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             raiders::RaidersPlugin,
             santa::SantaPlugin,
             ashwalker::AshwalkerPlugin,
+            voidwalker::VoidwalkerPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
@@ -166,6 +169,8 @@ pub const ROLE_BLOB_INFECTION: &str = "Blob Infection";
 pub const ROLE_NINJA: &str = "Space Ninja";
 /// tg `ROLE_SPY` (`spy`).
 pub const ROLE_SPY: &str = "Spy";
+/// tg `ROLE_VOIDWALKER` (`voidwalker`).
+pub const ROLE_VOIDWALKER: &str = "Voidwalker";
 /// tg `ROLE_FUGITIVE` (`raiders::fugitive`).
 pub const ROLE_FUGITIVE: &str = "Fugitive";
 

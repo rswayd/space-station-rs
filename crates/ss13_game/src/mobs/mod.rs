@@ -599,6 +599,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     cult_pets::on_death(world, mob, pos);
     oozes::on_death(world, mob);
     crate::antag::slaughter::on_death(world, mob, def, pos);
+    crate::antag::voidwalker::on_death(world, mob, pos);
     crate::spells::shapeshift::on_shape_death(world, mob);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).
     if ss13_mapload::fidelity::is_under(&def.path, MOUSE_ROOT) {
