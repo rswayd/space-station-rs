@@ -489,6 +489,7 @@
 //! | 2977 | `cargo::money::item_interaction` (cash and ID cards, holochips) |
 //! | 2980 | `cargo::express::item_interaction` |
 //! | 2985 | `cargo::materials_market::item_interaction` |
+//! | 2991 | `cargo::bank_machine::deposit` (money into the vault's bank machine) |
 //! | 3000 | `mining::item_interaction` |
 //! | 3100 | `science::item_interaction` |
 //! | 3110 | `science::exodrone::server::item_interaction` (the drone launcher) |

@@ -132,6 +132,13 @@ pub struct HabitableAtmos {
     pub max_n2: f32,
 }
 
+/// `SENTIENCE_ORGANIC`: what the lazarus injector revives.
+pub const SENTIENCE_ORGANIC: u8 = 1;
+
+fn organic() -> u8 {
+    SENTIENCE_ORGANIC
+}
+
 /// One `/mob/living/basic` type, vars resolved through its parents.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct MobDef {
@@ -179,6 +186,9 @@ pub struct MobDef {
     pub icon_dead: String,
     pub density: bool,
     pub mob_size: u8,
+    /// `sentience_type` (`SENTIENCE_ORGANIC` 1, `_ARTIFICIAL` 2, `_BOSS` 5, ...).
+    #[serde(default = "organic")]
+    pub sentience_type: u8,
     /// Faction names (`FACTION_*` values).
     pub faction: Vec<String>,
     /// `ai_controller` type, empty without one.
@@ -637,6 +647,7 @@ fn mob_def(
             .and_then(Value::as_f64)
             .is_none_or(|d| d != 0.0),
         mob_size: num("mob_size", 2.0) as u8,
+        sentience_type: num("sentience_type", f32::from(SENTIENCE_ORGANIC)) as u8,
         faction,
         speech_lines: speech_lines(types, &ai_controller),
         ai_traits: (!ai_controller.is_empty())

@@ -15,7 +15,10 @@
 //!   market's news on the newscasters (`crate::newscaster_server::earnings_report`), clears that
 //!   news and counts the waiting mail ([`super::mail::economy_tick`]). Civilian bounties:
 //!   [`super::bounty`].
-// shortcut: no inflation, debts, departmental cards, audit log or species payday modifiers.
+//! - Each account keeps tg's `transaction_history` (the last 20 logged adjustments, shown by NT
+//!   Pay): paychecks and the transfers that pass a reason.
+// shortcut: no inflation, debts, departmental cards, audit log or species payday modifiers;
+// purchases (vendors, consoles) adjust money without a history entry.
 
 use std::collections::HashMap;
 
@@ -55,6 +58,8 @@ pub const BUDGET_POOL: i64 = 35000;
 pub const STARTING_PAYCHECKS: u32 = 5;
 /// `PAYCHECK_CREW`: the most a single passive paycheck pays.
 pub const PAYCHECK_CREW: i64 = 50;
+/// `add_log_to_history`: the history keeps this many entries.
+pub const HISTORY_MAX: usize = 20;
 /// `MAX_GRANT_DPT`.
 pub const MAX_GRANT_DPT: i64 = 500;
 /// `SSeconomy` `wait = 5 MINUTES`.
@@ -101,6 +106,8 @@ pub struct BankAccount {
     pub job: String,
     /// `mining_points`: earned at the ore redemption machine, spent at the mining vendor.
     pub mining_points: i64,
+    /// `transaction_history`: (adjusted money, reason), oldest first.
+    pub history: Vec<(i64, String)>,
 }
 
 impl BankAccount {
@@ -116,6 +123,25 @@ impl BankAccount {
         }
         self.balance += amount;
         true
+    }
+
+    /// tg `adjust_money(amount, reason)`: an empty reason logs nothing.
+    pub fn adjust_money_for(&mut self, amount: i64, reason: &str) -> bool {
+        if !self.adjust_money(amount) {
+            return false;
+        }
+        if !reason.is_empty() {
+            self.add_log_to_history(amount, reason);
+        }
+        true
+    }
+
+    /// tg `add_log_to_history`.
+    pub fn add_log_to_history(&mut self, amount: i64, reason: &str) {
+        if self.history.len() >= HISTORY_MAX {
+            self.history.remove(0);
+        }
+        self.history.push((amount, reason.to_owned()));
     }
 }
 
@@ -224,6 +250,7 @@ impl Economy {
                 paycheck_department: department.to_owned(),
                 job: String::new(),
                 mining_points: 0,
+                history: Vec::new(),
             },
         );
         id
@@ -240,6 +267,8 @@ impl Economy {
         if paychecks == 1 {
             amount = amount.clamp(0, PAYCHECK_CREW);
         }
+        // tg's reasons: a free payday's, and `transfer_money` from a department.
+        let mut reason = "Нанотрейзен: Оплата смены";
         if !free {
             let department = account.paycheck_department.clone();
             let budget = self
@@ -248,9 +277,13 @@ impl Economy {
             if !budget.adjust_money(-amount) {
                 return Err(PaydayError::DepartmentBroke);
             }
+            reason = "Нанотрейзен: Зарплата";
         }
         let account = self.accounts.get_mut(&id).expect("checked above");
-        account.adjust_money(amount);
+        // `adjust_money` refuses a zero amount.
+        if amount > 0 {
+            account.adjust_money_for(amount, reason);
+        }
         Ok(account.balance)
     }
 
@@ -502,6 +535,27 @@ mod tests {
         assert_eq!(e.department(ACCOUNT_CAR).unwrap().balance, 450);
         assert_eq!(e.payday(other, 1, false), Ok(25));
         assert_eq!(e.payday(999, 1, false), Err(PaydayError::NoAccount));
+        let history = &e.account(qm).unwrap().history;
+        assert_eq!(
+            history,
+            &vec![
+                (500, "Нанотрейзен: Оплата смены".to_owned()),
+                (50, "Нанотрейзен: Зарплата".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn history_keeps_the_last_twenty() {
+        let mut a = BankAccount::default();
+        for i in 1..=25 {
+            assert!(a.adjust_money_for(i, "x"));
+        }
+        assert!(!a.adjust_money_for(-1000, "too much"));
+        assert!(a.adjust_money_for(5, ""));
+        assert_eq!(a.history.len(), HISTORY_MAX);
+        assert_eq!(a.history[0].0, 6);
+        assert_eq!(a.history[19].0, 25);
     }
 
     #[test]

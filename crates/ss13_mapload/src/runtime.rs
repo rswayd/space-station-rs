@@ -1669,6 +1669,38 @@ pub const SECDEF_RUNTIME_TYPES: &[&str] = &[
 
 /// Every DM type the game spawns by a constant path: the tables above and every
 /// `*_RUNTIME_TYPES` table of this crate. `ss13-mapload convert` emits all of them.
+/// The bank machine's siphoned cash (`credits_to_spacecash`), the cook's grocery freezer and
+/// what lavaland and icemoon flora drop (`ss13_game::cargo::bank_machine`,
+/// `ss13_game::mining::console`, `ss13_game::flora`).
+pub const CARGO_FLORA_RUNTIME_TYPES: &[&str] = &[
+    "/obj/item/stack/spacecash/c1",
+    "/obj/item/stack/spacecash/c10",
+    "/obj/item/stack/spacecash/c20",
+    "/obj/item/stack/spacecash/c50",
+    "/obj/item/stack/spacecash/c100",
+    "/obj/item/stack/spacecash/c200",
+    "/obj/item/stack/spacecash/c500",
+    "/obj/item/stack/spacecash/c1000",
+    "/obj/item/stack/spacecash/c10000",
+    "/obj/structure/closet/crate/freezer",
+    "/obj/item/food/grown/ash_flora/shavings",
+    "/obj/item/food/grown/ash_flora/mushroom_leaf",
+    "/obj/item/food/grown/ash_flora/mushroom_cap",
+    "/obj/item/food/grown/ash_flora/mushroom_stem",
+    "/obj/item/food/grown/ash_flora/cactus_fruit",
+    "/obj/item/seeds/lavaland/cactus",
+    "/obj/item/food/grown/ash_flora/seraka",
+    "/obj/item/food/grown/ash_flora/fireblossom",
+    "/obj/item/food/grown/ash_flora/glowgrowth",
+    "/obj/item/food/grown/icepepper",
+    "/obj/item/food/grown/ash_flora/fonarstolbe",
+    "/obj/item/food/grown/ash_flora/vahrezjia",
+    "/obj/item/food/grown/ash_flora/podsneyzka",
+    "/obj/item/food/grown/ash_flora/inozhakust",
+    "/obj/item/food/grown/ash_flora/plasma_flower",
+    "/obj/item/food/grown/drake_beet",
+];
+
 pub fn runtime_types() -> BTreeSet<&'static str> {
     use crate::{antag, atmos_machine, cargo, mobs, service, silicon};
     let mut out = BTreeSet::new();
@@ -1730,6 +1762,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
     out.extend(crate::fishing::runtime_types());
     // What the stack crafting menus make (`ss13_game::stack_recipes`).
     out.extend(crate::stack_recipe_types::STACK_RECIPE_RESULTS);
+    out.extend(CARGO_FLORA_RUNTIME_TYPES);
     // What growing vats grow and the dish the microscope hands back (`ss13_game::science`).
     out.extend(crate::cell_line_types::CELL_LINE_RESULTS);
     out.insert("/obj/item/petri_dish");

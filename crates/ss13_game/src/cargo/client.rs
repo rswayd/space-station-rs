@@ -46,6 +46,7 @@ impl Plugin for CargoClientPlugin {
             .register_ui_view::<MatMarketUi>()
             .register_ui_view::<super::market_ui::BlackMarketUi>()
             .register_ui_view::<super::market_ui::LtsrbtUi>()
+            .register_ui_view::<super::bank_ui::BankMachineUi>()
             .add_observer(submit_request);
     }
 }

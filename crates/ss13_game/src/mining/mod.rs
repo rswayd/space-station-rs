@@ -7,7 +7,7 @@
 //! the fauna's monster cores with the stabilizing serum ([`cores`]), the resonator
 //! ([`resonator`]), bluespace shelter capsules ([`capsule`]), marker beacons ([`beacons`]), the explorer gear's
 //! armour plates ([`explorer`]), fulton extraction ([`fulton`]) and the necropolis tendrils with
-//! their chests ([`necropolis`]).
+//! their chests ([`necropolis`]), the lazarus injector ([`devices`]).
 //! This module holds the windows' data, which both halves share; the client views are in
 //! [`client`].
 //!
@@ -31,6 +31,8 @@ pub mod console;
 pub mod cores;
 #[cfg(feature = "server")]
 pub mod crusher;
+#[cfg(feature = "server")]
+pub mod devices;
 #[cfg(feature = "server")]
 pub mod equipment;
 #[cfg(feature = "server")]
@@ -111,6 +113,7 @@ impl bevy::prelude::Plugin for MiningServerPlugin {
             fulton::FultonPlugin,
             crusher::CrusherPlugin,
             necropolis::NecropolisPlugin,
+            devices::DevicesPlugin,
         ));
     }
 }
@@ -143,6 +146,7 @@ pub fn item_interaction(
     target: bevy::prelude::Entity,
 ) -> bool {
     orm::item_interaction(world, held, target)
+        || devices::item_interaction(world, mob, held, target)
         || cores::item_interaction(world, client, mob, held, target)
         || resonator::item_interaction(world, mob, held, target)
         || beacons::item_interaction(world, client, mob, held, target)
@@ -185,6 +189,7 @@ pub fn examine_lines(
     fulton::examine_lines(world, target, lines);
     equipment::examine_lines(world, target, lines);
     rocks::examine_lines(world, target, lines);
+    devices::examine_lines(world, target, lines);
 }
 
 /// The mining `click_alt`s: rotating an open ORM's input and output. True when handled.

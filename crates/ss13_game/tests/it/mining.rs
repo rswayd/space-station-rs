@@ -144,6 +144,14 @@ const TYPES: &str = r##"{
         "name": "mining equipment order console",
         "order_categories": { "list": [ "Mining" ] }, "credit_type": "mp",
         "cargo_cost_multiplier": 0.65, "express_cost_multiplier": 1, "cooldown_time": 100 } },
+    "/obj/machinery/computer/order_console/cook": {
+        "parent": "/obj/machinery/computer/order_console", "declared_vars": {
+        "name": "produce orders console", "order_categories": { "list": [ "Mining" ] },
+        "credit_type": "cr", "cargo_cost_multiplier": 0.65,
+        "announcement_line": "The kitchen has ordered groceries." } },
+    "/obj/structure/closet": { "parent": "/obj/structure" },
+    "/obj/structure/closet/crate": { "parent": "/obj/structure/closet" },
+    "/obj/structure/closet/crate/freezer": { "parent": "/obj/structure/closet/crate" },
     "/mob": { "parent": "/atom/movable", "declared_vars": { "layer": 4, "density": 1 } },
     "/mob/living": { "parent": "/mob" },
     "/mob/living/carbon": { "parent": "/mob/living" },
@@ -187,12 +195,13 @@ const MAP: &str = r##""w" = (/turf/closed/wall,/area/space)
 "M" = (/obj/machinery/mineral/ore_redemption,/turf/open/floor,/area/space)
 "O" = (/obj/machinery/ore_silo,/turf/open/floor,/area/space)
 "C" = (/obj/machinery/computer/order_console/mining,/turf/open/floor,/area/space)
+"P" = (/obj/machinery/computer/order_console/cook,/turf/open/floor,/area/space)
 "S" = (/obj/machinery/mineral/stacking_machine,/turf/open/floor,/area/space)
 "K" = (/obj/machinery/mineral/stacking_unit_console,/turf/open/floor,/area/space)
 
 (1,1,1) = {"
 wwwwwwwww
-wGffSfOfw
+wGffSfOPw
 wsIffffff
 wBMfKfCfw
 wwwwwwwww
@@ -205,6 +214,7 @@ const GIBTONITE: TilePos = TilePos::new(2, 4, 1);
 const ORE_BOX: TilePos = TilePos::new(2, 2, 1);
 const ORM: TilePos = TilePos::new(3, 2, 1);
 const CONSOLE: TilePos = TilePos::new(7, 2, 1);
+const COOK_CONSOLE: TilePos = TilePos::new(8, 4, 1);
 const IRON: &str = "/datum/material/iron";
 
 const STATES: [(&str, &str); 10] = [
@@ -231,6 +241,7 @@ fn fixture_assets() -> PathBuf {
         "/obj/machinery/ore_silo",
         "/obj/machinery/mineral/ore_redemption",
         "/obj/machinery/computer/order_console/mining",
+        "/obj/machinery/computer/order_console/cook",
         "/obj/machinery/mineral/stacking_machine",
         "/obj/machinery/mineral/stacking_unit_console",
         "/obj/item/mining_voucher",
@@ -470,8 +481,8 @@ fn dig_smelt_claim_buy_gibtonite_and_ore_box() {
     s.run_for(10.5);
     apply(s.server.world_mut(), console, mob, ConsoleAct::Purchase);
     assert_eq!(
-        s.server.world().resource::<MiningShipments>().0,
-        vec![vec!["/obj/item/pickaxe".to_owned()]],
+        s.server.world().resource::<MiningShipments>().0[0].items,
+        vec!["/obj/item/pickaxe".to_owned()],
         "shipped with the next supply shuttle"
     );
     // 300 * 0.65.
@@ -806,4 +817,39 @@ fn modkits_cards_vouchers_gibtonite_ore_and_stacking() {
         s.server.world().get_entity(ore).is_ok()
     });
     s.run_until("blown", |s| s.server.world().get_entity(ore).is_err());
+}
+
+/// A credits console (the cook's): the account's credits pay, the order waits for the shuttle in
+/// the kitchen's freezer; too little money buys nothing.
+#[test]
+fn the_cook_console_pays_with_credits() {
+    let mut s = Station::start();
+    let mob = s.mob();
+    let console = s.obj(COOK_CONSOLE, "/obj/machinery/computer/order_console/cook");
+    let state = s.server.world().get::<OrderConsole>(console).unwrap();
+    assert!(!state.mining_points && state.kitchen);
+    let id = s.account();
+    let set_balance = |s: &mut Station, n: i64| {
+        let mut economy = s.server.world_mut().resource_mut::<Economy>();
+        let account = economy.account_mut(id).unwrap();
+        account.balance = n;
+        account.mining_points = 10_000;
+    };
+    set_balance(&mut s, 100);
+    apply(s.server.world_mut(), console, mob, ConsoleAct::AddOne(0));
+    apply(s.server.world_mut(), console, mob, ConsoleAct::Purchase);
+    assert!(
+        s.server.world().resource::<MiningShipments>().0.is_empty(),
+        "195 credits, 100 on the account: mining points do not pay here"
+    );
+    set_balance(&mut s, 1000);
+    apply(s.server.world_mut(), console, mob, ConsoleAct::Purchase);
+    let shipments = &s.server.world().resource::<MiningShipments>().0;
+    assert_eq!(shipments.len(), 1);
+    assert!(shipments[0].kitchen);
+    assert_eq!(shipments[0].items, vec!["/obj/item/pickaxe".to_owned()]);
+    // 300 * 0.65.
+    let economy = s.server.world().resource::<Economy>();
+    assert_eq!(economy.account(id).unwrap().balance, 805);
+    assert_eq!(economy.account(id).unwrap().mining_points, 10_000);
 }
