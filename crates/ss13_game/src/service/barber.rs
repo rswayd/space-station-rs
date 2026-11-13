@@ -1219,14 +1219,10 @@ fn start_option(
     }
 }
 
-/// tg `sanitize_name(allow_numbers = TRUE)`, roughly: printable, trimmed, not empty.
+/// tg `sanitize_name(allow_numbers = TRUE)` of the trimmed `tgui_input_text` answer
+/// (BandaStation's Cyrillic names).
 fn sanitize_name(text: &str) -> Option<String> {
-    let name: String = text
-        .chars()
-        .filter(|c| !c.is_control() && !matches!(c, '<' | '>' | '\\' | '"'))
-        .collect();
-    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!name.is_empty()).then_some(name)
+    ss13_shared::text::sanitize_name(text.trim(), true, true)
 }
 
 /// A mirror step answered. False when nothing more was asked (the menu comes back).
@@ -1792,9 +1788,10 @@ mod tests {
         assert_eq!(rgb_of("#12ab"), None);
         assert_eq!(rgb_of("12abff"), None);
         assert_eq!(
-            sanitize_name("  Вася   <b>Пупкин</b> ").as_deref(),
-            Some("Вася bПупкин/b")
+            sanitize_name("  вася пупкин ").as_deref(),
+            Some("Вася Пупкин")
         );
+        assert_eq!(sanitize_name("Вася   Пупкин"), None);
         assert_eq!(sanitize_name(" \n "), None);
     }
 

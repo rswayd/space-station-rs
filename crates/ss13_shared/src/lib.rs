@@ -10,6 +10,7 @@ pub mod dir;
 pub mod light;
 pub mod line_of_sight;
 pub mod protocol;
+pub mod text;
 pub mod tile;
 pub mod ui;
 

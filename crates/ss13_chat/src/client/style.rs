@@ -76,6 +76,8 @@ pub fn span_style(span: Span) -> SpanStyle {
         Span::Emoji(_) => (CHAT_TEXT, false, false),
         // `a { color: var(--color-hyperlink) }`.
         Span::Link(_) => (Color::hsl(207.0, 0.9, 0.65), false, false),
+        // Bold as the `.ooc` it sits in; an effect animates it (`super::donor`).
+        Span::DonorKey { rgb: [r, g, b], .. } => (Color::srgb_u8(r, g, b), true, false),
     };
     SpanStyle {
         color,

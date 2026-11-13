@@ -615,7 +615,10 @@ fn run_scene(
 ) -> impl Scene {
     let spans: Vec<_> = texts
         .into_iter()
-        .map(|(span, text)| bsn! { TextSpan(text) @span_font(span, outer, FONT_SIZE) })
+        .map(|(span, text)| {
+            let shine = super::donor::shine_patch(span);
+            bsn! { TextSpan(text) @span_font(span, outer, FONT_SIZE) @{shine} }
+        })
         .collect();
     let text = (!spans.is_empty()).then(|| {
         bsn! {

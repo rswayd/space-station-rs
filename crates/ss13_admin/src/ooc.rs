@@ -12,10 +12,11 @@
 // forgets them; they belong to the preferences' SQL); the prayer's type (chaplain, cult,
 // heretic), its icon and deity signal are not ported.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
+use ss13_chat::badges::{ChatBadges, DonorChatPrefs, MAX_DONATOR_LEVEL, ooc_badged_name};
 use ss13_chat::emoji::{Emojis, emoji_parse};
 use ss13_chat::server::{Muted, Overhead, OverheadKind, SayRates};
 use ss13_game::ghost::Ghost;
@@ -39,7 +40,7 @@ use crate::server::{
     AdminConfig, AdminSession, admin_action, admins_with, chat, client_ckey, log_admin,
     sanitize_text, tell,
 };
-use ss13_shared::admin::rights::R_ADMIN;
+use ss13_shared::admin::rights::{R_ADMIN, R_EVERYTHING};
 
 /// `#define LOOC_RANGE 7`.
 const LOOC_RANGE: u32 = 7;
@@ -104,6 +105,7 @@ pub(crate) fn build(app: &mut App) {
     app.insert_resource(Motd(motd))
         .init_resource::<OocPolicy>()
         .init_resource::<AdminNotice>()
+        .init_resource::<DonatorLevels>()
         .add_systems(
             Update,
             (
@@ -313,7 +315,9 @@ fn ooc_broadcast(world: &mut World, client: Entity, text: &str) {
     } else {
         Span::Ooc
     };
-    let mut segments = vec![ChatSegment::new(span, format!("OOC: {key}: "))];
+    let mut segments = vec![ChatSegment::new(span, "OOC: ")];
+    segments.extend(ooc_name(world, client, &key, span));
+    segments.push(ChatSegment::new(span, ": "));
     segments.extend(emoji_parse(text, span, world.get_resource::<Emojis>()));
     let receivers: Vec<Entity> = all_clients(world)
         .into_iter()
@@ -332,6 +336,48 @@ fn ooc_broadcast(world: &mut World, client: Entity, text: &str) {
             segments,
         },
     );
+}
+
+/// `client.donator_level` by ckey (BandaStation `budget` table).
+// shortcut: nothing fills it until the SQL layer is ported; it then loads the levels here.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct DonatorLevels(pub HashMap<String, u8>);
+
+/// BandaStation `/client/proc/get_donator_level`: the stored level, or the maximum for a holder
+/// (deadminned too) of every right (`get_donator_level_from_host`).
+// shortcut: no `enable_localhost_rank`/`localhost_donate_tier` (no localhost rank here).
+pub fn donator_level(world: &World, client: Entity) -> u8 {
+    let ckey = client_ckey(world, client);
+    let stored = world
+        .get_resource::<DonatorLevels>()
+        .and_then(|d| d.0.get(&ckey).copied())
+        .unwrap_or(0);
+    let host = world
+        .get::<AdminSession>(client)
+        .is_some_and(|s| s.rights == R_EVERYTHING);
+    if host {
+        stored.max(MAX_DONATOR_LEVEL)
+    } else {
+        stored
+    }
+}
+
+/// BandaStation `get_ooc_badged_name` of `client`: its badges and its key. The staff badge is
+/// of the first rank of an active holder (tg `holder?.ranks[1]`; deadminned, there is none).
+fn ooc_name(world: &World, client: Entity, key: &str, span: Span) -> Vec<ChatSegment> {
+    let prefs = world
+        .get::<DonorChatPrefs>(client)
+        .copied()
+        .unwrap_or_default();
+    let rank = holder(world, client).and_then(|s| s.rank.split('+').next());
+    ooc_badged_name(
+        key,
+        donator_level(world, client),
+        rank,
+        &prefs,
+        world.get_resource::<ChatBadges>(),
+        span,
+    )
 }
 
 /// BandaStation `/client/proc/looc_message`.
@@ -484,12 +530,13 @@ fn hearers_of(
     out
 }
 
-/// tg `/mob/verb/pray`: the words to the admins and back to the sender.
+/// tg `/mob/verb/pray`: the words to the admins and back to the sender, through BandaStation's
+/// IC filter.
 fn pray_intent(world: &mut World, client: Entity, raw: &str) {
     let Some(body) = sender_body(world, client) else {
         return;
     };
-    let text = sanitize_text(raw, MAX_MESSAGE_LEN);
+    let text = sanitize_text(&ss13_shared::text::ic_filter(raw), MAX_MESSAGE_LEN);
     if text.is_empty() {
         return;
     }
@@ -703,5 +750,38 @@ mod tests {
         assert!(looks_like_speech("#шепот"));
         assert!(looks_like_speech("say вот"));
         assert!(!looks_like_speech("обычный текст"));
+    }
+
+    #[test]
+    fn donor_levels_come_from_the_store_or_every_right() {
+        let mut world = World::new();
+        world.insert_resource(DonatorLevels(HashMap::from([("bob".to_owned(), 2)])));
+        world.insert_resource(ChatBadges(HashMap::from([
+            ("Tier_5".to_owned(), ss13_shared::IconStateId(1)),
+            ("Host".to_owned(), ss13_shared::IconStateId(2)),
+        ])));
+        let bob = world.spawn(ClientToken("Bob".into())).id();
+        let session = AdminSession {
+            ckey: "host".into(),
+            rank: "Хост+Ментор".into(),
+            rights: R_EVERYTHING,
+            active: true,
+        };
+        let host = world.spawn((ClientToken("Host".into()), session)).id();
+        assert_eq!(donator_level(&world, bob), 2);
+        assert_eq!(donator_level(&world, host), MAX_DONATOR_LEVEL);
+        let texts = |segments: Vec<ChatSegment>| -> Vec<String> {
+            segments.into_iter().map(|s| s.text).collect()
+        };
+        assert_eq!(
+            texts(ooc_name(&world, host, "host", Span::AdminOoc)),
+            [":Tier_5:", ":Host:", "host"]
+        );
+        // Deadminned: still the top level (tg counts `GLOB.deadmins`), no staff badge.
+        world.get_mut::<AdminSession>(host).unwrap().active = false;
+        assert_eq!(
+            texts(ooc_name(&world, host, "host", Span::Ooc)),
+            [":Tier_5:", "host"]
+        );
     }
 }

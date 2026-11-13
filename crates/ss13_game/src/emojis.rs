@@ -1,7 +1,9 @@
 //! The emoji set of tg `emoji_parse` (`ss13_chat::emoji`): every icon state of `EMOJI_SET` in
-//! the manifest, by lower-case name, refreshed whenever the icon index is (map load).
+//! the manifest, by lower-case name, refreshed whenever the icon index is (map load); the OOC
+//! badges of `ss13_chat::badges` alike, by their state names.
 
 use bevy::prelude::*;
+use ss13_chat::badges::{BADGES_DMI, ChatBadges};
 use ss13_chat::emoji::{EMOJI_SET, Emojis};
 use ss13_mapload::IconIndex;
 
@@ -9,16 +11,28 @@ pub struct EmojisPlugin;
 
 impl Plugin for EmojisPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Emojis>().add_systems(
-            Update,
-            collect_emojis.run_if(resource_exists_and_changed::<IconIndex>),
-        );
+        app.init_resource::<Emojis>()
+            .init_resource::<ChatBadges>()
+            .add_systems(
+                Update,
+                collect_emojis.run_if(resource_exists_and_changed::<IconIndex>),
+            );
     }
 }
 
 /// Cost: one pass over the icon index per map load.
-fn collect_emojis(icons: Res<IconIndex>, mut emojis: ResMut<Emojis>) {
+fn collect_emojis(
+    icons: Res<IconIndex>,
+    mut emojis: ResMut<Emojis>,
+    mut badges: ResMut<ChatBadges>,
+) {
     emojis.0 = emoji_states(&icons);
+    badges.0 = icons
+        .0
+        .iter()
+        .filter(|((dmi, _), _)| dmi == BADGES_DMI)
+        .map(|((_, state), &id)| (state.clone(), id))
+        .collect();
 }
 
 pub fn emoji_states(

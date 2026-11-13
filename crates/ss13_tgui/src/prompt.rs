@@ -514,11 +514,13 @@ pub fn check_entry(prompt: &Prompt, entry: &str) -> Option<PromptAnswer> {
                 Vec::new()
             }))
         }
+        // BandaStation `set_entry`: a Russian letter is the English key under it.
         PromptKind::KeyCombo { .. } => {
+            let entry = ss13_shared::text::ru_key_to_en_key(entry);
             let ok = !entry.is_empty()
                 && entry.len() <= MAX_COMBO_LEN
                 && entry.chars().all(|c| c.is_ascii_graphic());
-            ok.then(|| PromptAnswer::KeyCombo(entry.to_owned()))
+            ok.then_some(PromptAnswer::KeyCombo(entry))
         }
         // `sanitize_hexcolor(LOWER_TEXT(entry), 6, TRUE)`; a bad one keeps the window open.
         PromptKind::Color { .. } => sanitize_hex(entry).map(PromptAnswer::Color),
@@ -867,6 +869,11 @@ mod tests {
             Some(PromptAnswer::KeyCombo("CtrlShiftA".into()))
         );
         assert_eq!(check_entry(&combo, ""), None);
+        assert_eq!(
+            check_entry(&combo, "й"),
+            Some(PromptAnswer::KeyCombo("Q".into()))
+        );
+        assert_eq!(check_entry(&combo, "CtrlЙ"), None);
 
         let color = prompt(PromptKind::Color {
             default: "#000000".into(),
