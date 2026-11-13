@@ -17,8 +17,12 @@
 //!   [`super::bounty`].
 //! - Each account keeps tg's `transaction_history` (the last 20 logged adjustments, shown by NT
 //!   Pay): paychecks and the transfers that pass a reason.
-// shortcut: no inflation, debts, departmental cards, audit log or species payday modifiers;
-// purchases (vendors, consoles) adjust money without a history entry.
+//! - Departmental budget cards (`/obj/item/card/id/departmental_budget`, [`DepartmentalCard`]):
+//!   the card's account is its department's budget ([`department_account_id`]: department
+//!   accounts answer to small reserved ids in [`Economy::account`]), so paying with it draws on
+//!   the budget; it cannot withdraw cash, self-paid cargo orders and custom vendors refuse it.
+// shortcut: no inflation, debts, audit log or species payday modifiers; purchases (vendors,
+// consoles) adjust money without a history entry.
 
 use std::collections::HashMap;
 
@@ -148,6 +152,39 @@ impl BankAccount {
     }
 }
 
+/// `/obj/item/card/id/departmental_budget` (`department_ID`, `SSeconomy.dep_cards`).
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DepartmentalCard(pub &'static str);
+
+pub const DEPARTMENTAL_CARD: &str = "/obj/item/card/id/departmental_budget";
+
+/// A departmental card's department: the cargo card's, else the civilian one.
+pub fn card_department(path: &str) -> Option<&'static str> {
+    use ss13_mapload::fidelity::is_under;
+    if !is_under(path, DEPARTMENTAL_CARD) {
+        return None;
+    }
+    Some(if is_under(path, &format!("{DEPARTMENTAL_CARD}/car")) {
+        ACCOUNT_CAR
+    } else {
+        ACCOUNT_CIV
+    })
+}
+
+/// The id a department account answers to in [`Economy::account`]: its place in
+/// [`DEPARTMENTS`] plus one (personal accounts are 111111..=999999).
+pub fn department_account_id(department: &str) -> Option<u32> {
+    DEPARTMENTS
+        .iter()
+        .position(|&(id, _)| id == department)
+        .map(|i| i as u32 + 1)
+}
+
+/// tg `IS_DEPARTMENTAL_CARD`.
+pub fn is_departmental_card(world: &World, card: Entity) -> bool {
+    world.get::<DepartmentalCard>(card).is_some()
+}
+
 /// On an ID card: its `registered_account`.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct BankAccountId(pub u32);
@@ -221,13 +258,26 @@ impl Economy {
         self.departments.iter().map(|(d, a)| (d.as_str(), a))
     }
 
-    /// `bank_accounts_by_id[id]`.
+    /// `bank_accounts_by_id[id]`, or a department's budget by [`department_account_id`] (a
+    /// departmental card's `registered_account`).
     pub fn account(&self, id: u32) -> Option<&BankAccount> {
-        self.accounts.get(&id)
+        match Self::department_index(id) {
+            Some(i) => self.departments.get(i).map(|(_, a)| a),
+            None => self.accounts.get(&id),
+        }
     }
 
     pub fn account_mut(&mut self, id: u32) -> Option<&mut BankAccount> {
-        self.accounts.get_mut(&id)
+        match Self::department_index(id) {
+            Some(i) => self.departments.get_mut(i).map(|(_, a)| a),
+            None => self.accounts.get_mut(&id),
+        }
+    }
+
+    fn department_index(id: u32) -> Option<usize> {
+        (1..=DEPARTMENTS.len() as u32)
+            .contains(&id)
+            .then(|| id as usize - 1)
     }
 
     pub fn accounts(&self) -> impl Iterator<Item = (u32, &BankAccount)> {
@@ -306,7 +356,35 @@ impl Plugin for EconomyPlugin {
         if !app.world().contains_resource::<EconomyConfig>() {
             app.init_resource::<EconomyConfig>();
         }
-        app.add_systems(Startup, init).add_systems(Update, fire);
+        app.add_systems(Startup, init)
+            .add_systems(Update, fire)
+            .add_observer(add_departmental_card);
+    }
+}
+
+/// `departmental_budget/Initialize`: the department's account, name and description.
+fn add_departmental_card(
+    add: On<Add<ss13_mapload::DmItem>>,
+    items: Query<&ss13_mapload::DmItem>,
+    mut commands: Commands,
+) {
+    let Some(department) = items
+        .get(add.entity)
+        .ok()
+        .and_then(|i| card_department(&i.path))
+    else {
+        return;
+    };
+    let mut card = commands.entity(add.entity);
+    card.try_insert(DepartmentalCard(department));
+    if let Some(id) = department_account_id(department) {
+        card.try_insert(BankAccountId(id));
+    }
+    if let Some(&(_, name)) = DEPARTMENTS.iter().find(|(d, _)| *d == department) {
+        card.try_insert(ss13_mapload::DmName {
+            name: format!("departmental card ({name})"),
+            desc: format!("Обеспечивает доступ к бюджету {name}."),
+        });
     }
 }
 
@@ -506,6 +584,27 @@ pub(crate) fn dm_number(n: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn departmental_cards_pay_from_their_budget() {
+        assert_eq!(card_department(DEPARTMENTAL_CARD), Some(ACCOUNT_CIV));
+        assert_eq!(
+            card_department("/obj/item/card/id/departmental_budget/car"),
+            Some(ACCOUNT_CAR)
+        );
+        assert_eq!(card_department("/obj/item/card/id/advanced"), None);
+        let mut economy = Economy::new(1);
+        let car = department_account_id(ACCOUNT_CAR).unwrap();
+        let before = economy.department(ACCOUNT_CAR).unwrap().balance;
+        assert!(economy.account_mut(car).unwrap().adjust_money(100));
+        assert_eq!(
+            economy.department(ACCOUNT_CAR).unwrap().balance,
+            before + 100
+        );
+        let personal = economy.open_account("Джон Доу", 10, ACCOUNT_CIV);
+        assert!(personal >= 111_111 && economy.account(personal).is_some());
+        assert!(economy.account(0).is_none());
+    }
 
     #[test]
     fn starting_budgets_follow_tg_precedence() {

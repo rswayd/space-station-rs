@@ -598,6 +598,16 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity)
     if world.get::<IdCard>(target).is_none() {
         return false;
     }
+    // `departmental_budget/click_alt`: keeps the vault's bank machine useful.
+    if super::economy::is_departmental_card(world, target) {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "Снятие средств не совместимо с данным дизайном карты.",
+        );
+        return true;
+    }
     let Some(balance) = world.get::<BankAccountId>(target).and_then(|a| {
         world
             .get_resource::<Economy>()?

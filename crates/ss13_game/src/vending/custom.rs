@@ -442,6 +442,16 @@ pub(super) fn vend(
     };
     let mut paid = 0;
     if !is_owner(world, vendor, actor) {
+        if crate::cargo::economy::is_departmental_card(world, card) {
+            crate::balloon::balloon_alert(world, actor, vendor, "неверная платёжная карта");
+            super::tell_mob(
+                world,
+                actor,
+                Span::Warning,
+                "Эту карту отдела нельзя использовать для этого.",
+            );
+            return Err(VendReject::NoAccount);
+        }
         let linked = world.get::<CustomVendor>(vendor).and_then(|c| c.linked);
         let payer = world.get::<BankAccountId>(card).map(|a| a.0);
         let (Some(linked), Some(payer)) = (linked, payer) else {

@@ -369,6 +369,7 @@
 //! | 69 | `cannons::item_interaction` (cannon balls, charge, fuse, wrench; mounted gun ammo and wrench) |
 //! | 53 | `holodeck::item_interaction` (holo floors take no items, ready buttons, the holodeck conveyor) |
 //! | 100 | `antag::uplink::item_interaction` |
+//! | 197 | `antag::syndie_items::scan_secondary` (right click with an agent card: a human or an item scanned for ID cards) |
 //! | 200 | `antag::syndie_items::item_interaction` |
 //! | 247 | `weapons::disarm_attack` (a right click with a shield or a pillow shoves) |
 //! | 251 | `weapons` whetstone (`sharpener`), shield bash (`block::bash`) |

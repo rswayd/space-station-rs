@@ -576,6 +576,8 @@ struct ActorId {
     rank: String,
     account: Option<u32>,
     card_name: String,
+    /// `IS_DEPARTMENTAL_CARD`.
+    departmental: bool,
 }
 
 fn actor_id(world: &World, mob: Entity) -> Option<ActorId> {
@@ -592,6 +594,7 @@ fn actor_id(world: &World, mob: Entity) -> Option<ActorId> {
             card_name: world
                 .get::<DmName>(item)
                 .map_or_else(|| "ID card".into(), |n| n.name.clone()),
+            departmental: super::economy::is_departmental_card(world, item),
         })
     })
 }
@@ -633,6 +636,15 @@ fn add_item(
             machine_say(world, console, "No ID card detected.");
             return false;
         };
+        if card.departmental {
+            let text = format!(
+                "The {} rejects {}.",
+                crate::security::name_of(world, console),
+                card.card_name
+            );
+            machine_say(world, console, &text);
+            return false;
+        }
         let valid = account.is_some_and(|a| world.resource::<Economy>().account(a).is_some());
         if !valid {
             machine_say(world, console, "Invalid bank account.");

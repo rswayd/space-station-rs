@@ -9,13 +9,15 @@
 //! - the sleepy pen (`/obj/item/pen/sleepy`): a pen stab (`try_inject`) injects its whole
 //!   45 u holder (20 chloral hydrate, 15 mute toxin, 10 tirizene) into the victim's blood;
 //! - the agent card (`/obj/item/card/id/advanced/chameleon`): `attack_self` shows it or forges
-//!   it (a name and an assignment asked, or the forgery reset); used on another ID card it
-//!   copies the accesses its wildcard slots can take.
+//!   it (a name and an assignment asked, a blank name gives a random one, or the forgery reset);
+//!   used on another ID card it copies the accesses its wildcard slots can take; right-clicked
+//!   at a human it scans them for 2 s, at an item at once, and copies from a random ID card
+//!   among their contents (`interact_with_atom_secondary`).
 // shortcut: no `block_chance`, embedding, jousting, alternative (pointy) sharpness, light or
 // heat of the blades, no saber multitool rainbow; the sleepy pen does not fit a dart; the agent
 // card takes every access that fits instead of the `ChameleonCard` window's choice, has no
-// age, wallet spoofing, account change or chameleon trim action, does not copy from a worn ID
-// with a right click, and a blank forged name keeps the default instead of a random one.
+// age, wallet spoofing, account change or chameleon trim action; a blank forged name is a
+// random male name (the port's bodies are male, `crate::jobs`).
 
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
@@ -33,13 +35,15 @@ use crate::health::Stat;
 use crate::id_access::{AddMode, CardAccess, add_access};
 use crate::inventory::{CarriedBy, IdCard, Inventory};
 use crate::outfit::{IdRegistration, id_label};
-use crate::tools::{Actor, tell};
+use crate::tools::{Actor, do_after, tell};
 
 pub const ESWORD_ROOT: &str = "/obj/item/melee/energy/sword";
 const SABER_ROOT: &str = "/obj/item/melee/energy/sword/saber";
 pub const EDAGGER: &str = "/obj/item/pen/edagger";
 pub const SLEEPY_PEN: &str = "/obj/item/pen/sleepy";
 pub const AGENT_CARD: &str = "/obj/item/card/id/advanced/chameleon";
+/// `do_after(user, 2 SECONDS, interacting_with)` of the scan, deciseconds.
+const SCAN_DS: f32 = 20.0;
 /// `possible_sword_colors`.
 const SABER_COLORS: [&str; 4] = ["red", "blue", "green", "purple"];
 /// `SHARP_EDGED`.
@@ -104,6 +108,13 @@ impl Plugin for SyndieItemsPlugin {
             c.held.is_some_and(|h| {
                 crate::antag::syndie_items::item_interaction(w, c.client, c.mob, h, c.target)
             })
+        });
+        // Right click: the agent card scans a human or an item for ID cards.
+        app.add_click_handler(ClickPhase::HeldOnTarget, 197, |w, c| {
+            c.modifiers.right
+                && c.held.is_some_and(|h| {
+                    crate::antag::syndie_items::scan_secondary(w, c.client, c.mob, h, c.target)
+                })
         });
         // The sleepy pen on a mob, the agent card on an ID card.
         app.add_click_handler(ClickPhase::HeldOnTarget, 200, |w, c| {
@@ -454,6 +465,106 @@ fn copy_access(world: &mut World, client: Entity, card: Entity, target: Entity) 
     info!("agent card {card} copied {added} accesses from {target}");
 }
 
+/// The ID cards in `root` and everything inside it (`get_all_contents_type(/obj/item/card/id)`
+/// plus `GetID()`), for a human what they hold and wear.
+fn ids_in(world: &World, root: Entity) -> Vec<Entity> {
+    let mut things = if world.get::<Inventory>(root).is_some() {
+        crate::antag::objectives::all_contents(world, root)
+    } else {
+        vec![root]
+    };
+    let mut i = 0;
+    while i < things.len() {
+        if let Some(stored) = world.get::<crate::storage::Stored>(things[i]) {
+            for &e in stored.items() {
+                if !things.contains(&e) {
+                    things.push(e);
+                }
+            }
+        }
+        i += 1;
+    }
+    let mut ids: Vec<Entity> = Vec::new();
+    for e in things {
+        for id in [
+            Some(e).filter(|&e| world.get::<IdCard>(e).is_some()),
+            crate::inventory::get_id(world, e),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    ids
+}
+
+/// tg `interact_with_atom_secondary` of the agent card: a human is scanned for 2 s, an item at
+/// once; then a random ID card among their contents is the theft target. False when `held` is
+/// not an agent card or `target` is neither.
+pub fn scan_secondary(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    held: Entity,
+    target: Entity,
+) -> bool {
+    if !path_of(world, held).is_some_and(|p| is_under(&p, AGENT_CARD)) || held == target {
+        return false;
+    }
+    let human = world.get::<crate::human::HumanLook>(target).is_some();
+    if !human && world.get::<DmItem>(target).is_none() {
+        return false;
+    }
+    crate::balloon::balloon_alert(world, mob, target, "сканируем ID-карту...");
+    if human {
+        let actor = Actor {
+            client,
+            mob,
+            item: Some(held),
+        };
+        do_after(
+            world,
+            actor,
+            target,
+            SCAN_DS,
+            0,
+            crate::construction::Job::AgentCardScan { card: held },
+        );
+        return true;
+    }
+    steal_from(world, client, mob, held, target);
+    true
+}
+
+/// The end of the scan: the human is still there, the card still in hand.
+pub fn complete_scan(world: &mut World, client: Entity, mob: Entity, target: Entity, card: Entity) {
+    steal_from(world, client, mob, card, target);
+}
+
+/// The scan of a human interrupted.
+pub fn scan_interrupted(world: &mut World, mob: Entity, target: Entity) {
+    crate::balloon::balloon_alert(world, mob, target, "прервано!");
+}
+
+fn steal_from(world: &mut World, client: Entity, mob: Entity, card: Entity, target: Entity) {
+    let ids: Vec<Entity> = ids_in(world, target)
+        .into_iter()
+        .filter(|&id| id != card)
+        .collect();
+    if ids.is_empty() {
+        crate::balloon::balloon_alert(world, mob, target, "нет ID!");
+        return;
+    }
+    let pick = world
+        .get_resource_or_init::<CombatRng>()
+        .range(0, ids.len() as u32 - 1) as usize;
+    crate::balloon::balloon_alert(world, mob, target, "ID синхронизированы");
+    copy_access(world, client, card, ids[pick]);
+}
+
 /// What an agent card prompt was for.
 #[derive(Component, Clone, Debug)]
 enum AgentCardPrompt {
@@ -514,10 +625,12 @@ fn agent_card_answers(world: &mut World, mut cursor: Local<MessageCursor<PromptA
                 forge_or_reset(world, client, mob, card)
             }
             (AgentCardPrompt::Name { .. }, Some(PromptAnswer::Text(name))) => {
+                // Invalid/blank names give a randomly generated one.
                 let name = match name.trim() {
                     "" => world
-                        .get::<Name>(mob)
-                        .map(|n| n.to_string())
+                        .get_resource_mut::<crate::jobs::Jobs>()
+                        .and_then(|mut jobs| jobs.random_name(&Default::default()))
+                        .or_else(|| world.get::<Name>(mob).map(|n| n.to_string()))
                         .unwrap_or_default(),
                     name => name.to_owned(),
                 };
@@ -756,5 +869,25 @@ mod tests {
             world.get::<IdRegistration>(card).unwrap().registered_name,
             "Джон Доу"
         );
+    }
+
+    #[test]
+    fn the_agent_card_finds_ids_on_a_human() {
+        let mut world = World::new();
+        let id = world
+            .spawn(IdCard {
+                access: vec!["bar".into()],
+            })
+            .id();
+        let mob = world
+            .spawn(Inventory {
+                id: Some(id),
+                ..default()
+            })
+            .id();
+        assert_eq!(ids_in(&world, mob), vec![id]);
+        assert_eq!(ids_in(&world, id), vec![id]);
+        let empty = world.spawn(Inventory::default()).id();
+        assert!(ids_in(&world, empty).is_empty());
     }
 }
