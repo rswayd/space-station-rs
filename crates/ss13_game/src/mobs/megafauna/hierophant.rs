@@ -806,22 +806,15 @@ fn spawn_wall(world: &mut World, caster: Entity, pos: TilePos) {
         layer: BELOW_MOB_LAYER,
         ..Visual::new(WALL_DMI, "hierophant_wall_temp-0", 10.0)
     };
+    let until = now(world) + 10.0;
     let wall = match spawn_visual(world, pos, visual) {
         Some(e) => e,
-        None => world
-            .spawn((
-                pos,
-                super::TempVisual {
-                    until: now(world) + 10.0,
-                },
-            ))
-            .id(),
+        None => world.spawn((pos, super::TempVisual { until })).id(),
     };
-    world.entity_mut(wall).insert((
-        VortexWall { caster },
-        Density,
-        EnterPolicy(wall_lets_through),
-    ));
+    // Not dense: the caster walks through (`CanAllowThrough`), the policy stops the rest.
+    world
+        .entity_mut(wall)
+        .insert((VortexWall { caster }, EnterPolicy(wall_lets_through)));
 }
 
 /// A chaser from `from` after `target` (`chaser/Initialize`; `preset`: its first direction and
