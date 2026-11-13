@@ -1,11 +1,12 @@
 //! Wall mounts over real WebTransport on 127.0.0.1 (`ss13_game::wallmount`): a fire alarm closes
 //! the firelocks serving its area (also one in the next area, not one deeper there), turns the
-//! area's light red and rings until reset; a light switch turns its area's lights off and on; a
-//! door button opens and closes a blast door, a restricted one refuses an assistant, an
-//! unpowered one does nothing; an airlock button bolts its airlock; a flasher button fires a
-//! mounted flasher at the player in front of it; the extinguisher cabinet gives and takes its
-//! extinguisher; the fire axe cabinet stays shut until a multitool unlocks it; wall frames mount
-//! onto walls (one per wall side) and a wrench takes one apart.
+//! area's light red and rings until reset (a siren sound token the player hears, then stopped);
+//! a light switch turns its area's lights off and on; a door button opens and closes a blast
+//! door, a restricted one refuses an assistant, an unpowered one does nothing; an airlock button
+//! bolts its airlock; a flasher button fires a mounted flasher at the player in front of it; the
+//! extinguisher cabinet gives and takes its extinguisher; the fire axe cabinet stays shut until a
+//! multitool unlocks it; wall frames mount onto walls (one per wall side) and a wrench takes one
+//! apart.
 
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,7 @@ use bevy::prelude::*;
 use ss13_game::combat::NextMove;
 use ss13_game::doors::Door;
 use ss13_game::inventory::{CarriedBy, Inventory};
+use ss13_game::looping_sound::{self, defs::FIREALARM};
 use ss13_game::power::{AreaPower, LightFixture, LightMode};
 use ss13_game::status_effects::StatusEffects;
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
@@ -24,6 +26,8 @@ use ss13_game::wallmount::controls::{Button, Flasher};
 use ss13_game::wallmount::fire_alarm::FireAlarm;
 use ss13_game::wallmount::firelock::Firelock;
 use ss13_mapload::{Areas, DmItem, DmTurfBuild, DmWallMount};
+use ss13_net::sound::client::ChannelSoundReceived;
+use ss13_shared::protocol::ChannelSound;
 use ss13_shared::protocol::ClickModifiers;
 use ss13_shared::{Appearance, IconStateId, Optics, TilePos};
 use ss13_world::{Density, SpatialIndex};
@@ -307,12 +311,38 @@ struct Station(testing::Station);
 
 ss13_game::drive_station!(Station, 0);
 
+/// The channel sounds the player's client got (the sirens' sound tokens).
+#[derive(Resource, Default)]
+struct Channels(Vec<ChannelSound>);
+
+fn record_channels(mut got: MessageReader<ChannelSoundReceived>, mut out: ResMut<Channels>) {
+    out.0.extend(got.read().map(|c| c.0.clone()));
+}
+
+/// The channel a fire alarm siren plays on for the player, once one did.
+fn siren_channel(s: &Station) -> Option<u16> {
+    s.players[0]
+        .app
+        .world()
+        .resource::<Channels>()
+        .0
+        .iter()
+        .find(|c| {
+            c.sound
+                .as_ref()
+                .is_some_and(|e| e.file.starts_with("sound/machines/fire_alarm/fire_alarm"))
+        })
+        .map(|c| c.channel)
+}
+
 impl Station {
     fn start(test: &str) -> Self {
         let assets = fixture_assets(test);
         let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
         s.join("p0", |app| {
-            app.init_resource::<Received>().add_systems(Update, record);
+            app.init_resource::<Received>()
+                .init_resource::<Channels>()
+                .add_systems(Update, (record, record_channels));
         });
         let s = Self(s);
         assert_eq!(*s.get::<TilePos>(s.players[0].mob), SPAWN);
@@ -458,6 +488,16 @@ fn fire_alarm_and_light_switch() {
         s.get::<FireAlarm>(alarm).ringing.is_some(),
         "the pulled alarm rings"
     );
+    // Its siren (`/datum/looping_sound/firealarm`) is a sound token that reaches the player.
+    s.run_until("the siren reaches the player", |s| {
+        siren_channel(s).is_some()
+    });
+    let siren = siren_channel(&s).expect("heard");
+    assert!(looping_sound::is_active(
+        s.server.world(),
+        alarm,
+        FIREALARM.path
+    ));
     assert!(
         s.overlays(alarm)
             .contains(&state_id("wm.dmi", "fire_alerting"))
@@ -484,6 +524,20 @@ fn fire_alarm_and_light_switch() {
     s.run_until("reset opens them", |s| !s.dense(inner) && !s.dense(border));
     assert!(!s.get::<AreaPower>(station).fire);
     assert!(s.get::<FireAlarm>(alarm).ringing.is_none());
+    s.run_until("the siren stops for the player", |s| {
+        s.players[0]
+            .app
+            .world()
+            .resource::<Channels>()
+            .0
+            .iter()
+            .any(|c| c.channel == siren && c.sound.is_none())
+    });
+    assert!(!looping_sound::is_active(
+        s.server.world(),
+        alarm,
+        FIREALARM.path
+    ));
     assert_eq!(s.get::<Optics>(light).light, Some(normal));
     assert!(s.overlays(inner).is_empty());
 

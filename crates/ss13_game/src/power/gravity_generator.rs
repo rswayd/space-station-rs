@@ -13,7 +13,7 @@
 //! - A devastating explosion breaks it (and its parts); the repair is a screwdriver, a welder,
 //!   10 plasteel sheets and a wrench, in that order. [`blackout`] (the gravity generator
 //!   blackout event, a gravity anomaly's detonation) drains it and opens the breaker.
-// shortcut: no sound loop, no investigate log or admin messages, no tool sounds, no shuttle moves,
+// shortcut: no investigate log or admin messages, no tool sounds, no shuttle moves,
 // no nebula shielding, no silicon access, no `blob_act`/`zap_act`; the blackout event is not
 // scheduled by the events controller (see `docs/parity/events`).
 
@@ -358,6 +358,7 @@ fn enable(world: &mut World, e: Entity, shake: bool) {
     g.charging = Charging::Idle;
     g.on = true;
     super::update_use_power(world, e, true);
+    crate::looping_sound::start(world, e, &crate::looping_sound::defs::GRAVGEN);
     let old = gravity_in_level(world, e);
     update_list(world, e);
     if old == 0 && shake {
@@ -373,6 +374,7 @@ fn disable(world: &mut World, e: Entity) {
     g.charging = Charging::Idle;
     g.on = false;
     super::update_use_power(world, e, false);
+    crate::looping_sound::stop(world, e, crate::looping_sound::defs::GRAVGEN.path);
     let old = gravity_in_level(world, e);
     update_list(world, e);
     if old > 0 {

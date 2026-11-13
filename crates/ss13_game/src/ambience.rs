@@ -331,11 +331,10 @@ fn refresh_moved(
     world: &mut World,
     moved: &mut SystemState<Query<(Entity, &PlayerMob), Changed<TilePos>>>,
 ) {
-    let moved: Vec<(Entity, Entity)> = moved
-        .get(world)
-        .iter()
-        .map(|(mob, p)| (mob, p.client))
-        .collect();
+    let Ok(query) = moved.get(world) else {
+        return;
+    };
+    let moved: Vec<(Entity, Entity)> = query.iter().map(|(mob, p)| (mob, p.client)).collect();
     for (mob, client) in moved {
         refresh_buzz(world, mob, client);
     }

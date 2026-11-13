@@ -1,8 +1,8 @@
 //! Table clocks (server), after tg `/obj/item/table_clock`
 //! (`code/game/objects/items/devices/table_clock.dm`).
 //!
-//! - A working clock ticks (`/datum/looping_sound/clock`: `ticking_clock.ogg` every 4 s at 50,
-//!   not through walls) and tells the time on examine.
+//! - A working clock ticks (`/datum/looping_sound/clock`, BandaStation's volume 30:
+//!   `crate::looping_sound`) and tells the time on examine.
 //! - Hit with an item of force 5 or more, or thrown, it breaks (`table_clock_broken`, silent).
 //! - Used in hand, a broken clock is fixed in 10 s, unless it broke more than
 //!   `MAX_CLOCK_REPAIRS` (2) times; a working one refuses to be touched.
@@ -21,20 +21,16 @@ use crate::tools::{Actor, do_after, tell};
 pub const TABLE_CLOCK: &str = "/obj/item/table_clock";
 /// `MAX_CLOCK_REPAIRS`.
 const MAX_CLOCK_REPAIRS: u8 = 2;
-/// `/datum/looping_sound/clock`.
-const TICK_SOUND: &str = "sound/ambience/misc/ticking_clock.ogg";
-const TICK_SECS: f64 = 4.0;
 const SMASH_SOUND: &str = "sound/effects/magic/clockwork/ark_activation.ogg";
 const THROW_SOUND: &str = "sound/effects/footstep/glass_step.ogg";
 /// `do_after(user, 10 SECONDS, src)`, deciseconds.
 const REPAIR_DS: f32 = 100.0;
 
-/// `/obj/item/table_clock`: `broken`, `times_broken`, and when the loop ticks next.
+/// `/obj/item/table_clock`: `broken`, `times_broken`; its `soundloop` ticks while it works.
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct TableClock {
     pub broken: bool,
     pub times_broken: u8,
-    next_tick: f64,
 }
 
 pub(super) fn build(app: &mut App) {
@@ -52,8 +48,15 @@ pub(super) fn build(app: &mut App) {
         c.held
             .is_some_and(|h| crate::devices::table_clock::attackby(w, c.mob, h, c.target))
     });
-    app.add_observer(add_clock)
-        .add_systems(Update, (break_thrown, tick));
+    app.add_observer(add_clock).add_systems(
+        Update,
+        (
+            break_thrown,
+            crate::looping_sound::sync::<TableClock>(&crate::looping_sound::defs::CLOCK, |c| {
+                !c.broken
+            }),
+        ),
+    );
 }
 
 fn add_clock(add: On<Add<DmItem>>, items: Query<&DmItem>, mut commands: Commands) {
@@ -174,32 +177,8 @@ pub fn complete_repair(world: &mut World, mob: Entity, clock: Entity) {
         return;
     }
     c.broken = false;
-    c.next_tick = 0.0;
     refresh_icon(world, clock, false);
     crate::balloon::balloon_alert(world, mob, mob, "часы починены!");
-}
-
-/// The soundloop of the working clocks. Cost: one pass over the table clocks per tick (a
-/// handful per map), a sound each 4 s.
-fn tick(world: &mut World) {
-    let now = world.resource::<Time>().elapsed_secs_f64();
-    let mut q = world.query::<(Entity, &TableClock)>();
-    let due: Vec<Entity> = q
-        .iter(world)
-        .filter(|(_, c)| !c.broken && c.next_tick <= now)
-        .map(|(e, _)| e)
-        .collect();
-    for clock in due {
-        if let Some(mut c) = world.get_mut::<TableClock>(clock) {
-            c.next_tick = now + TICK_SECS;
-        }
-        if let Some(pos) = crate::explosions::turf_of(world, clock) {
-            playsound(
-                world,
-                PlaySound::new(pos, TICK_SOUND, 50.0, false).ignore_walls(false),
-            );
-        }
-    }
 }
 
 /// The time on a working clock, the hint on a broken one.

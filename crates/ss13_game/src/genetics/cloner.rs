@@ -188,6 +188,14 @@ pub(super) fn build(app: &mut App) {
                 apply_acts.in_set(UiSystems::Handle),
                 relay_moves.after(ss13_world::WorldSystems::Movement),
                 timers,
+                // The scanner's microwave loop while it scans, the pod's oven loop while it grows.
+                crate::looping_sound::sync::<CloneScanner>(
+                    &crate::looping_sound::defs::MICROWAVE,
+                    |s| s.scan_until.is_some(),
+                ),
+                crate::looping_sound::sync::<ClonePod>(&crate::looping_sound::defs::OVEN, |p| {
+                    p.running
+                }),
             ),
         );
 }

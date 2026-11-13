@@ -15,7 +15,7 @@
 //!   flip it (two sides); an unwound tape plays and records nothing until a screwdriver
 //!   respools it (12 s).
 // shortcut: hearing ignores walls and radios (every local line within 7 tiles, 1 for
-// whispers); no TTS voice, hiss sound loop, tape recorder speech span, alt-click play, fire
+// whispers); no TTS voice, tape recorder speech span, alt-click play, fire
 // unspooling, music tapes or pre-recorded ruin tapes, and the greyscale tape is not tinted.
 // Cost: one pass over the recording recorders per spoken line; the recording and playing ones
 // once a second.
@@ -184,6 +184,11 @@ pub(super) fn build(app: &mut App) {
             menu_answers
                 .in_set(ss13_tgui::server::UiSystems::Handle)
                 .after(ss13_tgui::prompt::PromptSystems::Answer),
+            // `update_sound()`: the hiss while playing or recording.
+            crate::looping_sound::sync::<TapeRecorder>(
+                &crate::looping_sound::defs::TAPE_RECORDER_HISS,
+                |r| r.playing || r.recording,
+            ),
         ),
     );
 }

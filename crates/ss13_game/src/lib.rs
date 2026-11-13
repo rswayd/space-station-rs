@@ -497,6 +497,8 @@ pub mod lockbox;
 #[cfg(feature = "server")]
 pub mod locked_pickup;
 #[cfg(feature = "server")]
+pub mod looping_sound;
+#[cfg(feature = "server")]
 pub mod loot;
 #[cfg(feature = "server")]
 pub mod machine_frame;

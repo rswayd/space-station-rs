@@ -11,7 +11,6 @@
 use bevy::prelude::*;
 use ss13_chat::Span;
 use ss13_mapload::DmObj;
-use ss13_shared::TilePos;
 
 use super::AtmosDevice;
 use super::devices::{VentPump, VolumePump};
@@ -21,45 +20,19 @@ use crate::tools::tell;
 
 /// `fan_damage_rate`.
 const FAN_DAMAGE_RATE: f32 = 0.5;
-/// `vent_pump_overclock`: `start_length`, `mid_length`, default volume.
-const FAN_START_SECS: f64 = 1.5;
-const FAN_LOOP_SECS: f64 = 1.9;
-const FAN_VOLUME: f32 = 100.0;
-pub const FAN_START: &str = "sound/machines/fan/fan_start.ogg";
-pub const FAN_LOOP: &str = "sound/machines/fan/fan_loop.ogg";
-pub const FAN_STOP: &str = "sound/machines/fan/fan_stop.ogg";
-
-/// A vent's running fan loop: when the next `mid_sounds` clip plays.
-#[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub struct FanLoop {
-    next_at: f64,
-}
-
-fn play(world: &mut World, e: Entity, file: &str) {
-    if let Some(&pos) = world.get::<TilePos>(e) {
-        crate::sound::playsound(
-            world,
-            crate::sound::PlaySound::new(pos, file, FAN_VOLUME, false),
-        );
-    }
-}
-
 /// `toggle_overclock`: flips it and starts or stops the fan loop.
 pub fn toggle_vent_overclock(world: &mut World, vent: Entity) {
-    let now = world.resource::<Time>().elapsed_secs_f64();
     let Some(mut v) = world.get_mut::<VentPump>(vent) else {
         return;
     };
     v.overclocked = !v.overclocked;
-    if v.overclocked {
-        world.entity_mut(vent).insert(FanLoop {
-            next_at: now + FAN_START_SECS,
-        });
-        play(world, vent, FAN_START);
-    } else {
-        world.entity_mut(vent).remove::<FanLoop>();
-        play(world, vent, FAN_STOP);
-    }
+    let on = v.overclocked;
+    crate::looping_sound::set(
+        world,
+        vent,
+        &crate::looping_sound::defs::VENT_PUMP_OVERCLOCK,
+        on,
+    );
 }
 
 /// `vent_pump/process_atmos`: an overclocked, running vent wears its fan before it moves gas.
@@ -81,22 +54,6 @@ pub fn damage_overclocked_vents(world: &mut World) {
     for vent in wearing {
         // `take_damage(fan_damage_rate)` has no damage flag: no armor.
         crate::obj_damage::take_damage_flagless(world, vent, FAN_DAMAGE_RATE);
-    }
-}
-
-/// The fan loop's clips.
-pub fn fan_loops(world: &mut World) {
-    let now = world.resource::<Time>().elapsed_secs_f64();
-    let mut q = world.query::<(Entity, &mut FanLoop)>();
-    let mut due = Vec::new();
-    for (e, mut fan) in q.iter_mut(world) {
-        if now >= fan.next_at {
-            fan.next_at = now + FAN_LOOP_SECS;
-            due.push(e);
-        }
-    }
-    for e in due {
-        play(world, e, FAN_LOOP);
     }
 }
 

@@ -14,7 +14,7 @@
 //!   goes onto a grill at the clicked point. An empty hand (5 s) takes an unlit one apart into its
 //!   logs and a rod. Prelit ones light once the air exists. Fire on its tile lights it; water puts
 //!   it out.
-//! - Both play the burning loop (`match_strike`, then `comfyfire` every 5 s) while lit.
+//! - Both play the burning loop while lit (`crate::looping_sound`: `match_strike`, then `comfyfire`).
 // shortcut: no buckling to the stake (`buckle_requires_restraints`, the 13 px shift), the rod is an
 // overlay rather than an underlay; no smoke/bonfire particles, no "warm and cozy" description, no
 // screentips. Add with buckling by state and particles.
@@ -28,9 +28,9 @@ use ss13_shared::{Appearance, Dir, Facing, IconStateId, LightSource, Optics, Ove
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, ask_world};
 use ss13_world::{Moved, SpatialIndex};
 
+use crate::looping_sound::defs::BURNING;
 use crate::medical::{name_of, visible};
 use crate::obj_damage::{is_under, set_icon_state};
-use crate::sound::{MEDIUM_RANGE_SOUND_EXTRARANGE, PlaySound, playsound};
 use crate::tools::{Actor, DoAfter, tell};
 
 pub const FIREPLACE: &str = "/obj/structure/fireplace";
@@ -58,12 +58,6 @@ const DISMANTLE_DS: f32 = 50.0;
 const FIREPLACE_LIGHT_ANGLE: u16 = 170;
 /// `bonfire/start_burning`: `set_light(6)`.
 const BONFIRE_LIGHT: f32 = 6.0;
-/// `/datum/looping_sound/burning`.
-const LOOP_START: &str = "sound/items/match_strike.ogg";
-const LOOP_MID: &str = "sound/effects/comfyfire.ogg";
-const LOOP_START_SECS: f64 = 3.0;
-const LOOP_MID_SECS: f64 = 5.0;
-const LOOP_VOLUME: f32 = 50.0;
 /// Every process tick; tg's SSobj runs every 2 s with `seconds_per_tick` 2, the rates scale.
 const TICK_SECS: f32 = 1.0;
 
@@ -73,7 +67,6 @@ pub struct Fireplace {
     pub lit: bool,
     pub fuel_added: f64,
     pub expiry: f64,
-    next_sound: f64,
     overlays: Vec<IconStateId>,
 }
 
@@ -83,7 +76,6 @@ pub struct Bonfire {
     pub burning: bool,
     pub grill: bool,
     pub stake: bool,
-    next_sound: f64,
     overlays: Vec<IconStateId>,
 }
 
@@ -117,6 +109,14 @@ impl Plugin for FireplacePlugin {
             .add_systems(
                 Update,
                 (process, entered).after(crate::click::ResolveClicks),
+            )
+            // `burning_loop` while lit (`ignite`/`start_burning` .. `put_out`/`extinguish`).
+            .add_systems(
+                Update,
+                (
+                    crate::looping_sound::sync::<Fireplace>(&BURNING, |f| f.lit),
+                    crate::looping_sound::sync::<Bonfire>(&BURNING, |b| b.burning),
+                ),
             )
             .add_systems(
                 Update,
@@ -202,34 +202,6 @@ fn fire_light(range: f32, angle: u16, dir: Dir, offset: [i8; 2]) -> LightSource 
     }
 }
 
-/// `/datum/looping_sound/burning`: the start sound now, the mid sound after it.
-fn start_loop(world: &mut World, e: Entity) -> f64 {
-    if let Some(&pos) = world.get::<TilePos>(e) {
-        playsound(
-            world,
-            PlaySound::new(pos, LOOP_START, LOOP_VOLUME, true)
-                .extrarange(MEDIUM_RANGE_SOUND_EXTRARANGE),
-        );
-    }
-    now(world) + LOOP_START_SECS
-}
-
-/// The mid sound when it is due; the next time it is.
-fn tick_loop(world: &mut World, e: Entity, due: f64) -> f64 {
-    let t = now(world);
-    if t < due {
-        return due;
-    }
-    if let Some(&pos) = world.get::<TilePos>(e) {
-        playsound(
-            world,
-            PlaySound::new(pos, LOOP_MID, LOOP_VOLUME, true)
-                .extrarange(MEDIUM_RANGE_SOUND_EXTRARANGE),
-        );
-    }
-    t + LOOP_MID_SECS
-}
-
 // --- Fireplace -----------------------------------------------------------------------------
 
 impl Fireplace {
@@ -312,12 +284,10 @@ fn fireplace_look(world: &mut World, e: Entity) {
 /// `fireplace/ignite`.
 fn ignite_fireplace(world: &mut World, e: Entity) {
     let t = now(world);
-    let next = start_loop(world, e);
     if let Some(mut f) = world.get_mut::<Fireplace>(e) {
         f.lit = true;
         f.expiry = t + f.fuel_added / 10.0;
         f.fuel_added = 0.0;
-        f.next_sound = next;
     }
     fireplace_look(world, e);
 }
@@ -436,10 +406,6 @@ fn process_fireplace(world: &mut World, e: Entity) {
     {
         atmos.hotspot_expose(pos, 700.0, 2.5 * f64::from(TICK_SECS), false);
     }
-    let next = tick_loop(world, e, f.next_sound);
-    if let Some(mut f) = world.get_mut::<Fireplace>(e) {
-        f.next_sound = next;
-    }
     fireplace_look(world, e);
 }
 
@@ -501,10 +467,8 @@ pub fn start_burning(world: &mut World, e: Entity) -> bool {
     if world.get::<Bonfire>(e).is_none_or(|b| b.burning) || !has_oxygen(world, e) {
         return false;
     }
-    let next = start_loop(world, e);
     if let Some(mut b) = world.get_mut::<Bonfire>(e) {
         b.burning = true;
-        b.next_sound = next;
     }
     bonfire_look(world, e);
     bonfire_burn(world, e, 2.0);
@@ -579,10 +543,6 @@ fn process_bonfire(world: &mut World, e: Entity) {
         return;
     }
     bonfire_burn(world, e, TICK_SECS);
-    let next = tick_loop(world, e, b.next_sound);
-    if let Some(mut b) = world.get_mut::<Bonfire>(e) {
-        b.next_sound = next;
-    }
 }
 
 fn bonfire_interaction(

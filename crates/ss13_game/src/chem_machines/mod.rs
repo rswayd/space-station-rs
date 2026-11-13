@@ -613,6 +613,11 @@ mod server {
                     (
                         smoke_machine::process.after(crate::power::PowerSystems),
                         separator::process,
+                        // The separator's `soundloop` while `boiling`.
+                        crate::looping_sound::sync::<separator::Separator>(
+                            &crate::looping_sound::defs::BOILING,
+                            |s| s.boiling,
+                        ),
                         mass_spec::process.after(crate::power::PowerSystems),
                         recipe_debug::process,
                         pandemic::process,

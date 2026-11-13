@@ -19,7 +19,7 @@
 //!   uranium by a screwdriver ([`PacmanBoard`], `high_production_profile`) builds the `super`
 //!   numbers (`on_construction`).
 //! - An emag unlocks output levels above 4 (`emag_act`).
-// shortcut: no generator sound loop, no `isinspace` check on anchoring, no `emp_act(EMP_HEAVY)`
+// shortcut: no `isinspace` check on anchoring, no `emp_act(EMP_HEAVY)`
 // of the emag (machine `emp_act` only draws power the generator does not use); power and fuel
 // are by kind, map var edits of `power_gen` or `sheets` beyond `pre_loaded` are not read.
 
@@ -226,6 +226,11 @@ impl Plugin for PacmanPlugin {
                 (
                     pacman_acts.in_set(ss13_tgui::server::UiSystems::Handle),
                     (overheat, pacman_looks).chain().after(super::PowerSystems),
+                    // `soundloop` follows `active` (`TogglePower`).
+                    crate::looping_sound::sync::<Pacman>(
+                        &crate::looping_sound::defs::GENERATOR,
+                        |p| p.active,
+                    ),
                 ),
             );
     }

@@ -97,6 +97,11 @@ impl Plugin for FabPlugin {
                         .before(UiSystems::Open),
                     fab_acts.in_set(UiSystems::Handle),
                     process.run_if(any_with_component::<FabProcessing>),
+                    // `print_sound`: `build_next_in_queue` .. `on_finish_printing`.
+                    crate::looping_sound::sync::<MechFab>(
+                        &crate::looping_sound::defs::LATHE_PRINT,
+                        |f| f.being_built.is_some(),
+                    ),
                 ),
             );
     }

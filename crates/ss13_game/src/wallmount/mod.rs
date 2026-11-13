@@ -21,7 +21,7 @@
 //! - The light switch, here: it flips its area's `lightswitch`.
 //!
 //! Cost: nothing per tick but the firelocks with something pending, a pass over the fire alarms
-//! and the ringing firelocks (one sound per 2.4 s each), the reported air tiles next to
+//! and the firelocks ringing or sounding (their sirens: `crate::looping_sound`), the reported air tiles next to
 //! firelocks and buttons with a pending flick or timer; everything else runs on a click or a
 //! power change.
 // shortcut: no construction or deconstruction beyond [`frames`] (screwdriver panels, wires,

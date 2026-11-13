@@ -112,6 +112,10 @@ pub(super) fn build(app: &mut App) {
                     .after(UiSystems::Handle)
                     .before(UiSystems::Send),
                 process.run_if(any_with_component::<Biogenerator>),
+                crate::looping_sound::sync::<Biogenerator>(
+                    &crate::looping_sound::defs::GENERATOR,
+                    |b| b.processing,
+                ),
             ),
         );
 }

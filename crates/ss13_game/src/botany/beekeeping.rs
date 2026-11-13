@@ -18,7 +18,7 @@
 //!   befriends the bees on the clicked tile, or every bee of a clicked apiary, with the user.
 //!   Cannabis refuels it by a fifth of its `wine_power`.
 // shortcut: no wrench anchoring or deconstruction into wood, no royal bee jelly or reagent
-// splicing of the queen item by syringe, no smoker particles, sound loop or dust effect; the
+// splicing of the queen item by syringe, no smoker particles or dust effect; the
 // queen in an item is kept as her reagent (a new queen mob comes out at full health).
 
 use bevy::ecs::message::{MessageCursor, Messages};
@@ -125,7 +125,17 @@ pub(super) fn build(app: &mut App) {
         .add_observer(remove_beebox)
         .add_systems(
             Update,
-            (process_hives, hive_exits, process_smokers, apiary_answers),
+            (
+                process_hives,
+                hive_exits,
+                process_smokers,
+                apiary_answers,
+                // `beesmoke_loop` while `activated` (`alter_state`).
+                crate::looping_sound::sync::<BeeSmoker>(
+                    &crate::looping_sound::defs::BEESMOKE,
+                    |s| s.active,
+                ),
+            ),
         );
 }
 

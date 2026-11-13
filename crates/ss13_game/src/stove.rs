@@ -24,8 +24,8 @@
 //!   used up, others without reagents get fried, and what is left is dumped next to the pot.
 // shortcut: one soup reacts in a pot at a time; the multiplier is not clamped to the ingredient
 // count, removing an ingredient mid-reaction stops every reaction of the pot; no foam when it
-// boils over, no steam particles, sounds or pot examine; the custom soup (burnt mess of
-// anything) and the soups with their own checks are not converted; `on_reaction`'s re-adding
+// boils over, no steam particles, other sounds than the boiling loop or pot examine; the custom
+// soup (burnt mess of anything) and the soups with their own checks are not converted; `on_reaction`'s re-adding
 // of required reagents beyond the food made (a duplicate for equilibrium reactions) is left out.
 
 use bevy::prelude::*;
@@ -448,6 +448,7 @@ fn process_stove(world: &mut World, e: Entity) {
         return;
     }
     prune(world, e);
+    soup_sound(world, e);
     let coeff = heat_coefficient(world, e);
     if let Some(container) = world.get::<Stove>(e).and_then(|s| s.container)
         && let Some(chem) = world.get_resource::<Chem>().map(|c| c.0.clone())
@@ -493,7 +494,21 @@ pub fn burner_overlays(world: &World, e: Entity) -> Vec<Overlay> {
         .collect()
 }
 
+/// `update_smoke()`'s `soup_sound`: on, with something in the container.
+fn soup_sound(world: &mut World, e: Entity) {
+    let Some(stove) = world.get::<Stove>(e) else {
+        return;
+    };
+    let boiling = stove.on
+        && stove
+            .container
+            .and_then(|c| world.get::<Reagents>(c))
+            .is_some_and(|r| r.0.total_volume > 0.0);
+    crate::looping_sound::set(world, e, &crate::looping_sound::defs::SOUP, boiling);
+}
+
 fn refresh_look(world: &mut World, e: Entity) {
+    soup_sound(world, e);
     if world.get::<crate::cooking::Oven>(e).is_some() {
         crate::cooking::refresh_look(world, e);
         return;

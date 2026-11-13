@@ -35,7 +35,7 @@
 // shortcut: sinks: no washing the face clean of makeup (no lipstick), no shocking yourself with
 // an active baton, no reagents' touch effects on the washer (`expose` is not ported for mobs), no
 // pickle jars, no installing a recycler back, no sink frames, no plumbing ducts; water sources
-// are not ported. Showers: no mist, no looping sound, no plunger, no shower frames; the washing
+// are not ported. Showers: no mist, no plunger, no shower frames; the washing
 // regen is applied per shower tick (no status effect alert), the water hater/adaptation and
 // morbid traits are not read. Toilets: no swirlies (internals and oxygen loss), no fish, no foam
 // (an overflow splashes the cistern on the floor), no monkey cubes, no flush animation. Urinals:
@@ -161,6 +161,13 @@ impl Plugin for PlumbingPlugin {
             .add_systems(
                 Update,
                 (reclaim_water, run_showers, run_toilets).after(crate::click::ResolveClicks),
+            )
+            // `soundloop` follows `actually_on` (`update_actually_on`).
+            .add_systems(
+                Update,
+                crate::looping_sound::sync::<Shower>(&crate::looping_sound::defs::SHOWERING, |s| {
+                    s.actually_on
+                }),
             );
     }
 }

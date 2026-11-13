@@ -20,7 +20,7 @@
 //! Cost: a print is one timer per printing autolathe.
 // shortcut: no design disks (`imported_designs`), no item recycling (only stacks with silo
 // materials go in), no material choice for `/datum/material_requirement` designs (not
-// offered), no drop direction, insertion energy, print sound or material animations; the window
+// offered), no drop direction, insertion energy or material animations; the window
 // is the Fabricator layout (designs with categories, the material bar) with the storage total.
 
 use std::sync::Arc;
@@ -115,6 +115,11 @@ impl Plugin for AutolathePlugin {
                     unpowered_windows.in_set(UiSystems::StatusHook),
                     print_tick.run_if(any_with_component::<AutolathePrinting>),
                     autolathe_looks,
+                    // `print_sound` while `busy`.
+                    crate::looping_sound::sync::<Autolathe>(
+                        &crate::looping_sound::defs::LATHE_PRINT,
+                        |a| a.busy,
+                    ),
                 ),
             );
     }
