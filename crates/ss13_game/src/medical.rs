@@ -54,6 +54,7 @@ pub mod special_traumas;
 pub mod split_personality;
 pub mod stasis;
 pub mod strange_reagent;
+pub mod strong_limbs;
 pub mod surgery;
 pub mod symptoms;
 pub mod tourniquet;

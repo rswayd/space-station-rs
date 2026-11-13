@@ -38,6 +38,8 @@ pub mod lasertag;
 #[cfg(feature = "server")]
 pub mod muzzle;
 #[cfg(feature = "server")]
+pub mod polymorph_belt;
+#[cfg(feature = "server")]
 pub mod reactive;
 #[cfg(feature = "server")]
 pub mod reskin;
@@ -47,6 +49,8 @@ pub mod secgear;
 pub mod sensors;
 #[cfg(feature = "server")]
 pub mod slowdown;
+#[cfg(feature = "server")]
+pub mod special_helmets;
 #[cfg(feature = "server")]
 pub mod toggles;
 #[cfg(feature = "server")]
@@ -186,6 +190,8 @@ mod server {
             crate::clothing::gear::build(app);
             reskin::build(app);
             super::laces::build(app);
+            super::polymorph_belt::build(app);
+            super::special_helmets::build(app);
         }
     }
 
@@ -235,10 +241,13 @@ mod server {
 
     /// The examine lines of clothing (`/obj/item/clothing/examine` and its subtypes').
     pub fn examine_lines(world: &World, item: Entity, lines: &mut Vec<crate::examine::Line>) {
+        // Not clothing in tg either (`/obj/item/polymorph_belt`).
+        super::polymorph_belt::examine_lines(world, item, lines);
         if world.get::<DmClothing>(item).is_none() {
             return;
         }
         damage::examine_lines(world, item, lines);
+        super::special_helmets::examine_lines(world, item, lines);
         toggles::examine_lines(world, item, lines);
         if accessories::is_jumpsuit(world, item) {
             sensors::examine_lines(world, item, lines);

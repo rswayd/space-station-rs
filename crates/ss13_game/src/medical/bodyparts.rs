@@ -274,6 +274,7 @@ pub fn drop_limb(world: &mut World, mob: Entity, zone: BodyZone) -> Option<Entit
         super::wounds::remove_wound(limb, 0);
     }
     let robotic = std::mem::take(&mut limb.robotic);
+    let kind = limb.kind.take();
     limb.gauze = None;
     // `limb_gone`: the scars leave with the limb; its tourniquet drops with it.
     limb.scars.clear();
@@ -326,10 +327,10 @@ pub fn drop_limb(world: &mut World, mob: Entity, zone: BodyZone) -> Option<Entit
             drop_slots(world, mob, pos, &[InventorySlot::Gloves]);
         }
     }
-    let path = if robotic {
-        format!("{root}/robot")
-    } else {
-        root.to_owned()
+    let path = match kind {
+        Some(kind) => kind,
+        None if robotic => format!("{root}/robot"),
+        None => root.to_owned(),
     };
     let item = crate::construction::spawn_obj(world, &path, pos);
     let held_organs = if zone == BodyZone::Head {
@@ -391,6 +392,7 @@ pub fn attach_limb(world: &mut World, mob: Entity, item: Entity) -> bool {
     limb.missing = false;
     limb.surgery = 0;
     limb.robotic = robotic;
+    limb.kind = super::strong_limbs::is_strong_limb(&path).then(|| path.clone());
     world.entity_mut(mob).insert(limbs);
     let damage = world.get::<Limb>(item).copied().unwrap_or_default();
     if let Some(mut health) = world.get::<Health>(mob).cloned() {

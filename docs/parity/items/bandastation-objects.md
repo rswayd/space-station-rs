@@ -44,7 +44,7 @@ _«Напитки и реагенты-напитки форка» описано
 Протезы рук и ног: мощные броски, особые удары и пинки.
 
 - **Код:** [`/datum/component/strongarm_combat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/bodyparts/strongarm_bodypart.dm#L16), [`/datum/component/strongleg_combat`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/objects/code/items/bodyparts/strongleg_bodypart.dm#L2)
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/medical/strong_limbs.rs`: тип протеза хранится в конечности (`wounds::Limb::kind`, ставится `bodyparts::attach_limb`, выпадает при отрыве); пара рук — удар по стоящему отбрасывает на 3 тайла (`crate::combat`), ПКМ-толчок пустой рукой валит на 3 с, отбрасывает на 5 тайлов и выбивает предмет у оглушённого/лежачего (`crate::security`); пара ног — отброс пинком стоящего (в порте пинок бывает только по лежачему, поэтому пока не срабатывает); нет собственных параметров конечностей (модификаторы урона, unarmed-урон, скорость клика/движения, грэб-бонусы) и `bodypart_traits`. Баг форка (сдвинутые аргументы `COMSIG_HUMAN_PUNCHED`: `kicking` = блок брони) не перенесён
 
 ### Чайник
 Настольная машина: греет или охлаждает напиток в стакане до фиксированной температуры; собирается из платы.

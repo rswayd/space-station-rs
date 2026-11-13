@@ -664,6 +664,9 @@ fn melee(
                             crate::martial::kaza_ruk::on_punched(
                                 world, attacker, target, hit, raw, armor, lying,
                             );
+                            crate::medical::strong_limbs::on_punched(
+                                world, attacker, target, lying,
+                            );
                         });
                         let damage =
                             crate::armor::blocked_damage(damage as f32 * multiplier(hit), armor);

@@ -20,7 +20,8 @@
 //! - [`wisdom_cow`]: a wisdom cow (`crate::mobs::farm`); [`nightshift`]: the station's APCs'
 //!   night shift (`crate::power::set_nightshift`).
 //! - [`dynamic_tweak`]: one more midround or latejoin ruleset (`crate::antag::midround`).
-//! - [`wizard`], [`object_rain`]: Summon Events' wizard events, only in wizard mode or forced.
+//! - [`wizard`], [`wizard_items`], [`object_rain`]: Summon Events' wizard events, only in wizard
+//!   mode or forced.
 //! - [`holidays`]: the holiday calendar (`check_holidays`) and the round start greetings;
 //!   [`holiday_events`] spawn only on their holiday.
 //!
@@ -61,6 +62,7 @@ pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
 pub mod scrubber_overflow;
+pub mod sentience;
 pub mod shuttle;
 pub mod space_vines;
 pub mod stray_cargo;
@@ -68,6 +70,7 @@ pub mod supermatter_surge;
 pub mod vent_clog;
 pub mod wisdom_cow;
 pub mod wizard;
+pub mod wizard_items;
 pub mod wormholes;
 
 use bevy::prelude::*;
@@ -477,6 +480,8 @@ pub fn controls() -> Vec<EventControl> {
             ),
         ),
         c(fake_virus::NAME, 20, 20.0, 0, 20, fake_virus::make),
+        c(sentience::NAME, 10, 20.0, 0, 20, sentience::make),
+        c(sentience::NAME_ALL, 0, 20.0, 0, 20, sentience::make_all),
         c(wisdom_cow::NAME, 20, 20.0, 0, 1, wisdom_cow::make),
         c(aurora_caelus::NAME, 1, 5.0, 0, 1, aurora_caelus::make),
         c(
@@ -576,6 +581,44 @@ pub fn controls() -> Vec<EventControl> {
                 wizard::make_petsplosion,
             )),
         ),
+        needs(
+            wizard_items::embedding_can_run,
+            summon(c(
+                wizard_items::EMBEDPOCALYPSE,
+                2,
+                0.0,
+                0,
+                1,
+                wizard_items::make_embedpocalypse,
+            )),
+        ),
+        needs(
+            wizard_items::embedding_can_run,
+            summon(c(
+                wizard_items::STICKY,
+                6,
+                0.0,
+                0,
+                1,
+                wizard_items::make_sticky,
+            )),
+        ),
+        summon(c(
+            wizard_items::CURSED_ITEMS,
+            3,
+            0.0,
+            0,
+            3,
+            wizard_items::make_cursed_items,
+        )),
+        summon(c(
+            wizard_items::GREENTEXT,
+            4,
+            0.0,
+            0,
+            1,
+            wizard_items::make_greentext,
+        )),
         summon(c(
             object_rain::ANIMALS,
             2,
@@ -699,6 +742,7 @@ impl Plugin for EventsServerPlugin {
                     c.target,
                 )
         });
+        wizard_items::build(app);
         app.init_resource::<EventsConfig>()
             .init_resource::<holidays::HolidaysConfig>()
             .init_resource::<anomalies::CoresMade>()

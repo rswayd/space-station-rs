@@ -65,11 +65,12 @@ pub(super) fn handles(spell: Spell) -> bool {
     possible_shapes(spell).is_some()
 }
 
-/// On a shape: its caster inside and the spell that made it.
+/// On a shape: its caster inside and the spell that made it (`None`: a polymorph belt,
+/// `crate::clothing::polymorph_belt`, whose action is not one of the caster's spells).
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Shapeshifted {
     pub caster: Entity,
-    pub spell: Spell,
+    pub spell: Option<Spell>,
 }
 
 /// A `tgui_input_list` for the Wild Shapeshift form.
@@ -151,7 +152,7 @@ pub(super) fn answers(world: &mut World, mut answers: Local<MessageCursor<Prompt
 /// `shapeshift/cast`: the shift back or forth.
 pub(super) fn cast(world: &mut World, _client: Entity, mob: Entity, spell: Spell) -> bool {
     if let Some(shift) = world.get::<Shapeshifted>(mob).copied() {
-        if shift.spell != spell {
+        if shift.spell != Some(spell) {
             chat_to(
                 world,
                 mob,
@@ -170,7 +171,7 @@ pub(super) fn cast(world: &mut World, _client: Entity, mob: Entity, spell: Spell
     let Some(path) = chosen_shape(world, mob, spell) else {
         return false;
     };
-    do_shapeshift(world, mob, spell, path)
+    do_shapeshift(world, mob, Some(spell), path).is_some()
 }
 
 /// The damage share of `health`.
@@ -181,10 +182,15 @@ fn damage_share(health: &Health) -> f32 {
     ((health.max - health.health()) / health.max).clamp(0.0, 1.0)
 }
 
-fn do_shapeshift(world: &mut World, mob: Entity, spell: Spell, path: &str) -> bool {
-    let Some(pos) = crate::explosions::turf_of(world, mob) else {
-        return false;
-    };
+/// `do_shapeshift`: `mob` waits inside a new `path` mob that takes its mind; the shape, or
+/// `None` when it could not be made. Only a spell's shift takes the caster's spells along.
+pub(crate) fn do_shapeshift(
+    world: &mut World,
+    mob: Entity,
+    spell: Option<Spell>,
+    path: &str,
+) -> Option<Entity> {
+    let pos = crate::explosions::turf_of(world, mob)?;
     let Some(shape) = crate::mobs::spawn::spawn_mob(world, path, pos) else {
         chat_to(
             world,
@@ -192,7 +198,7 @@ fn do_shapeshift(world: &mut World, mob: Entity, spell: Spell, path: &str) -> bo
             Span::Warning,
             "You can't shapeshift in this form!",
         );
-        return false;
+        return None;
     };
     let share = world.get::<Health>(mob).map_or(0.0, damage_share);
     if let Some(mut health) = world.get::<Health>(shape).cloned() {
@@ -201,19 +207,28 @@ fn do_shapeshift(world: &mut World, mob: Entity, spell: Spell, path: &str) -> bo
     }
     if !crate::medical::brainmob::transfer_mind(world, mob, shape) {
         world.despawn(shape);
-        return false;
+        return None;
     }
     crate::closets::put_mob_inside(world, mob, shape);
     world
         .entity_mut(shape)
         .insert(Shapeshifted { caster: mob, spell });
-    if let Some(spells) = world.entity_mut(mob).take::<Spells>() {
+    if let Some(spell) = spell
+        && let Some(spells) = world.entity_mut(mob).take::<Spells>()
+    {
         world.entity_mut(shape).insert(spells);
         // `spells::cast` starts the cooldown on the mob that no longer holds the spell.
         start_cooldown(world, shape, spell, None);
     }
     info!("{mob} shapeshifted into {path} ({shape})");
-    true
+    Some(shape)
+}
+
+/// `unshift_owner`: the shape's caster comes back with its damage share; the shape goes.
+pub(crate) fn unshift(world: &mut World, shape: Entity) {
+    if let Some(shift) = world.get::<Shapeshifted>(shape).copied() {
+        restore(world, shape, shift, false, true);
+    }
 }
 
 /// `restore_caster` + `after_unchange`. `delete` despawns the shape now (else later, its
@@ -241,7 +256,9 @@ fn restore(world: &mut World, shape: Entity, shift: Shapeshifted, kill: bool, de
         world.entity_mut(caster).insert(spells);
     }
     crate::medical::brainmob::transfer_mind(world, shape, caster);
-    start_cooldown(world, caster, shift.spell, None);
+    if let Some(spell) = shift.spell {
+        start_cooldown(world, caster, spell, None);
+    }
     world.entity_mut(shape).remove::<Shapeshifted>();
     if kill {
         crate::medical::organs::kill(world, caster);

@@ -155,6 +155,8 @@
 //! | 409 | `medical::surgery::notes_interaction` (research notes onto the notes in the other hand) |
 //! | 419 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a held hookah) |
 //! | 427 | `toy_mechs::item_interaction` (a toy mech on the one in the other hand: a brawl) |
+//! | 439 | `clothing::special_helmets::insert_core` (a hallucination core into the perceptomatrix in the other hand) |
+//! | 449 | `clothing::polymorph_belt::item_interaction` (a bioscrambler core into the polymorph belt in the other hand) |
 //! | 450 | `fishing::server::insert_bait`, `fishing::aquarium::item_interaction`, `fishing::catalog::analyze` (the fish analyzer on a held fish or fish tank) |
 //! | 455 | `inducer::item_interaction` (screwdriver, a cell, plasma onto the inducer) |
 //! | 457 | `devices::rhd::load` (a cartridge onto the RSF, cable onto the RWD) |
@@ -407,6 +409,8 @@
 //! | 345 | `shuttle_remote::link` (a shuttle remote on a shuttle console) |
 //! | 355 | `transport::elevator` (an emag on an elevator panel) |
 //! | 400 | `modsuit::server::item_interaction` |
+//! | 479 | `clothing::special_helmets::insert_core` (a hallucination core into a perceptomatrix) |
+//! | 489 | `clothing::polymorph_belt::item_interaction` (a bioscrambler core into a polymorph belt, the belt scanning a basic mob) |
 //! | 497 | `clothing::collar_bomb::open_wires` (a wire tool or assembly on a collar bomb) |
 //! | 500 | `assemblies::server::item_interaction` |
 //! | 555 | `wiremod::devices::cable_interaction` (USB cables on shells and machines) |

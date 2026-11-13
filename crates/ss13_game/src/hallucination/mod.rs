@@ -21,7 +21,8 @@
 //!   synaptizine, diphen-synaptizine and haloperidol take it away ([`reagents`]).
 //! - The Mass Hallucination event is `crate::events::mass_hallucination`.
 // shortcut: only humans hallucinate (tg: every living mob without robotic or spirit biotypes);
-// no `TRAIT_HALLUCINATION_IMMUNE`, `TRAIT_MADNESS_IMMUNE` or `TRAIT_FEARLESS` (no sources),
+// `TRAIT_HALLUCINATION_IMMUNE` only from the perceptomatrix (`crate::clothing::special_helmets`),
+// no `TRAIT_MADNESS_IMMUNE` or `TRAIT_FEARLESS` (no sources),
 // no advanced health scanner line (scanners are `SCANPOWER_BASIC`), no airlock-bump shocks
 // (no `COMSIG_CARBON_BUMPED_AIRLOCK_OPEN`), no limb self-check damage, no perceptomatrix
 // variant, no admin give-hallucination verbs and no investigate log (a debug log instead).
@@ -174,6 +175,7 @@ pub fn can_hallucinate(world: &World, mob: Entity) -> bool {
     entity.contains::<crate::human::HumanLook>()
         && entity.contains::<Stat>()
         && crate::species::def_of(world, mob).biotypes & (ROBOTIC | SPIRIT) == 0
+        && !crate::clothing::special_helmets::hallucination_immune(world, mob)
 }
 
 /// Seconds of hallucination `mob` has left (tg `get_timed_status_effect_duration`).
