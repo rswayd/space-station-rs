@@ -32,6 +32,8 @@ pub mod brother;
 pub mod changeling;
 #[cfg(feature = "client")]
 pub mod client;
+#[cfg(feature = "server")]
+pub mod contractor;
 pub mod cult;
 #[cfg(feature = "server")]
 pub mod dynamic;
@@ -132,6 +134,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             voidwalker::VoidwalkerPlugin,
             separatist::SeparatistPlugin,
             minions::MinionsPlugin,
+            contractor::ContractorPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);

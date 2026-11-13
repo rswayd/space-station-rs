@@ -1,5 +1,6 @@
 //! Client screens of the station programs (`NtosPay`, `NtosRadar`, `NtosCyborgRemoteMonitor`,
-//! `NtosRoboControl`, `NtosRevelation`, `NtosPhysScanner`, `NtosSpectreMeter`, `NtosRobotact`).
+//! `NtosRoboControl`, `NtosRevelation`, `NtosPhysScanner`, `NtosSpectreMeter`, `NtosRobotact`,
+//! `SyndicateContractor`).
 // shortcut: the radar draws the target as text (grid cell or bearing), not tgui's map with a
 // pointer image; NT Pay takes the token and the amount in one input ("TOKEN AMOUNT", sent as
 // `transfer`), since an input sends only its own text.
@@ -135,7 +136,110 @@ pub fn screen(s: &StationScreen) -> Part {
         }
         StationScreen::Scipaper(d) => scipaper(d),
         StationScreen::Robotact(d) => robotact(d),
+        StationScreen::Contractor(d) => contractor(d),
     }
+}
+
+/// tgui `SyndicateContractor`: the login, the hub, the contracts and the extraction.
+fn contractor(d: &ContractorData) -> Part {
+    const TITLE: &str = "Syndicate Contractor Uplink";
+    let mut parts = Vec::new();
+    if !d.error.is_empty() {
+        parts.push(line(format!("ОШИБКА: {}", d.error)));
+        parts.push(button(
+            "Закрыть".to_owned(),
+            "times",
+            CONTRACT_CLEAR_ERROR,
+            Vec::new(),
+        ));
+    }
+    if !d.logged_in {
+        parts.push(line(format!("SyndTract v2.0 — {}", d.station_name)));
+        parts.push(button(
+            "Войти".to_owned(),
+            "sign-in-alt",
+            CONTRACT_LOGIN,
+            Vec::new(),
+        ));
+        return section(TITLE.to_owned(), parts);
+    }
+    if d.info_screen {
+        parts.push(line(
+            "Принимайте контракты, доставляйте цели в зону высадки, вызывайте капсулу и \
+             помещайте цель внутрь. Бонус в скобках — за живую цель."
+                .to_owned(),
+        ));
+    }
+    parts.push(button(
+        if d.info_screen {
+            "Скрыть справку"
+        } else {
+            "Справка"
+        }
+        .to_owned(),
+        "info",
+        CONTRACT_TOGGLE_INFO,
+        Vec::new(),
+    ));
+    parts.push(line(format!(
+        "ТК к выплате: {} | Заработано ТК: {} | Выполнено контрактов: {}",
+        d.redeemable_tc, d.earned_tc, d.contracts_completed
+    )));
+    parts.push(button(
+        "Получить ТК".to_owned(),
+        "money-bill-wave",
+        CONTRACT_REDEEM,
+        Vec::new(),
+    ));
+    if d.ongoing_contract {
+        parts.push(line(format!(
+            "Текущее местоположение: {} | Зона высадки: {}",
+            d.current_location, d.dropoff_direction
+        )));
+        if d.extraction_enroute {
+            parts.push(line("Капсула эвакуации в пути.".to_owned()));
+        } else {
+            parts.push(button(
+                "Вызвать капсулу".to_owned(),
+                "parachute-box",
+                CONTRACT_EXTRACTION,
+                Vec::new(),
+            ));
+        }
+    }
+    for c in &d.contracts {
+        let status = match c.status {
+            1 => "доступен",
+            2 => "принят",
+            4 => "эвакуация",
+            5 => "выполнен",
+            6 => "отменён",
+            _ => "",
+        };
+        parts.push(line(format!(
+            "#{} {} ({}) — {} ТК (+{} ТК), высадка: {} [{status}]",
+            c.id, c.target, c.target_rank, c.payout, c.payout_bonus, c.dropoff
+        )));
+        if !c.message.is_empty() {
+            parts.push(line(c.message.clone()));
+        }
+        match c.status {
+            1 if !d.ongoing_contract => parts.push(button(
+                "Принять".to_owned(),
+                "check",
+                CONTRACT_ACCEPT,
+                vec![("contract_id".to_owned(), c.id.to_string())],
+            )),
+            2 | 4 => parts.push(button(
+                "Отменить".to_owned(),
+                "ban",
+                CONTRACT_ABORT,
+                Vec::new(),
+            )),
+            _ => {}
+        }
+    }
+    section(TITLE.to_owned(), parts)
 }
 
 /// tgui `NtosRobotact`'s Status, Logs and Network tabs, one after the other.

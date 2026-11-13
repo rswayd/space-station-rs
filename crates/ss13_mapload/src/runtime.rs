@@ -1412,6 +1412,8 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/food/pizza/custom",
     "/obj/item/food/burger/empty",
     "/obj/item/food/pie/empty",
+    // `ss13_game::antag::contractor`: the extraction pod.
+    "/obj/structure/closet/supplypod/extractionpod",
 ];
 
 /// `ss13_game::species`: every species' organs (`mutant*`), meat (`meat`) and the plasmaman

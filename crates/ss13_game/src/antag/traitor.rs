@@ -790,6 +790,7 @@ pub fn roundend_report(world: &mut World, end: RoundEnd) -> Vec<ChatMessage> {
             out.push(line(vec![ChatSegment::new(Span::Plain, text)]));
         }
         out.extend(objective_lines);
+        out.extend(super::contractor::roundend_lines(world, mob));
         let role = TRAITOR_NAME.to_lowercase();
         out.push(line(vec![if won {
             ChatSegment::new(Span::GreenText, format!("{role} был успешен!"))

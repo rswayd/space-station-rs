@@ -37,10 +37,13 @@ pub enum StationProgram {
     /// `/datum/computer_file/program/robotact`: a cyborg's built-in computer only
     /// (`super::robotact`).
     Robotact,
+    /// `/datum/computer_file/program/contract_uplink` (Syndicate Contractor Uplink): the
+    /// contractor tablet's only (`crate::antag::contractor`).
+    ContractUplink,
 }
 
 impl StationProgram {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 16] = [
         Self::NtPay,
         Self::Lifeline,
         Self::CustodialLocator,
@@ -56,6 +59,7 @@ impl StationProgram {
         Self::RestockTracker,
         Self::Frontier,
         Self::Robotact,
+        Self::ContractUplink,
     ];
 
     pub fn filename(self) -> &'static str {
@@ -75,6 +79,7 @@ impl StationProgram {
             Self::RestockTracker => "restockapp",
             Self::Frontier => "ntfrontier",
             Self::Robotact => "robotact",
+            Self::ContractUplink => "contractor uplink",
         }
     }
 
@@ -95,6 +100,7 @@ impl StationProgram {
             Self::SpectreMeter => "Spectre-Meter",
             Self::Frontier => "NT Frontier",
             Self::Robotact => "RoboTact",
+            Self::ContractUplink => "Syndicate Contractor Uplink",
         }
     }
 
@@ -115,6 +121,7 @@ impl StationProgram {
             Self::RestockTracker => "cash-register",
             Self::Frontier => "paper-plane",
             Self::Robotact => "terminal",
+            Self::ContractUplink => "tasks",
         }
     }
 
@@ -174,6 +181,10 @@ impl StationProgram {
             Self::Robotact => {
                 "Встроенное приложение для самостоятельного управления и диагностики киборга."
             }
+            Self::ContractUplink => {
+                "A standard, Syndicate issued system for handling important contracts while on \
+                 the field."
+            }
         }
     }
 
@@ -182,7 +193,7 @@ impl StationProgram {
             Self::NtPay | Self::CustodialLocator | Self::PhysScanner => 2,
             Self::RestockTracker => 4,
             Self::Lifeline | Self::BorgMonitor | Self::CivBounties | Self::Robotact => 5,
-            Self::BudgetOrders | Self::BountyBoard | Self::ScienceHub => 10,
+            Self::BudgetOrders | Self::BountyBoard | Self::ScienceHub | Self::ContractUplink => 10,
             Self::Frontier => 12,
             Self::RoboControl => 6,
             Self::SpectreMeter => 7,
@@ -192,7 +203,7 @@ impl StationProgram {
 
     pub fn category(self) -> &'static str {
         match self {
-            Self::NtPay | Self::Revelation => CATEGORY_DEVICE,
+            Self::NtPay | Self::Revelation | Self::ContractUplink => CATEGORY_DEVICE,
             Self::BorgMonitor
             | Self::RoboControl
             | Self::ScienceHub
@@ -212,7 +223,11 @@ impl StationProgram {
     pub fn on_ntnet_store(self) -> bool {
         !matches!(
             self,
-            Self::Revelation | Self::PhysScanner | Self::SpectreMeter | Self::Robotact
+            Self::Revelation
+                | Self::PhysScanner
+                | Self::SpectreMeter
+                | Self::Robotact
+                | Self::ContractUplink
         )
     }
 
@@ -231,7 +246,8 @@ impl StationProgram {
             | Self::SpectreMeter
             | Self::BudgetOrders
             | Self::CivBounties
-            | Self::Robotact => pda,
+            | Self::Robotact
+            | Self::ContractUplink => pda,
             _ => true,
         }
     }

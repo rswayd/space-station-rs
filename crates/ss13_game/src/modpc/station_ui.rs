@@ -34,6 +34,40 @@ pub enum StationScreen {
     Scipaper(Box<ScipaperData>),
     /// `NtosRobotact`.
     Robotact(Box<RobotactData>),
+    /// `SyndicateContractor`.
+    Contractor(Box<ContractorData>),
+}
+
+/// `/datum/computer_file/program/contract_uplink/ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ContractorData {
+    pub logged_in: bool,
+    pub station_name: String,
+    pub info_screen: bool,
+    pub error: String,
+    pub ongoing_contract: bool,
+    pub extraction_enroute: bool,
+    pub current_location: String,
+    /// Compass word, "LOCATION CONFIRMED" or "???".
+    pub dropoff_direction: String,
+    pub redeemable_tc: u32,
+    pub earned_tc: u32,
+    pub contracts_completed: u32,
+    pub contracts: Vec<ContractRow>,
+}
+
+/// One of `data["contracts"]`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContractRow {
+    pub id: u32,
+    pub target: String,
+    pub target_rank: String,
+    pub payout: u32,
+    pub payout_bonus: u32,
+    pub dropoff: String,
+    /// `CONTRACT_STATUS_*`: 1 inactive, 2 active, 3 extracting, 4 complete, 5 aborted.
+    pub status: u8,
+    pub message: String,
 }
 
 /// `/datum/computer_file/program/robotact/ui_data` and `ui_static_data`.
@@ -256,6 +290,14 @@ pub struct BotRow {
 }
 
 // `NtosRobotact` acts.
+// `SyndicateContractor` acts (`contract_id`: the contract's id).
+pub const CONTRACT_LOGIN: &str = "PRG_login";
+pub const CONTRACT_ACCEPT: &str = "PRG_contract-accept";
+pub const CONTRACT_EXTRACTION: &str = "PRG_call_extraction";
+pub const CONTRACT_ABORT: &str = "PRG_contract_abort";
+pub const CONTRACT_REDEEM: &str = "PRG_redeem_TC";
+pub const CONTRACT_CLEAR_ERROR: &str = "PRG_clear_error";
+pub const CONTRACT_TOGGLE_INFO: &str = "PRG_toggle_info";
 pub const ROBOTACT_COVER_UNLOCK: &str = "coverunlock";
 pub const ROBOTACT_LAW_CHANNEL: &str = "lawchannel";
 pub const ROBOTACT_LAW_STATE: &str = "lawstate";

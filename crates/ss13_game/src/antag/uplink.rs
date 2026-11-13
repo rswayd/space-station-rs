@@ -955,6 +955,17 @@ pub fn purchase(
     if item.path == FAILSAFE_ITEM {
         return buy_failsafe(world, user, device, &item);
     }
+    // `/datum/uplink_item/contractor/can_be_bought`: the shop needs the contractor hub.
+    if is_under(&item.path, super::contractor::SHOP_ROOT)
+        && world
+            .get::<super::contractor::ContractorHub>(uplink.owner)
+            .is_none()
+    {
+        return Err(BuyReject::NotSold);
+    }
+    if item.path == super::contractor::REROLL_ITEM {
+        return buy_reroll(world, user, device, &item);
+    }
     let spawned = world.resource_scope(|world, catalog: Mut<UplinkCatalog>| {
         catalog
             .templates
@@ -978,6 +989,10 @@ pub fn purchase(
         uplink.shop_locked = true;
     }
     let owner = uplink.owner;
+    // `contract_kit/purchase`: the contractor shop joins `extra_purchasable`.
+    if item.path == super::contractor::CONTRACT_KIT_ITEM {
+        add_extra_items(world, device, &super::contractor::SHOP_ITEMS);
+    }
     let Some(in_hand) = hand_or_floor(world, user, spawned, &item.item) else {
         return Err(BuyReject::NotHeld);
     };
@@ -1073,6 +1088,75 @@ pub fn can_spawn(catalog: &UplinkCatalog, path: &str) -> bool {
     catalog
         .item(path)
         .is_some_and(|i| catalog.templates.contains_key(&i.item))
+}
+
+/// `extra_purchasable += new uplink_item`: catalog items (sold to nobody by themselves) offered
+/// by this uplink, in their own category.
+pub fn add_extra_items(world: &mut World, device: Entity, paths: &[&str]) {
+    let Some(uplink) = world.get::<Uplink>(device) else {
+        return;
+    };
+    let flag = uplink.uplink_flag;
+    let catalog = world.resource::<UplinkCatalog>();
+    let extra: Vec<UplinkItemDef> = paths
+        .iter()
+        .filter(|p| !uplink.sales.iter().any(|s| s.path == **p))
+        .filter_map(|p| catalog.item(p).cloned())
+        .map(|mut i| {
+            i.purchasable_from = flag;
+            i
+        })
+        .collect();
+    if extra.is_empty() {
+        return;
+    }
+    let mut board = (*uplink.board).clone();
+    board
+        .items
+        .extend(extra.iter().map(|i| record(i, &catalog.templates)));
+    let mut data = catalog.data.clone();
+    for i in &extra {
+        if !data.uplink_categories.contains(&i.category) {
+            data.uplink_categories.push(i.category.clone());
+        }
+    }
+    board.categories = categories_of(&data, &board.items);
+    let mut uplink = world.get_mut::<Uplink>(device).expect("checked above");
+    uplink.sales.extend(extra);
+    uplink.board = Arc::new(board);
+}
+
+/// `/datum/uplink_item/contractor/reroll/spawn_item`: new contracts, nothing spawns. Returns
+/// the device.
+fn buy_reroll(
+    world: &mut World,
+    user: Entity,
+    device: Entity,
+    item: &UplinkItemDef,
+) -> Result<Entity, BuyReject> {
+    let owner = world
+        .get::<Uplink>(device)
+        .ok_or(BuyReject::NoUplink)?
+        .owner;
+    if !super::contractor::reroll(world, owner) {
+        return Err(BuyReject::NotSold);
+    }
+    let mut uplink = world.get_mut::<Uplink>(device).expect("checked above");
+    if item.limited_stock != -1 {
+        *uplink
+            .item_stock
+            .entry(item.path.clone())
+            .or_insert(item.limited_stock) -= 1;
+    }
+    uplink.telecrystals -= item.cost;
+    if !uplink.purchases.iter().any(|p| p == &item.path) {
+        uplink.purchases.push(item.path.clone());
+    }
+    if let Some(mut log) = world.get_mut::<PurchaseLog>(owner) {
+        log.log(&item.name, item.cost);
+    }
+    info!("uplink: {user} rerolled the contracts of {owner}");
+    Ok(device)
 }
 
 /// `/datum/uplink_item/device_tools/failsafe/spawn_item`: a new failsafe code (never the

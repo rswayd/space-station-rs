@@ -10,6 +10,8 @@ pub mod card_mod;
 #[cfg(feature = "server")]
 pub mod chat;
 #[cfg(feature = "server")]
+pub mod contractor;
+#[cfg(feature = "server")]
 pub mod downloader;
 #[cfg(feature = "server")]
 pub mod messenger;
@@ -331,6 +333,7 @@ impl ProgramKind {
                 | Self::Downloader
                 | Self::FileManager
                 | Self::Station(StationProgram::Robotact)
+                | Self::Station(StationProgram::ContractUplink)
         )
     }
 
@@ -447,6 +450,8 @@ const HEAD_PROGRAMS: [ProgramKind; 4] = [
     ProgramKind::Station(StationProgram::BudgetOrders),
 ];
 
+/// `/obj/item/modular_computer/pda/syndicate_contract_uplink`.
+pub const CONTRACTOR_TABLET: &str = "/obj/item/modular_computer/pda/syndicate_contract_uplink";
 /// `/obj/item/modular_computer/pda/crew/heads`: `head_programs` are added after the rest.
 const HEADS_PDA: &str = "/obj/item/modular_computer/pda/crew/heads";
 
@@ -571,6 +576,11 @@ fn starting_programs(path: &str) -> &'static [ProgramKind] {
 /// `install_default_programs` of a PDA of type `path`: `pda_programs` + `starting_programs`,
 /// then a head's `head_programs` (`heads/Initialize`).
 pub fn pda_programs(path: &str) -> Vec<ProgramKind> {
+    // `has_pda_programs = FALSE`: the contractor tablet runs its uplink only.
+    // shortcut: no syndicate SecurEye (the program is not ported).
+    if is_under_path(path, CONTRACTOR_TABLET) {
+        return vec![ProgramKind::Station(StationProgram::ContractUplink)];
+    }
     let mut programs = PDA_PROGRAMS.to_vec();
     for &p in starting_programs(path) {
         if !programs.contains(&p) {
@@ -651,6 +661,16 @@ mod tests {
             assert_eq!(ProgramKind::from_filename(p.filename()), Some(p));
             assert!(CATEGORIES.contains(&p.category()));
         }
+    }
+
+    #[test]
+    fn the_contractor_tablet_runs_its_uplink_only() {
+        assert_eq!(
+            pda_programs(CONTRACTOR_TABLET),
+            [ProgramKind::Station(StationProgram::ContractUplink)]
+        );
+        assert!(ProgramKind::Station(StationProgram::ContractUplink).undeletable());
+        assert!(!StationProgram::ContractUplink.on_ntnet_store());
     }
 
     #[test]
