@@ -290,6 +290,11 @@ fn add_to_upgrades(world: &mut World, borg: Entity, item: Entity, one_use: bool)
         ),
     );
     if one_use {
+        crate::modpc::silicon::logevent(
+            world,
+            borg,
+            &format!("Firmware {item_name} run successfully."),
+        );
         world.entity_mut(item).despawn();
         return;
     }
@@ -297,6 +302,11 @@ fn add_to_upgrades(world: &mut World, borg: Entity, item: Entity, one_use: bool)
     if let Some(mut chassis) = world.get_mut::<Chassis>(borg) {
         chassis.upgrades.push(item);
     }
+    crate::modpc::silicon::logevent(
+        world,
+        borg,
+        &format!("Hardware {item_name} installed successfully."),
+    );
 }
 
 #[cfg(test)]

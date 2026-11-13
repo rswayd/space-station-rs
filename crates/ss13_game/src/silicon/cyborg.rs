@@ -355,6 +355,7 @@ pub(crate) fn spawn_borg(world: &mut World, pos: TilePos, braintype: &str) -> Op
         super::alarms::AlarmQueue::default(),
     ));
     super::chassis::setup(world, borg);
+    crate::modpc::silicon::logevent(world, borg, "System brought online.");
     Some(borg)
 }
 
@@ -556,6 +557,11 @@ fn choose_model(world: &mut World, mut acts: Local<MessageCursor<UiActed<ListInp
             Span::Notice,
             format!("Выбрана модель: {}.", model.name),
         );
+        crate::modpc::silicon::logevent(
+            world,
+            borg,
+            &format!("Chassis model has been set to {}.", model.name),
+        );
     }
 }
 
@@ -718,6 +724,7 @@ pub fn reset_model(world: &mut World, borg: Entity) -> bool {
     }
     let choices = model_choices(world);
     world.entity_mut(borg).insert(ListInput(choices));
+    crate::modpc::silicon::logevent(world, borg, "Chassis model has been reset.");
     if let Some(client) = world
         .get::<crate::server::PlayerMob>(borg)
         .map(|p| p.client)

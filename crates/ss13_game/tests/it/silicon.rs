@@ -1420,6 +1420,7 @@ fn ai_hud_alerts_and_announcement() {
             "camera",
             "camera_track",
             "alerts",
+            "state_laws",
             "modpc",
             "announcement",
             "call_shuttle",

@@ -15,7 +15,7 @@
 //! - Call Emergency Shuttle (`ai_call_shuttle`): a reason prompt, then `SSshuttle.requestEvac`.
 //! - Change core display (the `ai_core_display_picker` verb): tg's display names; the core
 //!   shows `ai-<name>` (dead: `<state>_dead`, else `ai_dead`).
-//! - Sensor Augmentation (`toggle_sensors`; a cyborg's alert panel has it as Toggle Sensors):
+//! - Sensor Augmentation (`toggle_sensors`; a cyborg toggles it in RoboTact):
 //!   the silicon's data HUDs (`crate::records::hud`) on or off.
 //!
 //! The buttons do nothing while the AI is incapacitated (dead or depowered); the AI core
@@ -224,8 +224,6 @@ pub(crate) fn give_borg_buttons(world: &mut World, borg: Entity) {
     let buttons = vec![
         button(world, MODPC, "Modular Interface", SCREEN_CYBORG, "template"),
         button(world, ALERTS, "Alert Panel", SCREEN_AI, "alerts"),
-        // shortcut: a button until RoboTact (`robotact`, its `toggleSensors`) is ported.
-        button(world, SENSORS, "Toggle Sensors", SCREEN_AI, "ai_sensor"),
     ];
     set_buttons(world, borg, buttons);
 }
@@ -248,8 +246,6 @@ fn trigger(world: &mut World, mut acts: Local<MessageCursor<UiActed<ActionButton
                 super::alarms::open(world, client, actor, actor);
             } else if id == MODPC {
                 crate::modpc::silicon::interact(world, client, actor);
-            } else if id == SENSORS {
-                toggle_sensors(world, client, actor);
             }
             continue;
         }
