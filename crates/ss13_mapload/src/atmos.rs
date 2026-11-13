@@ -86,14 +86,45 @@ impl DmTurfAtmos {
 }
 
 /// An area's vars (tg `/area`): `outdoors` (weather reaches it, barometers work in it, no room
-/// beauty) and the mood bonus of being there (`mood_bonus`, `mood_message`, `mood_trait`: the
-/// trait it needs, empty for anyone).
-#[derive(Component, Reflect, Clone, Debug, Default, PartialEq)]
+/// beauty), the mood bonus of being there (`mood_bonus`, `mood_message`, `mood_trait`: the
+/// trait it needs, empty for anyone) and its ambience ([`crate::ambience`]).
+#[derive(Component, Reflect, Clone, Debug, PartialEq)]
 pub struct DmArea {
     pub outdoors: bool,
     pub mood_bonus: f32,
     pub mood_message: String,
     pub mood_trait: String,
+    /// `ambientsounds` after `/area/Initialize` (own list, else the `ambience_index` list).
+    pub ambientsounds: Vec<String>,
+    /// A newcomer may get an ambience sound before the cooldown ends (5% a second).
+    pub forced_ambience: bool,
+    /// The loop on the buzz channel; empty for none.
+    pub ambient_buzz: String,
+    pub ambient_buzz_vol: f32,
+    /// Seconds (DM: deciseconds).
+    pub min_ambience_cooldown: f32,
+    pub max_ambience_cooldown: f32,
+    /// `SOUND_ENVIRONMENT_*` (-1: none).
+    pub sound_environment: i32,
+}
+
+/// tg's `/area` values; the files come from the converter.
+impl Default for DmArea {
+    fn default() -> Self {
+        Self {
+            outdoors: false,
+            mood_bonus: 0.0,
+            mood_message: String::new(),
+            mood_trait: String::new(),
+            ambientsounds: Vec::new(),
+            forced_ambience: false,
+            ambient_buzz: String::new(),
+            ambient_buzz_vol: 35.0,
+            min_ambience_cooldown: 4.0,
+            max_ambience_cooldown: 10.0,
+            sound_environment: -1,
+        }
+    }
 }
 
 /// `beauty` of a cleanable decal type (`/datum/element/beauty` in its `Initialize`): dirt and

@@ -4,6 +4,7 @@
 
 mod airlock_construction;
 mod airlock_control;
+mod ambience;
 mod assemblies;
 mod atmos_machinery;
 mod barber;

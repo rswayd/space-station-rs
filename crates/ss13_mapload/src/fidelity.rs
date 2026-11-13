@@ -280,6 +280,7 @@ impl<'a> ConvertContext<'a> {
         fields.extend(crate::look::type_fields(self, path));
         fields.extend(crate::cable::type_fields(self.types, path));
         fields.extend(crate::atmos::type_fields(self.types, path));
+        fields.extend(crate::ambience::type_fields(self.types, path));
         fields.extend(crate::turf_damage::type_fields(self.types, path));
         fields.extend(crate::atmos_machine::type_fields(self.types, path));
         fields.extend(crate::clothing::type_fields(self.types, path));
