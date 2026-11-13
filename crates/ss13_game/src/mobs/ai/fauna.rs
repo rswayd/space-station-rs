@@ -117,6 +117,22 @@ pub enum FaunaLeaf {
     Pollinate {
         key: Key,
     },
+    /// `find_hive`: a homeless bee's habitable apiary into the key.
+    FindHive {
+        key: Key,
+    },
+    /// `inhabit_hive` (10 s): next to the key's apiary, it becomes the bee's home.
+    InhabitHive {
+        key: Key,
+    },
+    /// `enter_exit_hive` outside the home (1 s): the home into the key 15%/s (queen 85%/s).
+    HiveFlyback {
+        key: Key,
+    },
+    /// `ai_interact` with the home next to it: the bee goes in.
+    EnterHive {
+        key: Key,
+    },
 }
 
 impl FaunaLeaf {
@@ -125,6 +141,8 @@ impl FaunaLeaf {
             Self::FindPartner => 5.0,
             Self::AcquireTray { .. } => 10.0,
             Self::Pollinate { .. } => 5.0,
+            Self::InhabitHive { .. } => 10.0,
+            Self::HiveFlyback { .. } => 1.0,
             Self::ParrotRepeat => crate::mobs::parrot::REPEAT_COOLDOWN,
             Self::RangedAttack { cooldown, .. } => *cooldown,
             Self::Lavaland(leaf) => leaf.cooldown(),
@@ -277,6 +295,10 @@ impl FaunaLeaf {
             Self::RatDomain => crate::mobs::space_fauna::rat_domain_leaf(ctx),
             Self::AcquireTray { key } => crate::mobs::bees::acquire_tray(ctx, key),
             Self::Pollinate { key } => crate::mobs::bees::pollinate_leaf(ctx, key),
+            Self::FindHive { key } => crate::mobs::bees::find_hive(ctx, key),
+            Self::InhabitHive { key } => crate::mobs::bees::inhabit_hive(ctx, key),
+            Self::HiveFlyback { key } => crate::mobs::bees::hive_flyback(ctx, key),
+            Self::EnterHive { key } => crate::mobs::bees::enter_hive(ctx, key),
             // Performed above.
             Self::Lavaland(_) => FAIL,
         }
@@ -305,6 +327,8 @@ impl FaunaLeaf {
             }
             // `always_reset_target`, `pollinate_hydro/finish_action`.
             Self::SmashLight { key } | Self::Pollinate { key } => ctx.bb.clear(key),
+            // `inhabit_hive/finish_action`: a hive that failed is forgotten.
+            Self::InhabitHive { key } if !succeeded => ctx.bb.clear(key),
             Self::MaintainDistance { .. } => {
                 ctx.movement.failed = false;
                 ctx.movement.stop();

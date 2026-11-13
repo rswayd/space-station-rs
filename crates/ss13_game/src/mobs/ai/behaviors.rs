@@ -46,7 +46,8 @@ pub enum Strategy {
     /// `basic/same_faction/construct` with `BB_TARGET_WOUNDED_ONLY` (artificers): a hurt
     /// construct or shade of a shared faction.
     Construct,
-    /// `basic/bee`: `basic`, never someone `bee_friendly` (`crate::mobs::bees`).
+    /// `basic/bee`: `basic`, never someone `bee_friendly`, and for a bee with a hive in sight
+    /// only someone near the hive (`crate::mobs::bees`).
     Bee,
 }
 
@@ -93,6 +94,7 @@ impl Strategy {
                 (ignore_faction || !crate::mobs::same_faction(world, ctx.pawn, target))
                     && stat != Stat::Dead
                     && !crate::mobs::bees::bee_friendly(world, target)
+                    && crate::mobs::bees::near_hive_or_homeless(world, ctx.pawn, target)
             }
             Self::Construct => {
                 stat != Stat::Dead

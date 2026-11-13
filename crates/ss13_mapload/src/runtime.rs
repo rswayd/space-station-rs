@@ -130,6 +130,11 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     "/obj/effect/decal/cleanable/blood/bubblegum",
     "/obj/item/dnainjector/geladikinesis",
     "/obj/item/trash/bee",
+    // `ss13_game::botany::beekeeping`: what an apiary makes and gives back.
+    "/mob/living/basic/bee/queen",
+    "/obj/item/food/honeycomb",
+    "/obj/item/honey_frame",
+    "/obj/item/queen_bee",
     "/obj/effect/decal/remains/plasma",
     "/obj/effect/decal/remains/xeno",
     "/obj/effect/decal/cleanable/blood/gibs/torso",

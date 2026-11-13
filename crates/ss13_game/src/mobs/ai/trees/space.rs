@@ -2,8 +2,7 @@
 //! (`space_fauna/statue/*.bt.json`), regal rat (`regal_rat/regal_rat.bt.json`), headslug and bee
 //! (`farm_animals/bee/*.bt.json`) controllers, with the leaves of `crate::mobs::space_fauna`,
 //! `crate::mobs::gorilla` and `crate::mobs::bees`. Left out everywhere: escape captivity,
-//! attacking obstructions; the bees' hive branches (`find_hive`, `transition_hive_status`,
-//! `enter_exit_hive`: the apiary belongs to botany and is not ported).
+//! attacking obstructions; the bees' pet commands.
 
 use super::super::behaviors::{Behavior, FIND_TARGET_RATE, Strategy};
 use super::super::bt::{Abort, Cond, Node, decorator, leaf, selector, sequence, subplan};
@@ -44,8 +43,8 @@ pub(super) fn build(path: &str) -> Option<Built> {
         regal_rat()
     } else if is("headslug") {
         random_walk(25.0)
-    } else if is("queen_bee") {
-        bee_combat()
+    } else if is("bee/queen") {
+        queen_bee()
     } else if is("bee") {
         bee()
     } else {
@@ -241,9 +240,95 @@ fn bee_combat() -> Node {
     )
 }
 
-/// `bee.bt.json` without the hive: pollinates a tray it found (85% of its 10 s looks), else
-/// stings whoever is not bee-friendly.
+/// `find_hive.bt.json` as meant (tg moves to `BB_CURRENT_HOME` while it has only
+/// `BB_TARGET_HOME`): to the apiary it found, and in.
+fn find_hive() -> Node {
+    decorator(
+        Cond::KeySet(Key::TargetHome),
+        false,
+        Abort::Lower,
+        sequence(vec![
+            leaf(Behavior::MoveToTarget {
+                key: Key::TargetHome,
+                dist: 1,
+                finish_on_arrival: true,
+            }),
+            fauna(FaunaLeaf::InhabitHive {
+                key: Key::TargetHome,
+            }),
+            leaf(Behavior::ClearKey(Key::TargetHome)),
+        ]),
+    )
+}
+
+/// `transition_hive_status.bt.json`: to the home it wants into, and in.
+fn transition_hive() -> Node {
+    decorator(
+        Cond::KeySet(Key::CurrentHome),
+        false,
+        Abort::Lower,
+        sequence(vec![
+            leaf(Behavior::MoveToTarget {
+                key: Key::CurrentHome,
+                dist: 1,
+                finish_on_arrival: true,
+            }),
+            fauna(FaunaLeaf::EnterHive {
+                key: Key::CurrentHome,
+            }),
+            leaf(Behavior::ClearKey(Key::CurrentTarget)),
+        ]),
+    )
+}
+
+/// The secondary `find_hive` leaf of both bee trees, while no apiary is picked.
+fn look_for_hive() -> Node {
+    decorator(
+        Cond::KeySet(Key::TargetHome),
+        true,
+        Abort::None,
+        fauna(FaunaLeaf::FindHive {
+            key: Key::TargetHome,
+        }),
+    )
+}
+
+/// `queen_bee.bt.json`: finds and enters her hive, else stings and flies back home.
+fn queen_bee() -> Node {
+    par(
+        vec![
+            selector(vec![
+                find_hive(),
+                transition_hive(),
+                par(
+                    vec![
+                        bee_combat(),
+                        fauna(FaunaLeaf::HiveFlyback {
+                            key: Key::CurrentHome,
+                        }),
+                    ],
+                    FIND_TARGET_RATE,
+                ),
+            ]),
+            look_for_hive(),
+        ],
+        FIND_TARGET_RATE,
+    )
+}
+
+/// `bee.bt.json` without pet commands: finds a home and flies in and out of it; pollinates a
+/// tray it found (85% of its 10 s looks), else stings whoever is not bee-friendly.
 fn bee() -> Node {
+    par(
+        vec![
+            selector(vec![find_hive(), transition_hive(), worker()]),
+            look_for_hive(),
+        ],
+        FIND_TARGET_RATE,
+    )
+}
+
+fn worker() -> Node {
     par(
         vec![
             selector(vec![
@@ -264,6 +349,9 @@ fn bee() -> Node {
                 ),
                 bee_combat(),
             ]),
+            fauna(FaunaLeaf::HiveFlyback {
+                key: Key::CurrentHome,
+            }),
             decorator(
                 Cond::RandomChance(0.85),
                 false,
