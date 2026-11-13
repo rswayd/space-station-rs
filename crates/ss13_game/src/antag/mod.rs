@@ -43,6 +43,8 @@ pub mod hud;
 #[cfg(feature = "server")]
 pub mod midround;
 #[cfg(feature = "server")]
+pub mod minions;
+#[cfg(feature = "server")]
 pub mod morph;
 #[cfg(feature = "server")]
 pub mod nightmare;
@@ -129,6 +131,7 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             ashwalker::AshwalkerPlugin,
             voidwalker::VoidwalkerPlugin,
             separatist::SeparatistPlugin,
+            minions::MinionsPlugin,
         ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);

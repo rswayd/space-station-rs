@@ -36,7 +36,7 @@
 // shortcut: no countdown, light, wibble filter or emissive overlay; no neutralization smoke;
 // explosions do not destroy anomalies; the cores' own `signal()` effects are not ported; the
 // gravitational one does not throw mobs (knockdown only) or check magboots; the pyroclastic
-// one makes no slime (no ghost polls); the bluespace one has no sparkle flash; the
+// slime does not pick its colour's sprite variant; the bluespace one has no sparkle flash; the
 // hallucination pulse ignores line of sight (tg `visible_hallucination_pulse`).
 
 pub mod exotic;
@@ -310,7 +310,19 @@ pub struct Anomaly {
     pub core: Option<CoreSignal>,
     /// `/obj/effect/anomaly/hallucination/decoy`: drifts, misleads analyzers, nothing else.
     pub decoy: bool,
+    /// The pyroclastic one's `already_polling` and `chosen_one`.
+    polling: bool,
+    chosen: Option<crate::ghost_poll::Candidate>,
 }
+
+/// On a pyroclastic anomaly's slime spawned before its poll ended: the poll's winner takes it.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct PyroSlimeOf(pub Entity);
+
+/// `/obj/effect/anomaly/pyro` `poll_time`.
+const PYRO_POLL_SECS: f64 = 10.0;
+/// `POLL_IGNORE_PYROSLIME`.
+const POLL_IGNORE_PYROSLIME: &str = "pyroslime";
 
 /// The `frequency` and `code` of an anomaly's core signaller.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -642,6 +654,8 @@ fn spawn_one(
             ticks: 0.0,
             core,
             decoy,
+            polling: false,
+            chosen: None,
         },
     ));
     if kind.dense() {
@@ -720,16 +734,26 @@ fn anomaly_effect(world: &mut World, e: Entity, secs: f64) {
             }
         }
         AnomalyKind::Pyro => {
+            let now = crate::tools::now(world);
             let Some(mut a) = world.get_mut::<Anomaly>(e) else {
                 return;
             };
+            // tg asks `poll_time` after the death time, when the anomaly has long detonated
+            // (its slime is always mindless); the poll runs in the last `poll_time` instead.
+            let poll = !a.immortal && !a.polling && a.death_time - PYRO_POLL_SECS < now;
+            a.polling |= poll;
             // `releasedelay`.
             a.ticks += secs;
-            if a.ticks < 10.0 {
-                return;
+            let release = a.ticks >= 10.0;
+            if release {
+                a.ticks -= 10.0;
             }
-            a.ticks -= 10.0;
-            spawn_air(world, pos, "o2=5;plasma=5;TEMP=1000");
+            if poll {
+                start_pyro_poll(world, e);
+            }
+            if release {
+                spawn_air(world, pos, "o2=5;plasma=5;TEMP=1000");
+            }
         }
         AnomalyKind::Vortex => vortex_effect(world, e, pos),
         AnomalyKind::Hallucination => {
@@ -1130,7 +1154,10 @@ fn detonate(world: &mut World, e: Entity) {
             cosmic_sound(world, pos);
             bluespace_mass_teleport(world, area);
         }
-        AnomalyKind::Pyro => spawn_air(world, pos, "o2=500;plasma=500;TEMP=1000"),
+        AnomalyKind::Pyro => {
+            spawn_air(world, pos, "o2=500;plasma=500;TEMP=1000");
+            make_pyro_slime(world, e, pos);
+        }
         AnomalyKind::Vortex => crate::sound::playsound(
             world,
             crate::sound::PlaySound::new(
@@ -1507,4 +1534,86 @@ fn bluespace_mass_teleport(world: &mut World, area: Option<Entity>) {
             world.entity_mut(m).insert(dest);
         }
     }
+}
+
+/// `start_poll`: the ghosts are asked for the slime.
+fn start_pyro_poll(world: &mut World, anomaly: Entity) {
+    if !world.contains_resource::<crate::ghost_poll::Polls>() {
+        return;
+    }
+    let spec = crate::ghost_poll::PollSpec {
+        question: "Вы хотите сыграть за pyroclastic anomaly slime?".to_owned(),
+        role_name: "pyroclastic anomaly slime".to_owned(),
+        secs: PYRO_POLL_SECS,
+        ignore: Some(POLL_IGNORE_PYROSLIME),
+        ..default()
+    };
+    let group = crate::ghost_poll::ghosts(world);
+    crate::ghost_poll::poll_candidates(world, spec, group, move |world, mut signed_up| {
+        let Some(chosen) = crate::ghost_poll::pick_candidate(world, &mut signed_up) else {
+            return;
+        };
+        if let Some(mut a) = world.get_mut::<Anomaly>(anomaly) {
+            a.chosen = Some(chosen);
+            return;
+        }
+        // Already detonated: its slime waits for a player.
+        let mut q = world.query::<(Entity, &PyroSlimeOf)>();
+        let slime = q
+            .iter(world)
+            .find(|(_, of)| of.0 == anomaly)
+            .map(|(e, _)| e);
+        if let Some(slime) = slime {
+            possess_pyro_slime(world, slime, chosen);
+        }
+    });
+}
+
+/// `makepyroslime`: an enraged adult red or orange slime, the poll's winner in it.
+fn make_pyro_slime(world: &mut World, anomaly: Entity, pos: TilePos) {
+    let colour = if world.resource_mut::<EventRng>().0.prob(50.0) {
+        "red"
+    } else {
+        "orange"
+    };
+    let Some(slime) = crate::science::xenobio::spawn_slime(world, pos, colour, true) else {
+        warn!("no slime prototype for the pyroclastic anomaly");
+        return;
+    };
+    // `set_enraged_behaviour`.
+    if let Some(mut s) = world.get_mut::<crate::science::xenobio::Slime>(slime) {
+        s.rabid = true;
+    }
+    match world.get::<Anomaly>(anomaly).and_then(|a| a.chosen) {
+        Some(chosen) => possess_pyro_slime(world, slime, chosen),
+        None => {
+            world.entity_mut(slime).insert(PyroSlimeOf(anomaly));
+        }
+    }
+}
+
+/// `PossessByPlayer` + `/datum/antagonist/pyro_slime`, if the winner is still a ghost.
+fn possess_pyro_slime(world: &mut World, slime: Entity, chosen: crate::ghost_poll::Candidate) {
+    let still_ghost = world.get::<crate::ghost::Ghost>(chosen.mob).is_some()
+        && world
+            .get::<crate::server::PlayerMob>(chosen.mob)
+            .is_some_and(|p| p.client == chosen.client);
+    if !still_ghost
+        || world.get::<crate::server::PlayerMob>(slime).is_some()
+        || world.get::<Stat>(slime).is_none_or(|s| *s == Stat::Dead)
+    {
+        return;
+    }
+    if !crate::medical::brainmob::possess(world, chosen.client, chosen.mob, slime) {
+        return;
+    }
+    world.try_despawn(chosen.mob).ok();
+    world.entity_mut(slime).remove::<PyroSlimeOf>();
+    crate::antag::minions::add_minion(
+        world,
+        slime,
+        crate::antag::minions::MinionKind::PyroSlime,
+        None,
+    );
+    info!("{slime} was made into a slime by pyroclastic anomaly");
 }

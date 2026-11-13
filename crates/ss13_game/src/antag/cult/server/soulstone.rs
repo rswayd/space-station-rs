@@ -18,8 +18,8 @@
 //!   with nobody the shell comes back.
 //! - Who may use it: a cult stone needs a cultist, a mystic one a wizard (else 10 s unconscious);
 //!   a purified stone burns a cultist's hand. A destroyed stone kills its shade.
-// shortcut: no exorcism with a bible or corruption of purified stones, no non-cult shade minion
-// datum (the master is only told), no soulful toolbox, no suicide, no seek-master action or
+// shortcut: no exorcism with a bible or corruption of purified stones (the shade minion datum is
+// `crate::antag::minions`), no soulful toolbox, no suicide, no seek-master action or
 // blood sense alert, no examine lines, no language copying, no shade/construct `add_ally`; the
 // shade inside is protected by being unreachable (no `TRAIT_GODMODE`).
 
@@ -578,6 +578,7 @@ fn init_shade(
                      them succeed in their goals at all costs."
                 ),
             );
+            crate::antag::minions::assign_shade_master(world, shade, user);
         }
         if message_user {
             chat_to(
@@ -671,9 +672,11 @@ fn capture_shade(
                  {name}."
             ),
         );
-        // `assign_master`: a cultist's stone binds the shade to the cult.
+        // `assign_master`: a cultist's stone binds the shade to the cult, anyone else's to them.
         if is_cultist(world, user) && world.get::<PlayerMob>(shade).is_some() {
             make_shade_cultist(world, shade, None);
+        } else {
+            crate::antag::minions::assign_shade_master(world, shade, user);
         }
     }
     refresh_stone(world, stone);
