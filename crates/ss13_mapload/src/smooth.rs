@@ -193,9 +193,18 @@ pub fn smooth_all(world: &mut World, icons: &IconIndex) -> SmoothStats {
 /// Resmooths the atoms on `pos` and its 8 neighbors (their junctions depend on `pos`).
 /// Needs [`IconIndex`] (inserted by [`crate::fidelity::apply`]).
 pub fn resmooth_around(world: &mut World, pos: TilePos) {
+    resmooth_tiles(world, &[pos]);
+}
+
+/// [`resmooth_around`] for every tile of `tiles` at once, each atom smoothed once (a moved
+/// shuttle's rectangle).
+pub fn resmooth_tiles(world: &mut World, tiles: &[TilePos]) {
     let index = world.resource::<SpatialIndex>();
-    let targets: Vec<(Entity, TilePos)> = index
-        .in_radius(pos, 1)
+    let mut seen = std::collections::HashSet::new();
+    let targets: Vec<(Entity, TilePos)> = tiles
+        .iter()
+        .flat_map(|&pos| index.in_radius(pos, 1))
+        .filter(|&e| seen.insert(e))
         .filter(|&e| world.get::<DmSmooth>(e).is_some_and(DmSmooth::smooths))
         .filter_map(|e| Some((e, *world.get::<TilePos>(e)?)))
         .collect();
