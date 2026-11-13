@@ -125,6 +125,8 @@ pub fn refresh(world: &mut World, mob: Entity) {
         .is_some_and(crate::status_effects::StatusEffects::pacified);
     // The Hippocrates bust's oath (`crate::service`).
     pacifist |= crate::service::hippocratic_sworn(world, mob);
+    // A shy drone (`DRONE_SHY_TRAIT`, `crate::silicon::drones`).
+    pacifist |= crate::silicon::drones::shy(world, mob);
     // `/datum/status_effect/gonbola_pacify`: `TRAIT_PACIFISM`, `TRAIT_MUTE`.
     let gonbola = crate::legcuffs::gonbola_worn(world, mob);
     pacifist |= gonbola;

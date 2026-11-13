@@ -699,6 +699,10 @@ pub fn take_role(world: &mut World, ghost: Entity, spawner: Entity) -> Option<En
     if !crate::antag::ashwalker::allow_spawn(world, client, spawner) {
         return None;
     }
+    // A drone shell makes its drone (`crate::silicon::drones`).
+    if let Some(d) = def.as_ref().filter(|d| crate::silicon::drones::is_shell(d)) {
+        return crate::silicon::drones::take_shell(world, client, ghost, spawner, d);
+    }
     let mob = match &def {
         Some(d) => {
             let name = match crate::golems::forced_name(world, spawner) {

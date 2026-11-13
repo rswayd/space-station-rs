@@ -333,6 +333,7 @@ impl Plugin for GameServerPlugin {
             crate::stumble::StumblePlugin,
             crate::ventcrawl::VentcrawlPlugin,
             crate::pixel_shift::PixelShiftPlugin,
+            crate::dextrous::DextrousPlugin,
         ))
         .add_plugins(crate::mining::MiningServerPlugin)
         .add_plugins(crate::reta::RetaPlugin)

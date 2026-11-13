@@ -1,6 +1,7 @@
 //! Mob spawners (`code/modules/mob_spawn/mob_spawn.dm`): the human ghost roles
-//! (`/obj/effect/mob_spawn/ghost_role/human` and subtypes: sleepers, eggs, cryopods) and human
-//! corpses (`/obj/effect/mob_spawn/corpse/human`). Every such type carries [`DmMobSpawn`] (its
+//! (`/obj/effect/mob_spawn/ghost_role/human` and subtypes: sleepers, eggs, cryopods), the drone
+//! shells (`/obj/effect/mob_spawn/ghost_role/drone`, their [`MobSpawnDef::mob_type`] made by
+//! `ss13_game::silicon::drones`) and human corpses (`/obj/effect/mob_spawn/corpse/human`). Every such type carries [`DmMobSpawn`] (its
 //! path); [`MOB_SPAWN_FILE`] holds each type's resolved vars ([`MobSpawnDef`]: texts, uses,
 //! species, faction, corpse damage) and its `outfit` (`crate::jobs::outfit`), read by the game
 //! (`ss13_game::ghost_roles`) at startup. The outfits' items get prototypes ([`MobSpawnData::item_types`]).
@@ -23,6 +24,8 @@ use crate::value::Field;
 pub const MOB_SPAWN_FILE: &str = "mob_spawns.ron";
 pub const GHOST_ROLE_ROOT: &str = "/obj/effect/mob_spawn/ghost_role/human";
 pub const CORPSE_ROOT: &str = "/obj/effect/mob_spawn/corpse/human";
+/// `/obj/effect/mob_spawn/ghost_role/drone`: shells of maintenance drones.
+pub const DRONE_SHELL_ROOT: &str = "/obj/effect/mob_spawn/ghost_role/drone";
 const COMPONENT: &str = "dm_mob_spawn";
 /// What `ss13_game::golems` spawns besides [`GOLEM_STACK_FOOD`]: the completed shells and the
 /// adamantine sheet they leave.
@@ -91,6 +94,9 @@ pub struct MobSpawnDef {
     pub burn_damage: f32,
     pub oxy_damage: f32,
     pub husk: bool,
+    /// `mob_type`, read for the drone shells (the humans' is always a human).
+    #[serde(default)]
+    pub mob_type: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -135,7 +141,9 @@ impl MobSpawnData {
 }
 
 fn is_spawn(path: &str) -> bool {
-    is_under(path, GHOST_ROLE_ROOT) || is_under(path, CORPSE_ROOT)
+    is_under(path, GHOST_ROLE_ROOT)
+        || is_under(path, CORPSE_ROOT)
+        || is_under(path, DRONE_SHELL_ROOT)
 }
 
 fn text(v: Option<&Value>) -> String {
@@ -194,6 +202,9 @@ pub fn resolve(types: &DmTypes) -> MobSpawnData {
                 burn_damage: damage("burn_damage"),
                 oxy_damage: damage("oxy_damage"),
                 husk: truthy(r("husk")),
+                mob_type: is_under(p, DRONE_SHELL_ROOT)
+                    .then(|| path_of(r("mob_type")))
+                    .flatten(),
             }
         })
         .collect();
@@ -241,7 +252,13 @@ mod tests {
             "declared_vars": { "husk": 0 } },
         "/obj/effect/mob_spawn/corpse/human/damaged": { "parent": "/obj/effect/mob_spawn/corpse/human",
             "declared_vars": { "brute_damage": 1000 } },
-        "/obj/effect/mob_spawn/cockroach": { "parent": "/obj/effect/mob_spawn" }
+        "/obj/effect/mob_spawn/cockroach": { "parent": "/obj/effect/mob_spawn" },
+        "/obj/effect/mob_spawn/ghost_role/drone": { "parent": "/obj/effect/mob_spawn/ghost_role",
+            "declared_vars": { "name": "drone shell", "mob_name": "drone",
+            "mob_type": { "path": "/mob/living/basic/drone" } } },
+        "/obj/effect/mob_spawn/ghost_role/drone/classic": {
+            "parent": "/obj/effect/mob_spawn/ghost_role/drone",
+            "declared_vars": { "mob_type": { "path": "/mob/living/basic/drone/classic" } } }
       }
     }"##;
 
@@ -273,5 +290,26 @@ mod tests {
             1
         );
         assert!(type_fields(&types, "/obj/effect/mob_spawn/cockroach").is_empty());
+    }
+
+    #[test]
+    fn drone_shells_resolve_with_their_mob_type() {
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        let data = resolve(&types);
+        let classic = data
+            .get("/obj/effect/mob_spawn/ghost_role/drone/classic")
+            .unwrap();
+        assert!(!classic.corpse);
+        assert_eq!(classic.name, "drone shell");
+        assert_eq!(classic.mob_name.as_deref(), Some("drone"));
+        assert_eq!(
+            classic.mob_type.as_deref(),
+            Some("/mob/living/basic/drone/classic")
+        );
+        // A human role has none: the game makes a human.
+        let beach = data
+            .get("/obj/effect/mob_spawn/ghost_role/human/beach")
+            .unwrap();
+        assert_eq!(beach.mob_type, None);
     }
 }

@@ -23,7 +23,7 @@ use ss13_shared::ui::UiServerMessage;
 use ss13_tgui::client::AppTguiClientExt;
 use ss13_tgui::{UiInterface, decode};
 
-use crate::hud::{HudData, HudIcon, InventoryHudUi};
+use crate::hud::{HudData, HudIcon, HudLayout, InventoryHudUi};
 
 /// One 32 px HUD tile at the map's zoom 2.
 const SLOT_PX: f32 = 64.0;
@@ -239,6 +239,22 @@ const SLOTS: [SlotDef; 17] = [
 
 /// `ui_inventory`: the toggle button.
 const TOGGLE: (ScreenAxis, ScreenAxis) = (ScreenAxis(WEST, 0, 6), ScreenAxis(SOUTH, 0, 5));
+/// `ui_drone_storage`, `ui_drone_head` (`code/__DEFINES/hud.dm`).
+const DRONE_STORAGE: (ScreenAxis, ScreenAxis) =
+    (ScreenAxis(CENTER, -2, 14), ScreenAxis(SOUTH, 0, 5));
+const DRONE_HEAD: (ScreenAxis, ScreenAxis) = (ScreenAxis(CENTER, -3, 14), ScreenAxis(SOUTH, 0, 5));
+
+/// Where `def`'s slot sits on the `layout` HUD; `None`: that HUD has no such slot.
+fn placement(layout: HudLayout, def: &SlotDef) -> Option<(ScreenAxis, ScreenAxis)> {
+    if !layout.has(def.slot) {
+        return None;
+    }
+    Some(match (layout, def.slot) {
+        (HudLayout::Drone, InventorySlot::SuitStorage) => DRONE_STORAGE,
+        (HudLayout::Drone, InventorySlot::Head) => DRONE_HEAD,
+        _ => (def.x, def.y),
+    })
+}
 
 pub struct InventoryHudPlugin;
 
@@ -254,7 +270,7 @@ impl Plugin for InventoryHudPlugin {
                     send_inventory_keys,
                     receive_hud,
                     draw_hud.run_if(resource_changed::<Hud>),
-                    show_toggleable.run_if(resource_changed::<InventoryShown>),
+                    layout_slots,
                     follow_map_insets.run_if(resource_changed::<MapInsets>),
                 ),
             );
@@ -282,6 +298,10 @@ pub(crate) struct HudSlot(pub(crate) InventorySlot);
 /// A slot of `HUD_GROUP_TOGGLEABLE_INVENTORY`.
 #[derive(Component)]
 struct Toggleable;
+
+/// The `ui_inventory` button (only the human HUD has it).
+#[derive(Component)]
+struct ToggleButton;
 
 /// The held or worn item's icon inside a slot.
 #[derive(Component)]
@@ -341,6 +361,7 @@ fn spawn_hud(mut atlas: Option<ResMut<IconAtlas>>, mut commands: Commands) {
         .id();
     let dark = BackgroundColor(Color::srgba(0.1, 0.1, 0.15, 0.8));
     let mut toggle = commands.spawn((
+        ToggleButton,
         Name::new("hud_toggle"),
         screen_loc(TOGGLE.0, TOGGLE.1),
         ChildOf(root),
@@ -404,16 +425,46 @@ fn click_toggle(click: On<PointerClick>, mut shown: ResMut<InventoryShown>) {
     }
 }
 
-fn show_toggleable(
+/// The slots of the mob's HUD at their places (tg `hud_type`), the pop-up clothes while shown.
+// Cost: every frame, the 17 slot nodes; nothing is written unless it changes.
+fn layout_slots(
+    hud: Res<Hud>,
     shown: Res<InventoryShown>,
-    mut slots: Query<&mut Visibility, (With<Toggleable>, With<HudSlot>)>,
+    mut slots: Query<
+        (&HudSlot, &mut Node, &mut Visibility, Has<Toggleable>),
+        Without<ToggleButton>,
+    >,
+    mut toggles: Query<&mut Visibility, (With<ToggleButton>, Without<HudSlot>)>,
 ) {
-    for mut visibility in &mut slots {
-        *visibility = if shown.0 {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
+    let layout = hud.data.layout;
+    for (&HudSlot(slot), mut node, mut visibility, toggleable) in &mut slots {
+        let place = SLOTS
+            .iter()
+            .find(|d| d.slot == slot)
+            .and_then(|d| placement(layout, d));
+        let wanted = match place {
+            Some((x, y)) => {
+                let at = screen_loc(x, y);
+                if *node != at {
+                    *node = at;
+                }
+                if toggleable && layout == HudLayout::Human && !shown.0 {
+                    Visibility::Hidden
+                } else {
+                    Visibility::Inherited
+                }
+            }
+            None => Visibility::Hidden,
         };
+        visibility.set_if_neq(wanted);
+    }
+    let toggle = if layout == HudLayout::Human {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    for mut visibility in &mut toggles {
+        visibility.set_if_neq(toggle);
     }
 }
 
