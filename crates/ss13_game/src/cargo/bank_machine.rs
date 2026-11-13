@@ -12,6 +12,7 @@
 // changes z-level (consoles here never move between levels).
 
 use bevy::ecs::message::{MessageCursor, Messages};
+use bevy::ecs::system::SystemParamItem;
 use bevy::prelude::*;
 use ss13_mapload::DmObj;
 use ss13_mapload::spawner::Rng;
@@ -110,16 +111,11 @@ fn setup_mapped(world: &mut World) {
     }
 }
 
-fn cargo_balance(world: &World) -> i64 {
-    world
-        .get_resource::<Economy>()
-        .and_then(|e| e.department(ACCOUNT_CAR))
-        .map_or(0, |a| a.balance)
-}
+type BankParams = (Option<Res<'static, Economy>>, Res<'static, BankStationName>);
 
 impl ServerUi for BankMachineUi {
     type Source = &'static BankMachine;
-    type UserParam = (Option<Res<'static, Economy>>, Res<'static, BankStationName>);
+    type UserParam = BankParams;
     type Act = BankAct;
 
     fn static_data(_: &BankMachine) {}
@@ -127,7 +123,7 @@ impl ServerUi for BankMachineUi {
     fn data(
         machine: &BankMachine,
         _: Entity,
-        (economy, station): &(Option<Res<'_, Economy>>, Res<'_, BankStationName>),
+        (economy, station): &SystemParamItem<'_, '_, BankParams>,
     ) -> BankMachineData {
         BankMachineData {
             current_balance: economy
@@ -346,6 +342,13 @@ fn process(world: &mut World, e: Entity, seconds_per_tick: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cargo_balance(world: &World) -> i64 {
+        world
+            .get_resource::<Economy>()
+            .and_then(|e| e.department(ACCOUNT_CAR))
+            .map_or(0, |a| a.balance)
+    }
 
     #[test]
     fn cash_takes_the_largest_bills() {

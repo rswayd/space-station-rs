@@ -1222,6 +1222,8 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(CombatRng(3));
         world.insert_resource(Time::<()>::default());
+        // No prototypes: the produce is rolled but not spawned.
+        world.init_resource::<crate::construction::BuildTemplates>();
         let path = "/obj/structure/flora/ash/cacti";
         let e = world
             .spawn((

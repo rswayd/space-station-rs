@@ -133,7 +133,7 @@ fn window(world: &World, dm: &DmOrderConsole) -> ProduceStatic {
 fn setup_consoles(world: &mut World) {
     let mut query =
         world.query_filtered::<(Entity, &DmObj, &DmOrderConsole), With<ss13_world::Mapped>>();
-    let found: Vec<(Entity, DmOrderConsole)> = query
+    let found: Vec<(Entity, String, DmOrderConsole)> = query
         .iter(world)
         .filter(|(_, obj, _)| {
             is_under(&obj.path, ORDER_CONSOLE)

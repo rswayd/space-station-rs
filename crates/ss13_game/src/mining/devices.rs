@@ -41,8 +41,10 @@ pub(super) struct DevicesPlugin;
 
 impl Plugin for DevicesPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(on_item_added)
-            .add_systems(Update, injector_emps);
+        app.add_observer(on_item_added).add_systems(
+            Update,
+            injector_emps.in_set(crate::emp::EmpSystems::Effects),
+        );
     }
 }
 
