@@ -61,6 +61,14 @@ pub struct DmItem {
     /// `slowdown`: deciseconds added to the wearer's step while worn (negative: faster).
     /// Runtime state: items that toggle it (magboots, armor) change this copy.
     pub slowdown: f32,
+    /// `pickup_sound`, `drop_sound`, `equip_sound`, `throw_drop_sound`: files or SFX keys;
+    /// empty: `null` (silent).
+    pub pickup_sound: String,
+    pub drop_sound: String,
+    pub equip_sound: String,
+    pub throw_drop_sound: String,
+    /// `sound_vary`: those sounds vary in pitch.
+    pub sound_vary: bool,
 }
 
 impl DmItem {
@@ -75,7 +83,7 @@ impl DmItem {
 }
 
 /// Item vars and their [`DmItem`] field names.
-const VARS: [(&str, &str); 20] = [
+const VARS: [(&str, &str); 25] = [
     ("anchored", "anchored"),
     ("interaction_flags_item", "interaction_flags_item"),
     ("slot_flags", "slot_flags"),
@@ -96,6 +104,11 @@ const VARS: [(&str, &str); 20] = [
     ("resistance_flags", "resistance_flags"),
     ("max_integrity", "max_integrity"),
     ("slowdown", "slowdown"),
+    ("pickup_sound", "pickup_sound"),
+    ("drop_sound", "drop_sound"),
+    ("equip_sound", "equip_sound"),
+    ("throw_drop_sound", "throw_drop_sound"),
+    ("sound_vary", "sound_vary"),
 ];
 
 /// Converter fields of `path`: its type path, and the item vars it declares. The root
@@ -175,6 +188,10 @@ fn json_ron(var: &str, path: &str, value: &serde_json::Value) -> Result<String, 
             | "worn_icon_state"
             | "damtype"
             | "hitsound"
+            | "pickup_sound"
+            | "drop_sound"
+            | "equip_sound"
+            | "throw_drop_sound"
     );
     if numeric && num(Some(value)).is_none() {
         return Err(Skip::Unsupported);
@@ -184,12 +201,13 @@ fn json_ron(var: &str, path: &str, value: &serde_json::Value) -> Result<String, 
 
 fn scalar_ron(var: &str, n: f64, text: &str) -> Option<String> {
     Some(match var {
-        "anchored" => (n != 0.0).to_string(),
+        "anchored" | "sound_vary" => (n != 0.0).to_string(),
         "interaction_flags_item" | "slot_flags" | "item_flags" | "resistance_flags" => {
             (n.max(0.0) as u32).to_string()
         }
         "inhand_icon_state" | "lefthand_file" | "righthand_file" | "worn_icon"
-        | "worn_icon_state" | "damtype" | "hitsound" => str_ron(text),
+        | "worn_icon_state" | "damtype" | "hitsound" | "pickup_sound" | "drop_sound"
+        | "equip_sound" | "throw_drop_sound" => str_ron(text),
         "force" | "attack_speed" | "throwforce" | "throw_speed" | "throw_range"
         | "max_integrity" | "slowdown" => {
             format!("{:?}", n as f32)

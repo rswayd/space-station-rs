@@ -57,6 +57,7 @@ fn shutdown(world: &mut World, pc: Entity) {
     if let Some(mut c) = world.get_mut::<ModularComputer>(pc) {
         c.shutdown();
     }
+    super::pda::shutdown_effects(world, pc);
 }
 
 /// The component's effect on its computer.

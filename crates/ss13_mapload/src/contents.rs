@@ -134,6 +134,11 @@ pub struct DmCloset {
     pub id: String,
     /// `card_reader_installed`: personal closets (an ID swipe makes it the card's).
     pub card_reader_installed: bool,
+    /// `open_sound`, `close_sound` (files or SFX keys; empty: `null`) and their volumes.
+    pub open_sound: String,
+    pub close_sound: String,
+    pub open_sound_volume: f32,
+    pub close_sound_volume: f32,
 }
 
 /// The lock of a `/obj/item/storage/lockbox` type (`req_access`, the `icon_*` states);
@@ -163,6 +168,13 @@ pub struct DmStorage {
     pub max_specific_storage: u8,
     /// Sum of `w_class` of the contents.
     pub max_total_storage: u32,
+    /// `do_rustle`, `rustle_sound`, `rustle_vary`, `open_sound`, `open_sound_vary` (sounds:
+    /// files or SFX keys; empty: `null`).
+    pub do_rustle: bool,
+    pub rustle_sound: String,
+    pub rustle_vary: bool,
+    pub open_sound: String,
+    pub open_sound_vary: bool,
 }
 
 /// What a storage item's `storage_type` may hold (`set_holdable` in the datum's `New`): type
@@ -248,6 +260,11 @@ impl Default for DmStorage {
             max_slots: 7,
             max_specific_storage: WEIGHT_CLASS_NORMAL,
             max_total_storage: 14,
+            do_rustle: true,
+            rustle_sound: SFX_RUSTLE.to_owned(),
+            rustle_vary: true,
+            open_sound: String::new(),
+            open_sound_vary: true,
         }
     }
 }
@@ -288,6 +305,26 @@ const CLOSET_VARS: [(&str, &str); 17] = [
 ];
 
 const STORAGE_VARS: [&str; 3] = ["max_slots", "max_specific_storage", "max_total_storage"];
+/// `SFX_RUSTLE`, `/datum/storage::rustle_sound`.
+const SFX_RUSTLE: &str = "rustle";
+/// Closet sound vars and their `/obj/structure/closet` volume vars.
+const CLOSET_SOUNDS: [(&str, &str); 2] = [
+    ("open_sound", "open_sound_volume"),
+    ("close_sound", "close_sound_volume"),
+];
+
+/// A sound var's value: a file, an SFX key, or empty for `null`.
+fn sound_text(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Object(o) => o
+            .get("resource")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_owned(),
+        _ => String::new(),
+    }
+}
 
 fn is_text_var(var: &str) -> bool {
     matches!(
@@ -340,6 +377,15 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
                 (n.max(0.0) as u32).to_string(),
             ));
         }
+        for (sound, volume) in CLOSET_SOUNDS {
+            if let Some(v) = value(CLOSET_ROOT, sound) {
+                let text = ron::to_string(&sound_text(v)).expect("strings always serialize");
+                out.push(ext("dm_closet", sound, text));
+            }
+            if let Some(n) = value(CLOSET_ROOT, volume).and_then(|v| num(Some(v))) {
+                out.push(ext("dm_closet", volume, format!("{:?}", n as f32)));
+            }
+        }
     }
     if is_under(path, LOCKBOX_ROOT) {
         for var in LOCKBOX_VARS {
@@ -375,6 +421,24 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
             "dm_storage",
             "max_total_storage",
             storage.max_total_storage.to_string(),
+        ));
+        let s = |v: &str| ron::to_string(v).expect("strings always serialize");
+        out.push(ext(
+            "dm_storage",
+            "do_rustle",
+            storage.do_rustle.to_string(),
+        ));
+        out.push(ext("dm_storage", "rustle_sound", s(&storage.rustle_sound)));
+        out.push(ext(
+            "dm_storage",
+            "rustle_vary",
+            storage.rustle_vary.to_string(),
+        ));
+        out.push(ext("dm_storage", "open_sound", s(&storage.open_sound)));
+        out.push(ext(
+            "dm_storage",
+            "open_sound_vary",
+            storage.open_sound_vary.to_string(),
         ));
     }
     // A cardboard box only folds: it is a fancy box that is always open and has no count.
@@ -454,7 +518,27 @@ pub fn storage_limits(types: &DmTypes, path: &str) -> Option<DmStorage> {
             _ => storage.max_total_storage = n.max(0.0) as u32,
         }
     }
+    let flag = |var: &str, default: bool| {
+        types
+            .resolved(datum, var)
+            .map_or(default, |v| truthy(Some(v)))
+    };
+    storage.do_rustle = flag("do_rustle", true);
+    storage.rustle_vary = flag("rustle_vary", true);
+    storage.open_sound_vary = flag("open_sound_vary", true);
+    let sound = |var: &str, default: &str| {
+        types
+            .resolved(datum, var)
+            .map_or_else(|| default.to_owned(), sound_text)
+    };
+    storage.rustle_sound = sound("rustle_sound", SFX_RUSTLE);
+    storage.open_sound = sound("open_sound", "");
     Some(storage)
+}
+
+/// The sound vars of `path`'s `storage_type` datum (files the storage plays).
+pub fn storage_sounds(types: &DmTypes, path: &str) -> Vec<String> {
+    storage_limits(types, path).map_or_else(Vec::new, |s| vec![s.rustle_sound, s.open_sound])
 }
 
 fn json_ron(var: &str, value: &serde_json::Value) -> Option<String> {
@@ -911,11 +995,18 @@ mod tests {
         "/datum/storage": { "parent": "/datum", "declared_vars": {
             "max_slots": 7, "max_specific_storage": 3, "max_total_storage": 14 } },
         "/datum/storage/backpack": { "parent": "/datum/storage", "declared_vars": {
-            "max_slots": 21, "max_total_storage": 21 } },
+            "max_slots": 21, "max_total_storage": 21,
+            "rustle_sound": { "resource": "sound/bag.ogg" }, "rustle_vary": 0 } },
         "/obj/structure": { "parent": "/obj" },
         "/obj/structure/closet": { "parent": "/obj/structure", "declared_vars": {
             "opened": 0, "locked": 0, "secure": 0, "icon_door": null, "storage_capacity": 30,
-            "enable_door_overlay": 1, "empty": 0 } },
+            "enable_door_overlay": 1, "empty": 0,
+            "open_sound": { "resource": "sound/machines/closet/closet_open.ogg" },
+            "close_sound": { "resource": "sound/machines/closet/closet_close.ogg" },
+            "open_sound_volume": 35, "close_sound_volume": 50 } },
+        "/obj/structure/closet/cabinet": { "parent": "/obj/structure/closet", "declared_vars": {
+            "open_sound": { "resource": "sound/machines/closet/wooden_closet_open.ogg" },
+            "open_sound_volume": 25 } },
         "/obj/structure/closet/secure_closet": { "parent": "/obj/structure/closet",
             "declared_vars": { "locked": 1, "secure": 1, "req_access": { "list": ["captain"] } } },
         "/obj/structure/closet/secure_closet/empty": {
@@ -937,6 +1028,30 @@ mod tests {
 
     fn types() -> DmTypes {
         DmTypes::parse(TYPES.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn closet_sounds_follow_dm_inheritance() {
+        let types = types();
+        let ron = |path| crate::value::patch_ron(&type_fields(&types, path));
+        let root = ron(CLOSET_ROOT);
+        assert!(
+            root.contains(r#"open_sound: "sound/machines/closet/closet_open.ogg""#),
+            "{root}"
+        );
+        assert!(root.contains("open_sound_volume: 35.0"), "{root}");
+        assert!(root.contains("close_sound_volume: 50.0"), "{root}");
+        // A subtype carries only what it changes; the rest comes from the root prototype.
+        let cabinet = ron("/obj/structure/closet/cabinet");
+        assert!(cabinet.contains("wooden_closet_open.ogg") && cabinet.contains("25.0"));
+        assert!(!cabinet.contains("close_sound"), "{cabinet}");
+        let pack = ron("/obj/item/storage/backpack");
+        assert!(pack.contains(r#"rustle_sound: "sound/bag.ogg""#), "{pack}");
+        assert!(pack.contains("rustle_vary: false"), "{pack}");
+        assert_eq!(
+            storage_sounds(&types, "/obj/item/storage"),
+            ["rustle".to_owned(), String::new()]
+        );
     }
 
     #[test]
@@ -1034,7 +1149,10 @@ mod tests {
             Some(DmStorage {
                 max_slots: 21,
                 max_specific_storage: 3,
-                max_total_storage: 21
+                max_total_storage: 21,
+                rustle_sound: "sound/bag.ogg".into(),
+                rustle_vary: false,
+                ..DmStorage::default()
             })
         );
         let pack = ron("/obj/item/storage/backpack");

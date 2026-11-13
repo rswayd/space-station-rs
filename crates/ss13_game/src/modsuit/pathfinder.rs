@@ -367,7 +367,7 @@ fn launch(world: &mut World, module: Entity, recall: Recall) {
             closet.welded = false;
             closet.broken = true;
         }
-        crate::closets::open(world, container);
+        crate::closets::open_with(world, container, false);
     }
     let Some(dest) = crate::explosions::turf_of(world, recall.recaller) else {
         end_transit(world, module);

@@ -21,11 +21,17 @@ use crate::id_access::{
 };
 use crate::inventory::{IdCard, Inventory};
 use crate::jobs::Jobs;
-use crate::modpc::pda::{ModularComputer, insert_id, remove_id};
+use crate::modpc::pda::{ModularComputer, insert_id, play, remove_id};
 use crate::outfit::{IdRegistration, id_label};
 
 /// `MAX_NAME_LEN`.
 const MAX_NAME_LEN: usize = 42;
+/// `card_mod/ui_act` sounds, all at 50 without variation.
+const TERMINAL_ON: &str = "sound/machines/terminal/terminal_on.ogg";
+const TERMINAL_OFF: &str = "sound/machines/terminal/terminal_off.ogg";
+const PROMPT_DENY: &str = "sound/machines/terminal/terminal_prompt_deny.ogg";
+/// `SFX_TERMINAL_TYPE`.
+const TERMINAL_TYPE: &str = "terminal_type";
 
 /// The program's login: `authenticated_card`, `authenticated_user`, `minor`, `region_access`,
 /// `valid_access`, `job_templates`, and which card logged in.
@@ -293,7 +299,10 @@ pub fn apply(
             return Ok(());
         }
         CardAct::Authenticate => {
-            let card = computer.stored_id.ok_or("no auth card")?;
+            let Some(card) = computer.stored_id else {
+                play(world, console, PROMPT_DENY, 50.0, false);
+                return Err("no auth card");
+            };
             let access = world
                 .get::<IdCard>(card)
                 .map(|c| c.access.clone())
@@ -324,10 +333,12 @@ pub fn apply(
             world
                 .entity_mut(console)
                 .insert(CardModState { login: Some(login) });
+            play(world, console, TERMINAL_ON, 50.0, false);
             return Ok(());
         }
         CardAct::Logout => {
             world.entity_mut(console).insert(CardModState::default());
+            play(world, console, TERMINAL_OFF, 50.0, false);
             return Ok(());
         }
         _ => {}
@@ -370,11 +381,13 @@ pub fn apply(
             registration_mut(world, target).assignment = "Demoted".to_owned();
             with_card(world, target, remove_trim);
             relabel(world, target);
+            play(world, console, PROMPT_DENY, 50.0, false);
         }
         CardAct::Edit(name) => {
             let name = crate::records::console::sanitize(&name, MAX_NAME_LEN);
             registration_mut(world, target).registered_name = name;
             relabel(world, target);
+            play(world, console, TERMINAL_TYPE, 50.0, false);
         }
         CardAct::Age(age) => {
             if !(crate::records::AGE_MIN..=crate::records::AGE_MAX).contains(&age) {
@@ -384,16 +397,19 @@ pub fn apply(
                 .get_mut::<CardAccess>(target)
                 .expect("inserted above")
                 .registered_age = age;
+            play(world, console, TERMINAL_TYPE, 50.0, false);
         }
         CardAct::Assign(assignment) => {
             registration_mut(world, target).assignment =
                 crate::records::console::sanitize(&assignment, MAX_NAME_LEN);
             relabel(world, target);
+            play(world, console, TERMINAL_TYPE, 50.0, false);
         }
         CardAct::Access {
             target: access,
             wildcard,
         } => {
+            play(world, console, TERMINAL_TYPE, 50.0, false);
             if !login.auth.valid_access.contains(&access) {
                 return Err("access outside this login");
             }
@@ -425,6 +441,7 @@ pub fn apply(
             }
         }
         CardAct::Template(name) => {
+            play(world, console, TERMINAL_TYPE, 50.0, false);
             let trim = world.get_resource::<Jobs>().and_then(|jobs| {
                 login
                     .auth

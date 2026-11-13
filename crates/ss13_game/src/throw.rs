@@ -671,6 +671,17 @@ fn finish(world: &mut World, item: Entity, thrown: &Thrown, hit: Option<Entity>)
     if crate::spells::conjure::packet_thrown(world, item, hit) {
         return;
     }
+    // `/obj/item/throw_impact` on a turf or an object: `throw_drop_sound_chain`.
+    if hit.is_none_or(|h| world.get::<Health>(h).is_none())
+        && let (Some(dm), Some(&at)) = (world.get::<DmItem>(item), world.get::<TilePos>(item))
+    {
+        let sound = if dm.throw_drop_sound.is_empty() {
+            dm.drop_sound.clone()
+        } else {
+            dm.throw_drop_sound.clone()
+        };
+        crate::inventory::item_sound(world, at, item, &sound, crate::inventory::YEET_SOUND_VOLUME);
+    }
     let Some(hit) = hit else {
         // A boomerang baton flies back (`crate::security::thrown`).
         crate::security::thrown(world, item, None, thrown.thrower);

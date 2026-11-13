@@ -6,7 +6,7 @@
 
 - **Код:** [`/obj/item/modular_computer`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L4), [`proc/open_program()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L712), [`computer_ui.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer_ui.dm#L47); tgui: [`NtosMain.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/NtosMain.tsx)
 - **BandaStation:** [`computer.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L1107) — уровни Гамма/Эпсилон для тревожных звонков
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modpc/` (`NtosMain`: заголовок со временем, сигналом, зарядом; запуск, сворачивание и закрытие программ; фонарик): только КПК; нет журнала, печати, фото, тревожных звонков, тем (`// shortcut:` в `modpc/client.rs`, `modpc/pda.rs`)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modpc/` (`NtosMain`: заголовок со временем, сигналом, зарядом; запуск, сворачивание и закрытие программ; фонарик; выключение — `terminal_off` и «выключается.» (`pda::shutdown_effects`, также при разряде и от схемы); звонок мессенджера — `twobeep_high`): только КПК; нет звука клавиатуры кнопки фонарика (`ui_action_click`), ручки (`pda_button*`), сбойных гудков `STATION_TRAIT_PDA_GLITCHED`, журнала, печати, фото, тревожных звонков, тем (`// shortcut:` в `modpc/client.rs`, `modpc/pda.rs`)
 
 ### КПК (PDA)
 Планшет в слоте КПК/ID: ID-карта внутри, мессенджер, предустановленные программы по должности, ручка, раскраска (GAGS, раскрасчик КПК), КПК ролей и Синдиката; форк добавляет «Навигатор» в набор по умолчанию и КПК своих должностей.
@@ -43,7 +43,7 @@
 Слот ID (основной и второй), привязка имени/должности (imprint), доступ программ по ID.
 
 - **Код:** [`proc/insert_secondary_id()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L332), [`proc/imprint_id()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/modular_computers/computers/item/computer.dm#L809)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modpc/pda.rs`: ID-слот (вставка картой, alt-клик и «Вытащить ID»), привязка, КПК с картой открывает двери, шкафы и автоматы (`GetID`); второго слота нет, доступ копируется при вставке (`// shortcut:`)
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/modpc/pda.rs`: ID-слот (вставка картой, alt-клик и «Вытащить ID»; звук `terminal_insert_disc` на вставке и извлечении, `card_slide` при «Вытащить ID»/«Eject Disk», `terminal_processing` при привязке), привязка, КПК с картой открывает двери, шкафы и автоматы (`GetID`); второго слота нет, доступ копируется при вставке (`// shortcut:`)
 
 ### NTNet: доступность сети
 Программы требуют связи с NTNet (реле и телекомы), уровень сигнала зависит от z-уровня и состояния реле.
