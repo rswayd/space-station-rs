@@ -13,7 +13,8 @@
 //!   cyborg's law display; [`borg_upgrades`] (server): upgrade boards; [`robotics`] (server):
 //!   the robotics control console;
 //! - [`laws`] (server): lawsets, the round default, lawsync; [`law_rack`] (server): law racks,
-//!   their modules and the silicons linked to them;
+//!   their modules and the silicons linked to them; [`state_laws`] (server): stating laws aloud,
+//!   the automatic announcement channel;
 //! - [`malf`] (server): the malfunctioning AI, its APC hacks and shunting; [`malf_modules`]
 //!   (server): its module picker and modules;
 //! - [`ai_core`] (server): the AI core structure, its construction around a brain processor;
@@ -95,6 +96,8 @@ pub mod mob_cameras;
 pub mod pai;
 #[cfg(feature = "server")]
 pub mod robotics;
+#[cfg(feature = "server")]
+pub mod state_laws;
 pub mod ui;
 
 #[cfg(feature = "server")]
@@ -162,6 +165,7 @@ mod server {
                     super::pai::PaiPlugin,
                     super::camera_advanced::CameraAdvancedPlugin,
                     super::mob_cameras::MobCamerasPlugin,
+                    super::state_laws::StateLawsPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(

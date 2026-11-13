@@ -47,6 +47,8 @@ pub const OOC_VERB_VOTE: &str = "Голосование";
 pub const AI_TAB: &str = "Команды ИИ";
 /// BandaStation `ai_cryo` (`crate::cryosleep`).
 pub const AI_VERB_UNLOAD: &str = "Выгрузиться на сервер хранения";
+/// `set_automatic_say_channel` (`crate::silicon::state_laws`).
+pub const AI_VERB_AUTOSAY: &str = "Set Auto Announce Mode";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StatPanelData {
@@ -348,7 +350,7 @@ mod server {
         if world.get::<crate::silicon::ai::AiCore>(mob).is_some()
             || world.get::<crate::silicon::ai::AiEye>(mob).is_some()
         {
-            tabs.push((AI_TAB, vec![AI_VERB_UNLOAD]));
+            tabs.push((AI_TAB, vec![AI_VERB_AUTOSAY, AI_VERB_UNLOAD]));
         }
         tabs.push((OOC_TAB, ooc_verbs()));
         tabs

@@ -1282,10 +1282,8 @@ pub fn press(world: &mut World, client: Entity, pai: Entity, id: &str) {
                 around(world, pai, Span::Notice, &format!("{name} {text}"));
             }
         }
-        B_LAWS => {
-            let laws = world.get::<Laws>(pai).cloned().unwrap_or_default();
-            super::show_laws(world, client, &laws);
-        }
+        // `/atom/movable/screen/pai/state_laws`: `checklaws`.
+        B_LAWS => super::state_laws::checklaws(world, client, pai),
         _ => {}
     }
 }

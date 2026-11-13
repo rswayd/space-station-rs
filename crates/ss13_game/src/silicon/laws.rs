@@ -112,7 +112,7 @@ impl Laws {
 
 /// tg `ion_num()` is random `"[pick(...)]#!"`-style garbage; a fixed one keeps the list stable.
 // shortcut: no randomized ion numbers (a fixed one keeps tests and diffs stable).
-fn ion_num() -> &'static str {
+pub(crate) fn ion_num() -> &'static str {
     "#"
 }
 

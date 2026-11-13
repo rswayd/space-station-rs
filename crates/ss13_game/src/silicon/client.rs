@@ -14,6 +14,8 @@
 //!   its Lockdown / Release button.
 //! - `AiRestorer`: the restorer's AI (integrity bar, Functional / Nonfunctional, laws) and its
 //!   Begin Reconstruction button.
+//! - `StateLawUi`: a checkbox per law (hacked red, core blue, supplied green) and the State
+//!   Laws button, "On Cooldown" while locked.
 //! - `LawRack`: a row per slot (screw, weld, repair, insert or remove, by the tool in hand) and
 //!   the rack's links.
 // shortcut: the static is plain dark tiles, not tg's animated `cameravis.dmi` static.
@@ -62,6 +64,7 @@ impl Plugin for SiliconClientPlugin {
             .register_ui_view::<RoboticsConsoleUi>()
             .register_ui_view::<AiRestorerUi>()
             .register_ui_view::<LawRackUi>()
+            .register_ui_view::<StateLawUi>()
             .init_resource::<CameraView>()
             .add_systems(Startup, spawn_static)
             .add_systems(Update, receive_view)
@@ -1065,6 +1068,71 @@ impl ClientUi for LawRackUi {
                 --
                 @Section { @title: "Controls", @buttons: refresh, @scrollable: true, @fill: true }
                 Children [ {controls} ]
+            ]
+        }
+    }
+}
+
+/// tgui `StateLawUi`'s `lawTypeColors`.
+pub fn law_type_color(kind: &str) -> UiColor {
+    match kind {
+        "hacked" => UiColor::Red,
+        "core" => UiColor::Blue,
+        _ => UiColor::Green,
+    }
+}
+
+fn state_law_row(law: &StateLawEntry, checked: bool) -> Box<dyn SceneList> {
+    let icon = if checked { "check-square" } else { "square" };
+    let params = ActParams(vec![("law".to_owned(), law.text.clone())]);
+    let color = law_type_color(&law.kind).base();
+    let text = format!("{}. {}", law.number, law.text);
+    Box::new(EntityScene(bsn! {
+        Node { align_items: AlignItems::Center, margin: UiRect::bottom(px(4)) }
+        Children [
+            @ss13_ui_kit::Button { @icon: icon }
+            ss13_ui_kit::Button { selected: checked }
+            Act({TOGGLE_STATED.to_owned()})
+            params
+            --
+            Node { margin: UiRect::left(px(4)) }
+            Propagate::<TextColor>(TextColor(color))
+            Children [ Text(text) ]
+        ]
+    }))
+}
+
+const STATE_LAWS_TITLE: &str = "Which laws do you want to include when stating them for the crew?";
+
+impl ClientUi for StateLawUi {
+    const WIDTH: f32 = 400.0;
+    const HEIGHT: f32 = 420.0;
+
+    fn content(_: &(), data: &StateLawData) -> impl Scene {
+        let rows: Vec<Box<dyn SceneList>> = if data.all_laws.is_empty() {
+            vec![Box::new(EntityScene(
+                bsn! { Node Children [ Text("No laws available!") ] },
+            ))]
+        } else {
+            data.all_laws
+                .iter()
+                .map(|law| state_law_row(law, data.stated_laws.contains(&law.text)))
+                .collect()
+        };
+        let locked = data.locked;
+        let label = if locked { "On Cooldown" } else { "State Laws" };
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: STATE_LAWS_TITLE, @fill: true, @scrollable: true }
+                Children [ {rows} ]
+                --
+                @Section
+                Children [
+                    @ss13_ui_kit::Button { @content: label, @fluid: true }
+                    ss13_ui_kit::Button { disabled: locked, color: UiColor::Blue }
+                    Act({STATE_LAWS.to_owned()})
+                ]
             ]
         }
     }

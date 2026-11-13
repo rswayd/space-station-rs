@@ -284,3 +284,33 @@ pub const UNLINK_SILICON: &str = "unlink_silicon";
 pub const LINK_RACK: &str = "link_rack";
 pub const UNLINK_RACK: &str = "unlink_rack";
 pub const REFRESH: &str = "refresh";
+
+/// tg `StateLawUi` (`/datum/state_laws_ui`): which laws a silicon states aloud.
+pub struct StateLawUi;
+
+impl UiInterface for StateLawUi {
+    const NAME: &'static str = "StateLawUi";
+    type Data = StateLawData;
+    type StaticData = ();
+}
+
+/// One law of `get_laws_ui_data`: `kind` is `hacked`, `core` or `supplied`; `number` the
+/// law's number, `0` for the zeroth, an ion number for hacked and ioned laws.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateLawEntry {
+    pub text: String,
+    pub number: String,
+    pub kind: String,
+}
+
+/// `ui_data`: `locked`, `stated_laws` (texts), `all_laws`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateLawData {
+    pub locked: bool,
+    pub stated_laws: Vec<String>,
+    pub all_laws: Vec<StateLawEntry>,
+}
+
+/// `act('toggle_stated', { law })`, `act('state_laws')`.
+pub const TOGGLE_STATED: &str = "toggle_stated";
+pub const STATE_LAWS: &str = "state_laws";
