@@ -1690,6 +1690,46 @@ pub const EVENT_RUNTIME_TYPES: &[&str] = &[
     "/obj/structure/alien/resin/flower_bud",
 ];
 
+/// `ss13_game::events::shuttle_loan`: what the loan situations put on the cargo shuttle.
+pub const SHUTTLE_LOAN_RUNTIME_TYPES: &[&str] = &[
+    "/mob/living/basic/bear/russian",
+    "/mob/living/basic/bee/toxin",
+    "/mob/living/basic/spider/giant",
+    "/mob/living/basic/spider/giant/hunter",
+    "/mob/living/basic/spider/giant/nurse",
+    "/mob/living/basic/trooper/russian",
+    "/mob/living/basic/trooper/russian/ranged",
+    "/mob/living/basic/trooper/syndicate/ranged/infiltrator",
+    "/obj/effect/decal/cleanable/blood",
+    "/obj/effect/decal/cleanable/blood/gibs/robot_debris",
+    "/obj/effect/decal/cleanable/blood/oil",
+    "/obj/effect/decal/cleanable/food/flour",
+    "/obj/effect/decal/cleanable/insectguts",
+    "/obj/effect/decal/remains/human",
+    "/obj/item/ammo_casing/spent",
+    "/obj/item/clothing/mask/balaclava",
+    "/obj/item/clothing/shoes/jackboots/fast",
+    "/obj/item/gun/ballistic/automatic/pistol/m1911/no_mag",
+    "/obj/item/gun/ballistic/automatic/pistol/no_mag",
+    "/obj/item/honey_frame",
+    "/obj/item/pizzabox/bomb",
+    "/obj/item/pizzabox/margherita",
+    "/obj/item/pizzabox/margherita/robo",
+    "/obj/item/pizzabox/meat",
+    "/obj/item/pizzabox/mushroom",
+    "/obj/item/pizzabox/vegetable",
+    "/obj/item/queen_bee/bought",
+    "/obj/item/reagent_containers/cup/bottle",
+    "/obj/item/reagent_containers/cup/bottle/magnitis",
+    "/obj/item/reagent_containers/cup/bottle/pierrot_throat",
+    "/obj/item/reagent_containers/syringe",
+    "/obj/item/shard",
+    "/obj/structure/beebox/unwrenched",
+    "/obj/structure/closet/crate",
+    "/obj/structure/closet/crate/hydroponics",
+    "/obj/structure/spider/stickyweb",
+];
+
 /// `ss13_game::science::exodrone`: what exploration sites, traders and loot generators give.
 pub const EXPLORATION_RUNTIME_TYPES: &[&str] = &[
     "/obj/item/analyzer",
@@ -2056,6 +2096,7 @@ pub fn runtime_types() -> BTreeSet<&'static str> {
         SKILLCHIP_RUNTIME_TYPES,
     ];
     out.extend(tables.into_iter().flatten().copied());
+    out.extend(SHUTTLE_LOAN_RUNTIME_TYPES);
     // What a bullet or a fragment leaves in a body (`ss13_game::embedding`).
     out.extend(crate::embed::SHRAPNEL_RUNTIME_TYPES);
     // What the food reactions make (`ss13_game::chem`).

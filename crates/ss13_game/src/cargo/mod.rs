@@ -202,6 +202,10 @@ pub struct CargoData {
     pub can_approve_requests: bool,
     pub requestonly: bool,
     pub message: String,
+    /// A shuttle loan is offered (`SSshuttle.shuttle_loan`).
+    pub loan: bool,
+    /// ...and was taken.
+    pub loan_dispatched: bool,
     pub cart: Vec<CartEntry>,
     pub requests: Vec<RequestEntry>,
 }
@@ -225,6 +229,7 @@ pub const APPROVE: &str = "approve";
 pub const DENY: &str = "deny";
 pub const DENY_ALL: &str = "denyall";
 pub const TOGGLE_PRIVATE: &str = "toggleprivate";
+pub const LOAN: &str = "loan";
 /// Params.
 pub const ID: &str = "id";
 pub const ORDER_NAME: &str = "order_name";
