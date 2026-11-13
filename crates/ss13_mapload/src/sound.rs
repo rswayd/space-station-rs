@@ -327,7 +327,17 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 379] = [
+    pub const GAME_CODE: [&str; 389] = [
+        "sound/effects/constructform.ogg",
+        "sound/effects/magic/mutate.ogg",
+        "sound/effects/wounds/crack2.ogg",
+        "sound/items/radio/radio_talk.ogg",
+        "sound/items/weapons/gun/bow/bow_draw.ogg",
+        "sound/items/weapons/gun/bow/bow_fire.ogg",
+        "sound/items/weapons/gun/l6/l6_door.ogg",
+        "sound/items/weapons/laser_crank.ogg",
+        "sound/machines/clockcult/integration_cog_install.ogg",
+        "sound/machines/grill/grillsizzle.ogg",
         "modular_bandastation/vampire/sound/misc/demon_attack1.ogg",
         "sound/effects/rock/rock_break.ogg",
         "sound/announcer/announcement/announce_dig.ogg",
