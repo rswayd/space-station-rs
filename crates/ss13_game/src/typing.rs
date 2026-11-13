@@ -16,6 +16,9 @@
 //! - The overlay changes at most once per [`MIN_CHANGE_SECS`] (tgui-say debounces `thinking`
 //!   by 0.4 s), so a client flipping states cannot flood replication; turning it off is never
 //!   delayed.
+//! - Speech shows `talk.dmi`'s `[bubble_icon][say_test]` over the speaker for 3 s (tg
+//!   `send_speech`'s `say_popup`, `flick_overlay_global`): `0` plain, `1` a question, `2` an
+//!   exclamation ([`SpeechPopup`]).
 //! - `force_say`: a human hurt by a held item (`attacked_by`) or newly stunned, knocked down or
 //!   paralyzed (`/datum/status_effect/incapacitating/try_force_say`) while typing blurts out the
 //!   line ([`ClientIntent::SayDraft`], tg `saved_text`) cut short with a hurt phrase
@@ -26,6 +29,9 @@
 // `robot` bubble are not switched, until those systems exist.
 // shortcut: the line counts as open only in an in-character channel (the client sends nothing
 // for OOC/LOOC/pray), so a force_say there (tg: a hurt phrase in say) does not happen.
+// shortcut: the speech popup is an overlay on the speaker everyone who sees it gets, not an
+// image for the hearers only (tg `speech_bubble_recipients`); the difference is unseen speech
+// out of hearing range.
 // shortcut: knocked unconscious while typing says nothing (tg says the line first, in
 // `on_apply`; here the forced line reaches speech a tick later, when the mob cannot talk).
 
@@ -96,7 +102,7 @@ impl Plugin for TypingPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, typing_intents).add_systems(
             PostUpdate,
-            (incap_force_say, show_indicators)
+            (incap_force_say, start_popups, show_indicators, show_popups)
                 .chain()
                 .before(NetServerSystems::Send),
         );
@@ -444,8 +450,99 @@ fn sync(look: &mut Mut<Appearance>, states: [IconStateId; 2], icon: Option<IconS
     }
 }
 
+/// tg `say_popup` seconds.
+pub const POPUP_SECS: f64 = 3.0;
+
+/// The speech bubble over a mob that just spoke ([`POPUP_SECS`]).
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct SpeechPopup {
+    pub icon: IconStateId,
+    pub until: f64,
+}
+
+/// tg `/mob/proc/say_test`: `1` for a question, `2` for an exclamation, else `0`.
+pub fn say_test(text: &str) -> char {
+    match text.trim_end().chars().last() {
+        Some('?') => '1',
+        Some('!') => '2',
+        _ => '0',
+    }
+}
+
+/// `send_speech`'s `say_popup`: each speaker this tick gets its bubble for [`POPUP_SECS`].
+fn start_popups(world: &mut World, mut cursor: Local<MessageCursor<ss13_chat::server::Spoke>>) {
+    let Some(messages) = world.get_resource::<Messages<ss13_chat::server::Spoke>>() else {
+        return;
+    };
+    let spoke: Vec<(Entity, char)> = cursor
+        .read(messages)
+        .map(|s| (s.speaker, say_test(&s.text)))
+        .collect();
+    if spoke.is_empty() {
+        return;
+    }
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    for (speaker, test) in spoke {
+        let Some(mob) = indicator_mob(world, speaker).or(Some(speaker)) else {
+            continue;
+        };
+        let Some(icons) = world.get_resource::<IconIndex>() else {
+            return;
+        };
+        let state = |bubble: &str| icons.get(TALK_DMI, &format!("{bubble}{test}"));
+        let Some(icon) = state(bubble_icon(world, mob)).or_else(|| state(DEFAULT_BUBBLE)) else {
+            continue;
+        };
+        if let Ok(mut e) = world.get_entity_mut(mob) {
+            // A new line with another ending replaces the bubble still up.
+            if let Some(old) = e.get::<SpeechPopup>().copied()
+                && old.icon != icon
+                && let Some(mut look) = e.get_mut::<Appearance>()
+            {
+                look.overlays.retain(|o| o.icon_state != old.icon);
+            }
+            e.insert(SpeechPopup {
+                icon,
+                until: now + POPUP_SECS,
+            });
+        }
+    }
+}
+
+/// Keeps a speaker's bubble the top overlay while it lasts, then takes it off.
+fn show_popups(
+    time: Res<Time>,
+    mut mobs: Query<(Entity, &SpeechPopup, &mut Appearance)>,
+    mut commands: Commands,
+) {
+    let now = time.elapsed_secs_f64();
+    for (mob, popup, mut look) in &mut mobs {
+        let ours = |o: &Overlay| o.icon_state == popup.icon;
+        if now >= popup.until {
+            if look.overlays.iter().any(ours) {
+                look.overlays.retain(|o| !ours(o));
+            }
+            commands.entity(mob).remove::<SpeechPopup>();
+            continue;
+        }
+        let top = look.overlays.last().is_some_and(ours)
+            && look.overlays.iter().filter(|o| ours(o)).count() == 1;
+        if !top {
+            look.overlays.retain(|o| !ours(o));
+            look.overlays.push(Overlay::new(popup.icon));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn say_test_reads_the_ending() {
+        assert_eq!(say_test("Привет"), '0');
+        assert_eq!(say_test("Кто там?"), '1');
+        assert_eq!(say_test("Помогите! "), '2');
+    }
+
     use super::*;
     use ss13_shared::{Layer, MouseOpacity};
 

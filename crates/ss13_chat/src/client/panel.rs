@@ -13,6 +13,7 @@
 
 use std::sync::{Arc, RwLock};
 
+use bevy::ecs::schedule::SystemCondition;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{KeyCode, KeyboardInput};
 use bevy::input_focus::{FocusedInput, InputFocus};
@@ -559,7 +560,8 @@ pub(crate) fn plugin(app: &mut App) {
                 close_say,
                 admin_rights,
                 channel_keys,
-                show_channel.run_if(resource_changed::<SayChannel>.or(resource_changed::<SayLine>)),
+                show_channel
+                    .run_if(resource_changed::<SayChannel>.or_else(resource_changed::<SayLine>)),
                 send_typing,
             )
                 .chain(),
