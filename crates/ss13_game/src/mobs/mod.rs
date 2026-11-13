@@ -39,6 +39,7 @@ pub mod oneoffs;
 pub mod parrot;
 pub mod pets;
 pub mod ranged;
+pub mod riding;
 pub mod space_fauna;
 pub mod spawn;
 pub mod swarming;
@@ -179,6 +180,7 @@ impl Plugin for MobsServerPlugin {
         space_fauna::build(app);
         bees::build(app);
         swarming::build(app);
+        riding::build(app);
     }
 }
 

@@ -297,6 +297,10 @@ impl AiController {
     }
 }
 
+/// tg `TRAIT_AI_PAUSED` (a ridden mount, `crate::mobs::riding`): the controller stays off.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct AiPaused;
+
 /// Mobs that remember who hurt them (tg `/datum/element/ai_retaliate`).
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct Retaliates;
@@ -522,6 +526,7 @@ fn expected_status(world: &World, mob: Entity, players: &[TilePos]) -> AiStatus 
     // A closet is not a turf: tg `get_turf` still finds one, but the mob cannot act inside.
     // A bot that is off cannot run (`/datum/ai_controller/basic_controller/bot/get_able_to_run`).
     if e.contains::<PlayerMob>()
+        || e.contains::<AiPaused>()
         || (dead && traits & CAN_ACT_WHILE_DEAD == 0)
         || e.contains::<crate::closets::InCloset>()
         || e.get::<crate::bots::Bot>().is_some_and(|b| !b.on())
