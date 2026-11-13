@@ -1,6 +1,7 @@
 //! Succumbing over real WebTransport on 127.0.0.1: A in hard crit has the succumb alert, clicks
-//! it, types last words into the text prompt; B next to A reads the whisper, A dies (oxygen
-//! damage to the death threshold) with a time of death, and the alert is gone.
+//! it, types last words into the text prompt; B next to A reads them whispered "with its last
+//! breath", A dies (oxygen damage to the death threshold) with a time of death, and the alert is
+//! gone. A hard crit whisper typed into the say line is cut by the health left and kills too.
 
 use std::path::{Path, PathBuf};
 
@@ -231,12 +232,56 @@ fn succumb_with_last_words() {
     s.run_until(
         "B hears the whisper, A has a time of death and no alert",
         |s| {
-            s.received(1)
-                .chat
-                .iter()
-                .any(|line| line.contains("ередайте маме привет"))
-                && s.try_get::<TimeOfDeath>(a).is_some()
+            s.received(1).chat.iter().any(|line| {
+                // `Ellipsis` may put "..." between the words.
+                line.contains("шепчет своим последним вздохом") && line.contains("ередайте")
+            }) && s.try_get::<TimeOfDeath>(a).is_some()
                 && s.get::<Alerts>(a).get(AlertCategory::Succumb).is_none()
         },
+    );
+}
+
+#[test]
+fn a_hard_crit_whisper_is_cut_short_and_kills() {
+    use ss13_shared::protocol::ClientIntent;
+    let mut s = Station::start("a_hard_crit_whisper_is_cut_short_and_kills");
+    let a = s.players[0].mob;
+    // Health -80: 20 points above death, 19 characters get out (fewer as crit drains it).
+    {
+        let world = s.server.world_mut();
+        let mut health = world.get::<Health>(a).unwrap().clone();
+        let mut stat = *world.get::<Stat>(a).unwrap();
+        apply_damage(&mut health, &mut stat, DamageType::Brute, 180.0);
+        assert_eq!(stat, Stat::HardCrit);
+        world.entity_mut(a).insert((health, stat));
+    }
+    s.run_until("A's breath is known", |s| {
+        s.try_get::<ss13_chat::speech::LastBreath>(a).is_some()
+    });
+    // A plain say from hard crit is nothing.
+    s.send(0, ClientIntent::Say("помогите".into()));
+    s.run_for(1.0);
+    assert!(
+        !s.received(1).chat.iter().any(|l| l.contains("омогите")),
+        "hard crit cannot talk"
+    );
+    assert_ne!(s.get::<Stat>(a), &Stat::Dead);
+    s.send(
+        0,
+        ClientIntent::Say("#это сделал главный инженер станции".into()),
+    );
+    s.run_until("A succumbs after its last words", |s| {
+        s.get::<Stat>(a) == &Stat::Dead
+    });
+    s.run_until("B reads the cut words", |s| {
+        s.received(1).chat.iter().any(|l| {
+            l.contains("шепчет своим последним вздохом")
+                && l.contains("сделал")
+                && l.contains("-..")
+        })
+    });
+    assert!(
+        !s.received(1).chat.iter().any(|l| l.contains("инженер")),
+        "the rest is never said"
     );
 }

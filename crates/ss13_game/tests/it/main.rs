@@ -69,6 +69,7 @@ mod guardians;
 mod gulag;
 mod guns;
 mod harness;
+mod hearing;
 mod heretic;
 mod holodeck;
 mod icemoon_fauna;

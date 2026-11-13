@@ -793,11 +793,21 @@ fn transmit_speech(
         let race = race_of(spoke.speaker);
         let mut transmissions = Vec::new();
         // `talk_into` of the target's devices (`radio()`).
+        // Saymodes (binary, the hiveminds, vocal cords, the holopad) are not said into the air
+        // around the speaker: no radio takes or relays them.
+        let saymode = matches!(
+            spoke.radio,
+            Some(
+                RadioTarget::Binary
+                    | RadioTarget::Changeling
+                    | RadioTarget::Hive
+                    | RadioTarget::VocalCords
+                    | RadioTarget::Holopad
+            )
+        );
         let devices: Vec<(Entity, Option<RadioTarget>)> = match spoke.radio {
-            // Saymodes (binary, the changeling hivemind) never reach a radio.
-            None | Some(RadioTarget::Binary | RadioTarget::Changeling | RadioTarget::Hive) => {
-                Vec::new()
-            }
+            _ if saymode => Vec::new(),
+            None => Vec::new(),
             Some(RadioTarget::Intercom) => index
                 .in_radius(spoke.pos, INTERCOM_RANGE)
                 .filter(|&e| {
@@ -892,7 +902,8 @@ fn transmit_speech(
         }
         // Broadcasting radios that heard the words relay them (`/obj/item/radio/Hear`); the
         // intercoms a `:i` message went into do not hear it again.
-        // shortcut: range only, no line of sight, like local speech in `ss13_chat`.
+        // shortcut: range only, no line of sight (local speech has it,
+        // `ss13_chat::server::hearing_view`); add it here with radio hearing.
         let relay_reach = 7;
         // The held radio a `:r`/`:l` message went into is not heard twice.
         let talked_into = match spoke.radio {
@@ -902,7 +913,7 @@ fn transmit_speech(
             _ => None,
         };
         let mut nearby: Vec<Entity> = Vec::new();
-        for e in index.in_radius(spoke.pos, relay_reach) {
+        for e in index.in_radius(spoke.pos, relay_reach).filter(|_| !saymode) {
             if radios.contains(e) {
                 nearby.push(e);
             } else if let Ok((_, inventory)) = mobs.get(e) {

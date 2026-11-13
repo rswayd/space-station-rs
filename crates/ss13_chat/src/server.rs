@@ -4,9 +4,12 @@
 //! ones cannot be used to flood either), a body with a position (the client's
 //! [`ControlledEntity`]), then the text (control characters stripped, length, emptiness).
 //! Hearers are the clients whose controlled entity stands within [`HEARING_RANGE`] of the
-//! speaker on the same z-level, found through the spatial index: the cost of one say is the
-//! number of entities in a 15x15 box, never the number of clients or entities in the world.
-//! A body with [`MaskedSenses`] (the AI eye) hears only speakers on tiles its mask shows.
+//! speaker on the same z-level, found through the spatial index, on a tile the speaker's tile
+//! sees (tg `get_hearers_in_view`: BYOND `view()`, opaque tiles stop it, [`hearing_view`]); the
+//! dead hear in range without sight (tg adds dead players within 7 tiles). The cost of one say
+//! is the entities of a 15x15 box and the opacity of its 225 tiles, never the number of clients
+//! or entities in the world. A body with [`MaskedSenses`] (the AI eye) hears only speakers on
+//! tiles its mask shows, its cameras being its sight.
 //!
 //! Then, as tg `/mob/living/say`: a dead speaker ([`SpeakerStat::Dead`], kept by the game) talks
 //! in deadchat (every dead or ghost client); `*` runs an emote ([`crate::emote`]); prefixes are
@@ -25,11 +28,12 @@ use ss13_net::server::{
     ClientDisconnected, ClientToken, ControlledEntity, IntentReceived, Invisibility, MaskId,
     SeeInvisible, ViewMasks, VisibleToMobs,
 };
-use ss13_shared::TilePos;
 use ss13_shared::chat::{
     ChatChannel, ChatMessage, ChatSegment, MAX_MESSAGE_LEN, MAX_NAME_LEN, Span,
 };
+use ss13_shared::line_of_sight::ViewGrid;
 use ss13_shared::protocol::ClientIntent;
+use ss13_shared::{Optics, TilePos};
 use ss13_world::{SpatialIndex, WorldSystems};
 
 use crate::accents::TongueSpeech;
@@ -38,9 +42,10 @@ use crate::emote::{EMOTE_AUDIO_COOLDOWN_SECS, EmoteOutcome, EmoteSound, EmoteUse
 use crate::language::{self, LanguageHolder, LanguageId, ScrambleSeed, Tongue};
 use crate::speech::{
     ANXIOUS_FILLERS, AlienHivemind, Anxiety, AnxiousSay, BinaryCapable, ChangelingHivemind,
-    EarsWorn, Impediments, Muffled, RadioExtension, RadioTarget, SpeakerStat, SpeechEffects,
-    Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech, muffle, parse_mods_speaking, slur,
-    stars, stutter, stutter_with, unintelligize, whisper_heard,
+    EarsWorn, HolopadSpeaker, Impediments, LastBreath, Muffled, RadioExtension, RadioTarget,
+    SpeakerStat, SpeechEffects, Tongueless, VoiceSpan, WhisperHeard, capitalize, derpspeech,
+    last_words, muffle, parse_mods_speaking, slur, stars, stutter, stutter_with, unintelligize,
+    whisper_heard,
 };
 use crate::speech_filter::{NOTIFICATIONS as FILTER_NOTIFICATIONS, SpeechFilter, SpeechFiltered};
 
@@ -109,6 +114,32 @@ impl Senses<'_, '_> {
     pub fn perceives(&self, body: Entity, at: TilePos) -> bool {
         perceives(self.masks.as_deref(), self.masked.get(body).ok(), at)
     }
+
+    /// Whether the body perceives through a view mask rather than its own eyes.
+    pub fn masked(&self, body: Entity) -> bool {
+        self.masked.contains(body)
+    }
+}
+
+/// tg `get_hearers_in_view(range, source)`: BYOND `hearers(range, turf)`, the tiles the
+/// speaker's tile sees, opaque ones (walls, closed doors) stopping it; a tile off the map is
+/// opaque.
+pub fn hearing_view(
+    index: &SpatialIndex,
+    optics: &Query<&Optics>,
+    center: TilePos,
+    range: u32,
+) -> ViewGrid {
+    let mut grid = ViewGrid::default();
+    grid.compute(range.min(64) as i32, |dx, dy| {
+        let pos = TilePos::new(center.x + dx, center.y + dy, center.z);
+        !index.in_bounds(pos)
+            || index
+                .on_tile(pos)
+                .iter()
+                .any(|&e| optics.get(e).is_ok_and(|o| o.opaque))
+    });
+    grid
 }
 
 /// [`Senses::perceives`] from the world.
@@ -180,6 +211,13 @@ pub struct Emoted {
     pub speaker: Entity,
     pub key: &'static str,
     pub sound: Option<EmoteSound>,
+}
+
+/// A mob in hard crit whispered its last words (tg `succumbed` in `/mob/living/say`): the game
+/// makes it succumb (`succumb(whispered = TRUE)`).
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LastWords {
+    pub speaker: Entity,
 }
 
 /// A say the Social Anxiety quirk swallowed ([`Anxiety`]), for its game effects: the
@@ -410,6 +448,9 @@ impl Understanding<'_, '_> {
 /// tg `verb_whisper` (BandaStation).
 pub const WHISPER_VERB: &str = "шепчет";
 
+/// tg `say_mod` of `MODE_WHISPER_CRIT`: `"[ru_say_verb(verb_whisper)] своим последним вздохом"`.
+pub const LAST_WORDS_VERB: &str = "шепчет своим последним вздохом";
+
 /// tg `emotes_used`: when each emote of this speaker was last used, `Time<Real>` seconds.
 #[derive(Component, Default, Debug)]
 struct EmotesUsed(HashMap<&'static str, f64>);
@@ -484,6 +525,7 @@ impl Plugin for ChatServerPlugin {
             .insert_resource(ScrambleSeed(SpeechRng::default().0))
             .add_message::<SayRejected>()
             .add_message::<Spoke>()
+            .add_message::<LastWords>()
             .add_message::<Emoted>()
             .add_message::<AnxiousSpoke>()
             .add_message::<Overhead>()
@@ -609,6 +651,11 @@ pub fn whisper_message(name: &str, text: &str) -> ChatMessage {
     quote_message(name, WHISPER_VERB, text, Span::Italics)
 }
 
+/// [`whisper_message`] with another verb (the last words).
+pub fn whisper_message_verb(name: &str, verb: &str, text: &str) -> ChatMessage {
+    quote_message(name, verb, text, Span::Italics)
+}
+
 fn quote_message(name: &str, verb: &str, text: &str, span: Span) -> ChatMessage {
     ChatMessage {
         channel: ChatChannel::Local,
@@ -675,7 +722,11 @@ type Body<'a> = (
     Option<&'a SpeakerStat>,
     Has<EarsWorn>,
     Has<BinaryCapable>,
-    (Has<ChangelingHivemind>, Has<AlienHivemind>),
+    (
+        Has<ChangelingHivemind>,
+        Has<AlienHivemind>,
+        Has<HolopadSpeaker>,
+    ),
     Has<Tongueless>,
     Option<&'a Impediments>,
     Option<&'a SpeechEffects>,
@@ -706,6 +757,8 @@ fn handle_say(
         tongue_speech,
         speech_filter,
         tokens,
+        optics,
+        breaths,
     ): (
         Query<&SeeInvisible>,
         Senses,
@@ -720,6 +773,8 @@ fn handle_say(
         Query<&TongueSpeech>,
         Option<Res<SpeechFilter>>,
         Query<&ClientToken>,
+        Query<&Optics>,
+        Query<&LastBreath>,
     ),
     index: Res<SpatialIndex>,
     listeners: Res<Listeners>,
@@ -727,12 +782,13 @@ fn handle_say(
     mut rng: ResMut<SpeechRng>,
     time: Res<Time<Real>>,
     mut chat: MessageWriter<SendChat>,
-    (mut rejected, mut emoted, mut anxious, mut overhead, mut filtered): (
+    (mut rejected, mut emoted, mut anxious, mut overhead, mut filtered, mut succumbed): (
         MessageWriter<SayRejected>,
         MessageWriter<Emoted>,
         MessageWriter<AnxiousSpoke>,
         MessageWriter<Overhead>,
         MessageWriter<SpeechFiltered>,
+        MessageWriter<LastWords>,
     ),
     mut spoke: MessageWriter<Spoke>,
     mut commands: Commands,
@@ -775,7 +831,7 @@ fn handle_say(
                 stat,
                 ears_worn,
                 binary,
-                (hivemind, hive),
+                (hivemind, hive, holopad),
                 tongueless,
                 impediments,
                 speech_effects,
@@ -840,23 +896,29 @@ fn handle_say(
             });
             continue;
         }
-        // shortcut: range only, no line of sight (tg hearing uses `view`, which opaque turfs
-        // block); add an occlusion check once walls carry opacity in the index.
         // An invisible speaker is heard only by those who see it; an AI eye hears only what its
-        // cameras see.
+        // cameras see; the others hear what the speaker's tile sees.
+        // shortcut: no `TRAIT_XRAY_HEARING`, no whispers projected through a turf in front.
         let invisibility = invisibility.map_or(0, |i| i.0);
         // (client, distance, body).
         let hearers_within = |range: u32| -> Vec<(Entity, u32, Entity)> {
+            let mut view: Option<ViewGrid> = None;
             let mut hearers: Vec<(Entity, u32, Entity)> = index
                 .in_radius(*pos, range)
                 .filter(|&e| senses.perceives(e, *pos))
                 .filter_map(|e| {
                     let client = listeners.client_of(e)?;
-                    let distance = bodies
+                    let (at, dead) = bodies
                         .get(e)
-                        .ok()
-                        .and_then(|b| b.1.chebyshev(*pos))
-                        .unwrap_or(0);
+                        .map_or((*pos, false), |b| (*b.1, b.4 == Some(&SpeakerStat::Dead)));
+                    if e != speaker && !dead && !senses.masked(e) {
+                        let view =
+                            view.get_or_insert_with(|| hearing_view(&index, &optics, *pos, range));
+                        if !view.visible(at.x - pos.x, at.y - pos.y) {
+                            return None;
+                        }
+                    }
+                    let distance = at.chebyshev(*pos).unwrap_or(0);
                     Some((client, distance, e))
                 })
                 .filter(|&(c, _, body)| {
@@ -984,9 +1046,9 @@ fn handle_say(
         if mods.radio == Some(RadioExtension::Deadmin) {
             continue;
         }
-        // tg: an unconscious mob says nothing.
-        // shortcut: no last words (a hard crit whisper that succumbs); add with `succumb`.
-        if message.is_empty() || stat >= SpeakerStat::Unconscious {
+        // tg: an unconscious mob says nothing, but one in hard crit may whisper its last words.
+        let dying = stat == SpeakerStat::HardCrit && mods.whisper;
+        if message.is_empty() || (stat >= SpeakerStat::Unconscious && !dying) {
             continue;
         }
         let impediments = impediments.copied().unwrap_or_default();
@@ -1000,6 +1062,11 @@ fn handle_say(
             continue;
         }
         let mut message = message;
+        // The last words: as much as the health left above death lets out.
+        if dying {
+            let breath = breaths.get(speaker).map_or(0, |b| b.0);
+            message = last_words(&message, breath, || rng.percent());
+        }
         // `COMSIG_MOB_SAY`: BandaStation's speech filter. It sees the words as typed, before any
         // accent could hide them.
         if let Some(filter) = speech_filter.as_deref()
@@ -1129,6 +1196,17 @@ fn handle_say(
         // whisper (`REDUCE_RANGE`), even without a headset.
         let whisper = mods.whisper || stat == SpeakerStat::SoftCrit || impediments.force_whisper;
         let target = match mods.radio_target(ears_worn) {
+            // tg checks the saymode of the key first: the AI's `:h` is its holopad.
+            _ if holopad && mods.radio == Some(RadioExtension::Department) => {
+                Some(RadioTarget::Holopad)
+            }
+            // tg `/datum/saymode/vocalcords/can_be_used_by`: `iscarbon` (aliens are basic mobs
+            // here).
+            Some(RadioTarget::VocalCords)
+                if !emote_user.is_some_and(|u| u.mob == crate::emote::EmoteMob::Human) =>
+            {
+                None
+            }
             // tg: without `binarycheck()` the binary saymode is not used: plain speech.
             Some(RadioTarget::Binary) if !binary => None,
             // tg `/datum/saymode/changeling/can_be_used_by`: the hivemind trait.
@@ -1139,7 +1217,13 @@ fn handle_say(
         };
         if matches!(
             target,
-            Some(RadioTarget::Binary | RadioTarget::Changeling | RadioTarget::Hive)
+            Some(
+                RadioTarget::Binary
+                    | RadioTarget::Changeling
+                    | RadioTarget::Hive
+                    | RadioTarget::VocalCords
+                    | RadioTarget::Holopad
+            )
         ) {
             let verb = say_verb(&message);
             spoke.write(Spoke {
@@ -1157,7 +1241,9 @@ fn handle_say(
             });
             continue;
         }
-        let verb = if whisper {
+        let verb = if dying {
+            LAST_WORDS_VERB
+        } else if whisper {
             WHISPER_VERB
         } else {
             say_verb(&message)
@@ -1214,6 +1300,7 @@ fn handle_say(
             }
             continue;
         }
+        let whisper_verb = if dying { LAST_WORDS_VERB } else { WHISPER_VERB };
         let (mut full, mut starred, mut far) = (Vec::new(), Vec::new(), Vec::new());
         for (hearer, distance, body) in hearers_within(HEARING_RANGE) {
             match whisper_heard(distance) {
@@ -1235,7 +1322,10 @@ fn handle_say(
             write_heard(
                 &mut chat,
                 heard.clients,
-                tagged(whisper_message(&name, &heard.text), heard.tag),
+                tagged(
+                    whisper_message_verb(&name, whisper_verb, &heard.text),
+                    heard.tag,
+                ),
                 &heard.text,
                 &message,
                 codewords_of,
@@ -1255,7 +1345,7 @@ fn handle_say(
             }
             chat.write(SendChat {
                 clients: heard.clients,
-                message: tagged(whisper_message(&name, &text), heard.tag),
+                message: tagged(whisper_message_verb(&name, whisper_verb, &text), heard.tag),
             });
         }
         if !far.is_empty() {
@@ -1272,6 +1362,9 @@ fn handle_say(
                     ],
                 },
             });
+        }
+        if dying {
+            succumbed.write(LastWords { speaker });
         }
     }
 }

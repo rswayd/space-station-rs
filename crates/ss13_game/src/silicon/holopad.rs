@@ -14,12 +14,12 @@
 //!   another pad that covers the tile takes it (`transfer_to_nearby_pad`), else it is removed.
 //!   It is removed when the pad loses power or goes, or the AI is no longer conscious, powered,
 //!   in its core or played (`process` -> `validate_user`).
-//! - What the AI says aloud (not on a radio) the hologram says to those around it (tg
-//!   `holopad_talk`); while it projects, the AI hears and sees around its hologram without the
-//!   cameras (tg `holopad/Hear` relays what the pad hears).
-// shortcut: tg's AI talks through the hologram with `:h`; here `:h` is the shared parser's
-// department radio and the AI's plain speech is already said at its eye, so the hologram says
-// the plain speech.
+//! - The AI's `:h`/`:р` (tg's holopad saymode, [`HolopadSpeaker`] on its eye) is said by the
+//!   hologram only (`holopad_talk`), or "No holopad connected."; what the AI says aloud the
+//!   hologram repeats to those around it; while it projects, the AI hears and sees around its
+//!   hologram without the cameras (tg `holopad/Hear` relays what the pad hears).
+// shortcut: the AI's plain speech is said at its eye (tg: at its core), so the hologram repeats
+// it too; drop the repeat once the AI speaks from its core.
 // shortcut: the AI perceives everything around its hologram, tg relays only speech the pad
 // hears; no holoray, pad light, hologram choice from the preferences or holocolor, no holocalls,
 // AI presence requests or holodisks (see ../comms/station-info.md).
@@ -29,11 +29,12 @@ use bevy::prelude::*;
 use ss13_chat::server::{
     HEARING_RANGE, Listeners, MaskedSenses, SaySystems, Spoke, Understanding, say_message, tagged,
 };
+use ss13_chat::speech::{HolopadSpeaker, RadioTarget};
 use ss13_mapload::fidelity::is_under;
 use ss13_mapload::{Areas, DmObj, IconIndex};
 use ss13_net::chat::server::SendChat;
 use ss13_net::server::{Networked, SeeInvisible};
-use ss13_shared::chat::Span;
+use ss13_shared::chat::{ChatChannel, ChatMessage, Span};
 use ss13_shared::{Appearance, Dir, Facing, IconStateId, Layer, MouseOpacity, TilePos};
 use ss13_world::SpatialIndex;
 
@@ -86,8 +87,14 @@ impl Plugin for HolopadPlugin {
                     keep_holograms.run_if(any_with_component::<Hologram>),
                     hologram_speech.after(SaySystems),
                 ),
-            );
+            )
+            .add_observer(eye_talks_through_holopads);
     }
+}
+
+/// `/datum/saymode/holopad/can_be_used_by`: `isAI`.
+fn eye_talks_through_holopads(add: On<Add<AiEye>>, mut commands: Commands) {
+    commands.entity(add.entity).try_insert(HolopadSpeaker);
 }
 
 fn init_holopads(world: &mut World) {
@@ -321,8 +328,8 @@ fn keep_holograms(world: &mut World) {
     }
 }
 
-/// tg `holopad_talk`: the hologram says what its AI said aloud, to those who did not hear the
-/// (invisible) eye itself.
+/// tg `holopad_talk`: the hologram says the AI's `:h` to everyone around it, and repeats what
+/// the AI said aloud to those who did not hear the (invisible) eye itself.
 fn hologram_speech(
     mut spoken: MessageReader<Spoke>,
     eyes: Query<&AiEye>,
@@ -335,7 +342,8 @@ fn hologram_speech(
     mut chat: MessageWriter<SendChat>,
 ) {
     for spoke in spoken.read() {
-        if spoke.radio.is_some() || spoke.whisper {
+        let saymode = spoke.radio == Some(RadioTarget::Holopad);
+        if !saymode && (spoke.radio.is_some() || spoke.whisper) {
             continue;
         }
         let Some((&pos, name)) = eyes
@@ -344,15 +352,31 @@ fn hologram_speech(
             .and_then(|eye| projections.get(eye.ai).ok())
             .and_then(|p| holograms.get(p.hologram).ok())
         else {
+            if saymode {
+                chat.write(SendChat {
+                    clients: vec![spoke.client],
+                    message: ChatMessage::simple(
+                        ChatChannel::Warning,
+                        Span::Warning,
+                        "No holopad connected.",
+                    ),
+                });
+            }
             continue;
         };
-        let clients: Vec<Entity> = index
+        let mut clients: Vec<Entity> = index
             .in_radius(pos, HEARING_RANGE)
             .filter_map(|e| listeners.client_of(e))
-            .filter(|&c| c != spoke.client)
-            // Those who see the eye heard it already.
-            .filter(|&c| sight.get(c).ok().is_none_or(|s| s.0 < AI_EYE_INVISIBILITY))
+            .filter(|&c| saymode || c != spoke.client)
+            // Those who see the eye heard its plain speech already.
+            .filter(|&c| saymode || sight.get(c).ok().is_none_or(|s| s.0 < AI_EYE_INVISIBILITY))
             .collect();
+        if saymode && !clients.contains(&spoke.client) {
+            clients.push(spoke.client);
+        }
+        if saymode {
+            info!(target: "say", "{} holopad: {}", spoke.name, spoke.text);
+        }
         for heard in understanding.split(clients, spoke.language, &spoke.text) {
             chat.write(SendChat {
                 clients: heard.clients,
