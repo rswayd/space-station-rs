@@ -464,13 +464,10 @@ pub(super) fn on_target(world: &mut World, mob: Entity, target: Entity, now: f64
 
 /// `GiveTarget(null)` -> the 30 s `send_me_home` timer.
 pub(super) fn on_no_target(world: &mut World, mob: Entity, now: f64) {
-    let Some(s) = state(world, mob) else {
+    let Some((Some(home), home_at)) = state(world, mob).map(|s| (s.home, s.home_at)) else {
         return;
     };
-    let Some(home) = s.home else {
-        return;
-    };
-    match s.home_at {
+    match home_at {
         None => {
             if let Some(mut m) = state_mut(world, mob) {
                 m.hierophant.home_at = Some(now + HOME_DELAY);
