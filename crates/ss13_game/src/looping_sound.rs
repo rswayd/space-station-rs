@@ -444,48 +444,13 @@ impl SoundLoops {
     }
 }
 
-/// `SSsounds` channels reserved by tokens: from `CHANNEL_HIGHEST_AVAILABLE` (1008) down, as
-/// tg's `reserve_channel`.
-#[derive(Resource, Debug)]
-pub struct TokenChannels {
-    next: u16,
-    free: Vec<u16>,
-}
-
-/// `CHANNEL_HIGHEST_AVAILABLE`.
-pub const CHANNEL_HIGHEST_AVAILABLE: u16 = 1008;
-
-impl Default for TokenChannels {
-    fn default() -> Self {
-        Self {
-            next: CHANNEL_HIGHEST_AVAILABLE,
-            free: Vec::new(),
-        }
-    }
-}
-
-impl TokenChannels {
-    fn reserve(&mut self) -> Option<u16> {
-        if let Some(c) = self.free.pop() {
-            return Some(c);
-        }
-        if self.next == 0 {
-            return None;
-        }
-        self.next -= 1;
-        Some(self.next + 1)
-    }
-
-    fn release(&mut self, channel: u16) {
-        self.free.push(channel);
-    }
-}
+// Token channels come from `crate::sound::SoundChannels` (`SSsounds`).
 
 pub struct LoopingSoundPlugin;
 
 impl Plugin for LoopingSoundPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<TokenChannels>()
+        app.init_resource::<crate::sound::SoundChannels>()
             .add_message::<SendChannelSound>()
             .add_message::<SendSound>()
             .add_observer(parent_removed)
@@ -772,7 +737,10 @@ fn play(
     let channel = if has_token {
         None
     } else {
-        let Some(c) = world.resource_mut::<TokenChannels>().reserve() else {
+        let Some(c) = world
+            .resource_mut::<crate::sound::SoundChannels>()
+            .reserve(None)
+        else {
             warn!("looping sound {path}: no sound channels left");
             return;
         };
@@ -839,7 +807,9 @@ fn silence(world: &mut World, token: &Token) {
     for &client in token.listeners.keys() {
         world.write_message(stop_message(client, token.channel));
     }
-    world.resource_mut::<TokenChannels>().release(token.channel);
+    world
+        .resource_mut::<crate::sound::SoundChannels>()
+        .free(token.channel);
 }
 
 fn stop_message(client: Entity, channel: u16) -> SendChannelSound {
@@ -850,6 +820,7 @@ fn stop_message(client: Entity, channel: u16) -> SendChannelSound {
             sound: None,
             update: false,
             repeat: false,
+            fx: Default::default(),
         },
     }
 }
@@ -859,7 +830,7 @@ fn stop_message(client: Entity, channel: u16) -> SendChannelSound {
 fn parent_removed(
     remove: On<Remove<SoundLoops>>,
     loops: Query<&SoundLoops>,
-    mut channels: ResMut<TokenChannels>,
+    mut channels: ResMut<crate::sound::SoundChannels>,
     mut out: MessageWriter<SendChannelSound>,
 ) {
     let Ok(loops) = loops.get(remove.entity) else {
@@ -869,7 +840,7 @@ fn parent_removed(
         for &client in token.listeners.keys() {
             out.write(stop_message(client, token.channel));
         }
-        channels.release(token.channel);
+        channels.free(token.channel);
     }
 }
 
@@ -1017,6 +988,10 @@ fn follow_tokens(world: &mut World) {
                             }),
                             update,
                             repeat: token.repeat,
+                            // shortcut: a token plays without the listener's room reverb
+                            // (`sound.environment`); pass `crate::sound::listener_environment`
+                            // through the ears when tokens need it.
+                            fx: Default::default(),
                         },
                     });
                 }
@@ -1041,12 +1016,13 @@ mod tests {
 
     use super::defs::*;
     use super::*;
+    use ss13_shared::protocol::CHANNEL_HIGHEST_AVAILABLE;
 
     fn world() -> World {
         let mut world = World::new();
         world.init_resource::<Time>();
         world.init_resource::<SoundRng>();
-        world.init_resource::<TokenChannels>();
+        world.init_resource::<crate::sound::SoundChannels>();
         world.init_resource::<Messages<PlaySound>>();
         world.init_resource::<Messages<SendSound>>();
         world.init_resource::<Messages<SendChannelSound>>();
@@ -1244,7 +1220,7 @@ mod tests {
                 .is_none()
         );
         // The listener moves: only an update.
-        *world.get_mut::<TilePos>(mob).unwrap() = TilePos::new(9, 5, 1);
+        world.entity_mut(mob).insert(TilePos::new(9, 5, 1));
         advance(&mut world, 0.1);
         let sent: Vec<SendChannelSound> = world
             .resource_mut::<Messages<SendChannelSound>>()
@@ -1254,7 +1230,7 @@ mod tests {
         assert!(sent[0].sound.update);
         assert_eq!(listeners(&world, e, GRAVGEN.path), [client]);
         // Out of range (15 + 8): stopped.
-        *world.get_mut::<TilePos>(mob).unwrap() = TilePos::new(40, 5, 1);
+        world.entity_mut(mob).insert(TilePos::new(40, 5, 1));
         advance(&mut world, 0.1);
         let sent: Vec<SendChannelSound> = world
             .resource_mut::<Messages<SendChannelSound>>()
@@ -1264,7 +1240,7 @@ mod tests {
         assert!(sent[0].sound.sound.is_none());
         assert!(listeners(&world, e, GRAVGEN.path).is_empty());
         // Back in range, then the machine goes: stopped, the channel is free again.
-        *world.get_mut::<TilePos>(mob).unwrap() = TilePos::new(6, 5, 1);
+        world.entity_mut(mob).insert(TilePos::new(6, 5, 1));
         advance(&mut world, 0.1);
         world.resource_mut::<Messages<SendChannelSound>>().clear();
         world.despawn(e);
@@ -1275,7 +1251,9 @@ mod tests {
         assert_eq!(sent.len(), 1);
         assert!(sent[0].sound.sound.is_none());
         assert_eq!(
-            world.resource_mut::<TokenChannels>().reserve(),
+            world
+                .resource_mut::<crate::sound::SoundChannels>()
+                .reserve(None),
             Some(CHANNEL_HIGHEST_AVAILABLE)
         );
     }

@@ -17,9 +17,9 @@
 //! Cost: one pass over the player mobs per second (an area lookup and a few component reads
 //! each), plus the mobs that moved this tick for the buzz; a sound file's length is read from
 //! disk once.
-// shortcut: the volumes are the preferences' defaults (`sound_ambience_volume`,
-// `sound_ship_ambience_volume`: 100, `lobby_music::DEFAULT_VOLUME`); the port has no player
-// preferences yet — scale by them when it does. The master volume (`SS13_VOLUME`) applies.
+// The server sends tg's base volumes; the player's `sound_ambience_volume` and
+// `sound_ship_ambience_volume` are the client's category sliders (`SoundCategory::of_channel`
+// maps `CHANNEL_AMBIENCE` and `CHANNEL_BUZZ`).
 // shortcut: the deafness checks are polled each second instead of tg's `TRAIT_DEAF` signals.
 
 use std::collections::HashMap;
@@ -39,10 +39,7 @@ use crate::power::{Apc, AreaPower, Channel};
 use crate::server::PlayerMob;
 use crate::sound::SoundRng;
 
-/// tg `CHANNEL_AMBIENCE`.
-pub const CHANNEL_AMBIENCE: u16 = 1018;
-/// tg `CHANNEL_BUZZ`.
-pub const CHANNEL_BUZZ: u16 = 1017;
+pub use ss13_shared::protocol::{CHANNEL_AMBIENCE, CHANNEL_BUZZ};
 /// `SSambience.wait`.
 pub const AMBIENCE_WAIT_SECS: f64 = 1.0;
 /// `play_ambience`'s `volume`.
