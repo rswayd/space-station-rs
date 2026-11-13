@@ -408,9 +408,12 @@ fn call_children(world: &mut World, mob: Entity, now: f64) {
     let children: Vec<Entity> = world
         .get::<Megafauna>(mob)
         .map(|m| m.elite.children.clone())
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|&c| living(world, c))
+        .collect();
     let mut dirs: Vec<Dir> = Dir::DMI_ORDER.to_vec();
-    for child in children.into_iter().filter(|&c| living(world, c)) {
+    for child in children {
         if dirs.is_empty() {
             break;
         }
