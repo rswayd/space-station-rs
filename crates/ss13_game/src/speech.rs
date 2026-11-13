@@ -1,6 +1,7 @@
 //! The mob's stat for speech (server): `ss13_chat` reads [`SpeakerStat`] to whisper from soft
-//! crit, silence hard crit, send the dead and ghosts to deadchat and check emotes. A mob knocked
-//! out by `Unconscious` or `Sleeping` is [`SpeakerStat::Unconscious`] (tg stat `UNCONSCIOUS`).
+//! crit, silence hard crit (but for its last words, cut by [`LastBreath`]), send the dead and
+//! ghosts to deadchat and check emotes. A mob knocked out by `Unconscious` or `Sleeping` is
+//! [`SpeakerStat::Unconscious`] (tg stat `UNCONSCIOUS`).
 //!
 //! Emotes: the body's [`EmoteUser`] (its tg mob type, BandaStation species, physique and
 //! `TRAIT_SILICON_EMOTES_ALLOWED`) is kept here for `ss13_chat::emote`, and an emote that ran
@@ -17,14 +18,14 @@ use bevy::prelude::*;
 use ss13_chat::emote::{EmoteMob, EmoteSpecies, EmoteUser};
 use ss13_chat::language::Tongue;
 use ss13_chat::server::Emoted;
-use ss13_chat::speech::SpeakerStat;
+use ss13_chat::speech::{LastBreath, SpeakerStat};
 use ss13_chat::speech_filter::{SpeechFilter, SpeechFiltered};
 use ss13_mapload::DmObj;
 use ss13_shared::TilePos;
 
 use crate::bots::Bot;
 use crate::ghost::Ghost;
-use crate::health::{HealthSystems, Stat};
+use crate::health::{HEALTH_THRESHOLD_DEAD, Health, HealthSystems, Stat};
 use crate::human::HumanLook;
 use crate::medical::brainmob::BrainMob;
 use crate::mobs::BasicMob;
@@ -50,6 +51,7 @@ impl Plugin for SpeechServerPlugin {
                 Update,
                 (
                     sync_speaker_stat.after(HealthSystems),
+                    sync_last_breath.after(HealthSystems),
                     sync_emote_user,
                     emote_effects.after(ss13_chat::server::SaySystems),
                     speech_filtered.after(ss13_chat::server::SaySystems),
@@ -380,6 +382,31 @@ fn sync_speaker_stat(
             }
             None => {
                 commands.entity(mob).insert(wanted);
+            }
+        }
+    }
+}
+
+/// [`LastBreath`] of a mob in hard crit: `round(-dead_threshold + health)`.
+fn sync_last_breath(
+    mobs: Query<
+        (Entity, &Stat, &Health, Option<&LastBreath>),
+        Or<(Changed<Stat>, Changed<Health>)>,
+    >,
+    mut commands: Commands,
+) {
+    for (mob, &stat, health, current) in &mobs {
+        let wanted = (stat == Stat::HardCrit)
+            .then(|| LastBreath((health.health() - HEALTH_THRESHOLD_DEAD).round().max(0.0) as u32));
+        if wanted.as_ref() == current {
+            continue;
+        }
+        match wanted {
+            Some(breath) => {
+                commands.entity(mob).try_insert(breath);
+            }
+            None => {
+                commands.entity(mob).try_remove::<LastBreath>();
             }
         }
     }

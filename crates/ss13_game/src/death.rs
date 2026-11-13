@@ -11,19 +11,21 @@
 //!   not defibrillated (`DEFIB_FAIL_HUSK`) nor revived or filtered by surgery; [`cure_husk`] takes
 //!   the burn source away (an admin heal every source).
 //! - Succumbing: in soft or hard crit (`CAN_SUCCUMB`) the mob has the succumb alert; its click asks
-//!   for last words (`tgui_input_text`), whispers them and dies of oxygen damage down to the death
-//!   threshold.
+//!   for last words (`tgui_input_text`), whispers them through the say code (`say("#...")`) and,
+//!   once they were said, dies of oxygen damage down to the death threshold. A whisper from hard
+//!   crit is cut by the health left and makes the mob succumb itself (`ss13_chat`'s
+//!   [`LastWords`], tg `succumbed` in `/mob/living/say`).
 // shortcut: no `TRAIT_NODEATH`/`TRAIT_SUCCUMB_OVERRIDE` sources are ported (memento mori,
-// penthrite, voidwalker), so every crit mob may succumb; the last words reach the next tiles only
-// (no starred hearing at two tiles, no radio or languages); synthflesh and rezadone do not unhusk
+// penthrite, voidwalker), so every crit mob may succumb; synthflesh and rezadone do not unhusk
 // (reagent `expose_mob` is not ported, `crate::chem`); no `persistent_client` time of death (no
 // respawn timer).
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
-use ss13_net::chat::server::SendChat;
-use ss13_shared::TilePos;
+use ss13_chat::server::{LastWords, SaySystems};
+use ss13_net::server::IntentReceived;
 use ss13_shared::chat::{MAX_MESSAGE_LEN, Span};
+use ss13_shared::protocol::ClientIntent;
 use ss13_tgui::prompt::{Ask, PromptAnswer, PromptAnswered, PromptKind, PromptSystems, ask_world};
 use ss13_tgui::server::{UiActed, UiSystems};
 
@@ -55,6 +57,14 @@ pub struct BurnHusk {
 #[derive(Component, Clone, Copy, Debug)]
 struct SuccumbPrompt;
 
+/// On a mob whose last words from the succumb alert went to the say code: it succumbs after
+/// they were said. Armed by the first pass of [`succumb_after_words`], so the say was handled
+/// whichever way the systems ran in the frame it was asked.
+#[derive(Component, Clone, Copy, Debug, Default)]
+struct SuccumbAfterWords {
+    armed: bool,
+}
+
 /// `/atom/movable/screen/alert/succumb` `death_titles`.
 const DEATH_TITLES: [&str; 8] = [
     "Покойной ночи, милый принц",
@@ -79,6 +89,12 @@ impl Plugin for DeathPlugin {
             Update,
             (succumb_clicks, succumb_answers.after(PromptSystems::Answer))
                 .in_set(UiSystems::Handle),
+        )
+        .add_systems(
+            Update,
+            (last_words_succumb, succumb_after_words)
+                .chain()
+                .after(SaySystems),
         );
     }
 }
@@ -296,28 +312,53 @@ fn succumb_answers(world: &mut World, mut answers: Local<MessageCursor<PromptAns
         {
             continue;
         }
-        let words = ss13_chat::server::sanitize_say(&words).ok();
-        let whispered = words.is_some();
-        if let Some(words) = words
-            && world.get::<ss13_chat::server::Muted>(client).is_none()
-        {
-            whisper(world, actor, &words);
+        // `length(last_whisper)`: nothing to say succumbs at once.
+        if ss13_chat::server::sanitize_say(&words).is_err() {
+            succumb(world, actor, false);
+            continue;
         }
-        succumb(world, actor, whispered);
+        // `say("#[last_whisper]")`, then `succumb(whispered = TRUE)`.
+        world.write_message(IntentReceived {
+            client,
+            intent: ClientIntent::Say(format!("#{words}")),
+        });
+        world.entity_mut(actor).insert(SuccumbAfterWords::default());
     }
 }
 
-/// `say("#[last_whisper]")`: heard next to the speaker.
-fn whisper(world: &mut World, mob: Entity, text: &str) {
-    let Some(&pos) = world.get::<TilePos>(mob) else {
+/// tg `succumb(TRUE)` after a whisper from hard crit.
+fn last_words_succumb(world: &mut World, mut said: Local<MessageCursor<LastWords>>) {
+    let Some(messages) = world.get_resource::<Messages<LastWords>>() else {
         return;
     };
-    let name = crate::medical::name_of(world, mob);
-    let clients = crate::obj_damage::clients_in_range(world, pos, 1, &[]);
-    world.write_message(SendChat {
-        clients,
-        message: ss13_chat::server::whisper_message(&name, text),
-    });
+    let dying: Vec<Entity> = said.read(messages).map(|l| l.speaker).collect();
+    for mob in dying {
+        if world.get_entity(mob).is_ok() {
+            succumb(world, mob, true);
+        }
+    }
+}
+
+/// The succumb alert's `succumb(whispered = TRUE)` once its words were said; a mob the words
+/// already killed (hard crit) or that recovered meanwhile is left be.
+fn succumb_after_words(world: &mut World) {
+    let pending: Vec<(Entity, bool)> = world
+        .query::<(Entity, &SuccumbAfterWords)>()
+        .iter(world)
+        .map(|(e, p)| (e, p.armed))
+        .collect();
+    for (mob, armed) in pending {
+        if !armed {
+            world
+                .entity_mut(mob)
+                .insert(SuccumbAfterWords { armed: true });
+            continue;
+        }
+        world.entity_mut(mob).remove::<SuccumbAfterWords>();
+        if world.get::<Stat>(mob).is_some_and(|s| can_succumb(*s)) {
+            succumb(world, mob, true);
+        }
+    }
 }
 
 #[cfg(test)]

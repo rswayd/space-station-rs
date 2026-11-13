@@ -35,6 +35,34 @@ pub struct BinaryCapable;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct AlienHivemind;
 
+/// On the AI's eye (tg `isAI`, `/datum/saymode/holopad/can_be_used_by`), kept by the game: `:h`
+/// goes to [`RadioTarget::Holopad`] instead of the department channel.
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HolopadSpeaker;
+
+/// tg `round(health - dead_threshold)` of a mob in hard crit, kept by the game: how many
+/// characters of its last words it gets out ([`last_words`]).
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LastBreath(pub u32);
+
+/// tg `/mob/living/say` from hard crit: the whisper is cut to `breath - 1` characters and ends
+/// in `-..` (cut) or `...`, then `Ellipsis(message, 10, keep_words = TRUE)` puts `...` before a
+/// tenth of the words. `roll()` is a percent roll per word.
+pub fn last_words(message: &str, breath: u32, mut roll: impl FnMut() -> f32) -> String {
+    let len = message.chars().count();
+    let keep = (breath as usize).saturating_sub(1);
+    let mut cut: String = message.chars().take(keep).collect();
+    cut.push_str(if len > breath as usize { "-.." } else { "..." });
+    let mut words: Vec<&str> = Vec::new();
+    for word in cut.split(' ') {
+        if roll() < 10.0 {
+            words.push("...");
+        }
+        words.push(word);
+    }
+    words.join(" ")
+}
+
 /// On a body linked to the changeling hivemind (tg `TRAIT_CHANGELING_HIVEMIND`), kept by the
 /// game: `:g` goes to [`RadioTarget::Changeling`].
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -555,6 +583,8 @@ pub enum RadioExtension {
     Changeling,
     /// `MODE_KEY_ALIEN` (`:a`, BandaStation `:ф`): tg's alien saymode.
     Hive,
+    /// `MODE_KEY_VOCALCORDS` (`:x`, BandaStation `:ч`): tg's vocal cords saymode.
+    VocalCords,
 }
 
 /// Where a message goes besides the air (tg `radio()`), already resolved by priority: the hand
@@ -575,6 +605,14 @@ pub enum RadioTarget {
     Changeling,
     /// tg's alien saymode (`alien_talk`).
     Hive,
+    /// tg's vocal cords saymode (`iscarbon`): the voice organ speaks
+    /// (`/obj/item/organ/vocal_cords/handle_speech`, `speak_with`); nothing is said aloud.
+    // shortcut: no voice organs are ported (the adamantine cords of golems, the colossus' voice
+    // of god), so the words go nowhere, as tg's for a carbon without cords; their groups hook
+    // this target.
+    VocalCords,
+    /// tg's holopad saymode (`isAI`, `holopad_talk`): the AI's hologram says it.
+    Holopad,
 }
 
 /// tg `MESSAGE_RANGE - WHISPER_RANGE` + `WHISPER_RANGE`: whispers are heard in full at 1 tile,
@@ -604,6 +642,7 @@ impl SayMods {
             (Some(RadioExtension::Binary), _) => Some(RadioTarget::Binary),
             (Some(RadioExtension::Changeling), _) => Some(RadioTarget::Changeling),
             (Some(RadioExtension::Hive), _) => Some(RadioTarget::Hive),
+            (Some(RadioExtension::VocalCords), _) => Some(RadioTarget::VocalCords),
             (Some(RadioExtension::Intercom), _) => Some(RadioTarget::Intercom),
             (Some(RadioExtension::LeftHand), _) => Some(RadioTarget::Hand(0)),
             (Some(RadioExtension::RightHand), _) => Some(RadioTarget::Hand(1)),
@@ -645,6 +684,7 @@ fn radio_key(key: char) -> Option<RadioExtension> {
         'b' | 'и' => Some(RadioExtension::Binary),
         'g' | 'п' => Some(RadioExtension::Changeling),
         'a' | 'ф' => Some(RadioExtension::Hive),
+        'x' | 'ч' => Some(RadioExtension::VocalCords),
         _ => None,
     }
 }
@@ -879,6 +919,7 @@ mod tests {
             ("л", RadioExtension::LeftHand),
             ("d", RadioExtension::Deadmin),
             ("bи", RadioExtension::Binary),
+            ("xч", RadioExtension::VocalCords),
         ] {
             for key in keys.chars() {
                 assert_eq!(ext(&format!(":{key} x")), Some(want), "key {key}");
@@ -986,6 +1027,22 @@ mod tests {
         assert_eq!(
             slur("ао", &Slur::drunk(60.0), || rolls.next().unwrap()),
             "ахо"
+        );
+    }
+
+    #[test]
+    fn last_words_are_cut_by_the_health_left() {
+        // 12 characters, 5 of breath: 4 kept, cut short.
+        assert_eq!(last_words("Передайте им", 5, || 99.0), "Пере-..");
+        // Enough breath: the whole whisper trails off.
+        assert_eq!(last_words("Прощай", 50, || 99.0), "Прощай...");
+        // Exactly as long as the breath: `message_len > health_diff` fails, no dash.
+        assert_eq!(last_words("абв", 3, || 99.0), "аб...");
+        // Ellipsis keeps the words and puts "..." before the rolled ones.
+        let mut rolls = [99.0, 0.0].into_iter();
+        assert_eq!(
+            last_words("я ухожу", 50, || rolls.next().unwrap()),
+            "я ... ухожу..."
         );
     }
 }
