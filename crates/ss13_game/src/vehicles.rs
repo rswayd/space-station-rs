@@ -30,13 +30,18 @@
 //!   unfolds.
 //! - The janicart takes a trash bag (then anything else used on it goes into the bag), an empty
 //!   hand takes the bag back.
+//! - Lavaboats (`lavaboat.dm`): driven with an oar attached (the key), only onto lava or water
+//!   or off it (`turf_check`); the rider does not burn (`crate::lava`: buckled to something lava
+//!   proof). The dragon boat needs no oar, is faster, alt-click bottles it in 2 s
+//!   (a ship in a bottle, used in hand it is a boat again).
 //! - Examine: the integrity, the key hint, the skateboard's walk hint, the motorized
 //!   wheelchair's screen.
 //!
 //! Cost: one relay per driver step; one pass per tick over vehicles and riders that moved.
 // shortcut: no x pixel offsets of riders (only `pixel_z` through the elevation), no overlays
 // drawn above the rider (wheelchair wheels, ATV cover, speedbike cover: overlays have no layer
-// of their own here), no lavaboats, wheelys/roller skates/ski shoes, golf carts or sealed cars,
+// of their own here), no lavaboat or oar crafting recipes, no ship in a bottle shattering when
+// thrown, no wheelys/roller skates/ski shoes, golf carts or sealed cars,
 // no skateboard grinding on tables, no hoverboard falling or holy slowdown, no turf whitelist,
 // no speed potion, no motorized wheelchair panel/parts/ramming/bomb, no wheelchair bells or
 // TTVs, no janicart upgrades, no secway banana, no welder repairs, smoke or explosions, no
@@ -78,6 +83,16 @@ const BLUESPACE_BAG: &str = "/obj/item/storage/bag/trash/bluespace";
 const CELL: &str = "/obj/item/stock_parts/power_store/cell";
 const HELMET: &str = "/obj/item/clothing/head/helmet";
 const HARDHAT: &str = "/obj/item/clothing/head/utility/hardhat";
+const LAVABOAT: &str = "/obj/vehicle/ridden/lavaboat";
+/// The dragon boat, which needs no oar and goes back into its bottle.
+pub const DRAGON_BOAT: &str = "/obj/vehicle/ridden/lavaboat/dragon";
+pub const SHIP_IN_A_BOTTLE: &str = "/obj/item/ship_in_a_bottle";
+const OAR: &str = "/obj/item/oar";
+/// The lavaboat riding component's `allowed_turfs`.
+const BOAT_TURFS: [&str; 2] = ["/turf/open/lava", "/turf/open/water"];
+const GLASS_BREAK: &str = "sound/effects/glass/glassbr1.ogg";
+/// The dragon boat's `click_alt` `do_after`, deciseconds.
+const BOTTLE_DS: f32 = 20.0;
 
 /// `OBJ_LAYER`, `ABOVE_MOB_LAYER`.
 const OBJ_LAYER: f32 = 3.0;
@@ -126,6 +141,8 @@ pub enum Kind {
     Wheelchair,
     Motorized,
     Janicart,
+    /// A lavaboat: only on lava or water (`allowed_turf_typecache`).
+    Lavaboat,
 }
 
 /// The riding component subtype of a vehicle type (`/datum/component/riding/vehicle/*`).
@@ -284,6 +301,16 @@ pub fn riding_def(path: &str) -> Option<RidingDef> {
                 (-18, 0, None),
                 (-18, 0, None),
             ],
+            ..base
+        }
+    } else if under(LAVABOAT) {
+        let dragon = under(DRAGON_BOAT);
+        RidingDef {
+            kind: Kind::Lavaboat,
+            move_delay: if dragon { 1.0 } else { 2.0 },
+            key: (!dragon).then_some(OAR),
+            rider_up: if dragon { [2; 4] } else { [0; 4] },
+            parent: [(0, 0, Some(ABOVE_MOB_LAYER)); 4],
             ..base
         }
     } else if under("/obj/vehicle/ridden/janicart") {
@@ -872,6 +899,21 @@ fn handle_ride(world: &mut World, vehicle: Entity, driver: Entity, dir: Dir, now
     let Some(&from) = world.get::<TilePos>(vehicle) else {
         return false;
     };
+    if v.def.kind == Kind::Lavaboat && !boat_turf_check(world, from, from.step(dir)) {
+        let (name, turf) = (
+            name_of(world, vehicle),
+            crate::construction::turf_at(world, from.step(dir))
+                .map(|t| name_of(world, t))
+                .unwrap_or_default(),
+        );
+        tell_mob(
+            world,
+            driver,
+            Span::Warning,
+            format!("{name} не может заехать на {turf}!"),
+        );
+        return false;
+    }
     // `Process_Spacemove`: `override_allow_spacemove || has_gravity()`.
     if !v.def.spacemove && !crate::multiz::has_gravity(world, from) {
         return false;
@@ -896,6 +938,17 @@ fn handle_ride(world: &mut World, vehicle: Entity, driver: Entity, dir: Dir, now
             c.0.take(MOTOR_ENERGY_USAGE / MOTOR_EFFICIENCY.max(1.0) * 0.05, false);
     }
     true
+}
+
+/// tg `turf_check(next, current)` with the lavaboat's `allowed_turf_typecache`: onto lava or
+/// water, or off it onto anything else (so a boat can be beached, once).
+pub fn boat_turf_check(world: &World, current: TilePos, next: TilePos) -> bool {
+    let allowed = |pos: TilePos| {
+        crate::construction::turf_at(world, pos)
+            .and_then(|t| crate::construction::path_of(world, t))
+            .is_some_and(|p| BOAT_TURFS.iter().any(|root| is_under(&p, root)))
+    };
+    allowed(next) || allowed(current)
 }
 
 /// The rider moves with its vehicle (`Moved` of buckled mobs) and turns with it; a rider moved
@@ -1079,12 +1132,12 @@ pub fn item_interaction(
         if !hand_into(world, client, held, target) {
             return true;
         }
-        tell(
-            world,
-            client,
-            Span::Notice,
-            format!("Вы вставляете {what} в {name}."),
-        );
+        let text = if v.def.kind == Kind::Lavaboat {
+            format!("Вы прикрепляете {what} к {name}.")
+        } else {
+            format!("Вы вставляете {what} в {name}.")
+        };
+        tell(world, client, Span::Notice, text);
         // Just in case there's an invalid key.
         if let Some(old) = key
             && let Some(&pos) = world.get::<TilePos>(target)
@@ -1196,6 +1249,24 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity)
     let Some(v) = world.get::<Vehicle>(target).cloned() else {
         return false;
     };
+    // `/obj/vehicle/ridden/lavaboat/dragon/click_alt`.
+    if is_under(&path_of(world, target), DRAGON_BOAT) {
+        crate::balloon::balloon_alert(world, mob, mob, "бутилируем лодку...");
+        let actor = Actor {
+            client,
+            mob,
+            item: None,
+        };
+        crate::tools::do_after(
+            world,
+            actor,
+            target,
+            BOTTLE_DS,
+            0,
+            crate::construction::Job::BottleBoat,
+        );
+        return true;
+    }
     let Some(key) = inside(world, v.key, target) else {
         return v.def.key.is_some();
     };
@@ -1218,6 +1289,31 @@ pub fn click_alt(world: &mut World, client: Entity, mob: Entity, target: Entity)
     world.get_mut::<Vehicle>(target).expect("checked").key = None;
     put_in_hands(world, mob, key);
     true
+}
+
+/// The end of the dragon boat's `click_alt` `do_after`: a ship in a bottle in the hand, the
+/// boat gone (its rider gets off first).
+pub fn complete_bottle(world: &mut World, mob: Entity, boat: Entity) {
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return;
+    };
+    if world.get::<Vehicle>(boat).is_none() {
+        return;
+    }
+    crate::balloon::balloon_alert(world, mob, mob, "лодка в бутылке!");
+    if let Some(rider) = world.get::<Vehicle>(boat).and_then(|v| v.rider) {
+        dismount(world, rider);
+    }
+    if let Some(&boat_pos) = world.get::<TilePos>(boat) {
+        drop_contents(world, boat, boat_pos);
+        world.despawn(boat);
+        crate::construction::tile_changed(world, boat_pos);
+    } else {
+        world.despawn(boat);
+    }
+    if let Some(bottle) = crate::construction::spawn_obj(world, SHIP_IN_A_BOTTLE, pos) {
+        put_in_hands(world, mob, bottle);
+    }
 }
 
 /// A skateboard (`pick_up_board`) or a wheelchair (folding) dragged onto its user. True when
@@ -1366,6 +1462,23 @@ pub fn attack_self(world: &mut World, client: Entity, mob: Entity, item: Entity)
     let Some(path) = world.get::<DmItem>(item).map(|i| i.path.clone()) else {
         return false;
     };
+    // `/obj/item/ship_in_a_bottle/attack_self` -> `create_boat`.
+    if is_under(&path, SHIP_IN_A_BOTTLE) {
+        let Some(&pos) = world.get::<TilePos>(mob) else {
+            return true;
+        };
+        tell(
+            world,
+            client,
+            Span::Notice,
+            "Вы не знаете, как корабли попадают в такие бутылки, но, кажется, знаете, как его \
+             оттуда достать.",
+        );
+        playsound(world, PlaySound::new(pos, GLASS_BREAK, 100.0, true));
+        world.despawn(item);
+        crate::construction::spawn_obj(world, DRAGON_BOAT, pos);
+        return true;
+    }
     let Some(vehicle_path) = unfolded_type(&path) else {
         return false;
     };
@@ -1429,11 +1542,23 @@ pub fn examine_lines(world: &World, target: Entity, lines: &mut Vec<crate::exami
     }
     let name = name_of(world, target);
     if v.def.key.is_some() {
-        let line = match inside(world, v.key, target) {
-            None => format!("Вставьте в {name} ключ, кликнув по нему ключом."),
-            Some(key) => format!("Alt-клик по {name}, чтобы вынуть {}.", name_of(world, key)),
+        let key = inside(world, v.key, target);
+        let line = match (key, v.def.kind) {
+            (None, Kind::Lavaboat) => {
+                format!("Можно прикрепить к {name} весло, кликнув по ней веслом.")
+            }
+            (Some(key), Kind::Lavaboat) => {
+                format!("Alt-клик по {name}, чтобы снять {}.", name_of(world, key))
+            }
+            (None, _) => format!("Вставьте в {name} ключ, кликнув по нему ключом."),
+            (Some(key), _) => format!("Alt-клик по {name}, чтобы вынуть {}.", name_of(world, key)),
         };
         lines.push((Span::Notice, line));
+    } else if is_under(&path_of(world, target), DRAGON_BOAT) {
+        lines.push((
+            Span::Notice,
+            format!("Можно вернуть {name} в бутылку, потерев нос дракона (Alt-клик)."),
+        ));
     }
     match v.def.kind {
         Kind::Skateboard => lines.push((
@@ -1665,7 +1790,13 @@ mod tests {
         assert!(
             riding_def("/obj/vehicle/ridden/scooter/skateboard/wheelys/rollerskates").is_none()
         );
-        assert!(riding_def("/obj/vehicle/ridden/lavaboat").is_none());
+        let boat = riding_def("/obj/vehicle/ridden/lavaboat/plasma").unwrap();
+        assert_eq!(
+            (boat.kind, boat.key, boat.move_delay),
+            (Kind::Lavaboat, Some(OAR), 2.0)
+        );
+        let dragon = riding_def(DRAGON_BOAT).unwrap();
+        assert_eq!((dragon.key, dragon.move_delay), (None, 1.0));
         assert!(riding_def("/obj/vehicle/sealed/mecha/ripley").is_none());
         assert!(riding_def("/obj/vehicle/ridden_x").is_none());
     }

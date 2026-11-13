@@ -19,7 +19,7 @@
 //!   as in its `check_finished` edit); every head revolutionary dead or off the station: the
 //!   station wins, every revolutionary is deconverted.
 // shortcut: no mood, memories, codewords, conversion objective, clumsiness, holiday memes, AFK
-// grace for mutiny targets, hostile environment for the shuttle, syndicate security HUD implant
+// grace for mutiny targets, syndicate security HUD implant
 // for heads, exiled heads (`enemy_of_the_state`) or borging. tg `update_rev_heads` never promotes anyone (its
 // `can_be_headrev` refuses antagonists and every candidate is a revolutionary), so it is left out.
 
@@ -413,6 +413,7 @@ pub fn start_revolution(world: &mut World) {
     handler.started = true;
     handler.targets = targets;
     info!("revolution: started against {:?}", handler.targets);
+    crate::shuttle::register_hostile_environment(world, crate::shuttle::Blocker::Revolution);
 }
 
 /// `COMSIG_GLOB_JOB_AFTER_LATEJOIN_SPAWN` (`update_objectives`): a latejoining head of staff
@@ -744,6 +745,7 @@ fn declare_revs_win(world: &mut World) {
     );
     world.resource_mut::<RevolutionHandler>().result = Some(RevResult::Revolution);
     info!("revolution: the revolution won");
+    crate::shuttle::clear_hostile_environment(world, crate::shuttle::Blocker::Revolution);
 }
 
 /// `declare_heads_win`: everyone deconverted.
@@ -766,6 +768,7 @@ fn declare_heads_win(world: &mut World) {
     );
     world.resource_mut::<RevolutionHandler>().result = Some(RevResult::Station);
     info!("revolution: the station won");
+    crate::shuttle::clear_hostile_environment(world, crate::shuttle::Blocker::Revolution);
 }
 
 // ---------------------------------------------------------------------------------------------

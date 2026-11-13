@@ -31,7 +31,16 @@
 // CentCom and in transit); a dock of another direction turns `Facing` only.
 //! - Hyperspace sounds ([`hyperspace_sound`]): the engines rev up 5 s before the launch, the
 //!   launch, and the arrival half a second before the shuttle docks at CentCom.
-// shortcut: no hostile environments, ripples, shuttle events or airlock cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
+//! - A station map whose json names no emergency shuttle (or a missing one) gets tg's backup
+//!   shuttle (`emergency_backup`, `check_backup_emergency_shuttle`).
+//! - Hostile environments ([`ShuttleBlocks`], tg `registerHostileEnvironment`): while a blob,
+//!   the revolution, a doomsday device or Nar'Sie is registered, the igniting shuttle is stranded
+//!   at the station and docks again for the full dock time once they are gone; `block_recall`
+//!   forbids recalls for a while; a trade blockade strands the supply shuttle (`crate::cargo`).
+//! - Ripples ([`check_ripples`]): 10 s before a shuttle lands its landing tiles show ripples,
+//!   removed when it docks or turns back.
+//! - Flight events (`crate::shuttle_events`): turbulence and meteors during the escape.
+// shortcut: no airlock cycling on docking. A hijacked shuttle (`crate::shuttle_console_server`) docks at the CentCom
 // stand-in too (no Syndicate base level, `emergency_syndicate`); `syndicate_landing` records it.
 
 use std::collections::{HashMap, HashSet};
@@ -83,10 +92,16 @@ const SHUTTLE_AREA: &str = "/area/shuttle";
 const SPACE_TURF: &str = "/turf/open/space";
 const BASETURF_BOTTOM: &str = "/turf/baseturf_bottom";
 const HOME_DOCK: &str = "emergency_home";
+/// `/datum/map_template/shuttle/emergency/backup`.
+const BACKUP_TEMPLATE: &str = "emergency_backup";
 const AWAY_DOCK: &str = "emergency_away";
 /// Tiles of space around the shuttle on the transit level.
 const TRANSIT_MARGIN: i32 = 3;
 const SENDER: &str = "Аварийное оповещение эвакуационного шаттла";
+/// The sender of `SSshuttle`'s own announcements (hostile environments, recall lockouts).
+const ALERT_SENDER: &str = "Система оповещения эвакуационного шаттла";
+const NOTICE_SOUND: &str = "sound/announcer/notice/notice1.ogg";
+const DIG_SOUND: &str = "sound/announcer/announcement/announce_dig.ogg";
 /// tg `command_name()`.
 const COMMAND_NAME: &str = "Центральное Командование";
 
@@ -154,6 +169,8 @@ pub enum ShuttleMode {
     Docked,
     Escape,
     Endgame,
+    /// Held at the station by a hostile environment (tg `SHUTTLE_STRANDED`).
+    Stranded,
 }
 
 /// tg's mobile port timer (`timer`, `last_timer_length`), in seconds of server time.
@@ -221,6 +238,8 @@ pub struct Emergency {
     pub no_recall: bool,
     /// tg `hijack_status`: `HIJACK_NOT_BEGUN` (0) to [`HIJACK_COMPLETED`].
     pub hijack_status: u8,
+    /// tg `block_recall(lockout_timer)`: no recall before this server time.
+    pub recall_blocked_until: Option<f64>,
 }
 
 /// tg `HIJACK_COMPLETED`: the fifth stage of the console's navigation override.
@@ -314,6 +333,9 @@ impl Emergency {
             ShuttleMode::Docked => "Эвакуационный шаттл уже состыкован со станцией.",
             ShuttleMode::Igniting => "Эвакуационный шаттл производит запуск двигателей для отлёта.",
             ShuttleMode::Escape => "Эвакуационный шаттл удаляется на безопасное расстояние.",
+            ShuttleMode::Stranded => {
+                "Вызов эвакуационного шаттла был заблокирован Центральным Командованием."
+            }
             ShuttleMode::Idle | ShuttleMode::Endgame => return Ok(()),
         };
         Err(reason.to_owned())
@@ -330,7 +352,33 @@ impl Emergency {
         };
         self.mode == ShuttleMode::Call
             && !self.no_recall
+            && self.recall_blocked_until.is_none_or(|until| now >= until)
             && self.timer.left(now).is_some_and(|left| left >= needed)
+    }
+
+    /// tg `block_recall(lockout_timer)`: no recall for `secs`.
+    // tg's `unblock_recall` timers each clear the flag, so an earlier, shorter block ends a
+    // later, longer one (and the permanent crisis lock); the longest block wins here.
+    pub fn block_recall(&mut self, now: f64, secs: f64) {
+        let until = now + secs;
+        self.recall_blocked_until = Some(self.recall_blocked_until.map_or(until, |u| u.max(until)));
+    }
+
+    /// The emergency shuttle's part of tg `checkHostileEnvironment`: `Some(true)` when an
+    /// igniting shuttle is stranded, `Some(false)` when a stranded or docked one docks again for
+    /// `dock_secs` because nothing hostile is left.
+    pub fn hostile_check(&mut self, now: f64, hostile: bool, dock_secs: f64) -> Option<bool> {
+        if hostile && self.mode == ShuttleMode::Igniting {
+            self.mode = ShuttleMode::Stranded;
+            self.timer.clear();
+            return Some(true);
+        }
+        if !hostile && matches!(self.mode, ShuttleMode::Stranded | ShuttleMode::Docked) {
+            self.mode = ShuttleMode::Docked;
+            self.timer.set(now, dock_secs);
+            return Some(false);
+        }
+        None
     }
 
     /// tg `alert_coeff_change`: the time left (and the length a recall inverts) scale by the new
@@ -448,6 +496,146 @@ pub struct EmergencyShuttle {
     pub sound_played: bool,
 }
 
+/// A source of tg `SSshuttle.hostile_environments` or `trade_blockade` (a datum there).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Blocker {
+    /// A blob overmind, Nar'Sie, an AI's doomsday device (its AI); gone once despawned (tg
+    /// `QDELETED`).
+    Entity(Entity),
+    /// `GLOB.revolution_handler` while the revolution runs.
+    Revolution,
+}
+
+/// tg `SSshuttle.hostile_environments` and `trade_blockade`.
+#[derive(Resource, Clone, Debug, Default)]
+pub struct ShuttleBlocks {
+    pub hostile: HashSet<Blocker>,
+    pub trade: HashSet<Blocker>,
+}
+
+impl ShuttleBlocks {
+    /// The `QDELETED` sweep: blockers whose entity is gone are dropped.
+    fn prune(&mut self, world: &World) {
+        let alive = |b: &Blocker| match b {
+            Blocker::Entity(e) => world.get_entity(*e).is_ok(),
+            Blocker::Revolution => true,
+        };
+        self.hostile.retain(alive);
+        self.trade.retain(alive);
+    }
+}
+
+/// tg `SSshuttle.emergency_no_escape`: something hostile holds the emergency shuttle.
+pub fn hostile_environment(world: &World) -> bool {
+    world
+        .get_resource::<ShuttleBlocks>()
+        .is_some_and(|b| !b.hostile.is_empty())
+}
+
+/// tg `SSshuttle.supply_blocked`.
+pub fn supply_blocked(world: &World) -> bool {
+    world
+        .get_resource::<ShuttleBlocks>()
+        .is_some_and(|b| !b.trade.is_empty())
+}
+
+/// tg `SSshuttle.registerHostileEnvironment(bad)`.
+pub fn register_hostile_environment(world: &mut World, bad: Blocker) {
+    world
+        .get_resource_or_init::<ShuttleBlocks>()
+        .hostile
+        .insert(bad);
+    check_hostile_environment(world);
+}
+
+/// tg `SSshuttle.clearHostileEnvironment(bad)`.
+pub fn clear_hostile_environment(world: &mut World, bad: Blocker) {
+    if let Some(mut blocks) = world.get_resource_mut::<ShuttleBlocks>() {
+        blocks.hostile.remove(&bad);
+    }
+    check_hostile_environment(world);
+}
+
+/// tg `SSshuttle.registerTradeBlockade(bad)`.
+pub fn register_trade_blockade(world: &mut World, bad: Blocker) {
+    world
+        .get_resource_or_init::<ShuttleBlocks>()
+        .trade
+        .insert(bad);
+    crate::cargo::supply::check_trade_blockade(world);
+}
+
+/// tg `SSshuttle.clearTradeBlockade(bad)`.
+pub fn clear_trade_blockade(world: &mut World, bad: Blocker) {
+    if let Some(mut blocks) = world.get_resource_mut::<ShuttleBlocks>() {
+        blocks.trade.remove(&bad);
+    }
+    crate::cargo::supply::check_trade_blockade(world);
+}
+
+/// Drops blockers whose entity is gone.
+pub(crate) fn prune_blocks(world: &mut World) {
+    if !world.contains_resource::<ShuttleBlocks>() {
+        return;
+    }
+    world.resource_scope(|world, mut blocks: Mut<ShuttleBlocks>| blocks.prune(world));
+}
+
+/// tg `SSshuttle.checkHostileEnvironment`: an igniting shuttle is stranded while anything
+/// hostile is registered; without any, a stranded or docked one gets the full dock time again.
+pub fn check_hostile_environment(world: &mut World) {
+    world.init_resource::<ShuttleBlocks>();
+    prune_blocks(world);
+    let hostile = hostile_environment(world);
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    let dock_secs = world
+        .get_resource::<ShuttleConfig>()
+        .map_or(ShuttleConfig::tg().dock_secs, |c| c.dock_secs);
+    let changed = {
+        let Some(mut shuttle) = world.get_resource_mut::<EmergencyShuttle>() else {
+            return;
+        };
+        let changed = shuttle.state.hostile_check(now, hostile, dock_secs);
+        if changed == Some(true) {
+            shuttle.sound_played = false;
+        }
+        changed
+    };
+    match changed {
+        Some(true) => {
+            Priority::new(
+                "Отправка была отложена на неопределенный срок до разрешения конфликта.",
+                "Обнаружено враждебное окружение",
+            )
+            .sender(ALERT_SENDER)
+            .sound(NOTICE_SOUND)
+            .send(world);
+        }
+        Some(false) => {
+            Priority::new(
+                format!(
+                    "У вас есть {}, чтобы добраться до эвакуационного шаттла.",
+                    display_time_text(dock_secs)
+                ),
+                "Враждебное окружение устранено",
+            )
+            .sender(ALERT_SENDER)
+            .sound(DIG_SOUND)
+            .send(world);
+        }
+        None => {}
+    }
+}
+
+/// tg `SSshuttle.block_recall(lockout_timer)`: the emergency shuttle cannot be recalled for
+/// `secs`.
+pub fn block_recall(world: &mut World, secs: f64) {
+    let now = world.resource::<Time>().elapsed_secs_f64();
+    if let Some(mut shuttle) = world.get_resource_mut::<EmergencyShuttle>() {
+        shuttle.state.block_recall(now, secs);
+    }
+}
+
 #[derive(Resource)]
 struct ShuttleRng(Rng);
 
@@ -484,8 +672,18 @@ impl Plugin for ShuttleServerPlugin {
         let template = config.template.clone().or_else(|| {
             let map = app.world().get_resource::<MapLoadPlugin>()?;
             let name = map.maps.first().filter(|m| !m.ends_with(".dmm"))?;
-            let id = map_shuttle(&map.source, name, "emergency")?;
-            Some(shuttle_template_path(&map.source, "emergency", &id))
+            let own = map_shuttle(&map.source, name, "emergency")
+                .map(|id| shuttle_template_path(&map.source, "emergency", &id))
+                .filter(|p| ss13_data::exists(p));
+            // `check_backup_emergency_shuttle`: a map without its own gets the backup shuttle.
+            own.or_else(|| {
+                warn!("{name}: no emergency shuttle, using the backup shuttle");
+                Some(shuttle_template_path(
+                    &map.source,
+                    "emergency",
+                    BACKUP_TEMPLATE,
+                ))
+            })
         });
         if let Some(template) = template {
             info!("emergency shuttle template {}", template.display());
@@ -509,6 +707,7 @@ impl Plugin for ShuttleServerPlugin {
             })
             .unwrap_or_default();
         app.insert_resource(roundstart);
+        app.init_resource::<ShuttleBlocks>();
         app.add_systems(Startup, setup_shuttle)
             .add_systems(Update, tick)
             .add_plugins((
@@ -893,6 +1092,7 @@ pub(crate) fn setup_shuttle(world: &mut World) {
         syndicate_landing: false,
         sound_played: false,
     });
+    crate::shuttle_events::setup(world);
 }
 
 /// A shuttle loaded from a template onto its own level ([`setup_template_shuttle`]).
@@ -1138,12 +1338,108 @@ fn make_transit(
     Some((dock, z))
 }
 
-/// tg `initiate_docking(new_dock)`: moves the shuttle of mobile port `port` onto `dock` at once.
+/// tg `initiate_docking(new_dock)`: moves the shuttle of mobile port `port` onto `dock` at once;
+/// its ripples go away whether it moved or not (`remove_ripples`).
 pub fn initiate_docking(
     world: &mut World,
     port: Entity,
     dock: Entity,
 ) -> Result<MoveReport, DockingError> {
+    let result = move_shuttle(world, port, dock);
+    remove_ripples(world, port);
+    result
+}
+
+/// tg `/obj/effect/abstract/ripple`.
+pub const RIPPLE: &str = "/obj/effect/abstract/ripple";
+/// tg `SHUTTLE_RIPPLE_TIME`: ripples show this long before a landing.
+pub const RIPPLE_SECS: f64 = 10.0;
+const TRANSIT_AREA: &str = "/area/shuttle/transit";
+
+/// A hyperspace ripple put down by a landing shuttle.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Ripple;
+
+/// tg `ripples` of a mobile port: present from the first `create_ripples` of a landing until it
+/// docks or turns back.
+#[derive(Component, Clone, Debug, Default)]
+pub struct Ripples(pub Vec<Entity>);
+
+/// tg `ripple_area(S1)`: the tiles of `dock` the shuttle's own tiles will land on.
+pub fn ripple_area(world: &World, port: Entity, dock: Entity) -> Vec<TilePos> {
+    let (Some(mobile), Some(&port_pos), Some(target), Some(&dock_pos)) = (
+        world.get::<MobileDock>(port),
+        world.get::<TilePos>(port),
+        world.get::<StationaryDock>(dock),
+        world.get::<TilePos>(dock),
+    ) else {
+        return Vec::new();
+    };
+    let old = ordered_turfs(port_pos, mobile.dir, mobile.size);
+    let new = ordered_turfs(dock_pos, target.dir, mobile.size);
+    let areas = world.resource::<Areas>();
+    old.iter()
+        .zip(new)
+        .filter(|(o, _)| {
+            areas
+                .area_at(**o)
+                .and_then(|a| area_path(world, a))
+                .is_some_and(|p| is_under(p, SHUTTLE_AREA) && !is_under(p, TRANSIT_AREA))
+        })
+        .map(|(_, n)| n)
+        .collect()
+}
+
+/// tg `create_ripples(S1)`: a ripple on every landing tile in bounds.
+// shortcut: the ripple shows at once (tg fades it in over the time left and stops its icon's
+// animation after 0.8 s); fine until clients animate alpha.
+pub fn create_ripples(world: &mut World, port: Entity, dock: Entity) {
+    let tiles = ripple_area(world, port, dock);
+    let mut ripples = Vec::with_capacity(tiles.len());
+    for pos in tiles {
+        if !world.resource::<SpatialIndex>().in_bounds(pos) {
+            continue;
+        }
+        let Some(e) = crate::construction::spawn_obj(world, RIPPLE, pos) else {
+            continue;
+        };
+        let mut entity = world.entity_mut(e);
+        entity.insert(Ripple);
+        if let Some(mut look) = entity.get_mut::<ss13_shared::Appearance>() {
+            look.color = None;
+        }
+        ripples.push(e);
+    }
+    if let Ok(mut entity) = world.get_entity_mut(port) {
+        entity.insert(Ripples(ripples));
+    }
+}
+
+/// tg `remove_ripples`.
+pub fn remove_ripples(world: &mut World, port: Entity) {
+    let Some(Ripples(ripples)) = world
+        .get_entity_mut(port)
+        .ok()
+        .and_then(|mut e| e.take::<Ripples>())
+    else {
+        return;
+    };
+    for ripple in ripples {
+        if let Ok(e) = world.get_entity_mut(ripple) {
+            e.despawn();
+        }
+    }
+}
+
+/// The ripple part of tg `check_effects`: `left` seconds before landing on `dock`, once.
+pub fn check_ripples(world: &mut World, port: Entity, dock: Entity, left: f64) {
+    if left > RIPPLE_SECS || world.get::<Ripples>(port).is_some() {
+        return;
+    }
+    create_ripples(world, port, dock);
+}
+
+fn move_shuttle(world: &mut World, port: Entity, dock: Entity) -> Result<MoveReport, DockingError> {
     let start = Instant::now();
     let (Some(mobile), Some(&port_pos)) = (
         world.get::<MobileDock>(port).cloned(),
@@ -1344,9 +1640,11 @@ pub fn initiate_docking(
     })
 }
 
-/// Not touched by a landing shuttle: turfs, docking ports, atmos visuals.
+/// Not touched by a landing shuttle: its ripples (removed after), turfs, docking ports, atmos
+/// visuals.
 fn stays(world: &World, e: Entity) -> bool {
-    world.get::<Turf>(e).is_some()
+    world.get::<Ripple>(e).is_some()
+        || world.get::<Turf>(e).is_some()
         || world.get::<DmDockingPort>(e).is_some()
         || world.get::<StationaryDock>(e).is_some()
         || world.get::<GasOverlay>(e).is_some()
@@ -1486,6 +1784,10 @@ pub fn recall_shuttle(world: &mut World, origin: Option<String>) -> bool {
         return false;
     }
     shuttle.state.last_call_area = traced.clone();
+    let port = shuttle.port;
+    // tg's emergency `cancel` skips the parent's `remove_ripples`; a recalled shuttle's ripples
+    // would stay at the station for good.
+    remove_ripples(world, port);
     let traced = if traced.is_some() {
         " Сигнал отзыва шаттла отслежен. Результаты можно просмотреть на любой консоли коммуникаций."
     } else {
@@ -1521,6 +1823,26 @@ fn tick(world: &mut World) {
     let now = world.resource::<Time>().elapsed_secs_f64();
     let config = world.resource::<ShuttleConfig>().clone();
     check_auto_evac(world, &config, now);
+    if matches!(
+        world.resource::<EmergencyShuttle>().state.mode,
+        ShuttleMode::Igniting | ShuttleMode::Stranded
+    ) {
+        check_hostile_environment(world);
+    }
+    // The emergency shuttle's own ripple check: on the way to the station or to CentCom.
+    let shuttle = world.resource::<EmergencyShuttle>();
+    let landing = match shuttle.state.mode {
+        ShuttleMode::Call => shuttle.home,
+        ShuttleMode::Escape => Some(shuttle.away),
+        _ => None,
+    };
+    if let (Some(dock), Some(left)) = (landing, shuttle.state.timer.left(now)) {
+        let port = shuttle.port;
+        check_ripples(world, port, dock, left);
+    }
+    if world.resource::<EmergencyShuttle>().state.mode == ShuttleMode::Escape {
+        crate::shuttle_events::process(world, now);
+    }
     let step = world.resource_mut::<EmergencyShuttle>().state.check(now);
     emergency_sounds(world, now);
     let Some(step) = step else {
@@ -1563,6 +1885,7 @@ fn tick(world: &mut World) {
             hyperspace_sound(world, port, Hyperspace::Launch);
             let result = initiate_docking(world, port, transit);
             log_move(world, "enter transit", Some(result));
+            crate::shuttle_events::start_up(world, now, config.escape_secs);
             let mut shuttle = world.resource_mut::<EmergencyShuttle>();
             shuttle.state.launched(now, config.escape_secs);
             let minutes = minutes_left(&shuttle.state, now);
@@ -1910,6 +2233,37 @@ mod tests {
         assert!(!e.can_recall(1000.0, 600.0, SecLevel::Blue));
         assert!(e.can_recall(1000.0, 600.0, SecLevel::Red));
         assert!(!e.can_recall(1100.0, 600.0, SecLevel::Gamma));
+    }
+
+    #[test]
+    fn block_recall_holds_the_longest_lockout() {
+        let mut e = Emergency::default();
+        e.request(0.0, 600.0, 1.0);
+        e.block_recall(0.0, 100.0);
+        e.block_recall(10.0, 30.0);
+        assert!(!e.can_recall(50.0, 300.0, SecLevel::Blue));
+        assert!(e.can_recall(100.0, 300.0, SecLevel::Blue));
+    }
+
+    #[test]
+    fn hostile_environment_strands_only_an_igniting_shuttle() {
+        let mut e = Emergency::default();
+        e.request(0.0, 10.0, 1.0);
+        assert_eq!(e.hostile_check(1.0, true, 180.0), None, "called: untouched");
+        e.docked_home(10.0, true, 180.0);
+        assert_eq!(
+            e.hostile_check(11.0, true, 180.0),
+            None,
+            "docked: untouched"
+        );
+        assert_eq!(e.check(180.0), None);
+        assert_eq!(e.mode, ShuttleMode::Igniting);
+        assert_eq!(e.hostile_check(181.0, true, 180.0), Some(true));
+        assert_eq!(e.mode, ShuttleMode::Stranded);
+        assert_eq!(e.check(1000.0), None, "no timer while stranded");
+        assert_eq!(e.hostile_check(1000.0, false, 180.0), Some(false));
+        assert_eq!(e.mode, ShuttleMode::Docked);
+        assert_eq!(e.timer.left(1000.0), Some(180.0));
     }
 
     #[test]

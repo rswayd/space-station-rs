@@ -244,6 +244,8 @@ pub enum SupplyMode {
     Idle,
     Igniting,
     Call,
+    /// Held by a trade blockade (tg `SHUTTLE_STRANDED`).
+    Stranded,
 }
 
 /// Where the supply shuttle is docked.
@@ -273,6 +275,8 @@ pub struct SupplyShuttle {
     /// The docks' names (tg `getStatusText` shows the docked port's `name`).
     pub home_name: String,
     pub away_name: String,
+    /// tg `SSshuttle.supply_blocked`: a trade blockade is registered.
+    pub blocked: bool,
     rng: Rng,
 }
 
@@ -470,6 +474,7 @@ fn setup_supply(world: &mut World) {
         location: SupplyLocation::CentCom,
         home_name,
         away_name: "CentCom".into(),
+        blocked: false,
         rng: Rng::new(seed ^ 0x7375_7070),
     });
 }
@@ -527,6 +532,16 @@ fn tick(world: &mut World) {
     let Some(shuttle) = world.get_resource::<SupplyShuttle>() else {
         return;
     };
+    // `check_effects`: ripples where it is about to land.
+    if shuttle.mode == SupplyMode::Call
+        && let (Some(dock), Some(left)) = (shuttle.destination(), shuttle.timer.left(now))
+    {
+        let port = shuttle.port;
+        crate::shuttle::check_ripples(world, port, dock, left);
+    }
+    let Some(shuttle) = world.get_resource::<SupplyShuttle>() else {
+        return;
+    };
     if shuttle.mode == SupplyMode::Idle || shuttle.timer.left(now).is_none_or(|l| l > 0.0) {
         return;
     }
@@ -581,7 +596,26 @@ fn tick(world: &mut World) {
                 sell(world);
             }
         }
-        SupplyMode::Idle => {}
+        SupplyMode::Idle | SupplyMode::Stranded => {}
+    }
+}
+
+/// tg `SSshuttle.checkTradeBlockade`: an igniting supply shuttle is stranded while a blockade
+/// is registered and docked again once none is.
+pub fn check_trade_blockade(world: &mut World) {
+    crate::shuttle::prune_blocks(world);
+    let blocked = crate::shuttle::supply_blocked(world);
+    let Some(mut shuttle) = world.get_resource_mut::<SupplyShuttle>() else {
+        return;
+    };
+    shuttle.blocked = blocked;
+    if blocked && shuttle.mode == SupplyMode::Igniting {
+        shuttle.mode = SupplyMode::Stranded;
+        shuttle.timer.clear();
+    }
+    // tg sets `SHUTTLE_DOCKED`, which no request leaves; docked and idle are one mode here.
+    if !blocked && shuttle.mode == SupplyMode::Stranded {
+        shuttle.mode = SupplyMode::Idle;
     }
 }
 

@@ -631,6 +631,8 @@ pub mod shuttle_console_server;
 #[cfg(feature = "server")]
 pub mod shuttle_docker;
 #[cfg(feature = "server")]
+pub mod shuttle_events;
+#[cfg(feature = "server")]
 pub mod shuttle_nav;
 #[cfg(feature = "server")]
 pub mod shuttle_remote;

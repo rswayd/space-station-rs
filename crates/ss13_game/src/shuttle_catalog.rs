@@ -8,6 +8,9 @@
 //!   shuttle is not. The bought one loads then (tg `action_load`) onto its own level, ready at
 //!   its CentCom stand-in dock, and comes up initialized like the station
 //!   (`ss13_mapload::load_template`, `ss13_world::run_map_init`).
+//! - The Build Your Own Shuttle kits (`construction`, `constructionbig`, captain or chief
+//!   engineer) dock at the station as soon as they are bought (`shuttle_build/postregister`);
+//!   the call then finds them already docked.
 //! - Buying ([`can_buy_shuttles`], [`purchase`]): a non-silicon login whose access is in a
 //!   shuttle's `who_can_purchase` (the captain), the emergency shuttle idle or recalling, nothing
 //!   bought yet this round, and the cargo budget holding the price. The bought shuttle becomes
@@ -52,9 +55,12 @@ pub struct CatalogEntry {
 }
 
 const CAPTAIN: &[&str] = &["captain"];
+const CAPTAIN_CE: &[&str] = &["captain", "ce"];
+/// `/obj/docking_port/mobile/emergency/shuttle_build`: a BYOS kit's port.
+const SHUTTLE_BUILD: &str = "/obj/docking_port/mobile/emergency/shuttle_build";
 
 /// The shuttles offered (see the module's shortcut).
-pub const CATALOG: [CatalogEntry; 9] = [
+pub const CATALOG: [CatalogEntry; 11] = [
     CatalogEntry {
         id: "birdboat",
         name: "Birdboat Station Emergency Shuttle",
@@ -137,6 +143,27 @@ pub const CATALOG: [CatalogEntry; 9] = [
         credit_cost: CARGO_CRATE_VALUE * 15,
         occupancy_limit: "75",
         who_can_purchase: CAPTAIN,
+    },
+    CatalogEntry {
+        id: "construction",
+        name: "Build your own shuttle kit",
+        description: "For the enterprising shuttle engineer! The chassis will dock upon \
+                      purchase, but launch will have to be authorized as usual via shuttle call. \
+                      Comes stocked with construction materials.",
+        credit_cost: CARGO_CRATE_VALUE * 5,
+        occupancy_limit: "Flexible",
+        who_can_purchase: CAPTAIN_CE,
+    },
+    CatalogEntry {
+        id: "constructionbig",
+        name: "Build your own CRUISER kit",
+        description: "This is the big brother of the construction kit, with more space for your \
+                      shuttle-building ideas! The chassis will dock upon purchase, but launch \
+                      will have to be authorized as usual via shuttle call. Comes stocked with \
+                      construction materials.",
+        credit_cost: CARGO_CRATE_VALUE * 30,
+        occupancy_limit: "Flexible and more",
+        who_can_purchase: CAPTAIN_CE,
     },
 ];
 
@@ -237,6 +264,16 @@ pub fn replace_emergency(world: &mut World, id: &str, path: &Path) -> bool {
     emergency.centcom_z = shuttle.level_z;
     emergency.transit_z = shuttle.transit_z;
     emergency.sound_played = false;
+    let home = emergency.home;
+    // `/obj/docking_port/mobile/emergency/shuttle_build/postregister`: a BYOS kit docks at the
+    // station at once, to be built on until the shuttle is called.
+    let byos = world
+        .get::<ss13_mapload::DmDockingPort>(shuttle.port)
+        .is_some_and(|d| crate::obj_damage::is_under(&d.path, SHUTTLE_BUILD));
+    if byos && let Some(home) = home {
+        let moved = crate::shuttle::initiate_docking(world, shuttle.port, home);
+        info!("BYOS kit docked at the station: {moved:?}");
+    }
     true
 }
 

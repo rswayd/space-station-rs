@@ -57,6 +57,8 @@ const SAFETY_WARNING: &str = "For safety and ethical reasons, the automated supp
      transport live organisms, human remains, classified nuclear weaponry, mail, undelivered \
      departmental order crates, syndicate bombs, homing beacons, unstable eigenstates, fax \
      machines, or machinery housing any form of artificial intelligence.";
+/// The console's `blockade_warning`.
+const BLOCKADE_WARNING: &str = "Bluespace instability detected. Shuttle movement impossible.";
 /// Tiles a machine's `say` reaches (`world.view`).
 const SAY_RANGE: u32 = 7;
 /// The request console's `message_cooldown` between supply channel announcements.
@@ -418,10 +420,14 @@ pub fn console_data(
         can_send: console.can_send,
         can_approve_requests: console.can_approve_requests,
         requestonly: console.request_only,
-        message: orders
-            .map(|o| o.centcom_message.clone())
-            .filter(|m| !m.is_empty())
-            .unwrap_or_else(|| DEFAULT_MESSAGE.into()),
+        message: if shuttle.is_some_and(|s| s.blocked) {
+            BLOCKADE_WARNING.into()
+        } else {
+            orders
+                .map(|o| o.centcom_message.clone())
+                .filter(|m| !m.is_empty())
+                .unwrap_or_else(|| DEFAULT_MESSAGE.into())
+        },
         ..default()
     };
     let (Some(orders), Some(packs)) = (orders, packs) else {
@@ -808,6 +814,10 @@ fn send(world: &mut World, console: Entity) {
     };
     if !can_move(world, shuttle) {
         machine_say(world, console, SAFETY_WARNING);
+        return;
+    }
+    if shuttle.blocked {
+        machine_say(world, console, BLOCKADE_WARNING);
         return;
     }
     let at_station = shuttle.at_station();

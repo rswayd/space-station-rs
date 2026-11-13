@@ -77,6 +77,11 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `shuttle::create_ripples`: hyperspace ripples on a shuttle's landing tiles.
+    "/obj/effect/abstract/ripple",
+    // `vehicles`: the dragon boat and the bottle it goes into.
+    "/obj/vehicle/ridden/lavaboat/dragon",
+    "/obj/item/ship_in_a_bottle",
     // `bows::arrow_drop`: the reusable arrows a shot leaves.
     "/obj/item/ammo_casing/arrow",
     "/obj/item/ammo_casing/arrow/sticky",

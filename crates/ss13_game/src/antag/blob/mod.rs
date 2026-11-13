@@ -33,8 +33,7 @@
 //!   win (`check_station_floor`).
 // shortcut: no telepathy (the
 // overmind's speech is heard by ghosts only), no "Place Blob Core" HUD before the button, the
-// spore rally only says so, no status displays' biohazard alert, no hostile environment for the
-// shuttle, no news report, the victory takes everyone at once (no 10 s alarm, no area recolour),
+// spore rally only says so, no status displays' biohazard alert, no news report, the victory takes everyone at once (no 10 s alarm, no area recolour),
 // the core placement checks a 13-tile line of sight instead of `view`, no
 // `main_floor` in the map configs here (every station level counts as the main floor), the
 // overmind's info panel is the generic one.
@@ -586,6 +585,8 @@ pub fn spawn_overmind(world: &mut World, pos: TilePos, points: f32) -> Entity {
         "{overmind} is a blob overmind ({}) at {pos:?}",
         strain.def().name
     );
+    // Cleared once the overmind is despawned (the `QDELETED` sweep).
+    crate::shuttle::register_hostile_environment(world, crate::shuttle::Blocker::Entity(overmind));
     overmind
 }
 
@@ -2100,6 +2101,7 @@ pub fn kill_overmind(world: &mut World, overmind: Entity) {
         g.body = None;
     }
     world.despawn(overmind);
+    crate::shuttle::clear_hostile_environment(world, crate::shuttle::Blocker::Entity(overmind));
     let minions: Vec<Entity> = world
         .query::<(Entity, &minions::BlobMinion)>()
         .iter(world)

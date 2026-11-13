@@ -14,7 +14,7 @@
 //! - At zero: the nuke alarm for everyone, 10 s later (tg's cinematic) every living non-silicon
 //!   mob on the station levels is dusted, the world is told, the station counts as nuked and the
 //!   round ends.
-// shortcut: no cinematic, ghost notification, shuttle lockdown (`registerHostileEnvironment`),
+// shortcut: no cinematic, ghost notification,
 // red circuit floors (`add_nuke_threat`), cyborg doom lamps, pinpointer tracking or countdown
 // maptext; mobs inside closets or other containers (no tile) are not dusted.
 
@@ -328,6 +328,7 @@ fn arm(world: &mut World, ai: Entity) {
         next_announce: t + ANNOUNCE_INTERVAL_SECS,
         doom_at: None,
     });
+    crate::shuttle::register_hostile_environment(world, crate::shuttle::Blocker::Entity(ai));
     if let Some(index) = super::malf_modules::MODULES
         .iter()
         .position(|m| m.power == super::malf_modules::Power::Doomsday)
@@ -343,6 +344,7 @@ pub fn shut_off(world: &mut World, ai: Entity) {
     };
     e.remove::<DoomsdaySetup>();
     if e.take::<Doomsday>().is_some() {
+        crate::shuttle::clear_hostile_environment(world, crate::shuttle::Blocker::Entity(ai));
         crate::security_level::set_level(world, SecLevel::Red, true);
         info!("{ai}'s doomsday device shut off");
     }

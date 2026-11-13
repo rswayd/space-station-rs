@@ -41,6 +41,8 @@ const TYPES: &str = r##"{
         "name": "key", "icon": { "resource": "v.dmi" }, "icon_state": "key" } },
     "/obj/item/key/security": { "parent": "/obj/item/key", "declared_vars": {
         "icon_state": "keysec" } },
+    "/obj/item/oar": { "parent": "/obj/item", "declared_vars": {
+        "name": "oar", "icon": { "resource": "v.dmi" }, "icon_state": "oar" } },
     "/obj/item/card": { "parent": "/obj/item" },
     "/obj/item/card/id": { "parent": "/obj/item/card", "declared_vars": {
         "access": { "list": [] }, "slot_flags": 256 } },
@@ -58,6 +60,8 @@ const TYPES: &str = r##"{
     "/obj/vehicle/ridden": { "parent": "/obj/vehicle" },
     "/obj/vehicle/ridden/secway": { "parent": "/obj/vehicle/ridden", "declared_vars": {
         "name": "secway", "icon_state": "secway", "max_integrity": 60 } },
+    "/obj/vehicle/ridden/lavaboat": { "parent": "/obj/vehicle/ridden", "declared_vars": {
+        "name": "lava boat", "icon_state": "goliath_boat", "density": 0 } },
     "/obj/vehicle/ridden/scooter": { "parent": "/obj/vehicle/ridden", "declared_vars": {
         "name": "scooter", "icon_state": "scooter" } },
     "/obj/vehicle/ridden/scooter/skateboard": { "parent": "/obj/vehicle/ridden/scooter",
@@ -70,6 +74,7 @@ const TYPES: &str = r##"{
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
+    "/turf/open/water": { "parent": "/turf/open", "declared_vars": { "icon_state": "water" } },
     "/turf/open/space": { "parent": "/turf/open" },
     "/turf/open/space/basic": { "parent": "/turf/open/space" },
     "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
@@ -97,10 +102,30 @@ wwwwwwwww
 "}
 "##;
 
+/// A lavaboat `L` (3,2) on water `~` next to the spawn; the floor north of the water.
+const BOAT_MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"~" = (/turf/open/water,/area/station)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station)
+"L" = (/obj/vehicle/ridden/lavaboat,/turf/open/water,/area/station)
+
+(1,1,1) = {"
+wwwwww
+wfff~w
+wsL~~w
+wwwwww
+"}
+"##;
+
+const BOAT: TilePos = TilePos::new(3, 2, 1);
+
 const SECWAY: TilePos = TilePos::new(3, 2, 1);
 const BOARD: TilePos = TilePos::new(8, 3, 1);
 
-const STATES: [(&str, &str); 10] = [
+const STATES: [(&str, &str); 13] = [
+    ("t.dmi", "water"),
+    ("v.dmi", "oar"),
+    ("v.dmi", "goliath_boat"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -118,6 +143,9 @@ fn fixture_assets() -> PathBuf {
     let used = [
         "/obj/effect/landmark/start/assistant",
         "/obj/item/key/security",
+        "/obj/item/oar",
+        "/obj/vehicle/ridden/lavaboat",
+        "/turf/open/water",
         "/obj/vehicle/ridden/secway",
         "/obj/vehicle/ridden/scooter/skateboard",
         "/turf/open/floor",
@@ -126,7 +154,13 @@ fn fixture_assets() -> PathBuf {
         "/area/space",
         "/area/station",
     ];
-    write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", MAP)])
+    write_fixture(
+        &dir,
+        TYPES,
+        &used,
+        &STATES,
+        &[("map.dmm", MAP), ("boat.dmm", BOAT_MAP)],
+    )
 }
 
 struct Station(testing::Station);
@@ -135,8 +169,12 @@ ss13_game::drive_station!(Station, 0);
 
 impl Station {
     fn start() -> Self {
+        Self::start_on("map.dmm")
+    }
+
+    fn start_on(map: &str) -> Self {
         let assets = fixture_assets();
-        let mut s = testing::Station::start(fixture_map(&assets, &["map.dmm"]), |_| {});
+        let mut s = testing::Station::start(fixture_map(&assets, &[map]), |_| {});
         s.join_all(1, |_| {});
         Self(s)
     }
@@ -312,4 +350,39 @@ fn secway_key_drive_dismount_and_skateboard_crashes() {
     s.run_until("no longer a skater", |s| {
         s.try_get::<Rider>(mob).is_none() && s.get::<Vehicle>(board).rider.is_none()
     });
+}
+
+/// tg `lavaboat.dm`: the oar attaches as its key; it goes over water (or lava) and off it onto
+/// the shore once, never from land to land.
+#[test]
+fn lavaboat_needs_an_oar_and_water() {
+    let mut s = Station::start_on("boat.dmm");
+    let mob = s.mob();
+    let boat = s.obj(BOAT, "/obj/vehicle/ridden/lavaboat").unwrap();
+    s.drag(mob, boat);
+    s.run_until("in the boat", |s| s.buckled() && s.pos() == BOAT);
+
+    s.try_step(0, Dir::East);
+    s.hold(1.0, "no oar, no rowing", |s| s.pos_of(boat) == BOAT);
+
+    let oar =
+        ss13_game::construction::spawn_obj(s.server.world_mut(), "/obj/item/oar", BOAT).unwrap();
+    s.give(oar);
+    s.click(0, boat);
+    s.run_until("the oar is attached", |s| {
+        s.get::<Vehicle>(boat).key == Some(oar)
+    });
+
+    let water = BOAT.step(Dir::East);
+    s.step_until("rowed east over water", Dir::East, |s| {
+        s.pos_of(boat) == water
+    });
+    let shore = water.step(Dir::North);
+    s.step_until("beached on the shore", Dir::North, |s| {
+        s.pos_of(boat) == shore
+    });
+    s.run_until("the rower came along", |s| s.pos() == shore);
+    s.try_step(0, Dir::West);
+    s.hold(1.0, "no rowing over land", |s| s.pos_of(boat) == shore);
+    assert!(s.buckled());
 }

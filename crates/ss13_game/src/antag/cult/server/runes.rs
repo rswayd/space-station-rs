@@ -852,7 +852,16 @@ pub(super) fn tick_ending(world: &mut World) {
             );
             Ending::DestroyStation { at: t + 5.0 }
         }
-        Ending::DestroyStation { at } if t >= at => Ending::Apocalypse { at: t + 60.0 },
+        Ending::DestroyStation { at } if t >= at => {
+            // `narsie_start_destroy_station`: the shuttle stays until Nar'Sie is gone.
+            if let Some(narsie) = world.resource::<CultTeam>().narsie {
+                crate::shuttle::register_hostile_environment(
+                    world,
+                    crate::shuttle::Blocker::Entity(narsie),
+                );
+            }
+            Ending::Apocalypse { at: t + 60.0 }
+        }
         Ending::Apocalypse { at } if t >= at => {
             crate::shuttle::priority_announce(
                 world,
