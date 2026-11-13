@@ -933,13 +933,13 @@ impl Reactor {
 
     /// `inject_from_side_components`.
     fn inject_from_side_components(&mut self, seconds: f64, ports: &mut Ports<'_>) {
-        if self.start_moderator && ports.moderator.total_moles() > 0.0 {
-            if let Some(gas) = ports
+        if self.start_moderator
+            && ports.moderator.total_moles() > 0.0
+            && let Some(gas) = ports
                 .moderator
                 .remove(self.moderator_injection_rate * seconds)
-            {
-                self.moderator.merge(&gas);
-            }
+        {
+            self.moderator.merge(&gas);
         }
         let Some(fuel) = self.fuel() else { return };
         // `check_gas_requirements`: every fuel gas is in the port.
@@ -1044,10 +1044,8 @@ impl Reactor {
         // A preposterous mass gets bad very fast, past the cap.
         if moles >= HYPERCRITICAL_MOLES {
             let over = moles - HYPERCRITICAL_MOLES;
-            let damage = (over * HYPERCRITICAL_SCALE)
-                .max(0.0)
-                .min(HYPERCRITICAL_MAX_DAMAGE)
-                * seconds;
+            let damage =
+                (over * HYPERCRITICAL_SCALE).clamp(0.0, HYPERCRITICAL_MAX_DAMAGE) * seconds;
             ctp = (ctp + damage).max(0.0);
             self.warning_damage_flags |= warning::HIGH_FUEL_MIX_MOLE;
         }

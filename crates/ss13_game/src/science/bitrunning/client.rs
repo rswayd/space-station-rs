@@ -304,19 +304,6 @@ fn avatar_display(data: &QuantumConsoleData) -> impl Scene + use<> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn colors_and_amounts() {
-        assert_eq!(difficulty_color(0), UiColor::Green);
-        assert_eq!(difficulty_color(3), UiColor::Bad);
-        assert_eq!(amount_text("0"), "Никакие");
-        assert_eq!(amount_text(REDACTED), REDACTED);
-    }
-}
-
 /// `DEFAULT_HELP`.
 const DEFAULT_HELP: &str = "Информация отсутствует! Обратитесь за помощью при нужде.";
 
@@ -433,5 +420,18 @@ fn box_help(index: usize) -> impl Scene + use<> {
                 Children [ Text(text) ]
             ]
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colors_and_amounts() {
+        assert_eq!(difficulty_color(0), UiColor::Green);
+        assert_eq!(difficulty_color(3), UiColor::Bad);
+        assert_eq!(amount_text("0"), "Никакие");
+        assert_eq!(amount_text(REDACTED), REDACTED);
     }
 }

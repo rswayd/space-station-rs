@@ -272,7 +272,7 @@ mod client_side {
                 (UiColor::Average, 50.0, 90.0),
                 (UiColor::Bad, 0.0, 50.0),
             ];
-            let (integrity, min, max) = (data.integrity, 0.0, 100.0);
+            let (integrity, min, max) = (data.integrity, 0.0_f32, 100.0_f32);
             let parameters = vec![
                 labeled(
                     "Содержание железа",

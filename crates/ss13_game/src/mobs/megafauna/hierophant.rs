@@ -432,7 +432,7 @@ pub(super) fn celebrate_kill(world: &mut World, mob: Entity, victim: Entity) {
 }
 
 /// `GiveTarget` of a new target: a phrase, and the arena when it sits at home.
-pub(super) fn on_new_target(world: &mut World, mob: Entity, target: Entity, now: f64) {
+pub(super) fn on_new_target(world: &mut World, mob: Entity, _target: Entity, now: f64) {
     if let Some(mut m) = state_mut(world, mob) {
         m.hierophant.home_at = None;
     }

@@ -292,12 +292,7 @@ fn assemble(world: &mut World, core_box: Entity) -> bool {
     };
     let mut parts: Vec<(Entity, &'static str, u8, TilePos)> = Vec::new();
     for (direction, tile) in around(pos) {
-        let boxes: Vec<Entity> = world
-            .resource::<SpatialIndex>()
-            .on_tile(tile)
-            .iter()
-            .copied()
-            .collect();
+        let boxes: Vec<Entity> = world.resource::<SpatialIndex>().on_tile(tile).to_vec();
         for b in boxes {
             let Some(Some(part)) = path_of(world, b).and_then(|p| box_part(&p)) else {
                 continue;

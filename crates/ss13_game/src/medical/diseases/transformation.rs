@@ -135,10 +135,8 @@ pub(super) fn act(
         3 | 4 if spt_prob(rng, stage_prob * 2.0, secs) => {
             tell_line(world, mob, stage_lines(kind, stage), rng);
         }
-        5 => {
-            if transform(world, mob, kind, rng) {
-                return Outcome::Gone;
-            }
+        5 if transform(world, mob, kind, rng) => {
+            return Outcome::Gone;
         }
         _ => {}
     }

@@ -327,7 +327,8 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 392] = [
+    pub const GAME_CODE: [&str; 396] = [
+        "sound/machines/terminal/terminal_success.ogg",
         "sound/items/tools/welderdeactivate.ogg",
         "sound/machines/wewewew.ogg",
         "sound/music/antag/spy.ogg",

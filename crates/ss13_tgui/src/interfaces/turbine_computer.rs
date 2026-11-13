@@ -88,7 +88,7 @@ mod client_side {
                     (UiColor::Average, 40.0, 59.0),
                     (UiColor::Bad, 0.0, 39.0),
                 ];
-                let (integrity, min, max) = (data.integrity, 0.0, 100.0);
+                let (integrity, min, max) = (data.integrity, 0.0_f32, 100.0_f32);
                 let speed = format!("{} RPM", data.rpm);
                 let max_speed = format!("{} RPM", data.max_rpm);
                 let temp = format!("{} K", data.temp);

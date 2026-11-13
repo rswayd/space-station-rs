@@ -568,7 +568,16 @@ mod tests {
                     name: "bread slice".into(),
                     desc: String::new(),
                 },
-                Appearance::default(),
+                ss13_shared::Appearance {
+                    icon_state: ss13_shared::IconStateId(0),
+                    layer: ss13_shared::Layer(3.0),
+                    plane: -6,
+                    color: None,
+                    pixel_offset: [0, 0],
+                    rotation: 0,
+                    mouse_opacity: Default::default(),
+                    overlays: Vec::new(),
+                },
             ))
             .id();
         let tomato = world
@@ -589,7 +598,18 @@ mod tests {
             world.get::<crate::storage::StoredIn>(tomato).map(|s| s.0),
             Some(holder)
         );
-        let slice = world.spawn(Appearance::default()).id();
+        let slice = world
+            .spawn(ss13_shared::Appearance {
+                icon_state: ss13_shared::IconStateId(0),
+                layer: ss13_shared::Layer(3.0),
+                plane: -6,
+                color: None,
+                pixel_offset: [0, 0],
+                rotation: 0,
+                mouse_opacity: Default::default(),
+                overlays: Vec::new(),
+            })
+            .id();
         on_processed(&mut world, holder, &[slice]);
         let carried = world.get::<CustomFood>(slice).unwrap();
         assert_eq!(carried.names, ["tomato"]);

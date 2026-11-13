@@ -29,7 +29,6 @@ use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 use ss13_tgui::server::{UiActed, UiSystems};
 
-use super::BasicMob;
 use super::ai::AiController;
 use crate::actions::{ActionButton, ActionButtons, ActionButtonsUi, set_buttons};
 use crate::click::ClickResolved;
@@ -573,15 +572,20 @@ mod tests {
     fn grapes_also_eat_vegetables() {
         let mut world = World::new();
         let mob = world.spawn_empty().id();
-        let mut def = ss13_mapload::mobs::MobDef::default();
-        def.path = GRAPES.to_owned();
+        let def = ss13_mapload::mobs::MobDef {
+            path: GRAPES.to_owned(),
+            ..Default::default()
+        };
         attach(&mut world, mob, &def);
         let o = world.get::<Ooze>(mob).unwrap();
         assert_eq!(o.edible, foodtype::MEAT | foodtype::VEGETABLES);
         assert!(!o.gelatinous);
         assert_eq!(o.nutrition, START_NUTRITION);
         let cube = world.spawn_empty().id();
-        def.path = GELATINOUS.to_owned();
+        let def = ss13_mapload::mobs::MobDef {
+            path: GELATINOUS.to_owned(),
+            ..Default::default()
+        };
         attach(&mut world, cube, &def);
         let o = world.get::<Ooze>(cube).unwrap();
         assert!(o.gelatinous);
