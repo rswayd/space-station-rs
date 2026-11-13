@@ -234,6 +234,8 @@ pub mod bump;
 pub mod cannons;
 pub mod cargo;
 #[cfg(feature = "server")]
+pub mod cars;
+#[cfg(feature = "server")]
 pub mod chem;
 #[cfg(feature = "server")]
 pub mod chem_dispenser;
@@ -649,6 +651,8 @@ pub mod shuttle_events;
 pub mod shuttle_nav;
 #[cfg(feature = "server")]
 pub mod shuttle_remote;
+#[cfg(feature = "server")]
+pub mod shuttle_special;
 pub mod silicon;
 #[cfg(feature = "server")]
 pub mod skill_station;

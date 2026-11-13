@@ -898,6 +898,7 @@ type BodyItem<'a> = (
         Option<&'a crate::buffs::FoodBuff>,
         Option<&'a crate::clothing::slowdown::EquipmentSlowdown>,
         Option<&'a crate::science::xenobio::TurfSlowdown>,
+        Option<&'a crate::cars::CarOccupant>,
     ),
 );
 
@@ -928,6 +929,7 @@ fn body_state(
                 Changed<crate::buffs::FoodBuff>,
                 Changed<crate::clothing::slowdown::EquipmentSlowdown>,
                 Changed<crate::science::xenobio::TurfSlowdown>,
+                Changed<crate::cars::CarOccupant>,
             )>,
         )>,
     >,
@@ -969,6 +971,7 @@ fn body_state(
             food,
             worn,
             turf_slowdown,
+            car_seat,
         ),
     ) in &mut mobs
     {
@@ -1030,6 +1033,10 @@ fn body_state(
         if let Some(rider) = rider {
             delay = rider.move_delay;
         }
+        // A car driver at its car's (`crate::cars`).
+        if let Some(seat) = car_seat.filter(|s| s.driver()) {
+            delay = seat.move_delay;
+        }
         let floored = health.floored(*stat) || traits.floored || traits.resting;
         if floored != posture.lying() {
             if floored {
@@ -1049,10 +1056,12 @@ fn body_state(
                 posture.lying_angle = 0;
             }
         }
-        // tg `TRAIT_UNDENSE` while lying; a pilot is inside its mech.
-        if (posture.lying() || pilot.is_some()) && dense {
+        // tg `TRAIT_UNDENSE` while lying; a pilot is inside its mech, an occupant inside its
+        // car.
+        let inside = pilot.is_some() || car_seat.is_some();
+        if (posture.lying() || inside) && dense {
             commands.entity(mob).remove::<Density>();
-        } else if !posture.lying() && pilot.is_none() && !dense {
+        } else if !posture.lying() && !inside && !dense {
             commands.entity(mob).insert(Density);
         }
         if let Some(mut mover) = mover
@@ -1081,7 +1090,7 @@ fn body_state(
             // A driver's steps drive its vehicle (`crate::vehicles`).
             immobile: (!health.can_move(*stat) || traits.immobilized) && rider.is_none(),
             phasing: false,
-            relayed: pilot.is_some() || rider.is_some(),
+            relayed: pilot.is_some() || rider.is_some() || car_seat.is_some(),
             zone_selected: zone.copied().unwrap_or_default().0,
         });
         if let Some(player) = player {

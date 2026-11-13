@@ -252,6 +252,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::brig::sentence::examine_lines(world, target, &mut lines);
     crate::furniture::examine_lines(world, target, &mut lines);
     crate::vehicles::examine_lines(world, target, &mut lines);
+    crate::cars::examine_lines(world, target, &mut lines);
     crate::mecha::panel::examine_lines(world, target, &mut lines);
     crate::devices::examine_lines(world, target, &mut lines);
     crate::medical::surgery::examine_lines(world, target, &mut lines);

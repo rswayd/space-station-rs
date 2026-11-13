@@ -504,7 +504,9 @@ fn resolve_clicks(
         // shortcut: from inside a closet tg reaches only the closet itself (`CanReach` through
         // `loc`); here a mob inside clicks nothing but a machine with [`ControlsFromInside`].
         // A jaunter is inside its `phased_mob` holder: it reaches nothing (tg `CanReach`).
-        if (in_closet && !from_inside) || jaunters.contains(mob) {
+        // tg `check_click_intercept` comes before `CanReach`: a clown car's cannon (`crate::cars`)
+        // takes its driver's clicks from inside.
+        if (in_closet && !from_inside && !intercept) || jaunters.contains(mob) {
             continue;
         }
         if intercept && !modifiers.ctrl {

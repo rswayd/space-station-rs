@@ -1086,10 +1086,12 @@ fn door_bumps(
             Option<&crate::mecha::Mech>,
             Option<&crate::bots::Bot>,
             Option<&crate::vehicles::Vehicle>,
+            Option<&crate::cars::Car>,
         ),
         With<Mover>,
     >,
     pilots: Query<&Inventory>,
+    car_seats: Query<&crate::cars::CarOccupant>,
     cards: IdCards,
     // Electrified airlocks shock first (`crate::wires`).
     mut doors: Query<DoorItem, Without<Electrified>>,
@@ -1097,14 +1099,25 @@ fn door_bumps(
 ) {
     let now = time.elapsed_secs_f64();
     for bump in bumps.read() {
-        let Ok((&mover_pos, inventory, mech, bot, vehicle)) = movers.get(bump.entity) else {
+        let Ok((&mover_pos, inventory, mech, bot, vehicle, car)) = movers.get(bump.entity) else {
             continue;
         };
-        // A ridden vehicle opens with its driver's (`/datum/component/riding/vehicle_bump`).
-        let inventory = match (mech, vehicle) {
-            (Some(mech), _) => mech.occupant.and_then(|p| pilots.get(p).ok()),
-            (None, Some(vehicle)) => vehicle.rider.and_then(|p| pilots.get(p).ok()),
-            (None, None) => inventory,
+        // A ridden vehicle opens with its driver's (`/datum/component/riding/vehicle_bump`), a
+        // car with its first access provider's (`/obj/vehicle/sealed/Bump`).
+        // shortcut: tg tries every provider in turn; here only the first one with hands counts.
+        let inventory = match (mech, vehicle, car) {
+            (Some(mech), ..) => mech.occupant.and_then(|p| pilots.get(p).ok()),
+            (None, Some(vehicle), _) => vehicle.rider.and_then(|p| pilots.get(p).ok()),
+            (None, None, Some(car)) => car
+                .occupants
+                .iter()
+                .filter(|&&m| {
+                    car_seats
+                        .get(m)
+                        .is_ok_and(|s| s.flags & car.kind.access_flags() != 0)
+                })
+                .find_map(|&m| pilots.get(m).ok()),
+            (None, None, None) => inventory,
         };
         let obstacle = fillers.get(bump.obstacle).map_or(bump.obstacle, |f| f.0);
         let Ok((entity, mut door, mut appearance, pos, unpowered, wires)) = doors.get_mut(obstacle)

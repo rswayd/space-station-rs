@@ -12,7 +12,8 @@
 // shortcut: no rotation with a wrench (`simple_rotation`); the scanning module tier's bonus to
 // false beeps is fixed at tier 1 (the default parts; `RefreshParts`); no power draw per scan
 // (`use_energy`); the warrant lookup uses the mob's real name like the turret's (tg: face/ID
-// name); no `TRAIT_CONTRABAND_BLOCKER`, no luxury shuttle gate. Upgrade each with its mechanic.
+// name); no `TRAIT_CONTRABAND_BLOCKER`. Upgrade each with its mechanic. The luxury shuttle's
+// ticket field is `crate::shuttle_special`'s.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::ecs::system::SystemParamItem;

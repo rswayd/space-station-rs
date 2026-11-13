@@ -377,6 +377,8 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::bots::BotsServerPlugin)
         .add_plugins(crate::mecha::MechaServerPlugin)
         .add_plugins(crate::vehicles::VehiclesPlugin)
+        .add_plugins(crate::cars::CarsPlugin)
+        .add_plugins(crate::shuttle_special::ShuttleSpecialPlugin)
         .add_plugins(crate::modsuit::server::ModSuitPlugin)
         .add_plugins(crate::disposals::DisposalsServerPlugin)
         .add_plugins(crate::recycling::RecyclingServerPlugin)
@@ -1013,12 +1015,17 @@ pub(crate) fn forward_moves(
     mut ghostize: MessageWriter<Ghostize>,
     mut resists: MessageWriter<MoveResist>,
     mut relays: MessageWriter<crate::closets::ClosetRelayMove>,
-    (mut mech_steps, mut vehicle_steps): (
+    (mut mech_steps, mut vehicle_steps, mut car_steps): (
         MessageWriter<crate::mecha::core::MechRelayMove>,
         MessageWriter<crate::vehicles::VehicleRelayMove>,
+        MessageWriter<crate::cars::CarRelayMove>,
     ),
     mut jaunt_steps: MessageWriter<crate::spells::JauntStep>,
-    (mechs, vehicles): (Query<&crate::mecha::Mech>, Query<&crate::vehicles::Vehicle>),
+    (mechs, vehicles, cars): (
+        Query<&crate::mecha::Mech>,
+        Query<&crate::vehicles::Vehicle>,
+        Query<&crate::cars::Car>,
+    ),
     mut waiting: Local<EntityHashSet>,
     mut rng: ResMut<crate::combat::CombatRng>,
     // Weightless mobs step through `crate::spacemove`.
@@ -1064,7 +1071,7 @@ pub(crate) fn forward_moves(
             pilot,
             coma,
             (jaunting, incorporeal, observed),
-            rider,
+            (rider, car_seat),
         )) = mobs.get_mut(mob)
         else {
             return false;
@@ -1083,6 +1090,13 @@ pub(crate) fn forward_moves(
             && vehicles
                 .get(rider.vehicle)
                 .is_ok_and(|v| now < v.next_move())
+        {
+            return true;
+        }
+        // A car driver's steps wait for the car's move cooldown (`crate::cars`).
+        if let Some(seat) = car_seat
+            && seat.driver()
+            && cars.get(seat.car).is_ok_and(|c| now < c.next_move())
         {
             return true;
         }
@@ -1126,6 +1140,10 @@ pub(crate) fn forward_moves(
                 mech_steps.write(crate::mecha::core::MechRelayMove { pilot: mob, dir });
             }
             _ if pilot.is_some() => {}
+            // tg `relaymove` of the car the mob sits in (`crate::cars`).
+            _ if car_seat.is_some() => {
+                car_steps.write(crate::cars::CarRelayMove { mob, dir });
+            }
             // tg `relaymove` of the closet the mob is in (`crate::closets`).
             _ if closeted => {
                 relays.write(crate::closets::ClosetRelayMove { mob, dir });
@@ -1179,7 +1197,10 @@ type MoveItem<'a> = (
         Has<crate::antag::revenant::Incorporeal>,
         Has<crate::mobs::space_fauna::Observed>,
     ),
-    Option<&'a crate::vehicles::Rider>,
+    (
+        Option<&'a crate::vehicles::Rider>,
+        Option<&'a crate::cars::CarOccupant>,
+    ),
 );
 
 /// The mob's authoritative state to its client after a step was applied (moved or blocked) or

@@ -41,7 +41,7 @@
 // shortcut: no x pixel offsets of riders (only `pixel_z` through the elevation), no overlays
 // drawn above the rider (wheelchair wheels, ATV cover, speedbike cover: overlays have no layer
 // of their own here), no lavaboat or oar crafting recipes, no ship in a bottle shattering when
-// thrown, no wheelys/roller skates/ski shoes, golf carts or sealed cars,
+// thrown, no wheelys/roller skates/ski shoes or golf carts (sealed cars are `crate::cars`),
 // no skateboard grinding on tables, no hoverboard falling or holy slowdown, no turf whitelist,
 // no speed potion, no motorized wheelchair panel/parts/ramming/bomb, no wheelchair bells or
 // TTVs, no janicart upgrades, no secway banana, no welder repairs, smoke or explosions, no

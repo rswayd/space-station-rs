@@ -146,6 +146,25 @@ wwwwwww
 "}
 "##;
 
+/// BandaStation's Gamma armory shuttle stood in for by a shuttle lift with its id: at
+/// `gamma_away` (6,2,1), the station dock `gamma_home` on level 2.
+const GAMMA_MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
+"f" = (/turf/open/floor,/area/station)
+"E" = (/obj/docking_port/mobile/elevator{shuttle_id = "gamma"; width = 1; height = 1},/obj/docking_port/stationary{shuttle_id = "gamma_away"; width = 1; height = 1; name = "CentCom"},/turf/open/floor/plating,/area/shuttle)
+"U" = (/obj/docking_port/stationary{shuttle_id = "gamma_home"; width = 1; height = 1; name = "Gamma Home"},/turf/open/floor/plating,/area/station)
+
+(1,1,1) = {"
+wwwwwww
+wffffEw
+wwwwwww
+"}
+(1,1,2) = {"
+wwwwwww
+wffffUw
+wwwwwww
+"}
+"##;
+
 /// Level 1: the tram (two modules `T`, `C`) at the west platform; `C` holds the cabinet, the
 /// nav beacon and a crate; an anchored fluff `X` on the track, the east platform `E` (12,2).
 const TRAM_MAP: &str = r##""w" = (/turf/closed/wall,/area/station)
@@ -328,6 +347,24 @@ fn shuttle_lift_docks_at_once() {
     assert_eq!(world.get::<MobileDock>(port).unwrap().docked, Some(upper));
     assert_eq!(*world.get::<TilePos>(port).unwrap(), TilePos::new(6, 2, 2));
     assert_eq!(shuttle_nav::flight(world, port), shuttle_nav::Flight::Idle);
+}
+
+/// BandaStation's "Move Gamma Shuttle": from CentCom to the station's `gamma_home` and back.
+#[test]
+fn gamma_shuttle_moves_home_and_back() {
+    let mut app = testing::server_app(
+        fixture_map(&fixture("gamma", GAMMA_MAP), &["map.dmm"]),
+        |_| {},
+    );
+    app.update();
+    let world = app.world_mut();
+    let port = shuttle_nav::get_shuttle(world, "gamma").expect("the gamma shuttle registered");
+    let text = ss13_game::away_shuttles::move_gamma(world).expect("sent home");
+    assert_eq!(text, "К вам направлен оружейный шаттл «ГАММА».");
+    assert_eq!(*world.get::<TilePos>(port).unwrap(), TilePos::new(6, 2, 2));
+    let text = ss13_game::away_shuttles::move_gamma(world).expect("recalled");
+    assert_eq!(text, "Оружейный шаттл «ГАММА» был отозван.");
+    assert_eq!(*world.get::<TilePos>(port).unwrap(), TilePos::new(6, 2, 1));
 }
 
 #[test]
