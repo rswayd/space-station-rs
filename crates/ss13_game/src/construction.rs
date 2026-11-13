@@ -455,6 +455,9 @@ pub enum Job {
     Curse(crate::curses::CurseJob),
     /// Climbing into or out of a vent ([`crate::ventcrawl`]).
     Ventcrawl(crate::ventcrawl::VentJob),
+    /// Repairing, resetting, reactivating or cannibalizing a drone
+    /// ([`crate::silicon::drones`]).
+    Drone(crate::silicon::drones::DroneJob),
     /// A stack crafting menu's recipe ([`crate::stack_recipes`]).
     StackRecipe(crate::stack_recipes::StackJob),
     /// Cutting the hair off a hide ([`crate::sheets`]).
@@ -1616,6 +1619,7 @@ pub fn complete(world: &mut World, mob: Entity, action: &DoAfter) {
         &Job::Affliction(job) => crate::afflictions::complete(world, mob, action, job),
         &Job::Curse(job) => crate::curses::complete(world, mob, action, job),
         &Job::Ventcrawl(job) => crate::ventcrawl::complete(world, mob, action, job),
+        &Job::Drone(job) => crate::silicon::drones::complete(world, mob, action, job),
         &Job::StackRecipe(job) => crate::stack_recipes::complete(world, client, mob, job),
         &Job::Sheet(job) => crate::sheets::complete(world, client, mob, job),
         Job::WallSupport => crate::wall_support::complete(world, action),

@@ -34,6 +34,8 @@
 //! - [`mmi`] (server): brain processors (the MMI, positronic brains) and cyborgs built from an
 //!   endoskeleton around one.
 //! - [`pai`] (server): personal AIs, their cards, holochassis, software and door jack.
+//! - [`drones`] (server): maintenance drones, their shells, laws and drone chat;
+//!   [`drone_dispenser`] (server): the drone shell dispensers.
 // shortcut: a dead silicon stays where it died, inert, with the carbon deathgasp text; no
 // gibbing, debris or MMI ejection. EMPs: `crate::emp::mobs`.
 
@@ -75,6 +77,10 @@ pub mod chassis;
 pub mod client;
 #[cfg(feature = "server")]
 pub mod cyborg;
+#[cfg(feature = "server")]
+pub mod drone_dispenser;
+#[cfg(feature = "server")]
+pub mod drones;
 #[cfg(feature = "server")]
 pub mod holopad;
 #[cfg(feature = "server")]
@@ -170,6 +176,8 @@ mod server {
                     super::mob_cameras::MobCamerasPlugin,
                     super::state_laws::StateLawsPlugin,
                     super::law_change::LawChangePlugin,
+                    super::drones::DronesPlugin,
+                    super::drone_dispenser::DroneDispenserPlugin,
                 ))
                 .add_systems(PreStartup, load_data)
                 .add_systems(
@@ -336,16 +344,18 @@ mod server {
     }
 
     /// tg `robot_talk`: every binary-capable mob reads `Robotic Talk, Name "..."`, ghosts too.
+    /// Drones have their own chat on `:b` (`super::drones`) and do not hear this one.
     fn binary_chat(
         mut spoken: MessageReader<Spoke>,
-        hearers: Query<Entity, With<BinaryCapable>>,
+        hearers: Query<Entity, (With<BinaryCapable>, Without<super::drones::Drone>)>,
+        drones: Query<(), With<super::drones::Drone>>,
         ghosts: Query<Entity, With<Ghost>>,
         designations: Query<&super::ai::AiEye>,
         listeners: Res<Listeners>,
         mut chat: MessageWriter<SendChat>,
     ) {
         for spoke in spoken.read() {
-            if spoke.radio != Some(RadioTarget::Binary) {
+            if spoke.radio != Some(RadioTarget::Binary) || drones.contains(spoke.speaker) {
                 continue;
             }
             let clients: Vec<Entity> = hearers

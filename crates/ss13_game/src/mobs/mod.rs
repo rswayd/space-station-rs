@@ -350,6 +350,7 @@ fn attach(world: &mut World, entity: Entity) {
     oozes::attach(world, entity, &def);
     crate::antag::xeno::attach(world, entity, &def);
     crate::antag::spiders::attach(world, entity, &def);
+    crate::silicon::drones::attach(world, entity, &def);
     set_look(world, entity, false);
 }
 

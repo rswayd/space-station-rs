@@ -39,6 +39,7 @@ mod disposals;
 mod door_structures;
 mod doors;
 mod drag;
+mod drones;
 mod effects;
 mod emag;
 mod embedding;

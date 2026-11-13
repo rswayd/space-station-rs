@@ -40,6 +40,35 @@ pub struct HudData {
     pub belt: Option<HudIcon>,
     /// Left, right.
     pub pockets: [Option<HudIcon>; 2],
+    /// Which slots the client draws.
+    pub layout: HudLayout,
+}
+
+/// The slot set of a mob's HUD (tg `hud_type`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HudLayout {
+    /// tg `/datum/hud/human` (cyborgs share it here).
+    #[default]
+    Human,
+    /// tg `/datum/hud/dextrous/drone`: the hands, the internal storage (`ITEM_SLOT_SUITSTORE`)
+    /// and the head.
+    Drone,
+}
+
+impl HudLayout {
+    /// Whether this HUD has `slot`.
+    pub fn has(self, slot: InventorySlot) -> bool {
+        match self {
+            Self::Human => true,
+            Self::Drone => matches!(
+                slot,
+                InventorySlot::LeftHand
+                    | InventorySlot::RightHand
+                    | InventorySlot::SuitStorage
+                    | InventorySlot::Head
+            ),
+        }
+    }
 }
 
 impl HudData {

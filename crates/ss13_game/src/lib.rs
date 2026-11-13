@@ -8,7 +8,7 @@
 //! - `human` (feature `server`): player mobs drawn as tg humans (body parts, eyes, clothes, hair,
 //!   held items).
 //! - `inventory` (feature `server`): hands, tg's human equipment slots, pickup and drop, ID
-//!   access.
+//!   access; `dextrous` (feature `server`): hands and the few slots of basic mobs (drones).
 //! - `jobs`, `outfit` (feature `server`): joinable jobs, the latejoin menu, job spawn landmarks,
 //!   outfits and ID trims, character names.
 //! - `round` (feature `server`): the lobby (new players, ready, observe, job preferences), tg's
@@ -290,6 +290,8 @@ pub mod deployable_turrets;
 pub mod device_wires;
 #[cfg(feature = "server")]
 pub mod devices;
+#[cfg(feature = "server")]
+pub mod dextrous;
 #[cfg(feature = "server")]
 pub mod displaycase;
 #[cfg(feature = "server")]

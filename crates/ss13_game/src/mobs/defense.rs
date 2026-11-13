@@ -118,6 +118,24 @@ pub fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32, zone:
     }
 }
 
+/// A pacifist (a shy drone, a pacified human) refuses to hurt: tg's "You don't want to harm
+/// other living beings!".
+fn pacifist(world: &mut World, client: Entity, user: Entity) -> bool {
+    if world
+        .get::<crate::medical::traumas::Pacifist>(user)
+        .is_none()
+    {
+        return false;
+    }
+    crate::tools::tell(
+        world,
+        client,
+        Span::Warning,
+        "Вы не хотите причинять вред другим живым существам!",
+    );
+    true
+}
+
 /// Clicks of humans on basic mobs (tg `attack_hand`, `attackby` -> `attacked_by`).
 fn attacked_by_humans(
     world: &mut World,
@@ -190,6 +208,10 @@ fn attacked_by_humans(
                     continue;
                 }
                 let kind = DamageType::from_dm(&dm.damtype).unwrap_or(DamageType::Brute);
+                // tg `item/attack`: `TRAIT_PACIFISM` keeps harmful items off living things.
+                if kind != DamageType::Stamina && pacifist(world, click.client, user) {
+                    continue;
+                }
                 let item_name = name_of(world, item);
                 hurt(world, mob, kind, dm.force, None);
                 ai::record_attacker(world, mob, user);
@@ -243,6 +265,9 @@ fn attacked_by_humans(
                 world
                     .entity_mut(user)
                     .insert(NextMove(now + CLICK_CD_MELEE));
+                if pacifist(world, click.client, user) {
+                    continue;
+                }
                 let mut rng = CombatRng(world.resource::<CombatRng>().0);
                 let damage = rng.range(ARM.damage_low, ARM.damage_high) as f32;
                 world.resource_mut::<CombatRng>().0 = rng.0;

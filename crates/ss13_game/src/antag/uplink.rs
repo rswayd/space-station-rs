@@ -643,10 +643,38 @@ pub fn give_nuclear_uplink(world: &mut World, owner: Entity, device: Entity, tc:
 /// [`give_nuclear_uplink`] with the uplink type's flag: `/obj/item/uplink/loneop`
 /// (`UPLINK_LONE_OP`), `/obj/item/uplink/clownop` (`UPLINK_CLOWN_OPS`).
 pub fn give_op_uplink(world: &mut World, owner: Entity, device: Entity, tc: u32, flag: u32) {
+    give_item_uplink(
+        world,
+        owner,
+        device,
+        tc,
+        flag,
+        super::nukeop::ROLE_OPERATIVE,
+    );
+}
+
+/// `/obj/item/uplink` (`AddComponent(/datum/component/uplink, owner, lockable = FALSE, enabled =
+/// TRUE, uplink_flag, starting_tc)`): an open uplink of `tc` telecrystals in `device`, the
+/// traitors' catalog for `UPLINK_TRAITORS`, the operatives' for their flags.
+pub fn give_item_uplink(
+    world: &mut World,
+    owner: Entity,
+    device: Entity,
+    tc: u32,
+    flag: u32,
+    role: &str,
+) {
     let board = world
         .get_resource::<UplinkCatalog>()
-        .and_then(|c| c.op_boards.iter().find(|(f, _)| *f == flag))
-        .map(|(_, b)| b.clone())
+        .and_then(|c| {
+            if flag == UPLINK_TRAITORS {
+                return Some(c.board.clone());
+            }
+            c.op_boards
+                .iter()
+                .find(|(f, _)| *f == flag)
+                .map(|(_, b)| b.clone())
+        })
         .unwrap_or_default();
     world.entity_mut(device).insert((
         Uplink {
@@ -660,7 +688,7 @@ pub fn give_op_uplink(world: &mut World, owner: Entity, device: Entity, tc: u32,
             item_stock: HashMap::new(),
             purchases: Vec::new(),
             shop_locked: false,
-            assigned_role: super::nukeop::ROLE_OPERATIVE.into(),
+            assigned_role: role.into(),
             primary_objectives: Vec::new(),
             failsafe_code: None,
             sales: Vec::new(),

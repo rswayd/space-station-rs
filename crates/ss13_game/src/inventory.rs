@@ -365,11 +365,13 @@ pub fn mob_access(world: &World, mob: Entity) -> Vec<String> {
         .and_then(|card| world.get::<IdCard>(card))
         .map(|c| c.access.clone())
         .unwrap_or_default();
-    // The `simple_access` of an anagraphic abductor gland (`crate::antag::abductor`).
+    // The `simple_access` of an anagraphic abductor gland (`crate::antag::abductor`) and of a
+    // drone (`crate::silicon::drones`).
     // shortcut: the station's accesses, not tg's `REGION_ALL_GLOBAL` (CentCom, Syndicate, away).
     if world
         .get::<crate::antag::abductor::server::GlandAccess>(mob)
         .is_some()
+        || world.get::<crate::silicon::drones::Drone>(mob).is_some()
     {
         for a in crate::id_access::all_station_access() {
             if !access.iter().any(|o| o == a) {
@@ -721,7 +723,8 @@ fn apply(world: &mut World, client: Entity, action: Action) {
         Action::QuickEquip | Action::SmartEquip(_) | Action::AccessoryDraw
             if world
                 .get::<crate::silicon::cyborg::ModuleSlots>(mob)
-                .is_some() => {}
+                .is_some()
+                || world.get::<crate::dextrous::Dextrous>(mob).is_some() => {}
         Action::QuickEquip => quick_equip(world, client, mob, &inventory),
         Action::SmartEquip(slot) => smart_equip(world, client, mob, &inventory, slot),
         Action::AccessoryDraw => quick_accessory_draw(world, client, mob, &inventory),
@@ -1191,6 +1194,10 @@ pub fn can_equip(
     let Some(dm) = world.get::<DmItem>(item) else {
         return false;
     };
+    // A dextrous basic mob has its own few slots (`crate::dextrous`).
+    if let Some(dextrous) = world.get::<crate::dextrous::Dextrous>(mob) {
+        return crate::dextrous::can_equip(dextrous.layout, inventory, dm, slot);
+    }
     // The species' `no_equip_flags`.
     // shortcut: no `species_exception` items.
     if inventory.slot(slot).is_some() || !crate::species::can_wear(world, mob, slot_bit(slot)) {
@@ -1278,6 +1285,7 @@ pub fn unequip(world: &mut World, mob: Entity, mob_pos: TilePos, slot: Inventory
 
 type MobItem<'a> = (
     Ref<'a, Inventory>,
+    Option<&'a crate::dextrous::Dextrous>,
     Option<&'a HumanLook>,
     &'a mut HudData,
     Option<&'a mut Appearance>,
@@ -1296,7 +1304,8 @@ fn refresh_mobs(
     mut open: MessageWriter<OpenUi>,
     worn: crate::clothing::WornLook,
 ) {
-    for (mob, (inventory, body, mut hud, appearance, player, cuffed, halo, legcuffed)) in &mut mobs
+    for (mob, (inventory, dextrous, body, mut hud, appearance, player, cuffed, halo, legcuffed)) in
+        &mut mobs
     {
         let icon = |slot: Option<Entity>| {
             let (_, _, appearance) = items.get(slot?).ok()?;
@@ -1322,6 +1331,7 @@ fn refresh_mobs(
             suit_storage: icon(inventory.suit_storage),
             belt: icon(inventory.belt),
             pockets: inventory.pockets.map(&icon),
+            layout: dextrous.map_or_else(Default::default, |d| d.layout),
         };
         hud.set_if_neq(data);
         // Opens the HUD on spawn, refreshes it at once afterwards.

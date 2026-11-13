@@ -147,6 +147,8 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     if world.get::<crate::mobs::BasicMob>(target).is_some() {
         crate::mobs::examine_lines(world, target, &mut lines);
         crate::restaurant::examine_lines(world, target, &mut lines);
+        crate::dextrous::examine_lines(world, target, &mut lines);
+        crate::silicon::drones::examine_lines(world, target, &mut lines);
         return (name, lines);
     }
     if world.get::<Health>(target).is_some() {
@@ -221,6 +223,7 @@ pub fn examine_lines(world: &World, examiner: Entity, target: Entity) -> (String
     crate::grill::examine_lines(world, target, &mut lines);
     crate::food_cart::examine_lines(world, target, &mut lines);
     crate::gibber::examine_lines(world, target, &mut lines);
+    crate::silicon::drone_dispenser::examine_lines(world, target, &mut lines);
     crate::food::examine_lines(world, target, examiner, &mut lines);
     crate::custom_food::examine_lines(world, target, &mut lines);
     crate::hookah::examine_lines(world, target, &mut lines);

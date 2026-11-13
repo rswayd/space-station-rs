@@ -39,6 +39,7 @@
 //! | 993 | `guns_special::attack_self` (the last syringe out of a syringe gun) |
 //! | 997 | `guns::box_attack_self` (a round out of a held ammo box or magazine) |
 //! | 1000 | `guns::attack_self` (also the crank guns, `gun_crank`, and bows, `bows`) |
+//! | 1013 | `silicon::drones::open_item_uplink` (an open item uplink, the syndrone's, opens) |
 //! | 1093 | `food::open_can` (a canned food's tab) |
 //! | 1097 | `sprays::attack_self` (stream or spray mode; lets `chem::attack_self` run) |
 //! | 1100 | `chem::attack_self` |
@@ -386,6 +387,7 @@
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 239 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a hookah; the mouthpiece on oneself: a draw) |
 //! | 261 | `antag::nukeop::core_theft::held_on_target` (the nuclear bomb's deconstruction tools, cores and containers, a core and a container on each other) |
+//! | 263 | `silicon::drone_dispenser::item_interaction` (iron and glass stacks into a drone shell dispenser, its crowbar) |
 //! | 271 | `power::turbine::item_interaction` (turbine tools and parts, sheets on a part, a multitool on the console) |
 //! | 277 | `science::gizmo` (a gizmo spawned after map load gets its puzzle; never takes the click) |
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |

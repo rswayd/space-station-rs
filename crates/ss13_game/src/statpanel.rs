@@ -359,6 +359,10 @@ mod server {
                 ],
             ));
         }
+        if world.get::<crate::silicon::drones::Drone>(mob).is_some() {
+            use crate::silicon::drones::{VERB_LAWS, VERB_PING, VERB_TAB};
+            tabs.push((VERB_TAB, vec![VERB_LAWS, VERB_PING]));
+        }
         tabs.push((OOC_TAB, ooc_verbs()));
         tabs
     }
