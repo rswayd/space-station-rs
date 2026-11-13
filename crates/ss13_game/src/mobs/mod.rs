@@ -28,6 +28,7 @@ pub mod ai;
 pub mod bees;
 pub mod constructs;
 pub mod critters;
+pub mod cult_pets;
 pub mod defense;
 pub mod eating;
 pub mod farm;
@@ -592,6 +593,7 @@ fn death(world: &mut World, mob: Entity, basic: &BasicMob) {
     oneoffs::on_death(world, def, pos);
     space_fauna::on_death(world, def, pos);
     bees::on_death(world, mob, pos);
+    cult_pets::on_death(world, mob, pos);
     crate::antag::slaughter::on_death(world, mob, def, pos);
     crate::spells::shapeshift::on_shape_death(world, mob);
     // A mouse leaves its corpse as a food item (`/obj/item/food/deadmouse`, `copy_corpse`).

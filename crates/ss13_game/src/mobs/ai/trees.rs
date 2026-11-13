@@ -90,6 +90,8 @@ pub fn build(path: &str, def: &MobDef) -> Option<Built> {
         if passive {
             built.traits = STOP_MOVING_WHEN_PULLED;
         }
+    } else if under(path, crate::mobs::cult_pets::CONTROLLER) {
+        built.roots = vec![pet_cult()];
     } else if under(path, CORGI) {
         built.roots = vec![corgi()];
     } else if under(path, DOG) {
@@ -1389,6 +1391,65 @@ fn par(children: Vec<Node>, repeat_delay: f64) -> Node {
             ..ParallelOpts::default()
         },
     )
+}
+
+/// `pets/pet_cult/pet_cult.bt.json` (the pet command subtree is its first root, see [`build`]);
+/// left out: escape captivity. The walks before an interaction finish on arrival so the sequence
+/// goes on.
+fn pet_cult() -> Node {
+    use crate::mobs::cult_pets::CultLeaf;
+    let cult = |l: CultLeaf| leaf(Behavior::Fauna(FaunaLeaf::CultPet(l)));
+    let walk_to = |key: Key, dist: u32| {
+        leaf(Behavior::MoveToTarget {
+            key,
+            dist,
+            finish_on_arrival: true,
+        })
+    };
+    let when = |key: Key, child: Node| decorator(Cond::KeySet(key), false, Abort::Both, child);
+    selector(vec![
+        when(
+            Key::FriendlyCultist,
+            sequence(vec![
+                walk_to(Key::FriendlyCultist, 1),
+                cult(CultLeaf::Befriend),
+            ]),
+        ),
+        when(
+            Key::OccupiedRune,
+            sequence(vec![
+                walk_to(Key::OccupiedRune, 1),
+                cult(CultLeaf::ActivateRune),
+            ]),
+        ),
+        when(
+            Key::DeadCultist,
+            sequence(vec![
+                walk_to(Key::DeadCultist, 1),
+                cult(CultLeaf::Drag),
+                walk_to(Key::NearbyRune, 0),
+                leaf(Behavior::ClearKey(Key::DeadCultist)),
+            ]),
+        ),
+        par(
+            vec![
+                selector(vec![
+                    when(Key::CurrentTarget, melee_combat(Strategy::Cultist)),
+                    random_walk(25.0),
+                ]),
+                selector(vec![
+                    leaf(Behavior::AcquireCombatTarget {
+                        key: Key::CurrentTarget,
+                        strategy: Strategy::Cultist,
+                    }),
+                    cult(CultLeaf::FindFriendlyCultist),
+                    cult(CultLeaf::FindOccupiedRune),
+                    cult(CultLeaf::FindDeadCultist),
+                ]),
+            ],
+            FIND_TARGET_RATE,
+        ),
+    ])
 }
 
 /// `generic_subtrees/random_walk.bt.json`.

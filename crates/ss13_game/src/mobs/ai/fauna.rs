@@ -91,6 +91,8 @@ pub enum FaunaLeaf {
     },
     /// A lavaland mob leaf (`crate::mobs::lavaland::ai`).
     Lavaland(crate::mobs::lavaland::ai::LavaLeaf),
+    /// A cult pet leaf (`crate::mobs::cult_pets`).
+    CultPet(crate::mobs::cult_pets::CultLeaf),
     /// `run_emote` / `perform_emote` of this emote key.
     Emote(&'static str),
     /// `face_target_or_face_initial` (mannequins).
@@ -146,6 +148,7 @@ impl FaunaLeaf {
             Self::ParrotRepeat => crate::mobs::parrot::REPEAT_COOLDOWN,
             Self::RangedAttack { cooldown, .. } => *cooldown,
             Self::Lavaland(leaf) => leaf.cooldown(),
+            Self::CultPet(leaf) => leaf.cooldown(),
             _ => 0.0,
         }
     }
@@ -198,6 +201,9 @@ impl FaunaLeaf {
 
     pub fn perform(&mut self, ctx: &mut AiCtx) -> Perform {
         if let Self::Lavaland(leaf) = self {
+            return leaf.perform(ctx);
+        }
+        if let Self::CultPet(leaf) = self {
             return leaf.perform(ctx);
         }
         match *self {
@@ -300,13 +306,17 @@ impl FaunaLeaf {
             Self::HiveFlyback { key } => crate::mobs::bees::hive_flyback(ctx, key),
             Self::EnterHive { key } => crate::mobs::bees::enter_hive(ctx, key),
             // Performed above.
-            Self::Lavaland(_) => FAIL,
+            Self::Lavaland(_) | Self::CultPet(_) => FAIL,
         }
     }
 
     pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
         if let Self::Lavaland(leaf) = self {
             leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::CultPet(leaf) = self {
+            leaf.finish(ctx);
             return;
         }
         match *self {

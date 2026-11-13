@@ -141,6 +141,12 @@ pub enum Key {
     /// it wants into its home (`BB_WANTS_TO_TRANSITION_HIVE`).
     TargetHome,
     CurrentHome,
+    /// The cult pet's `BB_FRIENDLY_CULTIST`, `BB_OCCUPIED_RUNE`, `BB_NEARBY_RUNE`,
+    /// `BB_DEAD_CULTIST` (`crate::mobs::cult_pets`).
+    FriendlyCultist,
+    OccupiedRune,
+    NearbyRune,
+    DeadCultist,
 }
 
 #[derive(Clone, Debug, PartialEq)]

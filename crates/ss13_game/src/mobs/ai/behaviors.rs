@@ -49,6 +49,8 @@ pub enum Strategy {
     /// `basic/bee`: `basic`, never someone `bee_friendly`, and for a bee with a hive in sight
     /// only someone near the hive (`crate::mobs::bees`).
     Bee,
+    /// `basic/cultist` (cult pets): anyone alive who is no cultist nor a cult mob.
+    Cultist,
 }
 
 impl Strategy {
@@ -90,6 +92,9 @@ impl Strategy {
                     && stat != Stat::Dead
             }
             Self::IgnoreFaction => stat != Stat::Dead,
+            Self::Cultist => {
+                stat != Stat::Dead && !crate::mobs::cult_pets::is_cultist_or_cult_mob(world, target)
+            }
             Self::Bee => {
                 (ignore_faction || !crate::mobs::same_faction(world, ctx.pawn, target))
                     && stat != Stat::Dead
