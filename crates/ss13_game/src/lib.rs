@@ -142,7 +142,8 @@
 //!   fuses and the flashbang, EMP, smoke, explosive, frag and cluster grenades.
 //!   `effects` (feature `server`): effect systems: sparks, steam, smoke and chemical smoke,
 //!   foam and foamed metal, trails. `weather` (feature `server`): `SSweather` and the station
-//!   weathers (radiation storm, the floor is lava, void storm) and lavaland's ash storms. `lava`
+//!   weathers (radiation storm, the floor is lava, void storm) and lavaland's ash storms;
+//!   `weather_announcer` (feature `server`): weather radios and barometric monitors. `lava`
 //!   (feature `server`): lava turfs burn what touches them.
 //!
 //! - `events` (feature `server`): tg `SSevents`, the random event scheduler, and the round
@@ -753,6 +754,8 @@ pub mod watertank;
 pub mod weapons;
 #[cfg(feature = "server")]
 pub mod weather;
+#[cfg(feature = "server")]
+pub mod weather_announcer;
 /// Shared window data; `wiremod::circuit` and `wiremod::server` with `server`, `wiremod::client`
 /// with `client`.
 pub mod wiremod;
