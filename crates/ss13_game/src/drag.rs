@@ -251,6 +251,13 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `mouse_buckle_handling` of a ridable mob: oneself onto it (`crate::mobs::riding`).
+    if let (End::World(over), End::World(_)) = (to, from)
+        && adjacent(world, over)
+        && crate::mobs::riding::mouse_drop_receive(world, actor, over, dragged)
+    {
+        return;
+    }
     if to == End::World(mob)
         && matches!(from, End::World(_))
         && adjacent(world, dragged)

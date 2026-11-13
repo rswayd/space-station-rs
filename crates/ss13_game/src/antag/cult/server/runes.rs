@@ -140,7 +140,11 @@ pub(super) fn invoke_offer(world: &mut World, rune: Entity, invokers: &[Entity])
         .on_tile(pos)
         .iter()
         .copied()
-        .filter(|&e| world.get::<Health>(e).is_some() && world.get::<Cultist>(e).is_none())
+        .filter(|&e| {
+            world.get::<Health>(e).is_some()
+                && world.get::<Cultist>(e).is_none()
+                && !crate::mobs::cult_pets::spared_by_offer(world, e)
+        })
         .collect();
     targets.sort();
     let Some(&target) = targets.first() else {
@@ -282,6 +286,8 @@ pub(super) fn do_sacrifice(world: &mut World, target: Entity, invokers: &[Entity
             }
         }
     }
+    // `COMSIG_LIVING_CULT_SACRIFICED`: a pet turns cultist instead (`STOP_SACRIFICE`).
+    let stop = crate::mobs::cult_pets::become_cultist(world, target);
     for &i in invokers {
         let text = if is_target {
             "\"Yes! This is the one I desire! You have done well.\""
@@ -291,6 +297,10 @@ pub(super) fn do_sacrifice(world: &mut World, target: Entity, invokers: &[Entity
             "\"I accept this meager sacrifice.\""
         };
         chat_to(world, i, Span::CultLarge, text);
+    }
+    if stop {
+        update_info(world);
+        return false;
     }
     if let Some(pos) = world.get::<TilePos>(target).copied()
         && let Some(&invoker) = invokers.first()
@@ -501,7 +511,7 @@ pub(super) fn fail_rune(world: &mut World, rune: Option<Entity>) {
 }
 
 /// `raise_dead/invoke`: a dead cultist on the rune is revived for three sacrifices.
-pub(super) fn invoke_revive(world: &mut World, rune: Entity, invokers: &[Entity]) {
+pub(crate) fn invoke_revive(world: &mut World, rune: Entity, invokers: &[Entity]) {
     let user = invokers[0];
     let Some(&pos) = world.get::<TilePos>(rune) else {
         return;

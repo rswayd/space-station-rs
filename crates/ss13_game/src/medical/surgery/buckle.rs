@@ -178,6 +178,10 @@ pub fn unbuckle(world: &mut World, actor: Actor, mob: Entity) {
     if crate::pull::carry::post_unbuckle(world, actor, mob, furniture) {
         return;
     }
+    // A rider off a mob it rode (`crate::mobs::riding`).
+    if crate::mobs::riding::post_unbuckle(world, actor, mob, furniture) {
+        return;
+    }
     if crate::furniture::post_unbuckle(world, actor, mob, furniture) {
         return;
     }

@@ -27,6 +27,7 @@
 pub mod bubblegum;
 pub mod colossus;
 pub mod drake;
+pub mod hierophant;
 pub mod legion;
 pub mod placement;
 
@@ -92,6 +93,7 @@ pub enum Kind {
     Drake,
     Legion,
     ClockworkDefender,
+    Hierophant,
 }
 
 impl Kind {
@@ -106,6 +108,8 @@ impl Kind {
             Some(Self::Legion)
         } else if is_under(path, CLOCKWORK_DEFENDER) {
             Some(Self::ClockworkDefender)
+        } else if is_under(path, hierophant::HIEROPHANT) {
+            Some(Self::Hierophant)
         } else {
             None
         }
@@ -137,6 +141,7 @@ pub struct Megafauna {
     pub colossus: colossus::State,
     pub drake: drake::State,
     pub legion: legion::State,
+    pub hierophant: hierophant::State,
 }
 
 impl Megafauna {
@@ -156,6 +161,7 @@ impl Megafauna {
             colossus: colossus::State::default(),
             drake: drake::State::default(),
             legion: legion::State::default(),
+            hierophant: hierophant::State::default(),
         }
     }
 
@@ -190,6 +196,7 @@ pub enum Step {
     Colossus(colossus::Step),
     Drake(drake::Step),
     Legion(legion::Step),
+    Hierophant(hierophant::Step),
 }
 
 /// tg `/datum/status_effect/gutted`: devoured; while dead, never a target again.
@@ -229,6 +236,7 @@ impl Visual {
 }
 
 pub(super) fn build(app: &mut App) {
+    hierophant::build(app);
     app.add_systems(PostStartup, placement::place).add_systems(
         Update,
         (
@@ -237,6 +245,7 @@ pub(super) fn build(app: &mut App) {
             drake::land_strikes,
             bubblegum::bleed,
             legion::sentinels,
+            hierophant::tick,
             expire_visuals,
         )
             .chain()
@@ -261,6 +270,9 @@ pub(super) fn attach(world: &mut World, mob: Entity, def: &MobDef) {
     brain.drake.lesser = is_under(&def.path, LESSER_DRAKE);
     brain.legion.size = legion::size_of(&def.path);
     world.entity_mut(mob).insert((brain, controller));
+    if kind == Kind::Hierophant {
+        hierophant::attach(world, mob);
+    }
 }
 
 /// The ported megafauna kind of `mob`.
@@ -330,13 +342,24 @@ fn think_one(world: &mut World, mob: Entity, now: f64) {
                 .is_some_and(|d| d <= vision)
     });
     let range = if hurt { aggro_range } else { vision };
+    let hierophant = world.get::<Megafauna>(mob).map(|m| m.kind) == Some(Kind::Hierophant);
     let Some(target) = kept.or_else(|| find_target(world, mob, pos, range)) else {
+        if hierophant {
+            hierophant::on_no_target(world, mob, now);
+        }
         lose_target(world, mob);
         return;
     };
     if let Some(mut m) = world.get_mut::<Megafauna>(mob) {
         m.target = Some(target);
         m.aggro = true;
+    }
+    if hierophant {
+        if current == Some(target) {
+            hierophant::on_target(world, mob, target, now);
+        } else {
+            hierophant::on_new_target(world, mob, target, now);
+        }
     }
     let Some(&to) = world.get::<TilePos>(target) else {
         return;
@@ -368,6 +391,8 @@ fn vision(kind: Kind) -> (u32, u32) {
     match kind {
         Kind::Legion => (13, AGGRO_VISION_RANGE),
         Kind::ClockworkDefender => (9, 9),
+        // `aggro_vision_range = 21`: one side of its arena to the other.
+        Kind::Hierophant => (VISION_RANGE, 21),
         _ => (VISION_RANGE, AGGRO_VISION_RANGE),
     }
 }
@@ -375,7 +400,10 @@ fn vision(kind: Kind) -> (u32, u32) {
 /// An ability moves the boss (the drake's swoop, Bubblegum's charges): its AI neither walks
 /// nor strikes.
 fn moving_itself(world: &World, mob: Entity) -> bool {
-    drake::swooping(world, mob) || bubblegum::charging(world, mob) || legion::flying(world, mob)
+    drake::swooping(world, mob)
+        || bubblegum::charging(world, mob)
+        || legion::flying(world, mob)
+        || hierophant::blinking(world, mob)
 }
 
 /// `CanAttack` of a megafauna: a living mob (dead too) not of its faction, not gutted.
@@ -439,6 +467,7 @@ fn open_fire(world: &mut World, mob: Entity, target: Entity) {
         Kind::Colossus => colossus::open_fire(world, mob, target, now),
         Kind::Drake => drake::open_fire(world, mob, target, now),
         Kind::Legion => legion::open_fire(world, mob, target, now),
+        Kind::Hierophant => hierophant::open_fire(world, mob, target, now),
         // `clockwork_defender/OpenFire`: nothing.
         Kind::ClockworkDefender => {}
     }
@@ -485,6 +514,11 @@ fn attacking_target(world: &mut World, mob: Entity, target: Entity) {
         devour(world, mob, target);
         return;
     }
+    // `hierophant/AttackingTarget`: no strike, a burst.
+    if kind_of(world, mob) == Some(Kind::Hierophant) {
+        hierophant::attacking_target(world, mob, target, now);
+        return;
+    }
     super::defense::melee_attack(world, mob, target);
     if kind_of(world, mob) == Some(Kind::Legion) {
         legion::after_attack(world, mob, target);
@@ -510,6 +544,9 @@ fn devour(world: &mut World, mob: Entity, victim: Entity) {
     let heal = world.get::<Health>(victim).map_or(0.0, |h| h.max) * 0.5;
     if !station && let Some(mut health) = world.get_mut::<Health>(mob) {
         health.adjust(DamageType::Brute, -heal);
+    }
+    if kind_of(world, mob) == Some(Kind::Hierophant) {
+        hierophant::celebrate_kill(world, mob, victim);
     }
     super::defense::hurt(world, victim, DamageType::Brute, DEVOUR_DAMAGE, None);
     world.entity_mut(victim).insert((Stat::Dead, Gutted));
@@ -556,6 +593,7 @@ fn run_queues(world: &mut World) {
                 Step::Colossus(step) => colossus::run(world, mob, at, step),
                 Step::Drake(step) => drake::run(world, mob, at, step),
                 Step::Legion(step) => legion::run(world, mob, at, step),
+                Step::Hierophant(step) => hierophant::run(world, mob, at, step),
             }
         }
     }
@@ -749,6 +787,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
     }
     match kind {
         Kind::Legion => return legion::on_death(world, mob, pos),
+        Kind::Hierophant => return hierophant::on_death(world, mob, pos),
         Kind::ClockworkDefender => {
             crate::construction::spawn_obj(world, CLOCKWORK_ALLOY, pos);
             return;
@@ -763,7 +802,7 @@ pub(super) fn on_death(world: &mut World, mob: Entity, pos: TilePos) {
         Kind::Bubblegum => (bubblegum::CHEST, bubblegum::loot(world)),
         Kind::Colossus => (colossus::CHEST, colossus::loot(world)),
         Kind::Drake => (drake::CHEST, drake::loot(world)),
-        Kind::Legion | Kind::ClockworkDefender => return,
+        Kind::Legion | Kind::ClockworkDefender | Kind::Hierophant => return,
     };
     let Some(chest) = crate::construction::spawn_obj(world, chest, pos) else {
         return;
@@ -789,10 +828,7 @@ mod tests {
         assert_eq!(Kind::of(legion::LEGION), Some(Kind::Legion));
         assert_eq!(Kind::of(legion::SMALL), Some(Kind::Legion));
         assert_eq!(Kind::of(CLOCKWORK_DEFENDER), Some(Kind::ClockworkDefender));
-        assert_eq!(
-            Kind::of("/mob/living/simple_animal/hostile/megafauna/hierophant"),
-            None
-        );
+        assert_eq!(Kind::of(hierophant::HIEROPHANT), Some(Kind::Hierophant));
     }
 
     #[test]

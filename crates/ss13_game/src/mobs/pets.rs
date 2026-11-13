@@ -482,6 +482,8 @@ fn tamed(world: &mut World, mob: Entity, tamer: Entity) {
     let Some(path) = world.get::<BasicMob>(mob).map(|b| b.def.path.clone()) else {
         return;
     };
+    // Cows, pigs, ponies and vatbeasts `AddElement(/datum/element/ridable, ...)`.
+    super::riding::make_ridable(world, mob);
     let under = |root: &str| is_under(&path, root);
     let tamer_name = super::defense::name_of(world, tamer);
     if under(super::oneoffs::VATBEAST) {

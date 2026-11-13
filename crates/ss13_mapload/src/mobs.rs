@@ -25,6 +25,8 @@ pub const MEGAFAUNA_ROOT: &str = "/mob/living/simple_animal/hostile/megafauna";
 /// tg `/mob/living/carbon/alien`: the xenomorph castes, read as basic mobs with their icon
 /// states as the living and dead sprites and tox and stamina immune.
 pub const ALIEN_ROOT: &str = "/mob/living/carbon/alien";
+/// tg `/mob/living/simple_animal/hostile/ooze`: read as basic mobs like the megafauna.
+pub const OOZE_ROOT: &str = "/mob/living/simple_animal/hostile/ooze";
 const COMPONENT: &str = "dm_mob";
 /// `CANPUSH` of `status_flags`; `MOVE_RESIST_DEFAULT`.
 const CANPUSH: u32 = 1 << 3;
@@ -75,7 +77,7 @@ pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
 /// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
 /// the colossus' death bolt, the necropolis chests and what their `PopulateContents` makes
 /// (tg `necropolis_chests.dm`).
-pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 34] = [
+pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 37] = [
     "/mob/living/simple_animal/hostile/megafauna/bubblegum",
     "/obj/structure/closet/crate/necropolis/bubblegum",
     "/obj/item/clothing/suit/hooded/hostile_environment",
@@ -111,6 +113,10 @@ pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 34] = [
     "/obj/item/stack/sheet/bone",
     "/mob/living/simple_animal/hostile/megafauna/clockwork_defender",
     "/obj/item/clockwork_alloy",
+    // The hierophant (admin spawns; its arena ruin is not mapped), its beacon and its club.
+    "/mob/living/simple_animal/hostile/megafauna/hierophant",
+    "/obj/effect/hierophant",
+    "/obj/item/hierophant_club",
 ];
 
 /// The DM type of a basic mob (prototype data): the key into [`MobsData::mobs`].
@@ -400,7 +406,10 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
 
 /// A type read as a basic mob: `/mob/living/basic` and the megafauna.
 fn is_basic(path: &str) -> bool {
-    is_under(path, BASIC_ROOT) || is_under(path, MEGAFAUNA_ROOT) || is_under(path, ALIEN_ROOT)
+    is_under(path, BASIC_ROOT)
+        || is_under(path, MEGAFAUNA_ROOT)
+        || is_under(path, ALIEN_ROOT)
+        || is_under(path, OOZE_ROOT)
 }
 
 /// Every `/mob/living/basic` type and the megafauna.
@@ -566,7 +575,7 @@ fn mob_def(
         .collect();
     let max_health = num("maxHealth", 20.0);
     // `/mob/living/simple_animal` names for the same things.
-    let simple = is_under(path, MEGAFAUNA_ROOT);
+    let simple = is_under(path, MEGAFAUNA_ROOT) || is_under(path, OOZE_ROOT);
     let basic_mob_flags = if simple {
         // `del_on_death` -> `DEL_ON_DEATH`.
         u32::from(num("del_on_death", 0.0) != 0.0)

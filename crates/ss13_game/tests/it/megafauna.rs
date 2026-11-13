@@ -157,6 +157,15 @@ const TYPES: &str = r##"{
         "name": "clockwork defender", "maxHealth": 300, "health": 300, "melee_damage_lower": 20,
         "melee_damage_upper": 20, "speed": 5, "del_on_death": 1,
         "icon_state": "clockwork_defender", "icon_living": "clockwork_defender", "icon_dead": "" } },
+    "/mob/living/simple_animal/hostile/megafauna/hierophant": {
+        "parent": "/mob/living/simple_animal/hostile/megafauna", "declared_vars": {
+        "name": "hierophant", "maxHealth": 2500, "health": 2500, "melee_damage_lower": 15,
+        "melee_damage_upper": 15, "speed": 10, "del_on_death": 1,
+        "icon_state": "hierophant", "icon_living": "hierophant", "icon_dead": "" } },
+    "/obj/effect/hierophant": { "parent": "/obj/effect", "declared_vars": {
+        "name": "hierophant beacon", "icon": { "resource": "i.dmi" }, "icon_state": "toy",
+        "anchored": 1 } },
+    "/obj/item/hierophant_club": { "parent": "/obj/item", "declared_vars": { "name": "hierophant club" } },
     "/obj/item/storm_staff": { "parent": "/obj/item", "declared_vars": { "name": "staff of storms" } },
     "/obj/item/clockwork_alloy": { "parent": "/obj/item", "declared_vars": { "name": "clockwork alloy" } },
     "/obj/structure/closet/crate/necropolis/tendril": {
@@ -247,7 +256,25 @@ wwwwwwwwwwwwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 13] = [
+/// `s` the player (3,4), `H` the hierophant (7,4).
+const HIEROPHANT_MAP: &str = r##""w" = (/turf/closed/wall,/area/lavaland_test)
+"f" = (/turf/open/floor,/area/lavaland_test)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/lavaland_test)
+"H" = (/mob/living/simple_animal/hostile/megafauna/hierophant,/turf/open/floor,/area/lavaland_test)
+
+(1,1,1) = {"
+wwwwwwwwwwwwwwww
+wffffffffffffffw
+wffffffffffffffw
+wfsfffHffffffffw
+wffffffffffffffw
+wffffffffffffffw
+wwwwwwwwwwwwwwww
+"}
+"##;
+
+const STATES: [(&str, &str); 14] = [
+    ("m.dmi", "hierophant"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -263,7 +290,10 @@ const STATES: [(&str, &str); 13] = [
     ("cr.dmi", "necrocrateopen"),
 ];
 
-const USED: [&str; 41] = [
+const USED: [&str; 44] = [
+    "/mob/living/simple_animal/hostile/megafauna/hierophant",
+    "/obj/effect/hierophant",
+    "/obj/item/hierophant_club",
     "/obj/effect/landmark/start/assistant",
     "/turf/open/floor",
     "/turf/closed/wall",
@@ -553,4 +583,39 @@ fn bosses_roam_lavaland() {
     println!("{} megafauna: {bosses:?}", bosses.len());
     assert!(!bosses.is_empty(), "no megafauna on lavaland");
     assert!(bosses.iter().all(|(p, _)| p.z == z));
+}
+
+/// tg `hierophant.dm`: its beacon where it spawned, vortex blasts burn its target, and dying it
+/// leaves its club and takes the beacon along.
+#[test]
+fn hierophant_blasts_its_target_and_leaves_its_club() {
+    use ss13_game::mobs::megafauna::hierophant::{BEACON, CLUB, HIEROPHANT};
+    let mut s = Station::start("hierophant", HIEROPHANT_MAP);
+    let boss = s.mob_of(HIEROPHANT);
+    assert!(s.try_get::<Megafauna>(boss).is_some(), "a megafauna");
+    let start = s.pos(boss);
+    let beacon_at = |s: &mut Station| {
+        let world = s.0.server.world_mut();
+        world
+            .query::<(&DmObj, &TilePos)>()
+            .iter(world)
+            .find(|(o, _)| o.path == BEACON)
+            .map(|(_, p)| *p)
+    };
+    assert_eq!(beacon_at(&mut s), Some(start), "its home beacon");
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    s.run_until_for(40.0, "a vortex blast burns its target", |s| {
+        s.get::<Health>(me).burn > 0.0
+    });
+    let at = s.pos(boss);
+    s.kill(boss);
+    assert!(s.0.server.world().get_entity(boss).is_err(), "del_on_death");
+    assert_eq!(beacon_at(&mut s), None, "the beacon goes with it");
+    let world = s.0.server.world_mut();
+    let club = world
+        .query::<(&DmItem, &TilePos)>()
+        .iter(world)
+        .any(|(i, p)| i.path == CLUB && *p == at);
+    assert!(club, "its club where it died");
 }

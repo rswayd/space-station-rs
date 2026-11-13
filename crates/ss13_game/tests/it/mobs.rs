@@ -106,6 +106,9 @@ const TYPES: &str = r##"{
         "ai_controller": { "path": "/datum/ai_controller/basic_controller/cockroach" },
         "faction": { "expr": "list(FACTION_HOSTILE, FACTION_MAINT_CREATURES)" },
         "icon_state": "cockroach" } },
+    "/mob/living/basic/cow": { "parent": "/mob/living/basic", "declared_vars": {
+        "name": "корова", "maxHealth": 50, "health": 50, "icon_state": "cow",
+        "icon_living": "cow", "icon_dead": "cow_dead" } },
     "/turf": { "parent": "/atom", "declared_vars": { "icon": { "resource": "t.dmi" } } },
     "/turf/open": { "parent": "/turf" },
     "/turf/open/floor": { "parent": "/turf/open", "declared_vars": { "icon_state": "floor" } },
@@ -216,7 +219,22 @@ wwwwww
 "}
 "##;
 
-const STATES: [(&str, &str); 14] = [
+/// `s` the player (2,2) next to `K`, a cow (3,2), room to ride east.
+const COW_MAP: &str = r##""w" = (/turf/closed/wall,/area/station/mobs_test)
+"f" = (/turf/open/floor,/area/station/mobs_test)
+"s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/station/mobs_test)
+"K" = (/mob/living/basic/cow,/turf/open/floor,/area/station/mobs_test)
+
+(1,1,1) = {"
+wwwwwww
+wsKfffw
+wwwwwww
+"}
+"##;
+
+const STATES: [(&str, &str); 16] = [
+    ("m.dmi", "cow"),
+    ("m.dmi", "cow_dead"),
     ("t.dmi", "floor"),
     ("t.dmi", "wall"),
     ("l.dmi", "x2"),
@@ -247,6 +265,7 @@ fn fixture(test: &str, map: &str) -> PathBuf {
         "/mob/living/basic/pet/cat",
         "/mob/living/basic/cockroach",
         "/mob/living/basic/mouse/hamster/baby",
+        "/mob/living/basic/cow",
         "/obj/structure/fixture_table",
         "/obj/item/food/deadmouse",
         "/turf/open/floor",
@@ -565,4 +584,60 @@ fn a_hamster_pup_is_crushed_underfoot() {
         .iter(world)
         .any(|(i, p)| i.path == "/obj/item/food/deadmouse" && *p == at);
     assert!(corpse, "it leaves its corpse");
+}
+
+/// tg `riding/creature/cow`: a tamed cow is ridable; the rider drives it, its AI pauses, and
+/// resisting gets off.
+#[test]
+fn a_tamed_cow_is_ridden() {
+    use ss13_game::medical::surgery::Buckled;
+    use ss13_game::mobs::ai::AiPaused;
+    use ss13_game::vehicles::{Rider, Vehicle};
+    use ss13_shared::Dir;
+    use ss13_shared::protocol::DragEnd;
+
+    let mut s = Station::start("cow", COW_MAP);
+    let cow = s.mob_of("/mob/living/basic/cow").expect("cow");
+    let p = s.join("p0", |_| {});
+    let me = s.players[p].mob;
+    let drag = |s: &mut Station| {
+        let from = s.net_id(p, me).unwrap();
+        let to = s.net_id(p, cow).unwrap();
+        s.send(
+            p,
+            ClientIntent::Drag {
+                from: DragEnd::Atom(from),
+                to: DragEnd::Atom(to),
+                modifiers: Default::default(),
+            },
+        );
+    };
+    // Untamed, it is no mount.
+    drag(&mut s);
+    s.run_for(0.5);
+    assert!(
+        s.try_get::<Buckled>(me).is_none(),
+        "a wild cow is not ridden"
+    );
+
+    ss13_game::mobs::pets::tame(s.0.server.world_mut(), cow, me);
+    let start = s.pos(cow);
+    drag(&mut s);
+    s.run_until("on the cow", |s| s.try_get::<Rider>(me).is_some());
+    assert_eq!(s.pos(me), start);
+    assert_eq!(s.get::<Vehicle>(cow).rider, Some(me));
+    s.run_until("its AI pauses", |s| s.try_get::<AiPaused>(cow).is_some());
+
+    let east = start.step(Dir::East);
+    s.run_until("rode east", |s| {
+        s.try_step(p, Dir::East);
+        s.pos(cow) == east
+    });
+    s.run_until("the rider came along", |s| s.pos(me) == s.pos(cow));
+
+    s.send(p, ClientIntent::Resist);
+    s.run_until("off the cow", |s| s.try_get::<Buckled>(me).is_none());
+    s.run_until("the cow is free again", |s| {
+        s.get::<Vehicle>(cow).rider.is_none() && s.try_get::<AiPaused>(cow).is_none()
+    });
 }

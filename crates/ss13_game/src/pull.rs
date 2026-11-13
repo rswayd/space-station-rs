@@ -989,6 +989,8 @@ fn resist_intents(world: &mut World, mut intents: Local<MessageCursor<IntentRece
         } else if world.get::<crate::closets::InCloset>(mob).is_some() {
             // `loc.container_resist_act(src)`.
             crate::closets::container_resist(world, client, mob);
+            // A gelatinous cube's victim struggles out (`crate::mobs::oozes`).
+            crate::mobs::oozes::container_resist(world, mob);
         } else if !traits.immobilized && crate::fire::on_fire(world, mob) {
             // tg `execute_resist`: able to move and on fire -> stop, drop and roll.
             crate::fire::resist_fire(world, mob);
