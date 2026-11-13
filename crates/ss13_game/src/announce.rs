@@ -477,6 +477,7 @@ fn send_roundstart_report(world: &mut World) {
         Some(&format!("{COMMAND_NAME}. Отчет об обстановке")),
         false,
     );
+    crate::station_goals::on_report(world);
     if crate::security_level::current(world) < SecLevel::Blue {
         crate::security_level::set_level(world, SecLevel::Blue, false);
     }

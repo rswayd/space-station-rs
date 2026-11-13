@@ -22,7 +22,7 @@
 //! - The health analyzer lists the diseases the scanner sees (`crate::health_scan`).
 // shortcut: no darkness or blindfold sleep bonus, no immunodeficiency/virus
 // immunity traits (stasis skips `life`: `crate::medical`); no chronic or incremental-cure
-// diseases (chronic illness, asthma), no transformation, magic or floor diseases, no bites or
+// diseases (chronic illness, asthma), no magic or floor diseases, no bites or
 // bumps spreading contact diseases, no infective items, food or blood decals, no disease
 // archive, HUD icons or logging. Unported effects: butterflies, the decloning status effect.
 
@@ -48,12 +48,14 @@ pub(crate) mod effects;
 mod life;
 mod spread;
 mod transfer;
+mod transformation;
 
 use data::*;
 pub(crate) use effects::*;
 pub use life::*;
 pub use spread::*;
 pub use transfer::*;
+pub use transformation::reagent_expose;
 
 /// `disease_flags`.
 pub const CURABLE: u8 = 1 << 0;
@@ -172,6 +174,14 @@ pub enum Kind {
     Decloning,
     /// `/datum/disease/revblight` (`crate::antag::revenant`).
     Revblight,
+    /// `/datum/disease/transformation/*` ([`transformation`]).
+    JungleFlu,
+    TransformRobot,
+    TransformXeno,
+    TransformSlime,
+    TransformCorgi,
+    TransformMorph,
+    TransformGondola,
     /// `/datum/disease/advance`: [`Disease::advance`] holds the symptoms.
     Advance,
 }

@@ -291,8 +291,118 @@ pub(super) const ADVANCE: Def = Def {
     ..BASE
 };
 
+/// `/datum/disease/transformation` (abstract).
+const TRANSFORMATION: Def = Def {
+    path: "/datum/disease/transformation",
+    name: "Transformation",
+    max_stages: 5,
+    spread_text: "None",
+    spread_flags: SPREAD_SPECIAL,
+    cure_text: "A coder's love (theoretical).",
+    agent: "Shenanigans",
+    severity: Severity::Biohazard,
+    stage_prob: 5.0,
+    visibility: HIDDEN_SCANNER | HIDDEN_PANDEMIC,
+    disease_flags: CURABLE,
+    bypasses_immunity: true,
+    ..BASE
+};
+
+const ADMINORDRAZINE: &str = "/datum/reagent/medicine/adminordrazine";
+
+pub(super) const JUNGLE_FLU: Def = Def {
+    path: "/datum/disease/transformation/jungle_flu",
+    name: "Jungle Flu",
+    cure_text: "Death",
+    cures: &[ADMINORDRAZINE],
+    spread_text: "Unknown",
+    spread_flags: SPREAD_NON_CONTAGIOUS,
+    spreading_modifier: 1.0,
+    cure_chance: 0.5,
+    disease_flags: CAN_CARRY | CAN_RESIST,
+    desc: "A neutered but still dangerous descendent of the ancient \"Jungle Fever\", victims \
+           will eventually genetically backtrack into a primate. Luckily, once turned the new \
+           monkey will not gain the rabies-like rage of the fever.",
+    stage_prob: 2.0,
+    visibility: 0,
+    agent: "Kongey Vibrion M-909",
+    ..TRANSFORMATION
+};
+
+pub(super) const TRANSFORM_ROBOT: Def = Def {
+    path: "/datum/disease/transformation/robot",
+    name: "Robotic Transformation",
+    cure_text: "Copper",
+    cures: &["/datum/reagent/copper"],
+    cure_chance: 2.5,
+    agent: "R2D2 Nanomachines",
+    desc: "This disease, actually acute nanomachine infection, converts the victim into a cyborg.",
+    visibility: 0,
+    ..TRANSFORMATION
+};
+
+pub(super) const TRANSFORM_XENO: Def = Def {
+    path: "/datum/disease/transformation/xeno",
+    name: "Xenomorph Transformation",
+    cure_text: "Spaceacillin & Glycerol",
+    cures: &[SPACEACILLIN, "/datum/reagent/glycerol"],
+    cure_chance: 2.5,
+    agent: "Rip-LEY Alien Microbes",
+    desc: "This disease changes the victim into a xenomorph.",
+    visibility: 0,
+    ..TRANSFORMATION
+};
+
+pub(super) const TRANSFORM_SLIME: Def = Def {
+    path: "/datum/disease/transformation/slime",
+    name: "Advanced Mutation Transformation",
+    cure_text: "Frost Oil",
+    cures: &["/datum/reagent/consumable/frostoil"],
+    cure_chance: 55.0,
+    agent: "Advanced Mutation Toxin",
+    desc: "This highly concentrated extract converts anything into more of itself.",
+    visibility: 0,
+    ..TRANSFORMATION
+};
+
+pub(super) const TRANSFORM_CORGI: Def = Def {
+    path: "/datum/disease/transformation/corgi",
+    name: "The Barkening",
+    cure_text: "Death",
+    cures: &[ADMINORDRAZINE],
+    agent: "Fell Doge Majicks",
+    desc: "This disease transforms the victim into a corgi.",
+    visibility: 0,
+    ..TRANSFORMATION
+};
+
+pub(super) const TRANSFORM_MORPH: Def = Def {
+    path: "/datum/disease/transformation/morph",
+    name: "Gluttony's Blessing",
+    cure_text: "Nothing",
+    cures: &["/datum/reagent/consumable/nothing"],
+    agent: "Gluttony's Blessing",
+    desc: "A 'gift' from somewhere terrible.",
+    stage_prob: 10.0,
+    visibility: 0,
+    ..TRANSFORMATION
+};
+
+pub(super) const TRANSFORM_GONDOLA: Def = Def {
+    path: "/datum/disease/transformation/gondola",
+    name: "Gondola Transformation",
+    cure_text: "Condensed Capsaicin (not applied via vapor)",
+    cures: &["/datum/reagent/consumable/condensedcapsaicin"],
+    cure_chance: 55.0,
+    stage_prob: 2.5,
+    agent: "Tranquility",
+    desc: "Consuming the flesh of a Gondola comes at a terrible price.",
+    visibility: 0,
+    ..TRANSFORMATION
+};
+
 impl Kind {
-    pub const ALL: [Self; 15] = [
+    pub const ALL: [Self; 22] = [
         Self::Cold,
         Self::Cold9,
         Self::Flu,
@@ -308,6 +418,13 @@ impl Kind {
         Self::Anaphylaxis,
         Self::Decloning,
         Self::Revblight,
+        Self::JungleFlu,
+        Self::TransformRobot,
+        Self::TransformXeno,
+        Self::TransformSlime,
+        Self::TransformCorgi,
+        Self::TransformMorph,
+        Self::TransformGondola,
     ];
 
     pub fn def(self) -> &'static Def {
@@ -327,6 +444,13 @@ impl Kind {
             Self::Anaphylaxis => &ANAPHYLAXIS,
             Self::Decloning => &DECLONING,
             Self::Revblight => &REVBLIGHT,
+            Self::JungleFlu => &JUNGLE_FLU,
+            Self::TransformRobot => &TRANSFORM_ROBOT,
+            Self::TransformXeno => &TRANSFORM_XENO,
+            Self::TransformSlime => &TRANSFORM_SLIME,
+            Self::TransformCorgi => &TRANSFORM_CORGI,
+            Self::TransformMorph => &TRANSFORM_MORPH,
+            Self::TransformGondola => &TRANSFORM_GONDOLA,
             Self::Advance => &ADVANCE,
         }
     }

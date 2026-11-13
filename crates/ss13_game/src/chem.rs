@@ -2574,6 +2574,7 @@ fn life(world: &mut World, chem: &Chemistry, mob: Entity, seconds: f32) {
     // addiction points, the reagents' own effects, then the stacked effects.
     crate::addictions::metabolized(world, chem, mob, &metabolized);
     crate::drugs::metabolized(world, chem, mob, &metabolized, seconds);
+    crate::genetics::mutation_toxin::metabolized(world, chem, mob, &metabolized, seconds);
     crate::pyrotechnics::metabolized(world, chem, mob, &metabolized, seconds);
     crate::drugs::stacked_effects(world, chem, mob, &metabolized, seconds);
     if let Some(liver) = liver_organ {

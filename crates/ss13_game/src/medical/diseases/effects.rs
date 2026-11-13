@@ -405,6 +405,15 @@ pub(super) fn kind_act(
         Kind::Revblight => {
             return crate::antag::revenant::revblight_act(world, mob, stage, secs, rng);
         }
+        Kind::JungleFlu
+        | Kind::TransformRobot
+        | Kind::TransformXeno
+        | Kind::TransformSlime
+        | Kind::TransformCorgi
+        | Kind::TransformMorph
+        | Kind::TransformGondola => {
+            return super::transformation::act(world, mob, disease, secs, rng);
+        }
         Kind::Advance => {}
     }
     Outcome::Keep

@@ -362,6 +362,16 @@ pub(super) fn preop(world: &mut World, actor: Actor, mob: Entity, op: Op, zone: 
             format!("{user} начинает вскрывать {target}."),
             String::new(),
         ),
+        Op::ViralBonding => (
+            format!("Вы начинаете подогревать костный мозг {target} с помощью {tool}..."),
+            format!("{user} начинает подогревать костный мозг {target} с помощью {tool}..."),
+            "Вы чувствуете, как жгучее тепло разливается по вашей груди!".into(),
+        ),
+        Op::Bionecrosis => (
+            format!("Вы начинаете выращивать Ромерол-опухоль в мозге у {target}..."),
+            format!("{user} начинает копаться в мозге у {target}..."),
+            "Ваша голова разрывается от невообразимой боли!".into(),
+        ),
         Op::FilterBlood => (
             format!("Вы начинаете оперировать {target}..."),
             format!("{user} начинает оперировать {target}."),

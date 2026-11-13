@@ -20,6 +20,7 @@ pub mod crystallizer;
 pub mod destination_tagger;
 pub mod disposal_unit;
 pub mod dna_console;
+pub mod dna_vault;
 pub mod electrolyzer;
 pub mod gas_analyzer;
 pub mod gps;

@@ -49,6 +49,7 @@ use crate::interfaces::destination_tagger::{
 };
 use crate::interfaces::disposal_unit::{DisposalUnitData, DisposalUnitUi};
 use crate::interfaces::dna_console::{DnaConsoleData, DnaConsoleUi, DnaMutation};
+use crate::interfaces::dna_vault::{DnaVaultData, DnaVaultUi};
 use crate::interfaces::electrolyzer::{ElectrolyzerData, ElectrolyzerUi};
 use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
@@ -594,6 +595,22 @@ pub fn sample(name: &str) -> Option<Sample> {
             },
         ),
         DnaConsoleUi::NAME => dna_console(),
+        DnaVaultUi::NAME => of::<DnaVaultUi>(
+            "DNA Vault",
+            &(),
+            &DnaVaultData {
+                plants: 4,
+                plants_max: 6,
+                animals: 18,
+                animals_max: 18,
+                dna: 20,
+                dna_max: 20,
+                completed: true,
+                used: false,
+                choice_a: "Breathless".into(),
+                choice_b: "Tough".into(),
+            },
+        ),
         CrystallizerUi::NAME => crystallizer(),
         SmartVendUi::NAME => of::<SmartVendUi>(
             "smartfridge",

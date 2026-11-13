@@ -25,4 +25,4 @@
 
 - **Код:** [`/datum/reagent/mutationtoxin/vulpkanin`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/reagents/mutation.dm#L1)
 - **BandaStation:** [`modular_bandastation/species/code/reagents/mutation.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/species/code/reagents/mutation.dm#L1) — мутационные токсины видов форка
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/genetics/mutation_toxin.rs` (вызов из `crate::chem` после эффектов наркотиков): общий механизм `/datum/reagent/mutationtoxin` для всех токсинов tg и форка (вульпканин, таяр, скрелл) — в крови человека с органическим/скелетным/нежитью телом с шансом 5%/с предупреждения по циклам (≤6, ≤16, далее), на 20-м цикле `set_species` расы токсина, токсин удаляется, «You've become a …!»; несовершенный (`jelly`) — случайный подвид желе, на слаймовом теле сразу; рецепты экстрактов зелёного слайма (белок, сливки, соль, ром) приходят с данными реакций конвертера

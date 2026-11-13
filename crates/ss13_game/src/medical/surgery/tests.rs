@@ -124,6 +124,7 @@ fn tool(path: &str, behaviour: &str, sharpness: u32, force: f32) -> ToolInfo {
         force,
         temperature: 0.0,
         shock_ready: false,
+        zombie_chems: false,
     }
 }
 
@@ -408,4 +409,49 @@ fn autopsy_and_dissection_need_a_corpse_once() {
         .entity_mut(mob)
         .insert(crate::species::Species(crate::species::SpeciesId::Monkey));
     assert_eq!(dissection_value(&world, mob), 2.0);
+}
+
+#[test]
+fn viral_bonding_and_bionecrosis_are_locked_and_checked() {
+    let mut world = World::new();
+    world.init_resource::<Time>();
+    let mob = world
+        .spawn((
+            Health::default(),
+            Stat::Conscious,
+            organs::OrganHost,
+            Limbs::default(),
+            BodyPosition::default(),
+        ))
+        .id();
+    with_limbs(&mut world, mob, |l| {
+        for zone in [BodyZone::Chest, BodyZone::Head] {
+            let limb = l.limb_mut(zone);
+            limb.prepped = true;
+            limb.add_surgery(state::SKIN_OPEN | state::ORGANS_CUT | state::BONE_SAWED);
+        }
+    });
+    // No disease and no chems; no brain in the head.
+    assert!(!is_available(
+        &world,
+        Op::ViralBonding,
+        mob,
+        TargetZone::Chest
+    ));
+    assert!(!is_available(
+        &world,
+        Op::Bionecrosis,
+        mob,
+        TargetZone::Head
+    ));
+    for op in [Op::ViralBonding, Op::Bionecrosis] {
+        assert!(!operation_pool(&[]).contains(&op));
+        assert!(operation_pool(&[op.def().path]).contains(&op));
+    }
+    // Any heat source bonds; a cold item does not.
+    let mut lighter = tool("/obj/item/lighter", "", 0, 0.0);
+    assert!(!tool_check(Op::ViralBonding, &lighter));
+    lighter.temperature = 1500.0;
+    assert!(tool_check(Op::ViralBonding, &lighter));
+    assert!(tool_quality(Op::ViralBonding, &lighter) > 0.0);
 }

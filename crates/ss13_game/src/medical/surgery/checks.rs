@@ -43,6 +43,13 @@ impl Op {
             }
         }
         any.extend(state_guides(parsed, "требуется"));
+        // `bionecrosis/any_required_strings`.
+        if self == Op::Bionecrosis {
+            any.extend(
+                ["Rezadone", "Zombie Powder"]
+                    .map(|chem| format!("у пациента или в инструменте должно быть >1u {chem}")),
+            );
+        }
         let optional = if def.flags & flags::SELF_OPERABLE != 0 {
             vec!["хирург может сделать это самостоятельно".to_owned()]
         } else {
@@ -184,6 +191,8 @@ pub struct ToolInfo {
     /// Revival's `tool_check`: paddles of a powered unit, wielded and off cooldown; an active
     /// stun baton.
     pub shock_ready: bool,
+    /// Bionecrosis' `snowflake_check_availability`: more than 1u of a zombie chem inside.
+    pub zombie_chems: bool,
 }
 
 impl ToolInfo {
@@ -208,12 +217,42 @@ impl ToolInfo {
                 0.0
             },
             shock_ready: shock_ready(world, item),
+            zombie_chems: holder_has_zombie_chems(
+                world,
+                world.get::<crate::chem::Reagents>(item).map(|r| &r.0),
+            ),
         }
     }
 
     fn under(&self, root: &str) -> bool {
         self.path.as_deref().is_some_and(|p| is_under(p, root))
     }
+}
+
+/// `bionecrosis`' `zombie_chems`.
+pub(super) const ZOMBIE_CHEMS: [&str; 2] = [
+    "/datum/reagent/medicine/rezadone",
+    "/datum/reagent/toxin/zombiepowder",
+];
+/// `viral_bonding`'s `required_chems`.
+const VIRAL_BONDING_CHEMS: [&str; 3] = [
+    "/datum/reagent/medicine/spaceacillin",
+    "/datum/reagent/consumable/virus_food",
+    "/datum/reagent/toxin/formaldehyde",
+];
+
+/// More than 1u of one of [`ZOMBIE_CHEMS`] in `holder`.
+pub(super) fn holder_has_zombie_chems(
+    world: &World,
+    holder: Option<&ss13_reagents::Holder>,
+) -> bool {
+    let (Some(chem), Some(holder)) = (world.get_resource::<crate::chem::Chem>(), holder) else {
+        return false;
+    };
+    ZOMBIE_CHEMS
+        .iter()
+        .filter_map(|path| chem.0.id(path))
+        .any(|id| holder.amount(id) > 1.0)
 }
 
 pub(super) fn shock_ready(world: &World, item: Entity) -> bool {
@@ -265,7 +304,7 @@ pub(super) fn tool_check(op: Op, tool: &ToolInfo) -> bool {
             tool.under("/obj/item/stack/medical/suture")
                 || tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST
         }
-        Op::SealVeins => tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST,
+        Op::SealVeins | Op::ViralBonding => tool.temperature >= FIRE_MINIMUM_TEMPERATURE_TO_EXIST,
         // Any sharpness or a listed tool behaviour.
         Op::MechanicalIncision | Op::MechanicalClose => tool.sharpness != 0 || listed,
         Op::Gastrectomy | Op::Lobotomy => {
@@ -618,6 +657,22 @@ pub(crate) fn is_available(world: &World, op: Op, mob: Entity, zone: TargetZone)
         }
         // `dissection/state_check`: a corpse not dissected yet.
         Op::Dissection => p.dead && world.get::<Dissected>(mob).is_none(),
+        // `viral_bonding/state_check`: 1u of each chem in the blood, a curable disease.
+        Op::ViralBonding => {
+            VIRAL_BONDING_CHEMS
+                .iter()
+                .all(|c| crate::chem::blood_amount(world, mob, c) >= 1.0)
+                && super::super::diseases::of_mob(world, mob)
+                    .iter()
+                    .any(|d| d.severity != super::super::diseases::Severity::Uncurable)
+        }
+        // `bionecrosis/state_check`: the limb holds the brain and no romerol tumour.
+        Op::Bionecrosis => {
+            let holds = |slot: Slot| {
+                slot.spec().zone.check_zone() == body && organs::organ(world, mob, slot).is_some()
+            };
+            holds(Slot::Brain) && !holds(Slot::Zombie)
+        }
         // `bioware/state_check`: its zone, no bioware of the same kind yet.
         Op::Bioware(kind) => {
             body == kind.zone().check_zone() && super::super::bioware::can_gain(world, mob, kind)
@@ -670,6 +725,16 @@ pub(super) fn available(
     if tool_quality(op, tool) <= 0.0
         || !tool_fits(op, zone, tool)
         || !is_available(world, op, mob, zone)
+    {
+        return false;
+    }
+    // `bionecrosis/snowflake_check_availability`: the chems in the tool or the patient.
+    if op == Op::Bionecrosis
+        && !tool.zombie_chems
+        && !holder_has_zombie_chems(
+            world,
+            world.get::<crate::chem::MobReagents>(mob).map(|m| &m.blood),
+        )
     {
         return false;
     }

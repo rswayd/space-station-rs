@@ -52,6 +52,24 @@ pub(super) fn can_loop(world: &mut World, op: Op, mob: Entity) -> bool {
     any
 }
 
+/// `bionecrosis/on_success`: 1u of each zombie chem out of the tool and the patient's blood.
+fn bionecrosis_use_chems(world: &mut World, tool: Option<Entity>, mob: Entity) {
+    let Some(chem) = world
+        .get_resource::<crate::chem::Chem>()
+        .map(|c| c.0.clone())
+    else {
+        return;
+    };
+    for id in ZOMBIE_CHEMS.iter().filter_map(|p| chem.id(p)) {
+        if let Some(mut r) = tool.and_then(|t| world.get_mut::<crate::chem::Reagents>(t)) {
+            r.0.remove_reagent(id, 1.0);
+        }
+        if let Some(mut m) = world.get_mut::<crate::chem::MobReagents>(mob) {
+            m.blood.remove_reagent(id, 1.0);
+        }
+    }
+}
+
 /// `filter_blood/on_success`: each reagent in the blood loses 22% (0.4 to 10 units, rounded
 /// to 0.2).
 // shortcut: no whitelist (the filter's own UI), no chemical scan with an analyzer in hand.
@@ -558,6 +576,37 @@ pub(super) fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone
         Op::Dissection => {
             dissection_done(world, actor, mob, true);
             return;
+        }
+        Op::ViralBonding => {
+            own = format!(
+                "Костный мозг {target} начинает медленно пульсировать. Вирусное связывание \
+                 завершено."
+            );
+            others = format!("Костный мозг {target} начинает медленно пульсировать.");
+            pain(world, mob, "Вы чувствуете слабую пульсацию в груди.");
+            // No curing quirks.
+            if let Some(mut diseases) = world.get_mut::<super::super::diseases::Diseases>(mob) {
+                for disease in diseases
+                    .list
+                    .iter_mut()
+                    .filter(|d| d.severity != super::super::diseases::Severity::Uncurable)
+                {
+                    disease.carrier = true;
+                }
+            }
+        }
+        Op::Bionecrosis => {
+            own = format!("Вам удаётся вырастить Ромерол-опухоль в мозге у {target}.");
+            others = format!("{user} успешно выращивает Ромерол-опухоль в мозге у {target}!");
+            pain(
+                world,
+                mob,
+                "На мгновение голова полностью немеет, боль становится невыносимой!",
+            );
+            // "they got another one mid surgery? whatever".
+            if crate::antag::zombie::infect(world, mob, crate::antag::zombie::INFECTION) {
+                bionecrosis_use_chems(world, actor.item, mob);
+            }
         }
         Op::FilterBlood => {
             filter_blood(world, mob);

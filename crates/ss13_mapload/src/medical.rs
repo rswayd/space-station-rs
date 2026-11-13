@@ -64,12 +64,18 @@ pub const DEFIB_COMPONENT: &str = "dm_defib";
 pub const SURGICAL_TOOL: u32 = 1 << 10;
 
 /// Types spawned at runtime by medicine: defibrillator paddles (`paddle_type`).
-pub const MEDICAL_RUNTIME_TYPES: [&str; 4] = [
+pub const MEDICAL_RUNTIME_TYPES: [&str; 8] = [
     // Dissection's notes (`crate::medical::surgery::autopsy` in `ss13_game`).
     "/obj/item/research_notes",
     "/obj/item/shockpaddles",
     "/obj/item/shockpaddles/syndicate",
     "/obj/item/shockpaddles/syndicate/nanotrasen",
+    // The slime transformation of a sentient host (`ss13_game::medical::diseases`).
+    "/mob/living/basic/slime/random",
+    // The DNA vault goal's board, vault and probes (`ss13_game::genetics::dna_vault`).
+    "/obj/item/circuitboard/machine/dna_vault",
+    "/obj/machinery/dna_vault",
+    "/obj/item/dna_probe",
 ];
 
 /// What an item's hits do to wounds and surgery (`/obj/item` `sharpness`, `wound_bonus`,

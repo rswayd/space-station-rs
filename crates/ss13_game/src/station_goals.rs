@@ -14,8 +14,11 @@
 //!   ([`update_emagged`]); 3, 6 and 7 at once bring warnings (7: an announcement), 10 the dark
 //!   matt-eor. A dark matt-eor reflects the beam and destroys the shield.
 //! - The round-end report lists every goal and whether it was met ([`goal_report`]).
-// shortcut: the DNA vault and the bluespace artillery are not offered (their machines, probes
-// and parts are not ported); no beam visual or explosion visual, no examine lines or multitool
+//! - The DNA vault (`/datum/station_goal/dna_vault`): samples of animals, plants and humans
+//!   gathered with DNA probes into a vault (`crate::genetics::dna_vault`).
+//! - [`on_report`]: a goal's supply packs become orderable with the report.
+// shortcut: the bluespace artillery is not offered (its machines and parts are not ported); no
+// beam visual or explosion visual, no examine lines or multitool
 // readout of satellites, no admin goals panel (the toggle is [`set_completed`]).
 
 use crate::construction::is_space;
@@ -33,6 +36,7 @@ use crate::obj_damage::{Anchored, is_under};
 use crate::tools::{Actor, do_after, tell};
 
 pub const STATION_SHIELD: &str = "/datum/station_goal/station_shield";
+pub const DNA_VAULT: &str = "/datum/station_goal/dna_vault";
 pub const SATELLITE: &str = "/obj/machinery/satellite";
 pub const METEOR_SHIELD: &str = "/obj/machinery/satellite/meteor_shield";
 /// `/obj/machinery/satellite/meteor_shield` `kill_range`.
@@ -67,17 +71,42 @@ pub struct GoalDef {
 }
 
 /// The ported goals.
-pub static GOALS: [GoalDef; 1] = [GoalDef {
-    path: STATION_SHIELD,
-    name: "Станционные щиты",
-    weight: 1.0,
-    requires_space: true,
-    report: "Система противометеорной защиты\n\
+pub static GOALS: [GoalDef; 2] = [
+    GoalDef {
+        path: STATION_SHIELD,
+        name: "Станционные щиты",
+        weight: 1.0,
+        requires_space: true,
+        report: "Система противометеорной защиты\n\
              Станция находится в зоне, заполненной космическим мусором.\n\
              У вас есть прототип защитной системы, который необходимо развернуть для снижения \
              количества аварий из-за столкновений.\n\
              Вы можете заказать спутники и системы через отдел снабжения.",
-}];
+    },
+    GoalDef {
+        path: DNA_VAULT,
+        name: "ДНК хранилище",
+        weight: 1.0,
+        requires_space: false,
+        // Built with the goal's sample counts ([`Goal::report`]).
+        report: "",
+    },
+];
+
+/// The supply packs a goal's `on_report` enables (`ORDER_SPECIAL_ENABLED`).
+fn goal_packs(path: &str) -> &'static [&'static str] {
+    match path {
+        STATION_SHIELD => &[
+            "/datum/supply_pack/engineering/shield_sat",
+            "/datum/supply_pack/engineering/shield_sat_control",
+        ],
+        DNA_VAULT => &[
+            "/datum/supply_pack/engineering/dna_vault",
+            "/datum/supply_pack/engineering/dna_probes",
+        ],
+        _ => &[],
+    }
+}
 
 /// tg `STATION_GOAL_BUDGET` (BandaStation: 1). Insert before `GameServerPlugin` to override;
 /// otherwise `SS13_STATION_GOAL_BUDGET` or 1.
@@ -104,6 +133,18 @@ pub struct Goal {
     pub def: &'static GoalDef,
     /// tg `completed`: set by an admin.
     pub completed: bool,
+    /// `/datum/station_goal/dna_vault`'s `animal_count`, `plant_count`, `human_count`.
+    pub vault: Option<crate::genetics::dna_vault::VaultTargets>,
+}
+
+impl Goal {
+    /// tg `get_report()`.
+    pub fn report(&self) -> String {
+        match &self.vault {
+            Some(t) => crate::genetics::dna_vault::goal_report(t),
+            None => self.def.report.to_owned(),
+        }
+    }
 }
 
 /// tg `SSstation.goals_by_type`.
@@ -173,13 +214,22 @@ pub fn generate(world: &mut World) {
         .rng
         .take()
         .unwrap_or_else(|| Rng::new(seed ^ 0x474f_414c));
-    for def in pick(budget, false, &mut rng) {
-        if !goals.has(def.path) {
-            info!("station goal: {}", def.name);
-            goals.goals.push(Goal {
-                def,
-                completed: false,
-            });
+    let picked = pick(budget, false, &mut rng);
+    let mut new = Vec::new();
+    for def in picked {
+        let vault = (def.path == DNA_VAULT)
+            .then(|| crate::genetics::dna_vault::roll_targets(world, &mut rng));
+        new.push(Goal {
+            def,
+            completed: false,
+            vault,
+        });
+    }
+    let mut goals = world.resource_mut::<StationGoals>();
+    for goal in new {
+        if !goals.has(goal.def.path) {
+            info!("station goal: {}", goal.def.name);
+            goals.goals.push(goal);
         }
     }
     goals.rng = Some(rng);
@@ -210,7 +260,7 @@ pub fn report_section(world: &World) -> String {
     if goals.goals.is_empty() {
         return String::new();
     }
-    let reports: Vec<&str> = goals.goals.iter().map(|g| g.def.report).collect();
+    let reports: Vec<String> = goals.goals.iter().map(Goal::report).collect();
     format!("=== Цели на смену ===\n\n{}", reports.join("\n\n---\n\n"))
 }
 
@@ -230,7 +280,26 @@ pub fn check_completion(world: &mut World, goal: &Goal) -> bool {
     }
     match goal.def.path {
         STATION_SHIELD => update_coverage(world) >= COVERAGE_GOAL,
+        DNA_VAULT => goal
+            .vault
+            .is_some_and(|t| crate::genetics::dna_vault::goal_met(world, &t)),
         _ => false,
+    }
+}
+
+/// tg `on_report()` of every goal (`send_roundstart_report`): its supply packs can be ordered.
+pub fn on_report(world: &mut World) {
+    let paths: Vec<&'static str> = world
+        .get_resource::<StationGoals>()
+        .map(|g| g.goals.iter().map(|goal| goal.def.path).collect())
+        .unwrap_or_default();
+    let Some(mut packs) = world.get_resource_mut::<crate::cargo::supply::SupplyPacks>() else {
+        return;
+    };
+    for pack in paths.into_iter().flat_map(goal_packs) {
+        if let Some(i) = packs.by_id(pack) {
+            packs.packs[i].order_flags |= ss13_mapload::cargo::order_flags::SPECIAL_ENABLED;
+        }
     }
 }
 
@@ -665,12 +734,15 @@ mod tests {
         let mut rng = Rng::new(3);
         let one = pick(1.0, false, &mut rng);
         assert_eq!(one.len(), 1);
-        assert_eq!(one[0].path, STATION_SHIELD);
         assert!(pick(0.0, false, &mut rng).is_empty());
         // More budget than goals: all of them, once.
         assert_eq!(pick(5.0, false, &mut rng).len(), GOALS.len());
-        // The shield needs space.
-        assert!(pick(1.0, true, &mut rng).is_empty());
+        // The shield needs space; the vault does not.
+        for _ in 0..8 {
+            let planetary = pick(5.0, true, &mut rng);
+            assert_eq!(planetary.len(), 1);
+            assert_eq!(planetary[0].path, DNA_VAULT);
+        }
     }
 
     #[test]
@@ -680,16 +752,22 @@ mod tests {
         world.init_resource::<StationGoals>();
         assert!(report_section(&world).is_empty());
         generate(&mut world);
-        generate(&mut world);
-        assert_eq!(
-            world.resource::<StationGoals>().goals.len(),
-            1,
-            "once per type"
-        );
+        assert_eq!(world.resource::<StationGoals>().goals.len(), 1);
+        let goal = world.resource::<StationGoals>().goals[0].clone();
         let section = report_section(&world);
         assert!(section.starts_with("=== Цели на смену ==="), "{section}");
-        assert!(section.contains("Система противометеорной защиты"));
-        set_completed(&mut world, STATION_SHIELD, true);
+        match goal.def.path {
+            STATION_SHIELD => assert!(section.contains("Система противометеорной защиты")),
+            _ => {
+                assert!(goal.vault.is_some());
+                assert!(section.contains("#### ДНК хранилище"), "{section}");
+            }
+        }
+        // A second roll never adds a type already there.
+        generate(&mut world);
+        let goals = &world.resource::<StationGoals>().goals;
+        assert!(goals.iter().filter(|g| g.def.path == goal.def.path).count() == 1);
+        set_completed(&mut world, goal.def.path, true);
         let goal = world.resource::<StationGoals>().goals[0].clone();
         assert!(check_completion(&mut world, &goal));
     }
