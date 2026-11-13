@@ -64,7 +64,8 @@
 В начале раунда командование получает отчёт с примерным уровнем угрозы в зависимости от выпавшего тира.
 
 - **Код:** [`/datum/controller/subsystem/dynamic/proc/get_advisory_report()`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/dynamic/dynamic.dm#L307)
-- **Статус в ss13-rs:** ❌ нет
+- **BandaStation:** [`communications.dm#L79`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/datums/communications.dm#L79) — отчёт на старте собирается по шаблону `modular_bandastation/paperwork/templates/station_report.md` (цели смены, отклонения станции, сноски, подпись); уровня угрозы в нём нет, и `get_advisory_report()` нигде не вызывается
+- **Статус в ss13-rs:** ✅ как в BandaStation — отчёт на старте раунда (`crates/ss13_game/src/announce.rs`, `queue_roundstart_report`, `crates/ss13_game/src/station_goals.rs`) идёт по шаблону BandaStation без уровня угрозы; мёртвый код tg `get_advisory_report` и тексты `advisory_report` тиров не переносятся
 
 ### Админ-панель Dynamic
 TGUI-панель: смена тира, постановка рулсетов в очередь, принудительный мидраунд, форс extended, просмотр кулдаунов и шансов.
