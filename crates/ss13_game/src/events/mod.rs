@@ -61,6 +61,7 @@ pub mod processor_overload;
 pub mod radiation_leak;
 pub mod radiation_storm;
 pub mod scrubber_overflow;
+pub mod sentience;
 pub mod shuttle;
 pub mod space_vines;
 pub mod stray_cargo;
@@ -477,6 +478,8 @@ pub fn controls() -> Vec<EventControl> {
             ),
         ),
         c(fake_virus::NAME, 20, 20.0, 0, 20, fake_virus::make),
+        c(sentience::NAME, 10, 20.0, 0, 20, sentience::make),
+        c(sentience::NAME_ALL, 0, 20.0, 0, 20, sentience::make_all),
         c(wisdom_cow::NAME, 20, 20.0, 0, 1, wisdom_cow::make),
         c(aurora_caelus::NAME, 1, 5.0, 0, 1, aurora_caelus::make),
         c(

@@ -223,7 +223,7 @@ fn smoke_everyone(world: &mut World) {
 }
 
 /// DM `shuffle_inplace` (Fisher-Yates) with the event stream.
-fn shuffle<T>(world: &mut World, items: &mut [T]) {
+pub(super) fn shuffle<T>(world: &mut World, items: &mut [T]) {
     let mut rng = world.resource_mut::<EventRng>();
     for i in (1..items.len()).rev() {
         let j = rng.0.range(0, i as i64) as usize;
