@@ -75,7 +75,7 @@ pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
 /// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
 /// the colossus' death bolt, the necropolis chests and what their `PopulateContents` makes
 /// (tg `necropolis_chests.dm`).
-pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 34] = [
+pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 37] = [
     "/mob/living/simple_animal/hostile/megafauna/bubblegum",
     "/obj/structure/closet/crate/necropolis/bubblegum",
     "/obj/item/clothing/suit/hooded/hostile_environment",
@@ -111,6 +111,10 @@ pub const MEGAFAUNA_RUNTIME_TYPES: [&str; 34] = [
     "/obj/item/stack/sheet/bone",
     "/mob/living/simple_animal/hostile/megafauna/clockwork_defender",
     "/obj/item/clockwork_alloy",
+    // The hierophant (admin spawns; its arena ruin is not mapped), its beacon and its club.
+    "/mob/living/simple_animal/hostile/megafauna/hierophant",
+    "/obj/effect/hierophant",
+    "/obj/item/hierophant_club",
 ];
 
 /// The DM type of a basic mob (prototype data): the key into [`MobsData::mobs`].
