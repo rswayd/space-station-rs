@@ -102,6 +102,7 @@
 //! | 3189 | `shuttle_remote::use_remote` |
 //! | 3190 | `janitor::broom_attack_self` (push broom wield) |
 //! | 3192 | `power::lighting::replacer_attack_self` (the fixtures on the user's tile) |
+//! | 3193 | `mining::boulders::beacon_attack_self` (a boulder beacon calls down its next machine) |
 //! | 3194 | `closets::kinds::bodybag_attack_self` (a folded body bag unfolds) |
 //! | 3203 | `crayons::attack_self` (the stencil menu, a spray can's cap and colour) |
 //! | 3213 | `gifts::open` |
@@ -291,6 +292,7 @@
 //! | 2800 | `falsewall::attack_hand` |
 //! | 2810 | `door_structures::mineral_attack_hand` (mineral doors) |
 //! | 2900 | `mining::interact` |
+//! | 2903 | `mining::boulders::attack_hand` (a BRM teleports a boulder; right click: toggles it, a boulder out of a refinery) |
 //! | 3000 | `holosign::attack_hand` |
 //! | 3097 | `plumbing_net::interact` (plumbing machine settings) |
 //! | 3100 | `plumbing::interact` |

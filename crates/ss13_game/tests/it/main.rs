@@ -12,6 +12,7 @@ mod blob;
 mod border;
 mod botany;
 mod bots;
+mod boulders;
 mod breath;
 mod brig;
 mod brothers;

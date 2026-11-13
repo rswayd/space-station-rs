@@ -77,6 +77,35 @@ pub const GIFT_TYPES: &[&str] = &[
 /// Constant paths `ss13_game` spawns that no other table of this crate lists: leftovers,
 /// products and printouts of machines, decals, grenade payloads, quirk items, paper kinds.
 pub const GAME_RUNTIME_TYPES: &[&str] = &[
+    // `mining::vents`: boulders, the NODE drone, the defenders and rubble of a wave.
+    "/obj/item/boulder",
+    "/obj/item/boulder/artifact",
+    "/obj/item/boulder/artifact/bluespace",
+    "/obj/item/boulder/artifact/diamond",
+    "/mob/living/basic/node_drone",
+    "/mob/living/basic/mining/goliath",
+    "/mob/living/basic/mining/legion/spawner_made",
+    "/mob/living/basic/mining/watcher",
+    "/mob/living/basic/mining/lobstrosity/lava",
+    "/mob/living/basic/mining/brimdemon",
+    "/mob/living/basic/mining/bileworm",
+    "/obj/effect/decal/cleanable/rubble",
+    // `mining::boulders`: crushed boulders' ore and relics, the boulder beacon's machines.
+    "/obj/item/assembly/relic/lavaland",
+    "/obj/item/stack/ore/iron",
+    "/obj/item/stack/ore/glass/basalt",
+    "/obj/item/stack/ore/silver",
+    "/obj/item/stack/ore/gold",
+    "/obj/item/stack/ore/diamond",
+    "/obj/item/stack/ore/uranium",
+    "/obj/item/stack/ore/plasma",
+    "/obj/item/stack/ore/bluespace_crystal",
+    "/obj/item/stack/ore/bananium",
+    "/obj/item/stack/ore/titanium",
+    "/obj/item/stack/ore/slag",
+    "/obj/machinery/brm",
+    "/obj/machinery/bouldertech/refinery",
+    "/obj/machinery/bouldertech/refinery/smelter",
     // `shuttle::create_ripples`: hyperspace ripples on a shuttle's landing tiles.
     "/obj/effect/abstract/ripple",
     // `vehicles`: the dragon boat and the bottle it goes into.

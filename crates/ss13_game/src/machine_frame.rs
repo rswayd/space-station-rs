@@ -142,9 +142,11 @@ pub enum Family {
     PowerMonitor,
     /// Portable SMES banks (`crate::power::smes_portable`).
     SmesBank,
+    /// The BRM, boulder refineries and smelters (`crate::mining::boulders`).
+    Bouldertech,
 }
 
-const FAMILIES: [(&str, Family); 52] = [
+const FAMILIES: [(&str, Family); 54] = [
     (CELL_CHARGER, Family::Charger),
     (RECHARGER, Family::Charger),
     (crate::kitchen::MICROWAVE_ROOT, Family::Kitchen),
@@ -238,6 +240,8 @@ const FAMILIES: [(&str, Family); 52] = [
     ),
     (crate::cargo::black_market::LTSRBT, Family::Ltsrbt),
     (crate::power::monitor::MONITOR, Family::PowerMonitor),
+    (crate::mining::boulders::BRM, Family::Bouldertech),
+    (crate::mining::boulders::BOULDERTECH, Family::Bouldertech),
     (crate::power::smes_portable::BANK, Family::SmesBank),
 ];
 
@@ -1225,6 +1229,7 @@ pub fn setup_built(world: &mut World, machine: Entity) {
         Family::Ltsrbt => crate::cargo::black_market::setup(world, machine),
         Family::PowerMonitor => crate::power::monitor::setup(world, machine),
         Family::SmesBank => crate::power::smes_portable::setup_bank(world, machine),
+        Family::Bouldertech => crate::mining::boulders::setup(world, machine),
     }
 }
 

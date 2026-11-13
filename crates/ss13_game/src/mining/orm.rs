@@ -18,7 +18,7 @@
 //!   (`crate::machine_frame`); alt-click with the panel open turns the input and output a
 //!   quarter clockwise. tg's ORM has no part upgrades: `ore_multiplier` and `point_upgrade`
 //!   are its type's.
-// shortcut: no request console ore notices, I/O overlays, boulders, silo holds or logs.
+// shortcut: no request console ore notices, I/O overlays, silo holds or logs.
 
 use bevy::ecs::message::MessageCursor;
 use bevy::ecs::system::SystemParamItem;

@@ -334,6 +334,7 @@ impl Plugin for GameServerPlugin {
             crate::pixel_shift::PixelShiftPlugin,
         ))
         .add_plugins(crate::mining::MiningServerPlugin)
+        .add_plugins(crate::reta::RetaPlugin)
         .add_plugins(crate::forensics::server::ForensicsServerPlugin)
         .add_plugins(crate::service::server::ServiceServerPlugin)
         .add_plugins(crate::holodeck::HolodeckPlugin)

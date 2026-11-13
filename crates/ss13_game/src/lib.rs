@@ -598,6 +598,8 @@ pub mod restaurant;
 #[cfg(feature = "server")]
 pub mod restraints;
 #[cfg(feature = "server")]
+pub mod reta;
+#[cfg(feature = "server")]
 pub mod rot;
 #[cfg(feature = "server")]
 pub mod round;

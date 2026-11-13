@@ -10,8 +10,9 @@
 //!   flora.
 //! - A template only places when the converted prototypes cover all its types (the loader fails
 //!   on an unknown type): run `ss13-mapload convert` with `_maps/RandomRuins/LavaRuins`.
-// shortcut: no ore vent ruins (`mineral_budget`, `/datum/map_template/ruin/lavaland/vent`: no
-// ore vents), no AnywhereRuins (golem ship, fountain hall, shoe factory), no
+//! - The ore vent ruin (`/datum/map_template/ruin/lavaland/vent`) costs no budget but one of the
+//!   `mineral_budget` (15): vents are placed until it is spent.
+// shortcut: no AnywhereRuins (golem ship, fountain hall, shoe factory), no
 // `lavaruinblacklist.txt` or `lavaland_budget` config (tg default 60), no themed ruins, no
 // `always_spawn_with` / `never_spawn_with` (no lavaland template sets them), no `ruin` landmarks
 // or `active_ruins`, no terrain generation inside ruin areas (`biome_replace` turfs stay basalt).
@@ -55,6 +56,8 @@ pub struct RuinDef {
     pub always_place: bool,
     pub allow_duplicates: bool,
     pub unpickable: bool,
+    /// `mineral_cost`: what it takes from the `mineral_budget`.
+    pub mineral_cost: i64,
 }
 
 const fn ruin(id: &'static str, suffix: &'static str, cost: i64, dup: bool) -> RuinDef {
@@ -65,6 +68,7 @@ const fn ruin(id: &'static str, suffix: &'static str, cost: i64, dup: bool) -> R
         always_place: false,
         allow_duplicates: dup,
         unpickable: false,
+        mineral_cost: 0,
     }
 }
 
@@ -173,6 +177,10 @@ pub const LAVALAND_RUINS: &[RuinDef] = &[
         false,
     ),
     ruin("crashsite", "lavaland_surface_crashsite.dmm", 0, false),
+    RuinDef {
+        mineral_cost: 1,
+        ..always(ruin("ore_vent", "lavaland_surface_ore_vent.dmm", 0, true))
+    },
 ];
 
 /// A loaded template.
@@ -223,12 +231,12 @@ pub fn read_lavaland(source: &Path, seed: u64, known: impl Fn(&str) -> bool) -> 
 /// tg `seedRuins(z_levels, budget, whitelist, ...)` on every z-level of `map`.
 pub fn seed(map: &mut DmmMap, templates: &[Template], budget: i64, rng: &mut Rng) -> Vec<Placed> {
     let mut budget = budget;
-    let mineral_budget = MINERAL_BUDGET;
+    let mut mineral_budget = MINERAL_BUDGET;
     let mut reserved: HashSet<usize> = HashSet::new();
     let mut forced: Vec<usize> = Vec::new();
     let mut available: Vec<usize> = Vec::new();
     for (i, t) in templates.iter().enumerate() {
-        if t.def.cost > budget {
+        if t.def.cost > budget || t.def.mineral_cost > mineral_budget {
             continue;
         }
         if t.def.always_place {
@@ -258,6 +266,7 @@ pub fn seed(map: &mut DmmMap, templates: &[Template], budget: i64, rng: &mut Rng
             }
             Some((x, y, z)) => {
                 budget -= t.def.cost;
+                mineral_budget -= t.def.mineral_cost;
                 if !t.def.allow_duplicates {
                     available.retain(|&i| templates[i].def.id != t.def.id);
                 }
@@ -277,7 +286,9 @@ pub fn seed(map: &mut DmmMap, templates: &[Template], budget: i64, rng: &mut Rng
                 });
             }
         }
-        available.retain(|&i| templates[i].def.cost <= budget);
+        available.retain(|&i| {
+            templates[i].def.cost <= budget && templates[i].def.mineral_cost <= mineral_budget
+        });
     }
     placed
 }
@@ -525,6 +536,20 @@ www
             &mut Rng::new(1),
         );
         assert!(placed.is_empty());
+    }
+
+    #[test]
+    fn ore_vents_spend_the_mineral_budget() {
+        let mut map = level(120, 120);
+        let vent = Template {
+            def: RuinDef {
+                mineral_cost: 1,
+                ..template("ore_vent", 0, true, true).def
+            },
+            map: ruin_map(),
+        };
+        let placed = seed(&mut map, &[vent], 0, &mut Rng::new(5));
+        assert_eq!(placed.len(), MINERAL_BUDGET as usize);
     }
 
     #[test]
