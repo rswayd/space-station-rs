@@ -323,6 +323,7 @@
 //! | 3473 | `devices::beacons::attack_self` (right click toggles a tracking beacon) |
 //! | 3475 | `science::teleportation` (teleporter station toggle; teleporter, launchpad, satellite and gateway consoles; away gateways) |
 //! | 3485 | `science::teleportation::hand_tele::portal_hand` (through an adjacent portal) |
+//! | 3449 | `cars::attack_hand` (the clown car's trunk) |
 //! | 3450 | `vehicles::attack_hand` |
 //! | 3451 | `antag::wizard::server::ritual::interact` (a wizard invokes a grand rune) |
 //! | 3460 | `wiremod::server::attack_hand` |
@@ -391,6 +392,7 @@
 //! | 281 | `power::smes_portable::item_interaction` (a portable SMES bank's wrench; a connector with a bank refuses wrench, screwdriver and crowbar) |
 //! | 289 | `machine_wires::held_on_target` (panel screwdrivers of machines, cyborgs, mechs and radios; wire tools on an open panel, MOD or radio) |
 //! | 291 | `transit_tubes::held_on_target` (wrench and crowbar on tubes, stations, pods and unattached tubes) |
+//! | 299 | `cars::emag` (an emag on a clown car) |
 //! | 300 | `emag::interact_with_atom` (left click) |
 //! | 317 | `misc_items::puzzle::swipe` (keycards on keycard doors and panels) |
 //! | 320 | `janitor::key_on_door` (the janitor's key on a door) |
@@ -509,6 +511,7 @@
 //! | 2885 | `door_structures::item_interaction` (firelock frames and bolts, windoor assemblies, mineral doors) |
 //! | 2891 | `power::pipe_cleaner::held_on_target` (a pipe cleaner coil on plating or a piece, wirecutters on a piece) |
 //! | 2900 | `mecha::item_interaction` |
+//! | 2949 | `cars::item_interaction` (a key or a banana on a car) |
 //! | 2950 | `vehicles::item_interaction` |
 //! | 2959 | `electric_chair::item_interaction` (a helmet on an electropack, a shock kit on a chair, its screwdriver, wrenches on the kit and the electric chair) |
 //! | 2960 | `flora::item_interaction` |

@@ -111,6 +111,10 @@ pub const GAME_RUNTIME_TYPES: &[&str] = &[
     // `vehicles`: the dragon boat and the bottle it goes into.
     "/obj/vehicle/ridden/lavaboat/dragon",
     "/obj/item/ship_in_a_bottle",
+    // `cars`: the cars (uplink and admin spawns) and the clown car's banana peel.
+    "/obj/vehicle/sealed/car/clowncar",
+    "/obj/vehicle/sealed/car/speedwagon",
+    "/obj/item/grown/bananapeel/specialpeel",
     // `bows::arrow_drop`: the reusable arrows a shot leaves.
     "/obj/item/ammo_casing/arrow",
     "/obj/item/ammo_casing/arrow/sticky",

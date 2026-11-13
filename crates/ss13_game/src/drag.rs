@@ -311,6 +311,14 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `/obj/vehicle/sealed/car/mouse_drop_receive`: climbing into a car, forcing someone into
+    // the clown car.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && !traits.hands_blocked
+        && crate::cars::mouse_drop_receive(world, actor, over, dragged)
+    {
+        return;
+    }
     if let End::World(over) = to
         && matches!(from, End::World(_))
         && crate::disposals::mouse_drop_receive(world, actor, over, dragged)

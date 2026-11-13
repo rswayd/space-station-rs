@@ -453,7 +453,7 @@ pub(super) fn item_path(world: &World, e: Entity) -> String {
 pub(super) use crate::tools::client_of;
 
 /// The job title of a player's mob (tg `mind.assigned_role.title`).
-pub(super) fn job_title(world: &World, mob: Entity) -> Option<String> {
+pub(crate) fn job_title(world: &World, mob: Entity) -> Option<String> {
     if let Some(title) = crate::noncrew_jobs::title_of(world, mob) {
         return Some(title.to_owned());
     }

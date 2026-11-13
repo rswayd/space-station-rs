@@ -22,6 +22,7 @@ mod bump;
 mod cameras;
 mod cards;
 mod cargo;
+mod cars;
 mod changeling;
 mod chem;
 mod chem_machines;

@@ -424,6 +424,8 @@ fn apply_damage(
     } else {
         // `porta_turret/take_damage`: sparks and anger.
         crate::defenses::server::damaged(world, target);
+        // `clowncar/take_damage`: lube foam.
+        crate::cars::damaged(world, target);
         refresh_look(world, target);
     }
     hit
@@ -622,6 +624,7 @@ pub fn deconstruct(world: &mut World, target: Entity, disassembled: bool) {
         || crate::chem_machines::separator::deconstruct(world, target, &obj, pos)
         || crate::antag::ashwalker::deconstruct(world, &obj, pos)
         || (!disassembled && crate::defenses::cameras::destroyed(world, target, pos))
+        || crate::cars::destroyed(world, target, pos)
     {
         // A chair's, bed's, bathroom fixture's, decor's or flora's debris is out.
     }

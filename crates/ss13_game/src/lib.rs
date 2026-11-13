@@ -234,6 +234,8 @@ pub mod bump;
 pub mod cannons;
 pub mod cargo;
 #[cfg(feature = "server")]
+pub mod cars;
+#[cfg(feature = "server")]
 pub mod chem;
 #[cfg(feature = "server")]
 pub mod chem_dispenser;
