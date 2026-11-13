@@ -521,11 +521,15 @@ pub const EMOTES: &[Emote] = &[
             mimed("бесшумно пищит?", emote("squeak", "пищит!", AUDIBLE)),
         )
     },
-    // `/datum/emote/living/carbon/circle`, `slap`, `shoesteal`: no message, the game puts the
-    // hand gesture in a free hand (`ss13_game::devices::hand_items`, on `Emoted`).
+    // `/datum/emote/living/carbon/circle`, `slap`, `shoesteal`, `noogie`, `hand` and
+    // `/datum/emote/living/kiss`: no message, the game puts the hand gesture in a free hand
+    // (`ss13_game::devices::hand_items`, on `Emoted`).
     only(CARBON, emote("circle", "", REQUIRE_HANDS)),
     only(CARBON, emote("slap", "", REQUIRE_HANDS)),
     only(CARBON, emote("shoesteal", "", REQUIRE_HANDS)),
+    only(CARBON, emote("noogie", "", REQUIRE_HANDS)),
+    only(CARBON, emote("hand", "", REQUIRE_HANDS)),
+    emote("kiss", "", 0),
     only(CARBON, emote("wink", "подмигивает.", 0)),
     Emote {
         // BandaStation's "сочувственно зевнуть." is an infinitive slip; the verb form here.
@@ -1114,7 +1118,7 @@ fn starts_with_number(text: &str) -> bool {
 }
 
 /// The emotes that only put a hand gesture (`/obj/item/hand_item`) in a free hand.
-pub const HAND_GESTURES: [&str; 3] = ["circle", "slap", "shoesteal"];
+pub const HAND_GESTURES: [&str; 6] = ["circle", "slap", "shoesteal", "noogie", "hand", "kiss"];
 
 /// tg `/datum/emote/ai/emotion_display`'s `emotion` (`AI_EMOTION_*`) of an AI emote key.
 pub fn ai_emotion(key: &str) -> Option<&'static str> {

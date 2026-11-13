@@ -507,7 +507,9 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
         && world.get::<TilePos>(original) == Some(&tile)
         && (world.get::<Health>(original).is_some()
             || world.get::<Density>(original).is_some()
-            || crate::misc_items::target::is_target(world, original))
+            || crate::misc_items::target::is_target(world, original)
+            // A chef's kiss lands on the food it was blown at.
+            || crate::devices::hand_items::kisses_food(world, me, original))
     {
         return Some(original);
     }
@@ -552,6 +554,10 @@ fn select_target(world: &World, p: &Projectile, me: Entity, tile: TilePos) -> Op
 /// A hit of projectile `e`: a magic bolt fizzles on antimagic (`prehit_pierce`), then
 /// [`impact`] and the bolt's `on_hit`.
 fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity) {
+    // A harmless kiss fakes its hit (`kiss/impact` -> `harmless_on_hit`).
+    if crate::devices::hand_items::harmless_kiss(world, e, p, target) {
+        return;
+    }
     let bolt = world.get::<crate::spells::MagicBolt>(e).copied();
     if let Some(bolt) = &bolt
         && crate::spells::effects::bolt_blocked(world, bolt, e, target)
@@ -564,6 +570,8 @@ fn hit(world: &mut World, e: Entity, p: &Projectile, name: &str, target: Entity)
         return;
     }
     impact(world, p, name, target);
+    // A kiss's `on_hit` (`crate::devices::hand_items`).
+    crate::devices::hand_items::kiss_on_hit(world, e, p, target);
     pulse_hit(world, p, target);
     // Thermal, temperature, explosive, meteor and ink rounds (`crate::projectile_special`).
     crate::projectile_special::on_hit(world, p, target);

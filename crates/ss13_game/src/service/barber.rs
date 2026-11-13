@@ -17,8 +17,7 @@
 //! `can_perform_action`), and every `do_after` re-checks what it started on.
 // shortcut: the dye spray colors the whole hair or beard: tg paints a gradient pattern masked by
 // the hair (`get_gradient_overlay`, an `ICON_ADD` blend), which overlays cannot express; no organ
-// dyeing (no mutant bodypart overlays). Lipstick traits (kiss of death, syndie kiss) are not kept
-// (no kissing). The heretic's mirror changes a non-heretic at once (no 5 s trance). The mirror's
+// dyeing (no mutant bodypart overlays). The heretic's mirror changes a non-heretic at once (no 5 s trance). The mirror's
 // sex change sets the physique only (pronouns follow `HumanLook::female`). Upgrade each with its
 // mechanic.
 
@@ -106,6 +105,8 @@ pub struct Lipstick {
     pub color: [u8; 3],
     pub style: &'static str,
     pub base: String,
+    /// `lipstick_trait`: the kiss its wearer blows (`TRAIT_KISS_OF_DEATH`, `TRAIT_SYNDIE_KISS`).
+    pub kiss: Option<crate::devices::hand_items::Kiss>,
 }
 
 /// The `do_after`s of grooming ([`Job::Barber`]).
@@ -279,11 +280,18 @@ fn add_lipstick(add: On<Add<DmItem>>, mut commands: Commands) {
             _ => "lipstick",
         }
         .to_owned();
+        use crate::devices::hand_items::Kiss;
+        let kiss = match index {
+            0 => Some(Kiss::Death),
+            1 => Some(Kiss::Syndie),
+            _ => None,
+        };
         world.entity_mut(e).insert(Lipstick {
             open: false,
             color,
             style: "lipstick",
             base,
+            kiss,
         });
         refresh_lipstick(world, e);
     });
@@ -797,13 +805,26 @@ fn lips_free(world: &mut World, actor: Actor, target: Entity) -> bool {
     true
 }
 
-/// `update_lips(style, lipstick_color)`.
+/// `update_lips(style, lipstick_color, lipstick_trait)`.
 fn put_lipstick(world: &mut World, target: Entity, lipstick: &Lipstick) {
     let (style, color) = (lipstick.style, lipstick.color);
     set_look(world, target, |look| {
         look.lip_style = Some(style.to_owned());
         look.lip_color = color;
     });
+    // Read only while the lips are painted, so wiping them needs no cleanup.
+    match lipstick.kiss {
+        Some(kiss) => {
+            world
+                .entity_mut(target)
+                .insert(crate::devices::hand_items::LipstickKiss(kiss));
+        }
+        None => {
+            world
+                .entity_mut(target)
+                .remove::<crate::devices::hand_items::LipstickKiss>();
+        }
+    }
 }
 
 /// tg `clean_lips` (from `wash` and `clean_face`): an uncovered mouth loses its lipstick. True

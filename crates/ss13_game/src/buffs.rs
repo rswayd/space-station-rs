@@ -10,6 +10,8 @@
 //!   ([`AlertCategory::Offer`]); its click ([`crate::hud::ALERT_CLICK`]) takes the item into an
 //!   empty hand (`take`). The offer ends when the item leaves the giver's hands or the taker is
 //!   out of reach or incapacitated. Ctrl+shift on oneself moves the item to the other hand.
+//!   A hand gesture's `on_offered`/`on_offer_taken` (`crate::devices::hand_items`: high fives,
+//!   the helping hand, kisses) makes its own offer ([`OfferKind`]) and acts when it is taken.
 //! - Surrender: the `*surrender` emote ([`ss13_chat::server::Emoted`]) or a click on the
 //!   surrender alert paralyzes for 20 s and clears the alert. The security pen
 //!   (`/obj/item/pen/red/security`, a click past reach) gives the mob on the clicked tile the
@@ -21,10 +23,8 @@
 //! - Drugginess ([`Timed::Drugginess`]): the `high` alert and moodlet while it lasts; space
 //!   drugs set it. Bath salts in the blood make the mob stun immune
 //!   ([`crate::status_effects::StunImmunity`]).
-// shortcut: no give key (G, a new client intent) and no offer to everyone around; no high
-// fives, helping up or borg offers (no hand items); no shift-click examine of the offered item,
-// no item overlay on the alert, no `on_offered`/`on_offer_taken` hooks, no pulling exemption
-// from the reach checks. No gunpoint (`holdup`/`heldup`) and no security holosign effect. The
+// shortcut: no borg offers; no shift-click examine of the offered item, no item overlay on the
+// alert, no pulling exemption from the reach checks. No gunpoint (`holdup`/`heldup`) and no security holosign effect. The
 // per-food `crafted_food_buff` overrides (chilling ice cream, trait and accent foods) are not
 // imported: every handmade food gives haste. Drugginess has no screen effect (the `druggy`
 // overlay multiplies the view, which the client cannot draw), no drugged sound environment and
@@ -80,6 +80,24 @@ pub struct Offering {
     pub takers: Vec<Entity>,
     pub alert_name: String,
     pub alert_desc: String,
+    pub kind: OfferKind,
+}
+
+/// Which `offering` it is: the plain one or a `no_item_received` subtype of the hand gestures
+/// (`crate::devices::hand_items`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OfferKind {
+    /// `offering`: the item changes hands.
+    #[default]
+    Item,
+    /// `no_item_received`: a hand gesture; its `on_offer_taken` acts instead.
+    Gesture,
+    /// `no_item_received/needs_resting`: a hand to a lying mob; it ends when the giver lies
+    /// down, a taker leaves when it stands up.
+    HelpUp,
+    /// `no_item_received/high_five`: it outlives the slapper (`dropped_item` only forgets it),
+    /// so a late taker is "too slow"; its alert's click skips `take`.
+    HighFive,
 }
 
 /// `/datum/status_effect/surrender_timed`: the surrender alert until this game time.
@@ -295,24 +313,14 @@ pub fn give(world: &mut World, giver: Entity, taker: Option<Entity>) {
             return tell(world, "Он не может удержать ничего, что вы предлагаете!");
         }
     }
-    // `orange(1, src)` of living mobs, `is_taker_elligible`.
-    let around: Vec<Entity> = world
-        .get::<TilePos>(giver)
-        .copied()
-        .map(|pos| {
-            world
-                .resource::<SpatialIndex>()
-                .in_radius(pos, 1)
-                .filter(|&m| {
-                    m != giver
-                        && world.get::<Stat>(m).is_some()
-                        && world.get::<TilePos>(m) != Some(&pos)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    // `orange(1, src)` of living mobs.
+    let around = mobs_around(world, giver);
     if taker.is_none() && around.is_empty() {
         return tell(world, "Рядом с вами нет никого, кто мог бы взять это!");
+    }
+    // `on_offered`: a hand gesture makes its own offer (or none).
+    if crate::devices::hand_items::on_offered(world, giver, item, taker) {
+        return;
     }
     let giver_name = name_of(world, giver);
     let target_text = taker.map_or(String::new(), |t| format!("{} ", name_of(world, t)));
@@ -324,14 +332,62 @@ pub fn give(world: &mut World, giver: Entity, taker: Option<Entity>) {
         &format!("{giver_name} предлагает {target_text}{item_name}."),
         Span::Notice,
     );
-    let candidates: Vec<Entity> = match taker {
+    let alert_name = format!("{giver_name} предлагает {item_name}");
+    let alert_desc = format!("{alert_name}. Нажмите на уведомление, чтобы взять.");
+    start_offer(
+        world,
+        giver,
+        item,
+        taker,
+        OfferKind::Item,
+        alert_name,
+        alert_desc,
+    );
+}
+
+/// The living mobs around `giver` (`orange(1)`: not on its own tile).
+fn mobs_around(world: &World, giver: Entity) -> Vec<Entity> {
+    let Some(pos) = world.get::<TilePos>(giver).copied() else {
+        return Vec::new();
+    };
+    world
+        .resource::<SpatialIndex>()
+        .in_radius(pos, 1)
+        .filter(|&m| {
+            m != giver && world.get::<Stat>(m).is_some() && world.get::<TilePos>(m) != Some(&pos)
+        })
+        .collect()
+}
+
+/// `apply_status_effect(offering, item, alert, offered)` -> `on_creation`: `taker` if it may
+/// take it (`is_taker_elligible`), else everyone around who may; each gets the alert. False
+/// when nobody did (no offer).
+pub fn start_offer(
+    world: &mut World,
+    giver: Entity,
+    item: Entity,
+    taker: Option<Entity>,
+    kind: OfferKind,
+    alert_name: String,
+    alert_desc: String,
+) -> bool {
+    let eligible = |world: &World, m: Entity| {
+        m != giver
+            && adjacent(world, giver, m)
+            && able(world, m)
+            && match kind {
+                OfferKind::HelpUp => lying(world, m),
+                _ => can_hold_items(world, m),
+            }
+    };
+    let candidates: Vec<Entity> = match taker.filter(|&t| eligible(world, t)) {
         Some(t) => vec![t],
-        None => around
+        None => mobs_around(world, giver)
             .into_iter()
-            .filter(|&m| adjacent(world, giver, m) && able(world, m) && can_hold_items(world, m))
+            .filter(|&m| eligible(world, m))
             .collect(),
     };
-    // `offering/on_creation` -> `register_candidate`: no alert, no taker; no takers, no offer.
+    // `register_candidate`: no alert, no taker; no takers, no offer.
     let mut takers = Vec::new();
     for candidate in candidates {
         if throw_alert(world, candidate, AlertCategory::Offer(giver), "template", 0) {
@@ -339,19 +395,26 @@ pub fn give(world: &mut World, giver: Entity, taker: Option<Entity>) {
         }
     }
     if takers.is_empty() {
-        return;
+        return false;
     }
-    let alert_name = format!("{giver_name} предлагает {item_name}");
     world.entity_mut(giver).insert(Offering {
         item,
         takers,
-        alert_desc: format!("{alert_name}. Нажмите на уведомление, чтобы взять."),
         alert_name,
+        alert_desc,
+        kind,
     });
+    true
+}
+
+fn lying(world: &World, mob: Entity) -> bool {
+    world
+        .get::<crate::health::BodyPosition>(mob)
+        .is_some_and(|b| b.lying())
 }
 
 /// Ends `giver`'s offer: every taker's alert goes (`offering/Destroy`).
-fn end_offer(world: &mut World, giver: Entity) {
+pub(crate) fn end_offer(world: &mut World, giver: Entity) {
     let Some(offer) = world.get::<Offering>(giver).cloned() else {
         return;
     };
@@ -364,7 +427,7 @@ fn end_offer(world: &mut World, giver: Entity) {
 }
 
 /// `remove_candidate`: the last one gone ends the offer.
-fn remove_taker(world: &mut World, giver: Entity, taker: Entity) {
+pub(crate) fn remove_taker(world: &mut World, giver: Entity, taker: Entity) {
     clear_alert(world, taker, AlertCategory::Offer(giver));
     let Some(mut offer) = world.get_mut::<Offering>(giver) else {
         return;
@@ -381,6 +444,11 @@ pub fn take(world: &mut World, taker: Entity, giver: Entity) {
         clear_alert(world, taker, AlertCategory::Offer(giver));
         return;
     };
+    // `alert/give/highfive/handle_transfer`: the high five itself, no `take`.
+    if offer.kind == OfferKind::HighFive {
+        crate::devices::hand_items::high_five_click(world, giver, taker, offer.item);
+        return;
+    }
     // `clear_alert("[offerer]")`.
     remove_taker(world, giver, taker);
     let tell = |world: &mut World, text: &str| tell_mob(world, taker, Span::Warning, text);
@@ -408,6 +476,10 @@ pub fn take(world: &mut World, taker: Entity, giver: Entity) {
     });
     if !empty_hand {
         return tell(world, "У вас нет пустых рук!");
+    }
+    // `on_offer_taken`: a hand gesture acts instead of changing hands.
+    if crate::devices::hand_items::on_offer_taken(world, giver, taker, offer.item) {
+        return;
     }
     let item_name = name_of(world, offer.item);
     // `temporarilyRemoveItemFromInventory` fails for `TRAIT_NODROP`.
@@ -443,10 +515,13 @@ fn offer_upkeep(world: &mut World) {
     let mut query = world.query::<(Entity, &Offering)>();
     let offers: Vec<(Entity, Offering)> = query.iter(world).map(|(e, o)| (e, o.clone())).collect();
     for (giver, offer) in offers {
-        let holds = world
-            .get::<Inventory>(giver)
-            .is_some_and(|i| i.hands.contains(&Some(offer.item)));
-        if !holds || world.get::<Stat>(giver) == Some(&Stat::Dead) {
+        let holds = offer.kind == OfferKind::HighFive
+            || world
+                .get::<Inventory>(giver)
+                .is_some_and(|i| i.hands.contains(&Some(offer.item)));
+        // `needs_resting/check_owner_standing`.
+        let fell = offer.kind == OfferKind::HelpUp && lying(world, giver);
+        if !holds || fell || world.get::<Stat>(giver) == Some(&Stat::Dead) {
             end_offer(world, giver);
             continue;
         }
@@ -457,7 +532,10 @@ fn offer_upkeep(world: &mut World) {
                 let text = format!("Вы отошли слишком далеко от {}!", name_of(world, giver));
                 tell_mob(world, taker, Span::Warning, &text);
                 remove_taker(world, giver, taker);
-            } else if !able(world, taker) {
+            } else if !able(world, taker)
+                // `needs_resting/check_candidate_resting`.
+                || (offer.kind == OfferKind::HelpUp && !lying(world, taker))
+            {
                 remove_taker(world, giver, taker);
             }
         }
