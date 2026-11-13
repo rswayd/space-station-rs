@@ -50,9 +50,6 @@ pub mod picklock;
 
 pub use kinds::ClosetKind;
 
-/// `lock_sound`, `unlock_sound` (no closet overrides them).
-const LOCK_SOUND: &str = "sound/machines/closet/closet_lock.ogg";
-const UNLOCK_SOUND: &str = "sound/machines/closet/closet_unlock.ogg";
 /// BYOND `OBJ_LAYER`.
 const OBJ_LAYER: f32 = 3.0;
 /// `BELOW_OBJ_LAYER` (`code/__DEFINES/layers.dm`).
@@ -882,10 +879,12 @@ fn toggle_lock(
         kinds::relocked(world, closet);
     }
     refresh_look(world, closet);
-    // `play_closet_lock_sound`.
+    // `play_closet_lock_sound`: BandaStation's (`aesthetics_sounds/code/closet.dm`) picks one
+    // of its lock sounds at 10, 3 tiles less range, whichever way the lock goes.
     if let Some(&pos) = world.get::<TilePos>(closet) {
-        let sound = if locked { LOCK_SOUND } else { UNLOCK_SOUND };
-        crate::sound::playsound(world, crate::sound::PlaySound::new(pos, sound, 50.0, true));
+        let sound = crate::sound::pick_file(world, &ss13_mapload::sound::files::CLOSET_LOCK);
+        let sound = crate::sound::PlaySound::new(pos, sound, 10.0, true).extrarange(-3.0);
+        crate::sound::playsound(world, sound);
     }
     let what = crate::security::name_of(world, closet);
     let text = if locked {

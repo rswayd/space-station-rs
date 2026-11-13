@@ -301,10 +301,16 @@ struct Heard {
 
 fn record(
     mut sounds: MessageReader<SoundReceived>,
+    mut channel_sounds: MessageReader<ss13_net::sound::client::ChannelSoundReceived>,
     mut camera: MessageReader<CameraEffectReceived>,
     mut out: ResMut<Heard>,
 ) {
     out.sounds.extend(sounds.read().map(|s| s.0.file.clone()));
+    out.sounds.extend(
+        channel_sounds
+            .read()
+            .filter_map(|s| s.0.sound.as_ref().map(|s| s.file.clone())),
+    );
     out.shakes.extend(camera.read().map(|c| c.0));
 }
 

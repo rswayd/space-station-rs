@@ -2,7 +2,9 @@
 //! heard by the shooter and a listener next to it (at tg's falloff), not by one 20 tiles away,
 //! not by one in a vacuum room behind a wall, not by one wearing earmuffs. Footsteps (tg
 //! `/datum/element/footstep`) come from the turf's table every second step, and a sound that
-//! does not carry through walls (`ignore_walls = FALSE`) stops at one.
+//! does not carry through walls (`ignore_walls = FALSE`) stops at one. A sound takes the
+//! listener's room reverb (`/area/space`: `SOUND_AREA_SPACE`), its channel and volume preference,
+//! and `stop_sound_channel` stops it.
 
 use std::path::{Path, PathBuf};
 
@@ -11,9 +13,12 @@ use ss13_atmos::AtmosPlugin;
 use ss13_game::combat::NextMove;
 use ss13_game::inventory::{CarriedBy, Inventory};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
-use ss13_net::sound::client::SoundReceived;
+use ss13_net::sound::client::{ChannelSoundReceived, SoundReceived};
 use ss13_shared::TilePos;
-use ss13_shared::protocol::SoundEvent;
+use ss13_shared::protocol::{
+    CHANNEL_CHARGED_SPELL, ChannelSound, SOUND_ENVIRONMENT_NONE, SOUND_ENVIRONMENT_UNDERWATER,
+    SoundCategory, SoundEvent,
+};
 use ss13_world::SpatialIndex;
 
 const SHOT: &str = "sound/items/weapons/gun/pistol/shot.ogg";
@@ -106,8 +111,8 @@ const TYPES: &str = r##"{
     "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1,
         "blocks_air": 1 } },
     "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
-    "/area": { "parent": "/atom" },
-    "/area/space": { "parent": "/area" }
+    "/area": { "parent": "/atom", "declared_vars": { "sound_environment": -1 } },
+    "/area/space": { "parent": "/area", "declared_vars": { "sound_environment": 22 } }
   }
 }"##;
 
@@ -211,8 +216,26 @@ fn fixture_assets(test: &str) -> PathBuf {
 #[derive(Resource, Default)]
 struct Heard(Vec<SoundEvent>);
 
-fn record(mut sounds: MessageReader<SoundReceived>, mut out: ResMut<Heard>) {
+fn record(
+    mut sounds: MessageReader<SoundReceived>,
+    mut channel_sounds: MessageReader<ChannelSoundReceived>,
+    mut out: ResMut<Heard>,
+) {
     out.0.extend(sounds.read().map(|s| s.0.clone()));
+    // `playsound` comes as a sound datum (`ChannelSound`).
+    out.0
+        .extend(channel_sounds.read().filter_map(|s| s.0.sound.clone()));
+}
+
+/// Every sound datum as it came, for its channel and effects.
+#[derive(Resource, Default)]
+struct HeardDatums(Vec<ChannelSound>);
+
+fn record_datums(
+    mut channel_sounds: MessageReader<ChannelSoundReceived>,
+    mut out: ResMut<HeardDatums>,
+) {
+    out.0.extend(channel_sounds.read().map(|s| s.0.clone()));
 }
 
 struct Station(testing::Station);
@@ -229,6 +252,15 @@ impl Station {
 
     fn heard(&self, p: usize) -> Vec<SoundEvent> {
         self.players[p].app.world().resource::<Heard>().0.clone()
+    }
+
+    fn datums(&self, p: usize) -> Vec<ChannelSound> {
+        self.players[p]
+            .app
+            .world()
+            .resource::<HeardDatums>()
+            .0
+            .clone()
     }
 
     fn spawn_on(&mut self, p: usize, path: &str) -> Entity {
@@ -370,5 +402,58 @@ fn footsteps_and_sounds_that_walls_stop() {
     });
     s.hold(0.5, "the wall stops the other", |s| {
         s.heard(behind).iter().all(|e| e.file != "blocked.ogg")
+    });
+}
+
+#[test]
+fn sounds_carry_the_room_their_channel_and_preference() {
+    use ss13_game::sound::{PlaySound, playsound, stop_sound_channel};
+    let assets = fixture_assets("sounds_carry_the_room_their_channel_and_preference");
+    let mut s = testing::Station::start(fixture_map(&assets, &["rooms.dmm"]), |app| {
+        app.add_plugins(AtmosPlugin);
+    });
+    s.join_all(3, |app| {
+        app.init_resource::<HeardDatums>()
+            .add_systems(Update, record_datums);
+    });
+    let mut s = Station(s);
+    let corridor = s.at(CORRIDOR);
+    let world = s.0.server.world_mut();
+    let room = PlaySound::new(WALKER, "room.ogg", 50.0, false)
+        .channel(CHANNEL_CHARGED_SPELL)
+        .volume_preference(SoundCategory::Jukebox);
+    playsound(world, room);
+    playsound(
+        world,
+        PlaySound::new(WALKER, "dry.ogg", 50.0, false).use_reverb(false),
+    );
+    let file = |c: &ChannelSound, f: &str| c.sound.as_ref().is_some_and(|s| s.file == f);
+    s.run_until("the corridor hears both", |s| {
+        let heard = s.datums(corridor);
+        heard.iter().any(|c| file(c, "room.ogg")) && heard.iter().any(|c| file(c, "dry.ogg"))
+    });
+    let heard = s.datums(corridor);
+    let room = heard.iter().find(|c| file(c, "room.ogg")).unwrap();
+    assert_eq!(room.channel, CHANNEL_CHARGED_SPELL);
+    assert_eq!(room.fx.environment, SOUND_ENVIRONMENT_UNDERWATER);
+    assert_eq!(room.fx.category, SoundCategory::Jukebox);
+    let dry = heard.iter().find(|c| file(c, "dry.ogg")).unwrap();
+    assert_eq!(
+        (dry.channel, dry.fx.environment),
+        (0, SOUND_ENVIRONMENT_NONE)
+    );
+    assert_eq!(dry.fx.category, SoundCategory::Game);
+
+    let mob = s.players[corridor].mob;
+    let world = s.0.server.world_mut();
+    let client = world
+        .get::<ss13_game::server::PlayerMob>(mob)
+        .unwrap()
+        .client;
+    stop_sound_channel(world, client, CHANNEL_CHARGED_SPELL);
+    s.run_until("the channel is stopped", |s| {
+        s.datums(corridor)
+            .iter()
+            .any(|c| c.channel == CHANNEL_CHARGED_SPELL && c.sound.is_none())
     });
 }

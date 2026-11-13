@@ -138,9 +138,7 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
     if let Some(n) = var("forced_ambience").and_then(|v| num(Some(v))) {
         out.push(ext(COMPONENT, "forced_ambience", (n != 0.0).to_string()));
     }
-    if let Some(n) = var("sound_environment").and_then(|v| num(Some(v))) {
-        out.push(ext(COMPONENT, "sound_environment", (n as i32).to_string()));
-    }
+    // `sound_environment` is read with the other area fields (`crate::atmos`).
     let own = ambientsounds(types, path);
     let parent = ty
         .parent
@@ -250,7 +248,6 @@ mod tests {
                 "min_ambience_cooldown",
                 "max_ambience_cooldown",
                 "forced_ambience",
-                "sound_environment",
                 "ambientsounds",
             ]
         );

@@ -2016,6 +2016,14 @@ fn begin_victory(world: &mut World, overmind: Entity, t: f64) {
 /// station area dies (a spore rises over it), the round ends.
 fn victory(world: &mut World, overmind: Entity) {
     let name = name_of(world, overmind);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::to_playing_players(
+            ss13_mapload::sound::files::NUKE_ALARM,
+            70.0,
+            false,
+        ),
+    );
     if let Some(mut o) = world.get_mut::<BlobOvermind>(overmind) {
         o.won = true;
     }

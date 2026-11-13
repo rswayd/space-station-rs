@@ -820,6 +820,15 @@ pub(super) fn invoke_narsie(world: &mut World, rune: Entity, invokers: &[Entity]
         invokers,
         RuneKind::NarSie.def().invocation,
     );
+    // BandaStation's cult overhaul summoning sound for everyone.
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::to_playing_players(
+            ss13_mapload::sound::files::NARSIE_SUMMON,
+            100.0,
+            false,
+        ),
+    );
     info!("Nar'Sie is being summoned at {pos:?} by {invokers:?}");
 }
 
@@ -880,6 +889,14 @@ pub(super) fn tick_ending(world: &mut World) {
                 "Тревога! Обнаружен запуск орбитального эммитера. Протоколы безопасности станции \
                  обнулены, возобновление нево@#$%^-...",
             );
+            crate::sound::playsound(
+                world,
+                crate::sound::PlaySound::to_playing_players(
+                    ss13_mapload::sound::files::NUKE_ALARM,
+                    70.0,
+                    false,
+                ),
+            );
             Ending::End { at: t + 12.0 }
         }
         Ending::End { at } if t >= at => {
@@ -914,5 +931,16 @@ pub(super) fn narsie_rises(world: &mut World, pos: TilePos) {
         clients,
         message: ChatMessage::simple(ChatChannel::System, Span::CultLarge, "NAR'SIE HAS RISEN"),
     });
+    // BandaStation: `/obj/narsie/Initialize` to the world, the cult overhaul's risen sound to
+    // the players.
+    crate::sound::send_sound_to_world(world, ss13_mapload::sound::files::NARSIE_RISES, 100.0);
+    crate::sound::playsound(
+        world,
+        crate::sound::PlaySound::to_playing_players(
+            ss13_mapload::sound::files::NARSIE_RISEN,
+            100.0,
+            false,
+        ),
+    );
     info!("Nar'Sie has risen at {pos:?}");
 }

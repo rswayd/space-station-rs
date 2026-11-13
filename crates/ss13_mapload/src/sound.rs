@@ -978,6 +978,58 @@ pub mod files {
         "sound/runtime/hyperspace/hyperspace_begin.ogg",
         "sound/vehicles/mecha/mechstep.ogg",
     ];
+    /// BandaStation's MOD boot steps (`ss13_game::footsteps`), heaviest first.
+    pub const MOD_STEPS: [&str; 4] = [
+        "sound/items/modsuit/rigstep_chonk.ogg",
+        "sound/items/modsuit/rigstep_heavy.ogg",
+        "sound/items/modsuit/rigstep_medium.ogg",
+        "sound/items/modsuit/rigstep.ogg",
+    ];
+    /// BandaStation's closet lock sounds (`togglelock_sounds`).
+    pub const CLOSET_LOCK: [&str; 3] = [
+        "modular_bandastation/aesthetics_sounds/sound/lock_1.ogg",
+        "modular_bandastation/aesthetics_sounds/sound/lock_2.ogg",
+        "modular_bandastation/aesthetics_sounds/sound/lock_3.ogg",
+    ];
+    /// BandaStation's hyperspace sounds of the small shuttles: the warm-up, the arrival.
+    pub const SHUTTLE_WARMUP: &str =
+        "modular_bandastation/aesthetics_sounds/sound/shuttle/hyperspace_mini.ogg";
+    pub const SHUTTLE_END: &str =
+        "modular_bandastation/aesthetics_sounds/sound/shuttle/hyperspace_end_new.ogg";
+    /// Antagonist stingers (`stinger_sound`): BandaStation's blood brothers, tg's traitor and
+    /// brainwashed.
+    pub const STINGER_BROTHER: &str =
+        "modular_bandastation/aesthetics_sounds/sound/antag/blood_brothers_intro.ogg";
+    pub const STINGER_TRAITOR: &str = "sound/music/antag/traitor/tatoralert.ogg";
+    pub const STINGER_BRAINWASHED: &str = "sound/music/antag/brainwashed.ogg";
+    /// Sounds everyone hears (`sound_to_playing_players`, `SEND_SOUND(world)`).
+    pub const NUKE_ALARM: &str = "sound/announcer/alarm/nuke_alarm.ogg";
+    pub const ATTENTION: &str = "sound/announcer/default/attention.ogg";
+    pub const NARSIE_SUMMON: &str =
+        "modular_bandastation/cult_overhaul/sound/narsie/narsie_summon.ogg";
+    pub const NARSIE_RISEN: &str =
+        "modular_bandastation/cult_overhaul/sound/narsie/narsie_risen.ogg";
+    pub const NARSIE_RISES: &str = "modular_bandastation/mobs/sound/narsie_rises.ogg";
+    /// Everything above that is not in a list of its own.
+    pub const SOUND_CORE: [&str; 16] = [
+        SHUTTLE_WARMUP,
+        SHUTTLE_END,
+        STINGER_BROTHER,
+        STINGER_TRAITOR,
+        STINGER_BRAINWASHED,
+        NUKE_ALARM,
+        ATTENTION,
+        NARSIE_SUMMON,
+        NARSIE_RISEN,
+        NARSIE_RISES,
+        // `ss13_game::shuttle::hyperspace_sound` names these by phase.
+        "sound/runtime/hyperspace/hyperspace_begin.ogg",
+        "sound/runtime/hyperspace/hyperspace_begin_distance.ogg",
+        "sound/runtime/hyperspace/hyperspace_progress.ogg",
+        "sound/runtime/hyperspace/hyperspace_progress_distance.ogg",
+        "sound/runtime/hyperspace/hyperspace_end.ogg",
+        "sound/runtime/hyperspace/hyperspace_end_distance.ogg",
+    ];
 }
 
 pub const RUNTIME_SOUNDS: [&str; 15] = [
@@ -1305,6 +1357,9 @@ pub fn referenced<'a>(
     out.extend(files::RESTAURANT.map(str::to_owned));
     out.extend(files::DECOR.map(str::to_owned));
     out.extend(crate::ambience::referenced(types));
+    out.extend(files::MOD_STEPS.map(str::to_owned));
+    out.extend(files::CLOSET_LOCK.map(str::to_owned));
+    out.extend(files::SOUND_CORE.map(str::to_owned));
     for path in converted {
         for var in SOUND_VARS {
             let s = sound_var(types, path, var);

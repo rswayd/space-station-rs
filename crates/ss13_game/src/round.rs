@@ -527,6 +527,7 @@ pub fn start_now(world: &mut World) -> Result<bool, &'static str> {
     let started = world.resource_mut::<Ticker>().start_now()?;
     if !started {
         to_world(world, Span::BoldNotice, "Игра начнётся через 3 минуты.");
+        crate::sound::send_sound_to_world(world, ss13_mapload::sound::files::ATTENTION, 100.0);
     }
     Ok(started)
 }
@@ -549,6 +550,7 @@ pub fn delay_start(world: &mut World) -> Result<f64, &'static str> {
     ticker.start_immediately = false;
     let text = format!("Игра начнётся через {}.", display_time_text(secs));
     to_world(world, Span::Bold, text);
+    crate::sound::send_sound_to_world(world, ss13_mapload::sound::files::ATTENTION, 100.0);
     Ok(secs)
 }
 

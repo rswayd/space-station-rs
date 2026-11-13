@@ -87,7 +87,9 @@ impl DmTurfAtmos {
 
 /// An area's vars (tg `/area`): `outdoors` (weather reaches it, barometers work in it, no room
 /// beauty), the mood bonus of being there (`mood_bonus`, `mood_message`, `mood_trait`: the
-/// trait it needs, empty for anyone) and its ambience ([`crate::ambience`]).
+/// trait it needs, empty for anyone), its ambience ([`crate::ambience`]) and the reverb sounds
+/// get in it (`sound_environment`, BYOND's `SOUND_ENVIRONMENT_*`; `/area` declares
+/// `SOUND_ENVIRONMENT_NONE`, -1).
 #[derive(Component, Reflect, Clone, Debug, PartialEq)]
 pub struct DmArea {
     pub outdoors: bool,
@@ -105,7 +107,7 @@ pub struct DmArea {
     pub min_ambience_cooldown: f32,
     pub max_ambience_cooldown: f32,
     /// `SOUND_ENVIRONMENT_*` (-1: none).
-    pub sound_environment: i32,
+    pub sound_environment: i8,
 }
 
 /// tg's `/area` values; the files come from the converter.
@@ -258,6 +260,9 @@ pub fn type_fields(types: &DmTypes, path: &str) -> Vec<Field> {
         if let Some(n) = num(ty.declared_vars.get("mood_bonus")) {
             out.push(ext("dm_area", "mood_bonus", format!("{:?}", n as f32)));
         }
+        if let Some(n) = num(ty.declared_vars.get("sound_environment")) {
+            out.push(ext("dm_area", "sound_environment", (n as i8).to_string()));
+        }
         for var in ["mood_message", "mood_trait"] {
             if let Some(v) = ty.declared_vars.get(var) {
                 let text = v.as_str().unwrap_or_default();
@@ -384,9 +389,21 @@ mod tests {
         "/obj/machinery/door/airlock/plasma": { "parent": "/obj/machinery/door/airlock" },
         "/obj/machinery/door/firedoor": { "parent": "/obj/machinery/door",
             "declared_vars": { "opacity": 0, "heat_proof": 1 } },
-        "/obj/structure/window": { "parent": "/obj", "declared_vars": { "can_atmos_pass": -1 } }
+        "/obj/structure/window": { "parent": "/obj", "declared_vars": { "can_atmos_pass": -1 } },
+        "/area": { "parent": "/atom", "declared_vars": { "sound_environment": -1 } },
+        "/area/station": { "parent": "/area", "declared_vars": { "sound_environment": 20 } },
+        "/area/station/hallway": { "parent": "/area/station" }
       }
     }"##;
+
+    #[test]
+    fn area_sound_environment() {
+        let types = DmTypes::parse(TYPES.as_bytes()).unwrap();
+        let e = |v: &str| ext("dm_area", "sound_environment", v);
+        assert_eq!(type_fields(&types, "/area"), [e("-1")]);
+        assert_eq!(type_fields(&types, "/area/station"), [e("20")]);
+        assert!(type_fields(&types, "/area/station/hallway").is_empty());
+    }
 
     #[test]
     fn fields() {

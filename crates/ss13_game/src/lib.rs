@@ -683,6 +683,8 @@ pub mod smoking;
 pub mod sound;
 #[cfg(feature = "client")]
 pub mod sound_client;
+#[cfg(feature = "client")]
+pub mod sound_fx;
 #[cfg(feature = "server")]
 pub mod spacemove;
 #[cfg(feature = "server")]

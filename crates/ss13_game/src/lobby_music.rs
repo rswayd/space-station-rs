@@ -12,8 +12,9 @@
 //!   `config/reboot_themes/` ([`REBOOT_THEMES`]).
 // shortcut: no deployment title music (`config/title_music/sounds/`, rare and map-specific
 // tracks) and the last round's track is not excluded (`data/last_round_lobby_music.txt`); the
-// volumes are the preferences' defaults (100: `sound_lobby_volume`, `sound_midi`), the
-// preferences menu has no volume settings yet.
+// volumes sent are the preferences' defaults (100: `sound_lobby_volume`, `sound_midi`): the
+// player's lobby music volume applies on the client (`crate::sound_client`, by the channel); the
+// round end song is not scaled by the admin music volume (it plays on no channel).
 // Deviation: `title1.mod` is left out of the list: the client's audio decodes no tracker
 // modules (BYOND does).
 

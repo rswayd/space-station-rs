@@ -9,7 +9,7 @@ use ss13_game::instruments::{InstrumentDb, Song};
 use ss13_game::instruments_ui::{InstrumentEditorData, InstrumentEditorUi};
 use ss13_game::testing::{self, Drive, fixture_map, write_fixture};
 use ss13_mapload::instruments::{InstrumentData, InstrumentHolder, Instruments};
-use ss13_net::sound::client::SoundReceived;
+use ss13_net::sound::client::{ChannelSoundReceived, SoundReceived};
 use ss13_net::ui::client::UiMessageReceived;
 use ss13_shared::TilePos;
 use ss13_shared::protocol::SoundEvent;
@@ -115,6 +115,7 @@ struct Got {
 fn record(
     mut ui: MessageReader<UiMessageReceived>,
     mut sounds: MessageReader<SoundReceived>,
+    mut channel_sounds: MessageReader<ChannelSoundReceived>,
     mut got: ResMut<Got>,
 ) {
     for UiMessageReceived(message) in ui.read() {
@@ -129,6 +130,9 @@ fn record(
         }
     }
     got.sounds.extend(sounds.read().map(|s| s.0.clone()));
+    // `playsound` comes as a sound datum (`ChannelSound`).
+    got.sounds
+        .extend(channel_sounds.read().filter_map(|s| s.0.sound.clone()));
 }
 
 struct Station(testing::Station);

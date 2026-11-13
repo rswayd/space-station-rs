@@ -120,6 +120,7 @@ fn send(world: &mut World, client: Entity, sound: Option<SoundEvent>, update: bo
             sound,
             update,
             repeat,
+            ..default()
         },
     });
 }

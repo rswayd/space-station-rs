@@ -14,7 +14,7 @@
 //!   implants a random sleeper agent directive. A failure deals 40 brain damage.
 //! - Brain surgery and lobotomy cure it ([`remove_brainwashed`], `farewell`).
 //! - [`roundend_report`]: each victim and its directives.
-// shortcut: no deadchat broadcast, admin messages, April Fools line or stinger sound; the
+// shortcut: no deadchat broadcast, admin messages or April Fools line; the
 // sleeper's conspiracies phobia is not ported (no phobias); no `mechanic` reprogramming of
 // robotic brains; no admin "brainwash" verb; a body whose player is gone counts as mindless.
 
@@ -181,6 +181,7 @@ fn greet(world: &mut World, mob: Entity, victim: &Brainwashed) {
     };
     // shortcut: `span_big` is drawn bold (no big span in the chat).
     tell(world, client, Span::Bold, format!("Вы - {ANTAG_NAME}."));
+    crate::sound::play_stinger(world, mob, ss13_mapload::sound::files::STINGER_BRAINWASHED);
     announce_objectives(world, client, &victim.objectives);
     world.write_message(OpenUi::new::<AntagHudUi>(client, mob, mob, ""));
     world.write_message(OpenUi::new::<AntagInfoBrainwashedUi>(
