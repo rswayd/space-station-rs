@@ -589,7 +589,7 @@ fn bosses_roam_lavaland() {
 /// leaves its club and takes the beacon along.
 #[test]
 fn hierophant_blasts_its_target_and_leaves_its_club() {
-    use ss13_game::mobs::megafauna::hierophant::{BEACON, CLUB, HIEROPHANT};
+    use ss13_game::mobs::megafauna::hierophant::{CLUB, HIEROPHANT};
     let mut s = Station::start("hierophant", HIEROPHANT_MAP);
     let boss = s.mob_of(HIEROPHANT);
     assert!(s.try_get::<Megafauna>(boss).is_some(), "a megafauna");
