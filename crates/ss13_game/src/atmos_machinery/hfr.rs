@@ -19,9 +19,9 @@
 //!   around, an explosion, radiation and an EMP by the fuel's flags; the reactor is gone.
 //!
 //! Cost: O(cores) per SSair fire (a 3x3 scan each); stations have none or one.
-// shortcut: no construction from boards or deconstruction (crowbar), no sound loop or accent
-// sounds, no nuclear particles (the port has none), no EMP scrambling of the radio, no ghost
-// notification, no guide paper, gravity pulls ignore magboots; the countdown runs on game time.
+// shortcut: no construction from boards or deconstruction (crowbar), no accent sounds, no
+// nuclear particles (the port has none), no EMP scrambling of the radio, no ghost notification,
+// no guide paper, gravity pulls ignore magboots; the countdown runs on game time.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::ecs::system::SystemParamItem;
@@ -458,6 +458,9 @@ fn activate(world: &mut World, client: Entity, core: Entity, links: Links, corne
         c.links = Some(links);
         c.corners = corners;
     }
+    // `soundloop = new(src, TRUE)`; tg's later `soundloop.volume` (5, then the ambient hum)
+    // never reaches the running native token, so BandaStation's 30 is what plays.
+    crate::looping_sound::start(world, core, &crate::looping_sound::defs::HYPERTORUS);
 }
 
 /// `deactivate`.
@@ -473,6 +476,8 @@ pub fn deactivate(world: &mut World, core: Entity) {
         .filter(|&e| world.get_entity(e).is_ok())
         .collect();
     set_active(world, parts, false);
+    // `QDEL_NULL(soundloop)`: silent at once, no end sound.
+    crate::looping_sound::stop(world, core, crate::looping_sound::defs::HYPERTORUS.path);
 }
 
 // --- Interaction ---------------------------------------------------------------------------

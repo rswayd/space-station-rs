@@ -178,7 +178,18 @@ pub fn build(app: &mut App) {
         c.modifiers.right
             && crate::modpc::laptop::attack_hand_secondary(w, c.client, c.mob, c.target)
     });
-    app.add_observer(attach).add_systems(Update, looks);
+    app.add_observer(attach).add_systems(
+        Update,
+        (
+            looks,
+            // `soundloop` of every modular computer but a PDA (`looping_sound = FALSE`):
+            // `turn_on` .. `shutdown`.
+            crate::looping_sound::sync::<ModularComputer>(
+                &crate::looping_sound::defs::COMPUTER,
+                |c| c.enabled && !c.is_pda(),
+            ),
+        ),
+    );
 }
 
 #[cfg(test)]

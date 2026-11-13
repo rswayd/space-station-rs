@@ -311,6 +311,11 @@ impl Plugin for LathePlugin {
                     lathe_acts.in_set(UiSystems::Handle),
                     unpowered_windows.in_set(UiSystems::StatusHook),
                     print_tick.run_if(any_with_component::<Printing>),
+                    // `print_sound` while `busy`.
+                    crate::looping_sound::sync::<Lathe>(
+                        &crate::looping_sound::defs::LATHE_PRINT,
+                        |l| l.busy,
+                    ),
                 ),
             );
     }

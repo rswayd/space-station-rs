@@ -16,7 +16,7 @@
 //!   fuel's coefficient with the condenser on, burning 0.15 u of fuel).
 //! - Every reagent whose boiling point (`400 + 500 × (mass - 10) / 790` K) the flask is over
 //!   moves `2 + (T - bp) / 200 × 10` units into the beaker (or is lost without one).
-// shortcut: no light, overlays or boiling sound; no `fire_act`/`extinguish` of the burner.
+// shortcut: no light or overlays; no `fire_act`/`extinguish` of the burner.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;

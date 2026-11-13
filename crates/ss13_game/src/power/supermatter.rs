@@ -701,6 +701,8 @@ pub struct Supermatter {
     common_radio_at: f64,
     /// The countdown's next step (deciseconds left) and when it runs.
     pub countdown: Option<(i32, f64)>,
+    /// `last_accent_sound`: no accent before this (seconds).
+    accent_at: f64,
     looks: SmLooks,
 }
 
@@ -795,13 +797,28 @@ fn init_supermatter(world: &mut World) {
                     lastwarning: f64::NEG_INFINITY,
                     common_radio_at: f64::NEG_INFINITY,
                     countdown: None,
+                    accent_at: f64::NEG_INFINITY,
                     looks,
                 },
             )
         })
         .collect();
     info!("supermatter: {} crystals", found.len());
+    let crystals: Vec<Entity> = found.iter().map(|(e, _)| *e).collect();
     world.insert_batch(found);
+    // `soundloop = new(src, TRUE)`; BandaStation's `/supermatter_crystal/hugbox` has its own,
+    // quieter one (not the shard's hugbox).
+    for e in crystals {
+        let hugbox = world
+            .get::<super::DmPower>(e)
+            .is_some_and(|d| is_under(&d.path, &format!("{SM_ROOT}/hugbox")));
+        let def = if hugbox {
+            &crate::looping_sound::defs::SUPERMATTER_HUGBOX
+        } else {
+            &crate::looping_sound::defs::SUPERMATTER
+        };
+        crate::looping_sound::start(world, e, def);
+    }
     if let Some(index) = index {
         world.insert_resource(index);
     }
@@ -911,11 +928,58 @@ fn breathe(world: &mut World, e: Entity, pos: TilePos, now: f64) {
         .crystal
         .radiation();
     crate::radiation::radiation_pulse(world, e, 8.0, threshold as f32, chance as f32, 0.0);
+    processing_sound(world, e, pos, now);
     delam_progress(world, e, pos, now);
     if breath.start_countdown {
         start_countdown(world, e, pos, now);
     }
     update_looks(world, e);
+}
+
+/// `processing_sound()`: the loop turns to `delamming.ogg` from 300 damage, and now and then
+/// (20% a breath, at most every 2 s, sooner the more aggressive) an accent sound plays.
+// shortcut: the loop keeps its def volume: tg's `soundloop.volume = 50..100` does not reach a
+// running native token there either, and BandaStation lowered it to 20 on purpose.
+fn processing_sound(world: &mut World, e: Entity, pos: TilePos, now: f64) {
+    use crate::looping_sound::defs::{SM_CALM, SM_DELAMMING, SUPERMATTER};
+    let Some((damage, energy, accent_at)) = world
+        .get::<Supermatter>(e)
+        .map(|s| (s.crystal.damage, s.crystal.internal_energy, s.accent_at))
+    else {
+        return;
+    };
+    let delamming = damage >= 300.0;
+    let mids: &'static [(&'static str, u32)] = if delamming {
+        &[(SM_DELAMMING, 1)]
+    } else {
+        &[(SM_CALM, 1)]
+    };
+    crate::looping_sound::set_mid_sounds(world, e, SUPERMATTER.path, mids);
+    if accent_at >= now
+        || !world
+            .resource_mut::<crate::sound::SoundRng>()
+            .0
+            .chance(20.0)
+    {
+        return;
+    }
+    let aggression = ((damage / 800.0) * (energy / 2500.0)).min(1.0) * 100.0;
+    let vol = aggression.max(50.0) as f32;
+    let sound = if delamming {
+        crate::sound::PlaySound::new(pos, "sm_delam", vol, false)
+            .extrarange(40.0)
+            .falloff_exponent(30.0)
+    } else {
+        crate::sound::PlaySound::new(pos, "sm_calm", vol, false)
+            .extrarange(25.0)
+            .falloff_exponent(25.0)
+    };
+    crate::sound::playsound(world, sound.falloff_distance(10.0));
+    // `SUPERMATTER_ACCENT_SOUND_MIN_COOLDOWN` 2 s; `round((100 - aggression) * 5)` deciseconds.
+    let next = ((100.0 - aggression) * 5.0).round() / 10.0;
+    if let Some(mut sm) = world.get_mut::<Supermatter>(e) {
+        sm.accent_at = now + next.max(2.0);
+    }
 }
 
 /// One arc of `supermatter_zap`.
@@ -1432,6 +1496,7 @@ mod tests {
             lastwarning: 0.0,
             common_radio_at: 0.0,
             countdown: None,
+            accent_at: 0.0,
             looks: SmLooks::default(),
         };
         sm.eat_beam(30.0);

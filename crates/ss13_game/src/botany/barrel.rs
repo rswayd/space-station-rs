@@ -4,7 +4,7 @@
 //! or fruit wine (`/obj/item/food/grown/ferment`), the fruit's reagents into the barrel. An empty
 //! hand opens or closes the lid, a right click empties the fruits out of an open barrel. The
 //! gunpowder and thermite barrels never open and start with 500 u.
-// shortcut: no plant bags, wrench anchoring, boiling sound loop, labels or `can_distill`
+// shortcut: no plant bags, wrench anchoring, labels or `can_distill`
 // (every grown food ferments).
 
 use bevy::prelude::*;
@@ -46,7 +46,16 @@ pub struct Barrel {
 
 pub(super) fn build(app: &mut App) {
     app.add_systems(ss13_world::MapInit, setup_barrels)
-        .add_systems(Update, process_barrels);
+        .add_systems(
+            Update,
+            (
+                process_barrels,
+                // `soundloop` while `fermenting` (`sound_volume` 25, the loop's own).
+                crate::looping_sound::sync::<Barrel>(&crate::looping_sound::defs::BOILING, |b| {
+                    b.fermenting
+                }),
+            ),
+        );
 }
 
 /// `Initialize`: closed, drainable; the pirate barrels full of their powder.

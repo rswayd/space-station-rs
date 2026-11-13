@@ -23,7 +23,7 @@
 //!   (`ss13_reagents::metabolism`). Reports go to the medical channel.
 //! - A step of the occupant starts a 30 s breakout that opens the cell if it is still inside
 //!   and conscious.
-// shortcut: no sounds, sound loop, flick animations or occupant drawn in the tube (the
+// shortcut: no sounds but the loop, no flick animations or occupant drawn in the tube (the
 // occupant is hidden like in a closet); no vapor exposure effects (`expose_mob`), no screwdriver,
 // crowbar or wrench rules (the machine frame ones apply; no prying a closed unpowered cell, no
 // pressure release), no examine lines, no idle/active power switch; a moved or rotated cell
@@ -129,6 +129,11 @@ pub(super) fn build(app: &mut App) {
                 refresh_views
                     .after(UiSystems::Handle)
                     .before(UiSystems::Send),
+                // `soundloop`: `begin_processing` .. `end_processing` (`set_on`).
+                crate::looping_sound::sync::<CryoCell>(
+                    &crate::looping_sound::defs::CRYO_CELL,
+                    |c| c.on,
+                ),
             ),
         )
         .add_systems(

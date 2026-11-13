@@ -23,7 +23,7 @@
 //!   aborts.
 //! - A step from inside opens the sleeper, an extractor with its hatch unlocked or a harvester
 //!   that is not running; in a cryo cell ([`super::cryo`]) it starts a breakout.
-// shortcut: no sounds, sound loops, lights or flick animations; no breaking out of a locked
+// shortcut: no sounds but the loops, no lights or flick animations; no breaking out of a locked
 // extractor (tg's 60 s `do_after`: the step only tells it is locked); the extractor's cookie
 // lands on its tile instead of in the occupant's hands, meat is always human meat with no
 // material; the harvester does not notify ghosts, every carbon counts as organic.
@@ -148,6 +148,11 @@ pub(super) fn build(app: &mut App) {
                     .after(crate::power::PowerSystems)
                     .run_if(any_with_component::<FatSucker>),
                 timers.run_if(any_with_component::<Pod>),
+                // `soundloop`: `start_extracting` .. `stop`.
+                crate::looping_sound::sync::<FatSucker>(
+                    &crate::looping_sound::defs::MICROWAVE,
+                    |f| f.processing,
+                ),
             ),
         );
 }

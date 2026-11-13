@@ -91,7 +91,7 @@ pub struct Firelock {
     pub ignore_alarms: bool,
     /// Its row in [`Firelocks::groups`].
     pub group: usize,
-    /// `soundloop` (`is_playing_alarm`): when the next siren sound plays.
+    /// `is_playing_alarm`: since when its siren (`soundloop`) runs.
     pub ringing: Option<f64>,
     /// `activation_cooldown`.
     pub cooldown_until: f64,
@@ -337,6 +337,7 @@ pub fn teardown(world: &mut World, e: Entity) {
             list.retain(|&m| m != e);
         }
     }
+    crate::looping_sound::stop(world, e, crate::looping_sound::defs::FIREALARM.path);
     world
         .entity_mut(e)
         .remove::<(Firelock, FirelockPending, Ringing)>();

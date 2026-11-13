@@ -141,10 +141,6 @@ struct FireClocks {
     sound: f64,
 }
 
-/// `/datum/looping_sound/fire`: `volume`, `mid_length` (s).
-pub const FIRE_LOOP_VOLUME: f32 = 30.0;
-pub const FIRE_LOOP_SECS: f64 = 2.0;
-
 pub struct FireServerPlugin;
 
 impl Plugin for FireServerPlugin {
@@ -184,35 +180,28 @@ impl Plugin for FireServerPlugin {
     }
 }
 
-/// Every `mid_length` each hot group plays a random fire clip at its middle, carrying
-/// `drop_off_dist` further and fading from that far (tg `update_sound`).
+/// Every `mid_length` each hot group plays its loop (`/datum/looping_sound/fire`,
+/// [`FIRE`](crate::looping_sound::defs::FIRE)) at its middle, carrying `drop_off_dist` further
+/// and fading from that far (tg `update_sound`).
 // shortcut: one clock for every group (tg times each loop from its start); fine while the
-// clips last as long as the loop.
+// clips last as long as the loop. A hot group is no entity, so its loop is driven here.
 fn fire_sound_loops(world: &mut World) {
+    use crate::looping_sound::defs::FIRE;
     let delta = world.resource::<Time>().delta_secs_f64();
     {
         let mut clocks = world.resource_mut::<FireClocks>();
         clocks.sound += delta;
-        if clocks.sound < FIRE_LOOP_SECS {
+        if clocks.sound < FIRE.mid_length {
             return;
         }
-        clocks.sound -= FIRE_LOOP_SECS;
+        clocks.sound -= FIRE.mid_length;
     }
     let Some(sounds) = world.get_resource::<Atmos>().map(Atmos::fire_sounds) else {
         return;
     };
     for (pos, drop_off) in sounds {
-        let files = ss13_mapload::sound::files::FIRE_LOOP;
-        let clip = files[world
-            .resource_mut::<CombatRng>()
-            .range(0, files.len() as u32 - 1) as usize];
         let drop_off = drop_off as f32;
-        crate::sound::playsound(
-            world,
-            crate::sound::PlaySound::new(pos, clip, FIRE_LOOP_VOLUME, false)
-                .extrarange(drop_off)
-                .falloff_distance(drop_off),
-        );
+        crate::looping_sound::play_mid_at(world, pos, &FIRE, drop_off, drop_off);
     }
 }
 

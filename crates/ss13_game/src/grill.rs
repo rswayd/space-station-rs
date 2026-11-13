@@ -16,8 +16,8 @@
 //!   igniter, 5 iron and 5 rods, dropping its food and fuel (a puff of bad smoke when it had
 //!   fuel).
 // shortcut: the grill marks are the whole `grillmarks` state over the food (tg cuts them to the
-// food's shape with icon blending); the sizzle loop plays once per machine tick; no screentips,
-// no `quality_food_ingredient` buff for grilled ingredients.
+// food's shape with icon blending); no screentips, no `quality_food_ingredient` buff for grilled
+// ingredients.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmFood, DmItem, DmName, DmObj, IconIndex};
@@ -42,7 +42,6 @@ const IRON: &str = "/obj/item/stack/sheet/iron";
 const RODS: &str = "/obj/item/stack/rods";
 const KITCHEN_DMI: &str = "icons/obj/machines/kitchen.dmi";
 const GRILL_MARKS: &str = "grillmarks";
-const SIZZLE_SOUND: &str = "sound/machines/grill/grillsizzle.ogg";
 const RATCHET: &str = "sound/items/tools/ratchet.ogg";
 const CROWBAR: &str = "sound/items/tools/crowbar.ogg";
 /// `GRILL_FUELUSAGE_IDLE`, `GRILL_FUELUSAGE_ACTIVE`: fuel per second.
@@ -101,7 +100,14 @@ impl Plugin for GrillPlugin {
             c.held
                 .is_some_and(|h| crate::grill::item_interaction(w, c.client, c.mob, h, c.target))
         });
-        app.add_systems(Update, grill_tick.after(crate::power::PowerSystems));
+        app.add_systems(Update, grill_tick.after(crate::power::PowerSystems))
+            // `grill_loop`: food put on .. taken off (`Exited`).
+            .add_systems(
+                Update,
+                crate::looping_sound::sync::<Grill>(&crate::looping_sound::defs::GRILL, |g| {
+                    g.item.is_some()
+                }),
+            );
     }
 }
 
@@ -458,12 +464,6 @@ pub fn process_grill(world: &mut World, e: Entity, dt: f32) {
         exited(world, e);
     }
     let pos = world.get::<TilePos>(e).copied();
-    // `grill_loop` plays while food is on it, fuel or not.
-    if grill_of(world, e).item.is_some()
-        && let Some(pos) = pos
-    {
-        playsound(world, PlaySound::new(pos, SIZZLE_SOUND, 50.0, true));
-    }
     if !grill_of(world, e).processing {
         return;
     }

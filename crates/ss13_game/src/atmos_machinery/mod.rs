@@ -178,12 +178,7 @@ impl Plugin for AtmosMachineryPlugin {
         )
         .add_systems(
             Update,
-            (
-                airlock_pump::cycle_requests,
-                airlock_pump::pump_timers,
-                overclock::fan_loops,
-            )
-                .chain(),
+            (airlock_pump::cycle_requests, airlock_pump::pump_timers).chain(),
         );
         app.init_resource::<AreaAtmos>()
             .init_resource::<miner::MinerClock>()

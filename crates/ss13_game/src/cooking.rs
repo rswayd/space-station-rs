@@ -21,10 +21,10 @@
 //! - What nothing bakes or grills burns (`fire_act(1000)`, [`scorch`]): 20 damage a tick until
 //!   it is ash; a griddle uses its active power only for those, as tg does, and exposes its tile
 //!   to 800 K.
-// shortcut: no sounds, smoke particles, emissive light, grilling by hot air, the `burning`
-// component of burning items, pancake batter on a griddle, freeze cubes, dunking mobs in the
-// fryer, the fryer's fishing spot or its `chem_temp`; the tray and griddle contents are drawn as
-// their base sprites. The range's burner is `crate::stove`.
+// shortcut: no sounds but the looping ones (`crate::looping_sound`), smoke particles, emissive
+// light, grilling by hot air, the `burning` component of burning items, pancake batter on a
+// griddle, freeze cubes, dunking mobs in the fryer, the fryer's fishing spot or its `chem_temp`;
+// the tray and griddle contents are drawn as their base sprites. The range's burner is `crate::stove`.
 
 use bevy::prelude::*;
 use ss13_mapload::{DmAtom, DmFood, DmItem, DmName, DmPower, IconIndex};
@@ -145,7 +145,21 @@ impl Plugin for CookingServerPlugin {
             ss13_world::MapInit,
             setup_machines.after(crate::power::init_power),
         )
-        .add_systems(Update, cooking_tick.after(crate::power::PowerSystems));
+        .add_systems(Update, cooking_tick.after(crate::power::PowerSystems))
+        .add_systems(
+            Update,
+            (
+                // `update_grill_audio()`: on with something on it.
+                crate::looping_sound::sync::<Griddle>(&crate::looping_sound::defs::GRILL, |g| {
+                    g.on && !g.items.is_empty()
+                }),
+                // `fry_loop`: `start_fry` .. `reset_fryer`.
+                crate::looping_sound::sync::<DeepFryer>(
+                    &crate::looping_sound::defs::DEEP_FRYER,
+                    |f| f.frying.is_some(),
+                ),
+            ),
+        );
     }
 }
 
@@ -1156,6 +1170,8 @@ pub fn refresh_look(world: &mut World, e: Entity) {
     let (state, overlays): (String, Vec<Overlay>) = if let Some(oven) = world.get::<Oven>(e) {
         let oven = oven.clone();
         let active = oven_active(world, e);
+        // `update_baking_audio()` goes with `update_appearance()`.
+        crate::looping_sound::set(world, e, &crate::looping_sound::defs::OVEN, active);
         let state = format!("{base_state}_{}", if active { "on" } else { "off" });
         let mut overlays = Vec::new();
         if oven.open {

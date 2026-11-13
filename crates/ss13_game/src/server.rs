@@ -353,6 +353,7 @@ impl Plugin for GameServerPlugin {
         .add_plugins(crate::vision::VisionServerPlugin)
         .add_plugins(crate::stock_parts::StockPartsPlugin)
         .add_plugins(crate::sound::SoundServerPlugin)
+        .add_plugins(crate::looping_sound::LoopingSoundPlugin)
         .add_plugins(crate::atmos_machinery::AtmosMachineryPlugin)
         .add_plugins(crate::silicon::SiliconServerPlugin)
         .add_plugins(crate::records::RecordsServerPlugin)

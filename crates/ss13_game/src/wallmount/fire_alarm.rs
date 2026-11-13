@@ -17,24 +17,14 @@
 // (`fire_offstation`): every alarm counts as on the station. Add with those systems.
 
 use bevy::prelude::*;
-use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
 
 use super::firelock::{self, Firelock};
 use super::{Look, light_of, refresh_look};
+use crate::looping_sound::{self, SoundLoops, defs::FIREALARM};
 use crate::power::{AreaPower, Unpowered};
-use crate::sound::{PlaySound, SoundRng, playsound};
 use crate::tools::tell;
 
-/// `/datum/looping_sound/firealarm`: `mid_sounds`, `mid_length`, `volume`.
-const SIREN: [&str; 4] = [
-    "sound/machines/fire_alarm/fire_alarm1.ogg",
-    "sound/machines/fire_alarm/fire_alarm2.ogg",
-    "sound/machines/fire_alarm/fire_alarm3.ogg",
-    "sound/machines/fire_alarm/fire_alarm4.ogg",
-];
-const SIREN_SECS: f64 = 2.4;
-const SIREN_VOLUME: f32 = 30.0;
 /// tg light colors: `COLOR_WHITE` (detection off), `LIGHT_COLOR_INTENSE_RED` (alarm); the
 /// security level's own otherwise.
 const WHITE: [u8; 3] = [0xFF, 0xFF, 0xFF];
@@ -44,7 +34,7 @@ const INTENSE_RED: [u8; 3] = [0xC8, 0x19, 0x19];
 #[derive(Component, Clone, Copy, Debug)]
 pub struct FireAlarm {
     pub area: Entity,
-    /// The next siren sound while it rings.
+    /// Since when it rings (its siren, `soundloop`, runs meanwhile).
     pub ringing: Option<f64>,
     /// `can_trigger`, `can_reset`, `can_toggle_detection`: false while their wire is cut
     /// (`crate::machine_wires`).
@@ -302,42 +292,40 @@ fn set_status(world: &mut World, alarm: Entity) {
     refresh_look(world, alarm);
 }
 
-/// The sirens of the ringing alarms (`soundloop`), one random sound per 2.4 s.
+/// The sirens (`soundloop`, [`FIREALARM`]): a ringing alarm's, and a ringing firelock's while
+/// powered (`on_power_loss`). Cost: a pass over the alarms and the ringing or sounding
+/// firelocks per tick.
 pub(super) fn ring_alarms(world: &mut World) {
-    let t = now(world);
-    let mut query = world.query::<(Entity, &FireAlarm, &TilePos)>();
-    let due: Vec<(Entity, TilePos)> = query
+    let mut query = world.query::<(Entity, &FireAlarm, Option<&SoundLoops>)>();
+    let mut changed: Vec<(Entity, bool)> = query
         .iter(world)
-        .filter(|(_, a, _)| a.ringing.is_some_and(|next| t >= next))
-        .map(|(e, _, &p)| (e, p))
+        .filter(|(_, a, l)| a.ringing.is_some() != l.is_some_and(|l| l.is_active(FIREALARM.path)))
+        .map(|(e, a, _)| (e, a.ringing.is_some()))
         .collect();
-    for (e, pos) in due {
-        let i = world
-            .resource_mut::<SoundRng>()
-            .0
-            .range(0, SIREN.len() as u32 - 1) as usize;
-        playsound(world, PlaySound::new(pos, SIREN[i], SIREN_VOLUME, false));
-        if let Some(mut a) = world.get_mut::<FireAlarm>(e) {
-            a.ringing = Some(t + SIREN_SECS);
-        }
-    }
-    // The firelocks' own `soundloop`, silent without power (`on_power_loss`).
-    let mut query = world
-        .query_filtered::<(Entity, &Firelock, &TilePos), (With<firelock::Ringing>, Without<Unpowered>)>();
-    let due: Vec<(Entity, TilePos)> = query
-        .iter(world)
-        .filter(|(_, l, _)| l.ringing.is_some_and(|next| t >= next))
-        .map(|(e, _, &p)| (e, p))
-        .collect();
-    for (e, pos) in due {
-        let i = world
-            .resource_mut::<SoundRng>()
-            .0
-            .range(0, SIREN.len() as u32 - 1) as usize;
-        playsound(world, PlaySound::new(pos, SIREN[i], SIREN_VOLUME, false));
-        if let Some(mut l) = world.get_mut::<Firelock>(e) {
-            l.ringing = Some(t + SIREN_SECS);
-        }
+    let mut query = world.query_filtered::<(
+        Entity,
+        Has<firelock::Ringing>,
+        Has<Unpowered>,
+        Option<&SoundLoops>,
+    ), (
+        With<Firelock>,
+        Or<(With<firelock::Ringing>, With<SoundLoops>)>,
+    )>();
+    changed.extend(
+        query
+            .iter(world)
+            .map(|(e, ringing, unpowered, l)| {
+                (
+                    e,
+                    ringing && !unpowered,
+                    l.is_some_and(|l| l.is_active(FIREALARM.path)),
+                )
+            })
+            .filter(|(_, want, has)| want != has)
+            .map(|(e, want, _)| (e, want)),
+    );
+    for (e, on) in changed {
+        looping_sound::set(world, e, &FIREALARM, on);
     }
 }
 

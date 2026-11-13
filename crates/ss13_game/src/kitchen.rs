@@ -163,6 +163,11 @@ impl Plugin for KitchenServerPlugin {
                 Update,
                 (
                     kitchen_tick.run_if(any_running),
+                    // `soundloop`: `start()` .. `after_finish_loop()`.
+                    crate::looping_sound::sync::<Microwave>(
+                        &crate::looping_sound::defs::MICROWAVE,
+                        |m| m.operating.is_some(),
+                    ),
                     microwave_answers
                         .in_set(UiSystems::Handle)
                         .after(PromptSystems::Answer),
