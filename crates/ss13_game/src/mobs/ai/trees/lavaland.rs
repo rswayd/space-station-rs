@@ -415,7 +415,8 @@ pub(super) fn build(path: &str) -> Option<Built> {
         // (white), mothers caring for the young and babies following them, pet commands.
         retaliate_combat()
     } else if is("node_drone") {
-        // `node_drone.bt.json`: it only latches onto an unclaimed ore vent (none here);
+        // `node_drone.bt.json`: it only latches onto an unclaimed ore vent (vents land their
+        // own here, `crate::mining::vents`);
         // `PASSIVE_AI_FLAGS`, it never fights.
         leaf(Behavior::Fauna(FaunaLeaf::Wait))
     } else if is("ice_demon/afterimage") {
