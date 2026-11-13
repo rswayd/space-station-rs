@@ -27,6 +27,8 @@ pub struct LocalSlider {
     pub value: f32,
     /// Change per wheel notch.
     pub wheel_step: f32,
+    /// The value text: `None` a percent, `Some(n)` the value with `n` decimals.
+    pub decimals: Option<u8>,
 }
 
 impl LocalSlider {
@@ -75,9 +77,12 @@ const TRACK_HEIGHT: f32 = 6.0;
 const KNOB: f32 = 14.0;
 const LABEL_WIDTH: f32 = 40.0;
 
-/// The value as shown: a percent-like integer.
-fn label(value: f32) -> String {
-    format!("{}%", value.round() as i64)
+/// The value as shown: a percent-like integer, or the value with `decimals`.
+fn label(value: f32, decimals: Option<u8>) -> String {
+    match decimals {
+        None => format!("{}%", value.round() as i64),
+        Some(n) => format!("{value:.*}", usize::from(n)),
+    }
 }
 
 fn knob_color(active: bool) -> Color {
@@ -90,15 +95,27 @@ fn knob_color(active: bool) -> Color {
 
 /// A slider writing `key` in `min..=max`, drawn at `value`, its value text beside it.
 pub fn slider(key: String, value: f32, min: f32, max: f32) -> impl Scene + use<> {
+    slider_with(key, value, min, max, None)
+}
+
+/// [`slider`] showing its value with `decimals` (`None`: as a percent).
+pub fn slider_with(
+    key: String,
+    value: f32,
+    min: f32,
+    max: f32,
+    decimals: Option<u8>,
+) -> impl Scene + use<> {
     let track = LocalSlider {
         key,
         min,
         max,
         value,
         wheel_step: (max - min).abs() / 100.0,
+        decimals,
     };
     let at = track.fraction_of(value) * 100.0;
-    let text = label(value);
+    let text = label(value, decimals);
     bsn! {
         // Takes the room its row leaves it; the track stretches, the value text does not.
         Node {
@@ -204,6 +221,7 @@ fn set_value(
     slider.value = value;
     let at = slider.fraction_of(value) * 100.0;
     let key = slider.key.clone();
+    let decimals = slider.decimals;
     for part in children.iter_descendants(entity) {
         if let Ok((mut node, fill, knob)) = parts.get_mut(part) {
             if fill.is_some() {
@@ -218,7 +236,7 @@ fn set_value(
     if let Ok(row) = parents.get(entity).map(ChildOf::parent) {
         for part in children.iter_descendants(row) {
             if let Ok(mut text) = labels.get_mut(part) {
-                text.0 = label(value);
+                text.0 = label(value, decimals);
             }
         }
     }
@@ -396,7 +414,11 @@ fn drag_end(
     }
 }
 
-pub(crate) fn plugin(app: &mut App) {
+/// The slider observers; added once whoever adds them first (the tgui client, the chat panel).
+pub fn plugin(app: &mut App) {
+    if app.world().contains_resource::<Dragging>() {
+        return;
+    }
     app.init_resource::<Dragging>()
         .add_observer(press)
         .add_observer(drag)
@@ -418,6 +440,7 @@ mod tests {
             max: 100.0,
             value: 50.0,
             wheel_step: 1.0,
+            decimals: None,
         };
         assert_eq!(s.value_at(0.0), 0.0);
         assert_eq!(s.value_at(1.0), 100.0);
@@ -428,6 +451,7 @@ mod tests {
         assert_eq!(s.wheeled(3.0), 53.0);
         assert_eq!(s.wheeled(-80.0), 0.0);
         assert_eq!(stored(42.345), "42.35");
-        assert_eq!(label(42.6), "43%");
+        assert_eq!(label(42.6, None), "43%");
+        assert_eq!(label(1.234, Some(2)), "1.23");
     }
 }

@@ -16,13 +16,16 @@ use bevy::ui_widgets::Activate;
 use bevy::window::PrimaryWindow;
 use bevy::winit::WinitPlugin;
 use ss13_chat::client::panel::{ChatMessages, JumpButton, LINE_HEIGHT};
-use ss13_chat::client::{ChatLog, ChatPanelPlugin, ChatTab, ChatView};
+use ss13_chat::client::prefs::{Highlight, row_height};
+use ss13_chat::client::settings_ui::PageTab;
+use ss13_chat::client::{ChatLog, ChatPanelPlugin, ChatPrefs, ChatView};
 use ss13_net::client::SendIntent;
 use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_ui_kit::UiKitPlugin;
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::scroll::ScrollContent;
 use ss13_ui_kit::virtual_list::VirtualListRow;
+use ss13_ui_kit::virtual_list::VirtualListState;
 
 fn headless(capacity: usize) -> App {
     let mut app = App::new();
@@ -192,13 +195,68 @@ fn long_cyrillic_message_wraps_into_styled_rows() {
         .count();
     assert_eq!(badges, 1);
 
-    // The System tab hides local speech.
-    app.world_mut()
-        .resource_mut::<ChatView>()
-        .set_tab(ChatTab::System);
+    // A new tab shows only system messages: local speech is hidden.
+    app.world_mut().resource_mut::<ChatPrefs>().pages.add();
     settle(&mut app, 2);
     assert_eq!(lines(&app), 0);
     assert_eq!(rows(&mut app), 0);
+    let tabs = app
+        .world_mut()
+        .query::<&PageTab>()
+        .iter(app.world())
+        .count();
+    assert_eq!(tabs, 2);
+    // New speech there is unread on the main tab, and its label says so.
+    push(&mut app, say("Боцман", "эй"));
+    settle(&mut app, 2);
+    assert_eq!(app.world().resource::<ChatPrefs>().pages.pages[0].unread, 1);
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|t| t.0 == "Основная (1)")
+    );
+    // Back on the main tab: read, and the speech is shown again.
+    app.world_mut().resource_mut::<ChatPrefs>().pages.select(0);
+    settle(&mut app, 2);
+    assert_eq!(app.world().resource::<ChatPrefs>().pages.pages[0].unread, 0);
+    assert!(lines(&app) > 0);
+}
+
+#[test]
+fn highlights_and_font_size_reach_the_rows() {
+    let mut app = headless(2500);
+    app.world_mut().resource_mut::<ChatPrefs>().highlights = vec![Highlight {
+        text: "капитан".into(),
+        ..Default::default()
+    }];
+    settle(&mut app, 1);
+    push(&mut app, say("Боб", "где капитан?"));
+    settle(&mut app, 3);
+    let shown = app.world().resource::<ChatView>().lines();
+    let line = &shown[0];
+    assert!(line.highlight.is_some(), "the whole message");
+    let marked: Vec<&str> = line
+        .pieces
+        .iter()
+        .zip(&line.marks)
+        .filter(|(_, m)| m.is_some())
+        .map(|((_, t), _)| t.as_str())
+        .collect();
+    assert_eq!(marked, ["капитан"]);
+    // A bigger font: rows are laid out again, taller.
+    app.world_mut().resource_mut::<ChatPrefs>().font_size = 20.0;
+    settle(&mut app, 3);
+    let list = single::<ChatMessages>(&mut app);
+    let state = app.world().get::<VirtualListState>(list).unwrap();
+    assert_eq!(state.item_height, row_height(20.0, 1.2));
+    assert!(
+        app.world()
+            .resource::<ChatView>()
+            .lines()
+            .iter()
+            .all(|l| l.font_size == 20.0)
+    );
 }
 
 #[test]

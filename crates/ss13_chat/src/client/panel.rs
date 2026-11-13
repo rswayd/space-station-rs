@@ -1,5 +1,6 @@
 //! The docked chat panel: tgui-panel's tabs + message list + "scroll to bottom", with tgui-say's
-//! input line under it.
+//! input line under it. The tab bar, the settings pane and the emote panel are in
+//! [`super::settings_ui`]; what they set is [`super::prefs::ChatPrefs`].
 //!
 //! The say line is tgui-say (`tgui/packages/tgui-say`): the channel button and Tab cycle the
 //! channels, a radio prefix typed first (`:h `) moves onto the button, Up/Down walk the last
@@ -20,6 +21,7 @@ use bevy::input_focus::{FocusedInput, InputFocus};
 use bevy::platform::collections::HashMap;
 use bevy::text::{
     EditableText, FontCx, FontSize, FontSourceTemplate, FontStyle, FontWeight, LayoutCx,
+    TextBackgroundColor,
 };
 use bevy::ui::ComputedNode;
 use ss13_net::admin::client::{AdminResponseReceived, SendAdminRequest};
@@ -28,7 +30,7 @@ use ss13_net::client::SendIntent;
 use ss13_shared::IconStateId;
 use ss13_shared::admin::rights::R_ADMIN;
 use ss13_shared::admin::{AdminRequest, AdminResponse};
-use ss13_shared::chat::{ChatChannel, MAX_MESSAGE_LEN, Span};
+use ss13_shared::chat::{MAX_MESSAGE_LEN, Span};
 use ss13_shared::protocol::{ClientIntent, TypingState};
 use ss13_ui_kit::prelude::*;
 use ss13_ui_kit::scroll::{SCROLLBAR_WIDTH, ScrollContent};
@@ -36,11 +38,13 @@ use ss13_ui_kit::theme::{self, root_text_style};
 use ss13_ui_kit::virtual_list::VirtualListState;
 
 use super::log::{COMBINE_MAX_MESSAGES, ChatEntry, ChatLog};
+use super::prefs::{self, ChannelSet, Highlighter};
+use super::settings_ui;
 use super::style;
 use super::wrap::break_lines;
 
 /// tgui-panel default `fontSize: 13`.
-pub const FONT_SIZE: f32 = 13.0;
+pub const FONT_SIZE: f32 = prefs::DEFAULT_FONT_SIZE;
 /// `lineHeight: 1.2` of 13 px, rounded up to whole pixels so rows never drift.
 pub const LINE_HEIGHT: f32 = 16.0;
 /// Docked width. tgui-panel's split is user-resizable; this one is fixed, so lines are broken
@@ -55,29 +59,17 @@ const WRAP_SLACK: f32 = 2.0;
 /// and a single notch up must already stop the view from following new messages.
 pub const SCROLL_TRACKING_TOLERANCE: f32 = LINE_HEIGHT / 2.0;
 
-/// Which messages the list shows.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ChatTab {
-    #[default]
-    All,
-    System,
-}
-
-impl ChatTab {
-    fn shows(self, channel: ChatChannel) -> bool {
-        match self {
-            ChatTab::All => true,
-            ChatTab::System => channel == ChatChannel::System,
-        }
-    }
-}
-
 /// One visual line of a message.
 #[derive(Debug, PartialEq)]
 pub struct ChatLine {
     /// The [`ChatEntry`] it belongs to.
     pub id: u64,
     pub pieces: Vec<(Span, String)>,
+    /// The highlight color of each piece (tgui-panel `Chat__highlight`).
+    pub marks: Vec<Option<Color>>,
+    /// `ChatMessage--highlighted`: the whole message's highlight color.
+    pub highlight: Option<Color>,
+    pub font_size: f32,
     /// The span the whole message is nested in (a radio line's class), see
     /// [`style::span_style_in`].
     pub outer: Option<Span>,
@@ -144,6 +136,10 @@ impl AutoScroll {
     }
 }
 
+/// What the rows were built for: the shown types, font size, line height and the log's
+/// removal count; any change rebuilds every row.
+type Built = (ChannelSet, f32, f32, u64);
+
 /// Lines of the shown tab, shared with the list's row builder, and the per-message line cache.
 #[derive(Resource)]
 pub struct ChatView {
@@ -151,8 +147,11 @@ pub struct ChatView {
     /// Entry id → (`times` the lines were built for, lines).
     cache: HashMap<u64, (u32, Vec<Arc<ChatLine>>)>,
     width: f32,
-    tab: ChatTab,
-    built_tab: Option<ChatTab>,
+    filter: ChannelSet,
+    font_size: f32,
+    line_height: f32,
+    highlighter: Highlighter,
+    built: Option<Built>,
     /// Id after the newest entry already turned into lines.
     next_id: u64,
     pub autoscroll: AutoScroll,
@@ -164,8 +163,11 @@ impl Default for ChatView {
             rows: Arc::default(),
             cache: HashMap::new(),
             width: 0.0,
-            tab: ChatTab::All,
-            built_tab: None,
+            filter: ChannelSet::ALL,
+            font_size: prefs::DEFAULT_FONT_SIZE,
+            line_height: prefs::DEFAULT_LINE_HEIGHT,
+            highlighter: Highlighter::default(),
+            built: None,
             next_id: 0,
             autoscroll: AutoScroll::default(),
         }
@@ -178,15 +180,43 @@ impl ChatView {
         self.rows.read().map(|r| r.clone()).unwrap_or_default()
     }
 
-    pub fn tab(&self) -> ChatTab {
-        self.tab
+    /// The message types the list shows (the shown tab's).
+    pub fn filter(&self) -> ChannelSet {
+        self.filter
     }
 
-    pub fn set_tab(&mut self, tab: ChatTab) {
-        if self.tab != tab {
-            self.tab = tab;
+    /// `changePage`: the list shows these types, from the bottom.
+    pub fn set_filter(&mut self, filter: ChannelSet) {
+        if self.filter != filter {
+            self.filter = filter;
             self.autoscroll.jump_to_bottom();
         }
+    }
+
+    /// The chat's font size and line height (tgui-panel `assignStyle`).
+    pub fn set_font(&mut self, font_size: f32, line_height: f32) {
+        if self.font_size != font_size {
+            self.font_size = font_size;
+        }
+        if self.line_height != line_height {
+            self.line_height = line_height;
+        }
+    }
+
+    /// The highlights of messages from now on (tgui-panel `setHighlight`).
+    pub fn set_highlighter(&mut self, highlighter: Highlighter) {
+        self.highlighter = highlighter;
+    }
+
+    /// `rebuildChat` ("Apply now"): every message is laid out again, with today's highlights.
+    pub fn rebuild(&mut self) {
+        self.cache.clear();
+        self.built = None;
+    }
+
+    /// The height of one row.
+    pub fn row_height(&self) -> f32 {
+        prefs::row_height(self.font_size, self.line_height)
     }
 }
 
@@ -554,7 +584,12 @@ pub(crate) fn plugin(app: &mut App) {
         .add_systems(
             Update,
             (
+                settings_ui::read_sliders,
+                settings_ui::apply_prefs,
                 sync_view,
+                settings_ui::count_unread,
+                settings_ui::sync_tabs,
+                settings_ui::sync_panes,
                 show_jump_button,
                 attach_say_keys,
                 close_say,
@@ -569,17 +604,18 @@ pub(crate) fn plugin(app: &mut App) {
         .add_observer(on_act)
         .add_observer(on_say_submitted)
         .add_observer(on_say_changed);
+    settings_ui::plugin(app);
 }
 
 /// `TextFont` of a span, as a scene patch (`TextFont` holds asset handles and is a template).
-fn span_font(span: Span, outer: Option<Span>, size: f32) -> impl Scene {
+fn span_font(span: Span, outer: Option<Span>, size: f32, mark: Option<Color>) -> impl Scene {
     let style = style::span_style_in(span, outer);
     let weight = if style.bold {
         FontWeight::BOLD
     } else {
         FontWeight::NORMAL
     };
-    let color = style.color;
+    let color = mark.unwrap_or(style.color);
     let family = FontSourceTemplate::Family(theme::FONT_FAMILY.into());
     let slant = if style.italic {
         FontStyle::Italic
@@ -608,30 +644,34 @@ pub struct ChatEmoji {
 /// A run of a row: its text pieces, or one emoji; a link's run is a button whose click is
 /// `link:<id>` ([`on_act`]).
 fn run_scene(
-    texts: Vec<(Span, String)>,
+    texts: Vec<(Span, String, Option<Color>)>,
     emoji: Option<IconStateId>,
     link: Option<u32>,
     outer: Option<Span>,
+    size: f32,
 ) -> impl Scene {
     let spans: Vec<_> = texts
         .into_iter()
-        .map(|(span, text)| {
+        .map(|(span, text, mark)| {
             let shine = super::donor::shine_patch(span);
-            bsn! { TextSpan(text) @span_font(span, outer, FONT_SIZE) @{shine} }
+            // `.Chat__highlight`: the highlight color over a 15% wash of it.
+            let wash = mark.map(|c| bsn! { TextBackgroundColor(c.with_alpha(0.15)) });
+            bsn! { TextSpan(text) @span_font(span, outer, size, mark) @{shine} @{wash} }
         })
         .collect();
     let text = (!spans.is_empty()).then(|| {
         bsn! {
             Children [
-                Text("") @span_font(Span::Plain, None, FONT_SIZE) TextLayout::no_wrap()
+                Text("") @span_font(Span::Plain, None, size, None) TextLayout::no_wrap()
                 Children [ {spans} ]
             ]
         }
     });
+    let emoji_size = (size * 1.2).ceil();
     let icon = emoji.map(|id| {
         bsn! {
             Children [
-                Node { width: px(LINE_HEIGHT), height: px(LINE_HEIGHT) }
+                Node { width: px(emoji_size), height: px(emoji_size) }
                 ChatEmoji { icon_state: {Some(id)} }
             ]
         }
@@ -649,39 +689,63 @@ fn run_scene(
 }
 
 fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
+    let size = line.as_ref().map_or(FONT_SIZE, |l| l.font_size);
+    let whole = line.as_ref().and_then(|l| l.highlight);
     let (pieces, badge) = line.map_or((Vec::new(), None), |line| {
         let outer = line.outer;
         let mut runs = Vec::new();
         let mut texts = Vec::new();
-        for (span, text) in &line.pieces {
+        for (i, (span, text)) in line.pieces.iter().enumerate() {
+            let mark = line.marks.get(i).copied().flatten();
             match *span {
                 // A whole `:name:`; half of one broken over two lines stays text.
                 Span::Emoji(id)
                     if text.len() > 2 && text.starts_with(':') && text.ends_with(':') =>
                 {
                     if !texts.is_empty() {
-                        runs.push(run_scene(std::mem::take(&mut texts), None, None, outer));
+                        runs.push(run_scene(
+                            std::mem::take(&mut texts),
+                            None,
+                            None,
+                            outer,
+                            size,
+                        ));
                     }
-                    runs.push(run_scene(Vec::new(), Some(id), None, outer));
+                    runs.push(run_scene(Vec::new(), Some(id), None, outer, size));
                 }
                 Span::Link(id) => {
                     if !texts.is_empty() {
-                        runs.push(run_scene(std::mem::take(&mut texts), None, None, outer));
+                        runs.push(run_scene(
+                            std::mem::take(&mut texts),
+                            None,
+                            None,
+                            outer,
+                            size,
+                        ));
                     }
                     runs.push(run_scene(
-                        vec![(*span, text.clone())],
+                        vec![(*span, text.clone(), mark)],
                         None,
                         Some(id),
                         outer,
+                        size,
                     ));
                 }
-                _ => texts.push((*span, text.clone())),
+                _ => texts.push((*span, text.clone(), mark)),
             }
         }
         if !texts.is_empty() {
-            runs.push(run_scene(texts, None, None, outer));
+            runs.push(run_scene(texts, None, None, outer, size));
         }
         (runs, line.badge)
+    });
+    // `.ChatMessage--highlighted`: an 8% wash and a bar on the left.
+    let whole = whole.map(|c| {
+        bsn! {
+            Node { border: UiRect::left(px(2)) }
+            BackgroundColor(c.with_alpha(0.08))
+            BorderColor::all(c)
+        }
     });
     let badge = badge.map(|times| {
         let label = format!("x{times}");
@@ -689,12 +753,12 @@ fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
             Children [
                 Node {
                     margin: UiRect::left(px(4)),
-                    padding: UiRect::axes(px(FONT_SIZE * 0.3), px(FONT_SIZE * 0.1)),
+                    padding: UiRect::axes(px(size * 0.3), px(size * 0.1)),
                     border_radius: BorderRadius::all(px(10)),
                 }
                 BackgroundColor(style::BADGE_BACKGROUND)
                 Children [
-                    Text(label) @span_font(Span::Plain, None, FONT_SIZE * 0.7) TextColor(Color::WHITE) TextLayout::no_wrap()
+                    Text(label) @span_font(Span::Plain, None, size * 0.7, Some(Color::WHITE)) TextLayout::no_wrap()
                 ]
             ]
         }
@@ -708,6 +772,7 @@ fn row_scene(line: Option<Arc<ChatLine>>) -> impl Scene {
         }
         Children [ {pieces} ]
         @{badge}
+        @{whole}
     }
 }
 
@@ -718,6 +783,7 @@ fn spawn_panel(view: Res<ChatView>, mut commands: Commands) {
         row_scene(line)
     });
     let max_length = Some(MAX_MESSAGE_LEN);
+    let row_height = view.row_height();
     commands.spawn_scene(bsn! {
         Node {
             position_type: PositionType::Absolute,
@@ -733,20 +799,15 @@ fn spawn_panel(view: Res<ChatView>, mut commands: Commands) {
         BackgroundColor(style::PANEL_BACKGROUND)
         BorderColor::all(theme::COLOR_BORDER_DARK)
         Children [
-            Node { flex_shrink: 0.0 }
-            @root_text_style()
-            Children [
-                @Tabs
-                Children [
-                    @TabsTab { @icon: "list", @content: "Все" } TabsTab { selected: true } Act("tab:all")
-                    --
-                    @TabsTab { @icon: "cog", @content: "Система" } Act("tab:system")
-                ]
-            ]
+            @{settings_ui::top_bar()}
+            --
+            @{settings_ui::emotes_root()}
+            --
+            @{settings_ui::settings_root()}
             --
             Node { flex_grow: 1.0, min_height: px(0), flex_direction: FlexDirection::Column }
             Children [
-                @VirtualList { @item_height: LINE_HEIGHT, @row: row }
+                @VirtualList { @item_height: row_height, @row: row }
                 VirtualList { len: 0 }
                 ChatMessages
                 Node { flex_grow: 1.0 }
@@ -790,21 +851,29 @@ fn wrap_entry(
     entry: &ChatEntry,
     fonts: Option<(&mut FontCx, &mut LayoutCx)>,
     width: f32,
+    font_size: f32,
+    highlighter: &Highlighter,
 ) -> Vec<Arc<ChatLine>> {
     let segments = &entry.message.segments;
     let text = entry.message.plain_text();
     let width = if entry.times > 1 {
-        width - BADGE_RESERVE
+        width - BADGE_RESERVE * font_size / FONT_SIZE
     } else {
         width
     };
-    let ranges = break_lines(fonts, segments, &text, theme::FONT_FAMILY, FONT_SIZE, width);
+    let marks = if highlighter.is_empty() {
+        prefs::Marks::default()
+    } else {
+        highlighter.marks(&entry.message)
+    };
+    let ranges = break_lines(fonts, segments, &text, theme::FONT_FAMILY, font_size, width);
     let last = ranges.len() - 1;
     ranges
         .into_iter()
         .enumerate()
         .map(|(i, range)| {
             let mut pieces = Vec::new();
+            let mut piece_marks = Vec::new();
             let mut start = 0;
             for segment in segments {
                 let (a, b) = (
@@ -812,13 +881,27 @@ fn wrap_entry(
                     range.end.min(start + segment.text.len()),
                 );
                 start += segment.text.len();
-                if a < b {
-                    pieces.push((segment.span, text[a..b].to_string()));
+                // Cut where a highlight starts or ends, so each piece has one color.
+                let mut cut = a;
+                while cut < b {
+                    let next = marks
+                        .ranges
+                        .iter()
+                        .flat_map(|(r, _)| [r.start, r.end])
+                        .filter(|&p| p > cut && p < b)
+                        .min()
+                        .unwrap_or(b);
+                    pieces.push((segment.span, text[cut..next].to_string()));
+                    piece_marks.push(marks.at(cut));
+                    cut = next;
                 }
             }
             Arc::new(ChatLine {
                 id: entry.id,
                 pieces,
+                marks: piece_marks,
+                highlight: marks.whole,
+                font_size,
                 outer: style::outer_span(&entry.message),
                 badge: (i == last && entry.times > 1).then_some(entry.times),
             })
@@ -861,18 +944,32 @@ fn sync_view(
     let mut shifted = 0;
     let mut appended = 0;
     let resized = (width - view.width).abs() > 0.5;
-    let full = resized || view.built_tab != Some(view.tab);
+    let wanted = (
+        view.filter,
+        view.font_size,
+        view.line_height,
+        log.removals(),
+    );
+    let refont = view.built.is_some_and(|b| b.1 != view.font_size);
+    let full = resized || view.built != Some(wanted);
+    let row_height = view.row_height();
     if log.is_changed() || full {
-        if resized {
-            // shortcut: re-breaks every message (~2500 layouts) on a width change; fine for a
-            // fixed-width panel, debounce it if the panel becomes resizable.
+        if resized || refont {
+            // shortcut: re-breaks every message (~2500 layouts) on a width or font size change;
+            // fine for a fixed-width panel and a whole-pixel font slider, debounce it if the
+            // panel becomes resizable.
             view.cache.clear();
             view.width = width;
+        }
+        if full {
+            state.item_height = row_height;
         }
         let ChatView {
             rows,
             cache,
-            tab,
+            filter,
+            font_size,
+            highlighter,
             next_id,
             ..
         } = view;
@@ -901,13 +998,16 @@ fn sync_view(
         let old_tail = rows.split_off(cut);
         let mut fonts = font_cx.as_deref_mut().zip(layout_cx.as_deref_mut());
         for entry in entries.range(from..) {
-            if !tab.shows(entry.message.channel) {
+            if !filter.accepts(entry.message.channel) {
                 continue;
             }
             let cached = cache.entry(entry.id).or_insert((0, Vec::new()));
             if cached.0 != entry.times {
                 let fonts = fonts.as_mut().map(|(f, l)| (&mut **f, &mut **l));
-                *cached = (entry.times, wrap_entry(entry, fonts, width));
+                *cached = (
+                    entry.times,
+                    wrap_entry(entry, fonts, width, *font_size, highlighter),
+                );
             }
             rows.extend(cached.1.iter().cloned());
             if !full && entry.id >= *next_id {
@@ -928,17 +1028,17 @@ fn sync_view(
         }
         list.len = rows.len();
         drop(rows);
-        view.built_tab = Some(view.tab);
+        view.built = Some(wanted);
     }
     for &child in children {
         if let Ok((mut scroll, content)) = contents.get_mut(child) {
             let view_height = content.size.y * content.inverse_scale_factor;
-            let content_height = list.len as f32 * LINE_HEIGHT;
+            let content_height = list.len as f32 * row_height;
             if let Some(y) = view.autoscroll.update(
                 scroll.y,
                 content_height,
                 view_height,
-                shifted as f32 * LINE_HEIGHT,
+                shifted as f32 * row_height,
                 appended,
             ) {
                 scroll.y = y;
@@ -981,7 +1081,6 @@ fn show_jump_button(
 fn on_act(
     act: On<UiAct>,
     panels: Query<(), With<ChatPanel>>,
-    mut tabs: Query<(&mut TabsTab, &Act)>,
     mut view: ResMut<ChatView>,
     mut channel: ResMut<SayChannel>,
     mut line: ResMut<SayLine>,
@@ -1002,20 +1101,7 @@ fn on_act(
                 intents.write(SendIntent(ClientIntent::ChatLink(id)));
             }
         }
-        action => {
-            let tab = match action {
-                "tab:all" => ChatTab::All,
-                "tab:system" => ChatTab::System,
-                _ => return,
-            };
-            view.set_tab(tab);
-            for (mut t, a) in &mut tabs {
-                let selected = a.0 == action;
-                if a.0.starts_with("tab:") && t.selected != selected {
-                    t.selected = selected;
-                }
-            }
-        }
+        _ => {}
     }
 }
 

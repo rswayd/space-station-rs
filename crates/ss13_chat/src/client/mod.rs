@@ -4,8 +4,11 @@
 //! needs `ss13_ui_kit::UiKitPlugin` with a windowed or headless-rendering app.
 
 pub mod donor;
+pub mod history;
 pub mod log;
 pub mod panel;
+pub mod prefs;
+pub mod settings_ui;
 pub mod style;
 mod wrap;
 
@@ -15,7 +18,9 @@ use ss13_net::client::{NetClientState, NetClientSystems, NoticeReceived};
 use ss13_shared::chat::{ChatChannel, ChatMessage, Span};
 
 pub use log::{ChatEntry, ChatLog};
-pub use panel::{ChatLine, ChatPanel, ChatTab, ChatView};
+pub use panel::{ChatLine, ChatPanel, ChatView};
+pub use prefs::{ChannelSet, ChatPrefs};
+pub use settings_ui::ChatExported;
 
 pub struct ChatClientPlugin;
 

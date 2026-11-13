@@ -130,6 +130,22 @@ pub enum ClientIntent {
     /// it, at most once a second. The server says it, cut short, when the mob is hurt or
     /// stunned while typing (tg `force_say`).
     SayDraft(String),
+    /// BandaStation's chat emote panel (`emotes/execute`): one of the player's own panel emotes.
+    /// The panel lives on the client; the server checks it like `*key` in say, plus the panel's
+    /// cooldown on custom texts.
+    PanelEmote(PanelEmote),
+}
+
+/// A panel emote (BandaStation `TGUI_PANEL_EMOTE_TYPE_*`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum PanelEmote {
+    /// `TGUI_PANEL_EMOTE_TYPE_DEFAULT`: the emote `key` as it is.
+    Default { key: String },
+    /// `TGUI_PANEL_EMOTE_TYPE_CUSTOM`: the emote `key` (its sound, its checks) with `text` in
+    /// place of its message (`message_override`).
+    Custom { key: String, text: String },
+    /// `TGUI_PANEL_EMOTE_TYPE_ME`: `*me text`.
+    Me { text: String },
 }
 
 /// What the say line is doing ([`ClientIntent::Typing`]).

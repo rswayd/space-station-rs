@@ -81,6 +81,8 @@ fn main() -> AppExit {
         .add_plugins(ss13_game::mood_client::MoodHudPlugin)
         .add_plugins(ss13_game::fullscreen_client::FullscreenPlugin)
         .add_plugins(ss13_game::sound_client::SoundClientPlugin { asset_root })
+        // The chat panel's settings, history and saved logs beside the client settings.
+        .add_plugins(ss13_game::chat_prefs_client::ChatPrefsPlugin)
         // F1 adminhelp and, for server-confirmed admins, the F7 admin panel: every build.
         .add_plugins(ss13_admin::client::AdminUiPlugin)
         .add_systems(Update, map_left_of_chat);
