@@ -1488,6 +1488,44 @@ pub fn place_on_market(world: &mut World, _client: Entity, user: Entity, e: Enti
     sound(world, e, CASH_REGISTER, 40.0);
 }
 
+/// tg `/datum/market_item/stolen_good` of a spy bounty (`send_to_black_market`): `thing`
+/// leaves the map and is sold once, in "Fenced Goods", at `price`. `false` (the caller deletes
+/// it) without a market.
+pub fn add_stolen_good(world: &mut World, thing: Entity, price: i64) -> bool {
+    if !world.contains_resource::<BlackMarket>() {
+        return false;
+    }
+    let name = world
+        .get::<DmName>(thing)
+        .map(|n| crate::vending::plain_name(&n.name).to_owned())
+        .or_else(|| world.get::<Name>(thing).map(|n| n.to_string()))
+        .unwrap_or_default();
+    world
+        .entity_mut(thing)
+        .remove::<(StoredIn, TilePos, CarriedBy, ss13_net::server::Networked)>();
+    world.resource_mut::<BlackMarket>().add(Entry {
+        id: format!("stolen-{}", thing.to_bits()),
+        def: None,
+        name: format!("Stolen {name}"),
+        desc: format!(
+            "A {name}, stolen from somewhere on the station. Whoever owned it probably wouldn't \
+             be happy to see it here."
+        ),
+        category: STOLEN_GOODS.to_owned(),
+        price,
+        stock: 1,
+        availability_prob: 100.0,
+        restockable: false,
+        shipping_override: Vec::new(),
+        good: Good::Instance(thing),
+        seller: None,
+    });
+    true
+}
+
+/// `/datum/market_item/stolen_good` `category`.
+const STOLEN_GOODS: &str = "Fenced Goods";
+
 /// `examine` of a pad: the restock and placement prices.
 pub fn examine_lines(world: &World, e: Entity, lines: &mut Vec<(Span, String)>) {
     if world.get::<Ltsrbt>(e).is_none() || world.get::<Unpowered>(e).is_some() {

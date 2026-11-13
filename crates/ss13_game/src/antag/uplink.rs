@@ -950,47 +950,16 @@ pub fn purchase(
         uplink.shop_locked = true;
     }
     let owner = uplink.owner;
-    crate::storage::finish_item(world, spawned, 0);
-    // `spawn_item`: `put_in_hands`, the active hand first; else (or not an item: a mech) it
-    // stays on the floor.
-    let is_item = world.get::<DmItem>(spawned).is_some();
-    let hand = [inventory.active, 1 - inventory.active]
-        .into_iter()
-        .find(|&h| is_item && inventory.hands[h].is_none());
-    let pos = world.get::<TilePos>(user).copied();
-    match (hand, pos) {
-        (Some(hand), _) => {
-            world
-                .entity_mut(spawned)
-                .insert((Networked, CarriedBy(user)));
-            world
-                .get_mut::<Inventory>(user)
-                .expect("checked above")
-                .hands[hand] = Some(spawned);
-        }
-        (None, Some(pos)) => {
-            world.entity_mut(spawned).insert((Networked, pos));
-            // tg `new spawn_path(get_turf(user))` runs the mech's `Initialize`.
-            if !is_item
-                && world
-                    .get_resource::<crate::mecha::core::MechaDb>()
-                    .is_some_and(|db| db.mech(&item.item).is_some())
-            {
-                crate::mecha::core::init_mech(world, spawned, &item.item, false);
-            }
-        }
-        (None, None) => {
-            world.entity_mut(spawned).despawn();
-            return Err(BuyReject::NotHeld);
-        }
-    }
+    let Some(in_hand) = hand_or_floor(world, user, spawned, &item.item) else {
+        return Err(BuyReject::NotHeld);
+    };
     if item.path != TELECRYSTAL_ITEM
         && let Some(mut log) = world.get_mut::<PurchaseLog>(owner)
     {
         log.log(&item.name, item.cost);
     }
     let name = capitalize(&item_name(world, spawned));
-    let text = if hand.is_some() {
+    let text = if in_hand {
         format!("{name} материализуется в вашей руке!")
     } else {
         format!("{name} материализуется на полу!")
@@ -1011,6 +980,71 @@ pub fn purchase(
         world.get::<Uplink>(device).map_or(0, |u| u.telecrystals)
     );
     Ok(spawned)
+}
+
+/// `spawn_item`: the fresh `spawned` (of type `item`) into `user`'s hands, the active hand
+/// first; else (or not an item: a mech) onto their tile. `Some(true)` in a hand; `None` (it is
+/// gone) when `user` is nowhere.
+pub fn hand_or_floor(world: &mut World, user: Entity, spawned: Entity, item: &str) -> Option<bool> {
+    crate::storage::finish_item(world, spawned, 0);
+    let is_item = world.get::<DmItem>(spawned).is_some();
+    let hand = world.get::<Inventory>(user).and_then(|inventory| {
+        [inventory.active, 1 - inventory.active]
+            .into_iter()
+            .find(|&h| is_item && inventory.hands[h].is_none())
+    });
+    let pos = crate::explosions::turf_of(world, user);
+    match (hand, pos) {
+        (Some(hand), _) => {
+            world
+                .entity_mut(spawned)
+                .insert((Networked, CarriedBy(user)));
+            world
+                .get_mut::<Inventory>(user)
+                .expect("checked above")
+                .hands[hand] = Some(spawned);
+            Some(true)
+        }
+        (None, Some(pos)) => {
+            world.entity_mut(spawned).insert((Networked, pos));
+            // tg `new spawn_path(get_turf(user))` runs the mech's `Initialize`.
+            if !is_item
+                && world
+                    .get_resource::<crate::mecha::core::MechaDb>()
+                    .is_some_and(|db| db.mech(item).is_some())
+            {
+                crate::mecha::core::init_mech(world, spawned, item, false);
+            }
+            Some(false)
+        }
+        (None, None) => {
+            world.entity_mut(spawned).despawn();
+            None
+        }
+    }
+}
+
+/// `spawn_item_for_generic_use(user)` of the catalog's uplink item `path`: its item in `user`'s
+/// hands or at their feet ([`hand_or_floor`]). `None` without a catalog entry or prototype.
+pub fn spawn_for_generic_use(
+    world: &mut World,
+    user: Entity,
+    path: &str,
+) -> Option<(Entity, bool)> {
+    let spawned = world.resource_scope(|world, catalog: Mut<UplinkCatalog>| {
+        let item = catalog.item(path)?;
+        let template = catalog.templates.get(&item.item)?;
+        Some((template.spawn(world, None), item.item.clone()))
+    });
+    let (spawned, item) = spawned?;
+    hand_or_floor(world, user, spawned, &item).map(|in_hand| (spawned, in_hand))
+}
+
+/// Whether the catalog can spawn the uplink item `path` (it has a prototype).
+pub fn can_spawn(catalog: &UplinkCatalog, path: &str) -> bool {
+    catalog
+        .item(path)
+        .is_some_and(|i| catalog.templates.contains_key(&i.item))
 }
 
 /// `/datum/uplink_item/device_tools/failsafe/spawn_item`: a new failsafe code (never the

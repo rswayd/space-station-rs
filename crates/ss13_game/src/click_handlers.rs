@@ -15,6 +15,7 @@
 //!
 //! | prio | handler |
 //! | ---- | ------- |
+//! | 49 | `antag::spy::attack_self` (a spy opens the bounty list of a spy uplink; never takes the click) |
 //! | 89 | `device_wires::attack_self` (an unscrewed radio shows its wires) |
 //! | 100 | `atmos` analyzer scans the user's turf |
 //! | 150 | `silicon::mmi::attack_self` |
@@ -343,6 +344,7 @@
 //! | prio | handler |
 //! | ---- | ------- |
 //! | 3 | `modsuit::ninja` cloak (a cloaked wearer hitting something living drops the cloak; never takes the click) |
+//! | 9 | `antag::spy::try_steal` (right click with a spy uplink on a bounty's target: the scan) |
 //! | 21 | `power::supermatter_consume::attackby_hit` (an item on the crystal turns to dust; a cigarette lights) |
 //! | 25 | `weapons::special::sm_pre_attack` (the supermatter sword consumes an object or a turf) |
 //! | 35 | `weapons::special::powerfist_interaction` (a tank, wrench or screwdriver on a power-fist) |

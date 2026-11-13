@@ -21,11 +21,12 @@ use ss13_shared::{ABOVE_LIGHTING_PLANE, Appearance, Dir, IconStateId, Overlay};
 use ss13_tgui::client::{AppTguiClientExt, ClientUi, SetLocal, UiLocalState, UiSprite};
 use ss13_tgui::{UiInterface, decode};
 use ss13_ui_kit::prelude::*;
-use ss13_ui_kit::theme::{Bold, FontPx};
+use ss13_ui_kit::theme::{Bold, FontPx, Italic};
 
 use super::{
-    AntagHudData, AntagHudUi, AntagInfoBrainwashedUi, AntagInfoBrotherUi, AntagInfoTraitorUi, BUY,
-    BUY_RAW_TC, BrotherInfo, LOCK, OPEN_INFO, RENEGOTIATE_OBJECTIVES, TraitorInfo, UplinkData,
+    AntagHudData, AntagHudUi, AntagInfoBrainwashedUi, AntagInfoBrotherUi, AntagInfoSpyUi,
+    AntagInfoTraitorUi, BUY, BUY_RAW_TC, BrotherInfo, LOCK, OPEN_INFO, RENEGOTIATE_OBJECTIVES,
+    SpyBountyRecord, SpyInfo, SpyUplinkData, SpyUplinkUi, TraitorInfo, UplinkData,
     UplinkItemRecord, UplinkStatic, UplinkUi,
 };
 
@@ -46,6 +47,8 @@ impl Plugin for AntagClientPlugin {
             .register_ui_view::<AntagInfoTraitorUi>()
             .register_ui_view::<AntagInfoBrotherUi>()
             .register_ui_view::<AntagInfoBrainwashedUi>()
+            .register_ui_view::<AntagInfoSpyUi>()
+            .register_ui_view::<SpyUplinkUi>()
             .register_ui_headless::<AntagHudUi>()
             .init_resource::<AntagHud>()
             .add_systems(Startup, spawn_button)
@@ -727,5 +730,158 @@ impl ClientUi for AntagInfoBrainwashedUi {
 
     fn content(info: &BrotherInfo, data: &()) -> impl Scene {
         crate::antag::cult::AntagInfoGenericUi::content(info, data)
+    }
+}
+
+/// tg `AntagInfoSpy.tsx`: where the uplink is, how it works, the objectives.
+// shortcut: without the `ntos_darkmode` theme and the "Make Your Own Plan" button.
+impl ClientUi for AntagInfoSpyUi {
+    const WIDTH: f32 = 380.0;
+    const HEIGHT: f32 = 450.0;
+
+    fn content(info: &SpyInfo, _: &()) -> impl Scene {
+        let name = if info.antag_name.is_empty() {
+            "Шпион".to_owned()
+        } else {
+            info.antag_name.clone()
+        };
+        let title = format!("Вы {name}.");
+        let location = info
+            .uplink_location
+            .clone()
+            .unwrap_or_else(|| "что-то".to_owned());
+        let intro = format!(
+            "Вы были оснащены специальным аплинком, замаскированным под {location}, который \
+             поможет вам красть вещи со станции."
+        );
+        let mut lines: Vec<String> = info
+            .objectives
+            .iter()
+            .map(|o| format!("#{}: {}", o.count, o.explanation))
+            .collect();
+        if lines.is_empty() {
+            lines.push("Ни одной!".to_owned());
+        }
+        let objectives: Vec<_> = lines
+            .into_iter()
+            .map(|line| bsn! { Node Children [ Text(line) ] })
+            .collect();
+        let green = Color::srgb(0.125, 0.69, 0.26);
+        let red = Color::srgb(0.88, 0.24, 0.24);
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: {title}, @fill: true, @scrollable: true }
+                Children [
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(6) }
+                    Children [
+                        Node Propagate::<FontPx>(FontPx(14.4)) Children [ Text(intro) ]
+                        --
+                        Node
+                        Propagate::<TextColor>(TextColor(green))
+                        Children [ Text("Используйте в руке чтобы включить аплинк, и ПКМ по вещам-целям, чтобы их украсть.") ]
+                        --
+                        Node Children [ Text("Вы можете быть не одни: на станции могут находиться другие шпионы.") ]
+                        --
+                        Node Children [ Text("Работайте вместе, или против них: Выбор за вами, но") ]
+                        --
+                        Node
+                        Propagate::<TextColor>(TextColor(red))
+                        Children [ Text("вы не сможете получить награду дважды.") ]
+                        --
+                        Node Propagate::<Bold>(Bold(true))
+                        Children [ Text("Ваша миссия, если вы решите ее принять:") ]
+                        --
+                        Node { flex_direction: FlexDirection::Column }
+                        Name("spy info: objectives")
+                        Children [ {objectives} ]
+                    ]
+                ]
+            ]
+        }
+    }
+}
+
+/// `format_deciseconds`: "mm:ss".
+pub fn format_deciseconds(deciseconds: u32) -> String {
+    let seconds = deciseconds / 10;
+    let minutes = seconds / 60;
+    format!("{:02}:{:02}", minutes % 60, seconds % 60)
+}
+
+/// tg `SpyUplink.tsx`: the bounties with their reward, dimmed when stolen or out of reach.
+// shortcut: without the `ntos_darkmode` theme and the dimmer's icon; the dimmer is a line.
+impl ClientUi for SpyUplinkUi {
+    const WIDTH: f32 = 450.0;
+    const HEIGHT: f32 = 615.0;
+
+    fn content(_: &(), data: &SpyUplinkData) -> impl Scene {
+        let timer = format!(
+            "Время до обновления: {}",
+            format_deciseconds(data.time_left)
+        );
+        let bounties: Vec<_> = data.bounties.iter().map(bounty_view).collect();
+        bsn! {
+            @WindowContent
+            Children [
+                @Section { @title: "Шпионские заказы", @fill: true, @scrollable: true }
+                Children [
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(6) }
+                    Children [
+                        Node Name("spy uplink: timer") Children [ Text(timer) ]
+                        --
+                        Node { flex_direction: FlexDirection::Column, row_gap: px(6) }
+                        Children [ {bounties} ]
+                    ]
+                ]
+            ]
+        }
+    }
+}
+
+fn bounty_view(bounty: &SpyBountyRecord) -> impl Scene + use<> {
+    let color = match bounty.difficulty.to_lowercase().as_str() {
+        "easy" => UiColor::Good,
+        "medium" => UiColor::Average,
+        _ => UiColor::Bad,
+    }
+    .text()
+    .unwrap_or_default();
+    let dimmer = if bounty.claimed {
+        Some(("Украдено!", UiColor::Bad))
+    } else if !bounty.can_claim {
+        Some((
+            "Ваши наниматели считают, что вы неспособны завершить это.",
+            UiColor::Average,
+        ))
+    } else {
+        None
+    };
+    let dimmer = dimmer.map(|(text, c)| {
+        let c = c.text().unwrap_or_default();
+        EntityScene(bsn! {
+            Node
+            Propagate::<TextColor>(TextColor(c))
+            Propagate::<Italic>(Italic(true))
+            Children [ Text(text) ]
+        })
+    });
+    let name = ss13_shared::capitalize(&bounty.name);
+    let help = bounty.help.clone();
+    let reward = format!("Награда: {}", bounty.reward);
+    bsn! {
+        Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(4)) }
+        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.25))
+        Children [
+            Node Children [ {dimmer} ]
+            --
+            Node Propagate::<TextColor>(TextColor(color)) Children [ Text(name) ]
+            --
+            Node { padding: UiRect::left(px(8)) }
+            Propagate::<Italic>(Italic(true))
+            Children [ Text(help) ]
+            --
+            Node Propagate::<Italic>(Italic(true)) Children [ Text(reward) ]
+        ]
     }
 }
