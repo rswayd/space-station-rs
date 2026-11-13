@@ -3,6 +3,7 @@
 //! [`ChatClientPlugin`] is the data path only (headless-safe). [`ChatPanelPlugin`] adds the UI and
 //! needs `ss13_ui_kit::UiKitPlugin` with a windowed or headless-rendering app.
 
+pub mod donor;
 pub mod log;
 pub mod panel;
 pub mod style;
@@ -32,6 +33,7 @@ pub struct ChatPanelPlugin;
 impl Plugin for ChatPanelPlugin {
     fn build(&self, app: &mut App) {
         panel::plugin(app);
+        app.add_systems(Update, donor::animate);
     }
 }
 

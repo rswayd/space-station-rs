@@ -5,6 +5,7 @@
 
 #[cfg(feature = "server")]
 pub mod accents;
+pub mod badges;
 #[cfg(feature = "client")]
 pub mod client;
 pub mod emoji;

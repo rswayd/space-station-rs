@@ -537,8 +537,9 @@ fn is_stripped(c: char) -> bool {
 }
 
 /// Player text → the text spoken: control characters stripped (tab and line breaks become
-/// spaces), trimmed, at most
-/// [`MAX_MESSAGE_LEN`] characters, first letter capitalized (tg `capitalize`).
+/// spaces), BandaStation's IC filter (`sanitize(apply_ic_filter = TRUE)`,
+/// [`ss13_shared::text::ic_filter`]), trimmed, at most [`MAX_MESSAGE_LEN`] characters, first
+/// letter capitalized (tg `capitalize`).
 pub fn sanitize_say(raw: &str) -> Result<String, SayReject> {
     // UTF-8 is at most 4 bytes per character: longer input cannot fit, and is not scanned.
     if raw.len() > MAX_MESSAGE_LEN * 4 {
@@ -553,7 +554,8 @@ pub fn sanitize_say(raw: &str) -> Result<String, SayReject> {
             c => Some(c),
         })
         .collect();
-    let text = cleaned.trim();
+    let filtered = ss13_shared::text::ic_filter(&cleaned);
+    let text = filtered.trim();
     if text.is_empty() {
         return Err(SayReject::Empty);
     }
@@ -1306,8 +1308,10 @@ mod tests {
             sanitize_say(&"\u{0}".repeat(MAX_MESSAGE_LEN * 4 + 1)),
             Err(SayReject::TooLong)
         );
-        // Markup is plain text.
-        assert_eq!(sanitize_say("<b>x</b>").unwrap(), "<b>x</b>");
+        // BandaStation's IC filter: no markup characters, emoji or brackets.
+        assert_eq!(sanitize_say("<b>x</b>").unwrap(), "Bx/b");
+        assert_eq!(sanitize_say("ёлки (палки) 😀").unwrap(), "Ёлки палки");
+        assert_eq!(sanitize_say("😀"), Err(SayReject::Empty));
     }
 
     #[test]

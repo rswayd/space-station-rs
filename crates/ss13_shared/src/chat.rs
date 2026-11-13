@@ -108,6 +108,25 @@ pub enum Span {
     /// A clickable chat link (BYOND `<a href='?src=...'>` in `to_chat`): a click sends
     /// `ClientIntent::ChatLink` with this id, which only the server knows the meaning of.
     Link(u32),
+    /// BandaStation `get_ooc_badged_name`: a donor's key in OOC, in their `ooc_color`, with the
+    /// name effect of their tier (`None`: only the color).
+    DonorKey {
+        rgb: [u8; 3],
+        shine: Option<NameShine>,
+    },
+}
+
+/// BandaStation's donor name effects (`chat-dark.scss`, `.tier-3`..`.tier-5` with `.metal`,
+/// `.glowing` or `.auto`), resolved by the server from the tier and the player's choice.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum NameShine {
+    /// `@mixin metalic`: a light band sweeping across the name every 5 s.
+    #[default]
+    Metallic,
+    /// `@mixin glowing`: a hue-shifted light band every 3 s.
+    Glowing,
+    /// `glowing` with `@mixin shine`'s blurred halo (tier 5).
+    GlowingShine,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
