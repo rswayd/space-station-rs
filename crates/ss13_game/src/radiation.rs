@@ -25,14 +25,19 @@
 //! - Uranium walls and false walls pulse (range 3, 3 s exposure) when touched, hit or bumped,
 //!   and pass the pulse to adjacent uranium walls; gas reactions and the supermatter pulse
 //!   too.
+//! - [`Radioactive`] (tg `radioactive` element) pulses every 3 s: uranium statues, platforms,
+//!   walls and floors (the uranium material), radioactive space vines.
+//! - [`RadioactiveEmitter`] (tg `radioactive_emitter`) pulses at its own period and range.
 //!
 //! Cost: a pulse visits `(2r + 1)^2` tiles and, per human or item there, a line of at most `r`
 //! tiles (tile insulation cached per pulse): a range 8 supermatter pulse every SSair fire is
 //! ~300 tiles. Irradiated mobs process every 2 s.
 // shortcut: no green glow filter on irradiated atoms, no geiger clicking sound loop
-// (`geiger_sound`), no MOD radiation counter panel, no `radioactive` element on uranium
-// materials (statues, mineral doors), no `/datum/status_effect/radiation_immunity`, no
-// showers (the wash hook is here); add with those mechanics.
+// (`geiger_sound`), no MOD radiation counter panel, no `/datum/status_effect/radiation_immunity`,
+// no showers (the wash hook is here); add with those mechanics.
+// shortcut: the `radioactive` element reaches uranium atoms by type ([`URANIUM_MATERIAL_ATOMS`]),
+// not through `custom_materials` (non-item atoms carry no materials in the port); move to the
+// material property when atoms get materials.
 
 use std::collections::{HashMap, HashSet};
 
@@ -216,6 +221,43 @@ impl RadioactiveEmitter {
     }
 }
 
+/// `DELAY_BETWEEN_RADIATION_PULSES` of the `radioactive` element, seconds.
+const RADIOACTIVE_PULSE_DELAY: f64 = 3.0;
+/// Non-item types whose `custom_materials` hold uranium alone: the radioactivity material
+/// property gives them the element with the full uranium chance (`1 / length(materials)` = 1).
+const URANIUM_MATERIAL_ATOMS: [&str; 4] = [
+    "/obj/structure/statue/uranium",
+    "/obj/structure/platform/uranium",
+    URANIUM_WALL,
+    "/turf/open/floor/mineral/uranium",
+];
+
+/// tg `/datum/element/radioactive`: a [`radiation_pulse`] every 3 s from the time it was
+/// attached.
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Radioactive {
+    pub range: f32,
+    pub threshold: f32,
+    pub chance: f32,
+    pub minimum_exposure_time: f64,
+    /// `radioactive_objects[target]`: the last pulse (or the attach time).
+    pub last: f64,
+}
+
+impl Radioactive {
+    /// `AddElement(/datum/element/radioactive, chance = chance)` with the other defaults
+    /// (range 3, light insulation, uranium exposure time), attached at `now`.
+    pub fn new(chance: f32, now: f64) -> Self {
+        Self {
+            range: 3.0,
+            threshold: RAD_LIGHT_INSULATION,
+            chance,
+            minimum_exposure_time: URANIUM_RADIATION_MINIMUM_EXPOSURE_TIME,
+            last: now,
+        }
+    }
+}
+
 /// `/obj/item/geiger_counter` state (added on first use).
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Geiger {
@@ -251,6 +293,7 @@ impl Plugin for RadiationPlugin {
                 (
                     uranium_touches,
                     process_emitters.run_if(any_with_component::<RadioactiveEmitter>),
+                    process_radioactive.run_if(any_with_component::<Radioactive>),
                     geiger_ranged,
                     atmos_pulses,
                     fire_pulses,
@@ -258,7 +301,64 @@ impl Plugin for RadiationPlugin {
                 )
                     .chain()
                     .after(crate::click::ResolveClicks),
-            );
+            )
+            .add_observer(uranium_obj_added)
+            .add_observer(uranium_turf_added);
+    }
+}
+
+/// The radioactivity material property on a mapped or spawned uranium object.
+fn uranium_obj_added(add: On<Add<DmObj>>, objs: Query<&DmObj>, mut commands: Commands) {
+    let e = add.entity;
+    if objs.get(e).is_ok_and(|o| is_uranium_material(&o.path)) {
+        commands.queue(move |world: &mut World| attach_radioactive(world, e));
+    }
+}
+
+/// The radioactivity material property on a uranium wall or floor.
+fn uranium_turf_added(
+    add: On<Add<DmTurfBuild>>,
+    turfs: Query<&DmTurfBuild>,
+    mut commands: Commands,
+) {
+    let e = add.entity;
+    if turfs.get(e).is_ok_and(|t| is_uranium_material(&t.path)) {
+        commands.queue(move |world: &mut World| attach_radioactive(world, e));
+    }
+}
+
+fn is_uranium_material(path: &str) -> bool {
+    URANIUM_MATERIAL_ATOMS.iter().any(|p| is_under(path, p))
+}
+
+fn attach_radioactive(world: &mut World, e: Entity) {
+    let now = now(world);
+    if let Ok(mut entity) = world.get_entity_mut(e) {
+        entity.insert(Radioactive::new(URANIUM_IRRADIATION_CHANCE, now));
+    }
+}
+
+/// `/datum/element/radioactive/process`.
+fn process_radioactive(world: &mut World) {
+    let now = now(world);
+    let mut q = world.query::<(Entity, &mut Radioactive)>();
+    let due: Vec<(Entity, Radioactive)> = q
+        .iter_mut(world)
+        .filter(|(_, r)| now - r.last >= RADIOACTIVE_PULSE_DELAY)
+        .map(|(e, mut r)| {
+            r.last = now;
+            (e, *r)
+        })
+        .collect();
+    for (source, r) in due {
+        radiation_pulse(
+            world,
+            source,
+            r.range,
+            r.threshold,
+            r.chance,
+            r.minimum_exposure_time,
+        );
     }
 }
 

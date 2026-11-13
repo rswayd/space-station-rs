@@ -22,10 +22,10 @@
 //!   (`ZTRAIT_ASHSTORM`, [`ss13_mapload::mining_z`]) gets the ash storm (90) and emberfall (10).
 // shortcut: no area overlays (needs a client contract: tg draws the stage's icon state over
 // every impacted area), no particles, no turf or thunder effects (no rain on the station), no
-// barometers, weather radios or storm sound managers (`area_sound_manager`); the base
-// `weather_act_mob` pull of body temperature towards 20 °C is not ported; no status display
+// storm sound managers (`area_sound_manager`; weather radios: `crate::weather_announcer`); the
+// base `weather_act_mob` pull of body temperature towards 20 °C is not ported; no status display
 // radiation alert (the displays have no emergency override); no icemoon, sand or rain weathers;
-// the ash storm has no area sound loops (`GLOB.ash_storm_sounds`), thunder, barometer, and does
+// the ash storm has no area sound loops (`GLOB.ash_storm_sounds`) or thunder, and does
 // not refill dug basalt (`refill_dug`), and its damage ignores `required_bodytype`.
 
 use std::collections::HashSet;
@@ -53,6 +53,8 @@ const REST_SECS: (u32, u32) = (300, 600);
 const WEATHER_MOBS: u8 = 1 << 0;
 const WEATHER_INDOORS: u8 = 1 << 1;
 const WEATHER_ENDLESS: u8 = 1 << 2;
+/// `WEATHER_BAROMETER`: weather radios and barometers warn of it.
+const WEATHER_BAROMETER: u8 = 1 << 3;
 
 /// `/datum/weather/rad_storm` `protected_areas`.
 const RAD_PROTECTED: &[&str] = &[
@@ -201,7 +203,7 @@ impl WeatherKind {
             end_duration: 30.0,
             area_type: "/area",
             protected_areas: &[],
-            flags: WEATHER_MOBS,
+            flags: WEATHER_MOBS | WEATHER_BAROMETER,
             probability: 90,
             target: Target::AshStorm,
         };
@@ -252,7 +254,7 @@ impl WeatherKind {
                 end_duration: 10.0,
                 area_type: "/area",
                 protected_areas: &[],
-                flags: WEATHER_INDOORS | WEATHER_ENDLESS,
+                flags: WEATHER_INDOORS | WEATHER_BAROMETER | WEATHER_ENDLESS,
                 probability: 0,
                 target: Target::Station,
             },
@@ -275,7 +277,7 @@ impl WeatherKind {
                 end_duration: 30.0,
                 area_type: "/area",
                 protected_areas: &[],
-                flags: WEATHER_MOBS,
+                flags: WEATHER_MOBS | WEATHER_BAROMETER,
                 probability: 0,
                 target: Target::Station,
             },
@@ -301,7 +303,7 @@ impl WeatherKind {
                 end_duration: 10.0,
                 area_type: "/area",
                 protected_areas: &[],
-                flags: WEATHER_MOBS,
+                flags: WEATHER_MOBS | WEATHER_BAROMETER,
                 probability: 0,
                 target: Target::Station,
             },
@@ -328,7 +330,7 @@ impl WeatherKind {
                 end_duration: 30.0,
                 area_type: "/area",
                 protected_areas: &[],
-                flags: WEATHER_MOBS,
+                flags: WEATHER_MOBS | WEATHER_BAROMETER,
                 probability: 0,
                 target: Target::Station,
             },
@@ -441,7 +443,8 @@ impl Plugin for WeatherPlugin {
         app.init_resource::<ActiveWeather>()
             .init_resource::<WeatherSchedule>()
             .add_systems(Startup, init_schedule)
-            .add_systems(Update, fire);
+            .add_systems(Update, fire)
+            .add_plugins(crate::weather_announcer::WeatherAnnouncerPlugin);
     }
 }
 
@@ -610,6 +613,18 @@ fn impacted_areas(world: &World, def: &Def) -> HashSet<Entity> {
                     || world.get::<DmArea>(a).is_some_and(|d| d.outdoors))
         })
         .collect()
+}
+
+impl Weather {
+    /// `weather_flags & WEATHER_BAROMETER`: weather radios warn of it.
+    pub fn barometer(&self) -> bool {
+        self.kind.def().flags & WEATHER_BAROMETER != 0
+    }
+
+    /// `weather_flags & FUNCTIONAL_WEATHER`: it acts on mobs or strikes with thunder.
+    pub fn functional(&self) -> bool {
+        self.kind.def().flags & WEATHER_MOBS != 0 || self.thunder_chance > 0.0
+    }
 }
 
 /// A weather of `kind` is running.

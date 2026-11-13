@@ -15,6 +15,8 @@
 //!   [`heart_attack`] (`crate::medical::organs`), [`brain_trauma`]
 //!   (`crate::medical::traumas`).
 //! - [`shuttle`]: Shuttle Catastrophe and Shuttle Insurance (`crate::shuttle_catalog`).
+//! - [`gravity_blackout`]: the station's gravity generators lose charge
+//!   (`crate::power::gravity_generator::blackout`).
 //! - [`wisdom_cow`]: a wisdom cow (`crate::mobs::farm`); [`nightshift`]: the station's APCs'
 //!   night shift (`crate::power::set_nightshift`).
 //! - [`dynamic_tweak`]: one more midround or latejoin ruleset (`crate::antag::midround`).
@@ -40,6 +42,7 @@ pub mod earthquake;
 pub mod electrical_storm;
 pub mod fake_virus;
 pub mod false_alarm;
+pub mod gravity_blackout;
 pub mod grey_tide;
 pub mod grid_check;
 pub mod heart_attack;
@@ -184,6 +187,17 @@ pub fn controls() -> Vec<EventControl> {
             electrical_storm::make,
         ),
         c(comms_blackout::NAME, 30, 20.0, 0, 20, comms_blackout::make),
+        needs(
+            gravity_blackout::has_station_generator,
+            c(
+                gravity_blackout::NAME,
+                30,
+                20.0,
+                0,
+                20,
+                gravity_blackout::make,
+            ),
+        ),
         c(
             processor_overload::NAME,
             15,
@@ -604,6 +618,17 @@ pub fn controls() -> Vec<EventControl> {
                 0,
                 1,
                 holiday_events::make_valentines,
+            ),
+        ),
+        on(
+            holidays::CHRISTMAS,
+            c(
+                crate::antag::santa::NAME,
+                20,
+                30.0,
+                0,
+                1,
+                crate::antag::santa::make,
             ),
         ),
         on(

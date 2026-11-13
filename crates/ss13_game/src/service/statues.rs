@@ -1,9 +1,8 @@
 //! Statue materials, busts and sculpting (server), after tg `code/modules/art/statues.dm`,
-//! `code/game/objects/items/busts_and_figurines.dm`, `datums/elements/radioactive.dm`,
-//! `datums/components/combustible_flooder.dm` (fastening and slicing statues: `crate::decor`).
+//! `code/game/objects/items/busts_and_figurines.dm`,
+//! `datums/components/combustible_flooder.dm` (fastening and slicing statues: `crate::decor`;
+//! uranium statues' radiation: `crate::radiation::Radioactive`).
 //!
-//! - Uranium statues pulse radiation every 3 s (`/datum/element/radioactive` from the
-//!   radioactivity material property: range 3, light insulation, uranium chance, 3 s exposure).
 //! - Plasma statues (`combustible_flooder`): a lit welder or a fire hotter than
 //!   `FIRE_MINIMUM_TEMPERATURE_TO_EXIST` floods their tile with plasma at that temperature and
 //!   destroys them (sheets two fewer).
@@ -27,22 +26,14 @@ use super::server::set_name;
 use crate::chem::name_of;
 use crate::construction::Job;
 use crate::obj_damage::is_under;
-use crate::radiation::{
-    RAD_LIGHT_INSULATION, URANIUM_IRRADIATION_CHANCE, URANIUM_RADIATION_MINIMUM_EXPOSURE_TIME,
-    radiation_pulse,
-};
 use crate::tools::{Actor, DoAfter, do_after, tell};
 
-const URANIUM_STATUE: &str = "/obj/structure/statue/uranium";
 const PLASMA_STATUE: &str = "/obj/structure/statue/plasma";
 const CUSTOM_STATUE: &str = "/obj/structure/statue/custom";
 const HIPPOCRATIC: &str = "/obj/item/statuebust/hippocratic";
 const HIPPOCRATIC_EVIL: &str = "/obj/item/statuebust/hippocratic/evil";
 const CHISEL: &str = "/obj/item/chisel";
 const CARVING_BLOCK: &str = "/obj/structure/carving_block";
-/// `DELAY_BETWEEN_RADIATION_PULSES`, the element's range.
-const PULSE_DELAY: f64 = 3.0;
-const URANIUM_RANGE: f32 = 3.0;
 /// `FIRE_MINIMUM_TEMPERATURE_TO_EXIST`, kelvin.
 const FIRE_MIN_TEMP: f64 = ss13_atmos::reactions::FIRE_MINIMUM_TEMPERATURE_TO_EXIST;
 /// `mat_amount * 0.05 * multiplier` of `SHEET_MATERIAL_AMOUNT * 5` plasma (one material: the
@@ -73,12 +64,6 @@ const RESCIND_DS: f32 = 50.0;
 const RESCIND_LINE: &str = "Да уж, с этим 'Гиппопотамом' ничего не вышло. Я ухожу!";
 /// `sculpting_time`, deciseconds.
 const SCULPT_DS: f32 = 300.0;
-
-/// `/datum/element/radioactive` on a uranium structure: the time of its last pulse.
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
-pub struct Radioactive {
-    pub last: f64,
-}
 
 /// `/datum/component/combustible_flooder`: plasma moles released when ignited.
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -131,9 +116,7 @@ pub enum ArtJob {
 }
 
 pub(super) fn add_obj_parts(world: &mut World, e: Entity, path: &str) {
-    if is_under(path, URANIUM_STATUE) {
-        world.entity_mut(e).insert(Radioactive::default());
-    } else if is_under(path, PLASMA_STATUE) {
+    if is_under(path, PLASMA_STATUE) {
         world.entity_mut(e).insert(CombustibleFlooder {
             moles: PLASMA_STATUE_MOLES,
         });
@@ -158,31 +141,6 @@ pub(super) fn add_parts(world: &mut World, e: Entity, path: &str) {
         }
     } else if is_under(path, CHISEL) && world.get::<Chisel>(e).is_none() {
         world.entity_mut(e).insert(Chisel::default());
-    }
-}
-
-/// `/datum/element/radioactive/process`: every radioactive structure pulses once per
-/// [`PULSE_DELAY`].
-pub(super) fn pulse_radioactive(world: &mut World) {
-    let now = super::server::now(world);
-    let mut q = world.query::<(Entity, &mut Radioactive)>();
-    let due: Vec<Entity> = q
-        .iter_mut(world)
-        .filter(|(_, r)| now - r.last >= PULSE_DELAY)
-        .map(|(e, mut r)| {
-            r.last = now;
-            e
-        })
-        .collect();
-    for source in due {
-        radiation_pulse(
-            world,
-            source,
-            URANIUM_RANGE,
-            RAD_LIGHT_INSULATION,
-            URANIUM_IRRADIATION_CHANCE,
-            URANIUM_RADIATION_MINIMUM_EXPOSURE_TIME,
-        );
     }
 }
 

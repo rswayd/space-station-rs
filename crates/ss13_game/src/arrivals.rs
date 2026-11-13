@@ -54,7 +54,7 @@ const PERSON_ABOARD: &str = "обнаружена форма жизни на б�
 const DISK_ABOARD: &str = "на борту обнаружено критически важное устройство станции";
 pub(crate) const ANNOUNCEMENT_SYSTEM: &str = "/obj/machinery/announcement_system";
 /// `/obj/machinery/announcement_system` `name`.
-const AAS_NAME: &str = "Автоматическая система оповещений";
+pub(crate) const AAS_NAME: &str = "Автоматическая система оповещений";
 
 /// What the shuttle's requests console says (`console.say`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -550,15 +550,7 @@ fn aas_announce(world: &mut World, text: &str) {
 
 /// `aas_config_announce` on one channel (`freq`).
 pub(crate) fn aas_announce_on(world: &mut World, freq: u16, text: &str) {
-    let mut objs = world.query::<(Entity, &DmObj, &TilePos)>();
-    let found = objs
-        .iter(world)
-        .filter(|(e, o, _)| {
-            o.path == ANNOUNCEMENT_SYSTEM && world.get::<crate::power::Unpowered>(*e).is_none()
-        })
-        .map(|(_, _, p)| p.z)
-        .next();
-    let Some(z) = found else {
+    let Some(z) = aas_z(world) else {
         return;
     };
     world.write_message(crate::radio::MachineRadio {
@@ -567,6 +559,17 @@ pub(crate) fn aas_announce_on(world: &mut World, freq: u16, text: &str) {
         name: AAS_NAME.to_owned(),
         text: text.to_owned(),
     });
+}
+
+/// `get_announcement_system`: the level of a powered `/obj/machinery/announcement_system`.
+pub(crate) fn aas_z(world: &mut World) -> Option<u16> {
+    let mut objs = world.query::<(Entity, &DmObj, &TilePos)>();
+    objs.iter(world)
+        .filter(|(e, o, _)| {
+            o.path == ANNOUNCEMENT_SYSTEM && world.get::<crate::power::Unpowered>(*e).is_none()
+        })
+        .map(|(_, _, p)| p.z)
+        .next()
 }
 
 /// Where latejoiners spawn: the arrivals shuttle's chairs (tg `latejoin_trackers`), when it has

@@ -10,8 +10,9 @@
 //! - Three sheets of wrapping paper on a delivery parcel gift-wrap it (its `gift` sprite); an
 //!   emptied roll leaves its cardboard tube.
 // shortcut: the lists are what has a prototype (the converter emits the named gift types; toy
-// and hat subtypes only when something else needs them, "anything" likewise); no
-// `TRAIT_CANNOT_OPEN_PRESENTS`, present vision examine, greyscale paper and ribbon colours
+// and hat subtypes only when something else needs them, "anything" likewise); Santa
+// (`TRAIT_CANNOT_OPEN_PRESENTS`, `crate::antag::santa`) cannot open them; no present vision
+// examine, greyscale paper and ribbon colours
 // (the parcel takes the plain gift sprite), big crate wrapping or the wrapping paper bap.
 
 use bevy::prelude::*;
@@ -148,6 +149,15 @@ pub fn open(world: &mut World, client: Entity, mob: Entity, gift: Entity) -> boo
             client,
             Span::Notice,
             "Этот подарок не для вас, а портить отношения с Сантой не хочется!",
+        );
+        return true;
+    }
+    if world.get::<crate::antag::santa::SantaClaus>(mob).is_some() {
+        tell(
+            world,
+            client,
+            Span::Warning,
+            "You're supposed to be spreading gifts, not opening them yourself!",
         );
         return true;
     }
