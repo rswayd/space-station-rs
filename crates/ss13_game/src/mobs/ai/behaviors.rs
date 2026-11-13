@@ -1063,12 +1063,20 @@ pub(crate) fn melee(ctx: &mut AiCtx, key: Key, strategy: Strategy) -> Perform {
 
 /// tg `find_flee_location`: up to 3 steps, each away from the threat or any other free way.
 fn find_flee_location(ctx: &mut AiCtx, key: Key) -> Perform {
-    // `BB_BASIC_MOB_FLEE_DISTANCE`: 3 for mice, else `DEFAULT_BASIC_FLEE_DISTANCE`.
-    let mouse = ctx
+    // `BB_BASIC_MOB_FLEE_DISTANCE`: 3 for mice, 5 for the mega arachnid, else
+    // `DEFAULT_BASIC_FLEE_DISTANCE`.
+    let path = ctx
         .world
         .get::<BasicMob>(ctx.pawn)
-        .is_some_and(|b| ss13_mapload::fidelity::is_under(&b.def.path, MOUSE_ROOT));
-    let run = if mouse { 3 } else { DEFAULT_FLEE_DISTANCE };
+        .map(|b| b.def.path.clone())
+        .unwrap_or_default();
+    let run = if ss13_mapload::fidelity::is_under(&path, MOUSE_ROOT) {
+        3
+    } else if ss13_mapload::fidelity::is_under(&path, crate::mobs::jungle::MEGA_ARACHNID) {
+        crate::mobs::jungle::ARACHNID_FLEE_DISTANCE
+    } else {
+        DEFAULT_FLEE_DISTANCE
+    };
     let (Some(from), Some(threat)) = (ctx.pawn_pos(), ctx.target_pos(key)) else {
         return FAIL;
     };

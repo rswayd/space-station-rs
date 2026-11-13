@@ -25,6 +25,8 @@ pub enum FaunaCond {
     TurtleAbilityReady,
     /// A lavaland mob decorator (`crate::mobs::lavaland::ai`).
     Lavaland(crate::mobs::lavaland::ai::LavaCond),
+    /// A jungle mob decorator (`crate::mobs::jungle::ai`).
+    Jungle(crate::mobs::jungle::ai::JungleCond),
 }
 
 impl FaunaCond {
@@ -37,6 +39,7 @@ impl FaunaCond {
                 crate::mobs::critters::turtle_ability_ready(ctx.world, ctx.pawn, ctx.now)
             }
             Self::Lavaland(cond) => cond.check(ctx),
+            Self::Jungle(cond) => cond.check(ctx),
         }
     }
 }
@@ -91,6 +94,8 @@ pub enum FaunaLeaf {
     },
     /// A lavaland mob leaf (`crate::mobs::lavaland::ai`).
     Lavaland(crate::mobs::lavaland::ai::LavaLeaf),
+    /// A jungle mob leaf (`crate::mobs::jungle::ai`).
+    Jungle(crate::mobs::jungle::ai::JungleLeaf),
     /// A cult pet leaf (`crate::mobs::cult_pets`).
     CultPet(crate::mobs::cult_pets::CultLeaf),
     /// `run_emote` / `perform_emote` of this emote key.
@@ -148,6 +153,7 @@ impl FaunaLeaf {
             Self::ParrotRepeat => crate::mobs::parrot::REPEAT_COOLDOWN,
             Self::RangedAttack { cooldown, .. } => *cooldown,
             Self::Lavaland(leaf) => leaf.cooldown(),
+            Self::Jungle(leaf) => leaf.cooldown(),
             Self::CultPet(leaf) => leaf.cooldown(),
             _ => 0.0,
         }
@@ -155,6 +161,9 @@ impl FaunaLeaf {
 
     pub fn setup(&mut self, ctx: &mut AiCtx) -> bool {
         if let Self::Lavaland(leaf) = self {
+            return leaf.setup(ctx);
+        }
+        if let Self::Jungle(leaf) = self {
             return leaf.setup(ctx);
         }
         match *self {
@@ -201,6 +210,9 @@ impl FaunaLeaf {
 
     pub fn perform(&mut self, ctx: &mut AiCtx) -> Perform {
         if let Self::Lavaland(leaf) = self {
+            return leaf.perform(ctx);
+        }
+        if let Self::Jungle(leaf) = self {
             return leaf.perform(ctx);
         }
         if let Self::CultPet(leaf) = self {
@@ -306,13 +318,17 @@ impl FaunaLeaf {
             Self::HiveFlyback { key } => crate::mobs::bees::hive_flyback(ctx, key),
             Self::EnterHive { key } => crate::mobs::bees::enter_hive(ctx, key),
             // Performed above.
-            Self::Lavaland(_) | Self::CultPet(_) => FAIL,
+            Self::Lavaland(_) | Self::Jungle(_) | Self::CultPet(_) => FAIL,
         }
     }
 
     pub fn finish(&mut self, ctx: &mut AiCtx, succeeded: bool) {
         if let Self::Lavaland(leaf) = self {
             leaf.finish(ctx, succeeded);
+            return;
+        }
+        if let Self::Jungle(leaf) = self {
+            leaf.finish(ctx);
             return;
         }
         if let Self::CultPet(leaf) = self {

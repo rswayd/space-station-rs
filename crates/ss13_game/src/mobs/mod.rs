@@ -34,6 +34,7 @@ pub mod eating;
 pub mod farm;
 pub mod gorilla;
 pub mod illusion;
+pub mod jungle;
 pub mod lavaland;
 pub mod megafauna;
 pub mod oneoffs;
@@ -178,6 +179,7 @@ impl Plugin for MobsServerPlugin {
         trader::build(app);
         oneoffs::build(app);
         lavaland::build(app);
+        jungle::build(app);
         megafauna::build(app);
         space_fauna::build(app);
         bees::build(app);
@@ -342,6 +344,7 @@ fn attach(world: &mut World, entity: Entity) {
     trader::attach(world, entity, &def);
     oneoffs::attach(world, entity, &def);
     lavaland::attach(world, entity, &def);
+    jungle::attach(world, entity, &def);
     megafauna::attach(world, entity, &def);
     space_fauna::attach(world, entity, &def);
     gorilla::attach(world, entity, &def);

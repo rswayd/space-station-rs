@@ -464,6 +464,7 @@ fn plan(world: &mut World) {
         if controller.status != AiStatus::Off
             && !crate::bots::busy(world, mob)
             && !crate::mobs::lavaland::busy(world, mob)
+            && !crate::mobs::jungle::busy(world, mob)
         {
             stats.on += 1;
             stats.ticked += 1;

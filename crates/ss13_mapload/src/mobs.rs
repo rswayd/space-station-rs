@@ -74,6 +74,22 @@ pub const LAVALAND_RUNTIME_TYPES: [&str; 24] = [
     "/obj/item/stack/ore/diamond",
 ];
 
+/// What `ss13_game::mobs::jungle` spawns: the leaper's suicide frogs, bubbles and sludge, the
+/// projectiles of the leaper, the mega arachnid and seedlings, the arachnid's snare and acid,
+/// the venus human trap a flower bud grows.
+pub const JUNGLE_RUNTIME_TYPES: [&str; 10] = [
+    "/mob/living/basic/frog/suicide",
+    "/mob/living/basic/venus_human_trap",
+    "/obj/structure/leaper_bubble",
+    "/obj/effect/decal/cleanable/leaper_sludge",
+    "/obj/projectile/leaper",
+    "/obj/projectile/mega_arachnid",
+    "/obj/projectile/seedling",
+    "/obj/item/restraints/legcuffs/beartrap/mega_arachnid",
+    "/obj/effect/slippery_acid",
+    "/obj/structure/alien/resin/flower_bud",
+];
+
 /// What `ss13_game::mobs::megafauna` spawns: the ported bosses (placed on the mining level),
 /// the colossus' death bolt, the necropolis chests and what their `PopulateContents` makes
 /// (tg `necropolis_chests.dm`).

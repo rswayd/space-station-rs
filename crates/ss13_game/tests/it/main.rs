@@ -74,6 +74,7 @@ mod interact;
 mod inventory;
 mod janitor;
 mod jobs;
+mod jungle_fauna;
 mod kitchen;
 mod kitchen_machines;
 mod labor;

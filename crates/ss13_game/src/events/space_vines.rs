@@ -12,9 +12,9 @@
 //!
 //! Cost: a process walks every vine of the controller once (air checks) and grows at most
 //! `spread_cap` (≤ 60) of them, every 2 s; a step onto a tile looks up its vines.
-// shortcut: no venus human traps (the Flowering bud is placed, the bud itself does not grow;
-// `docs/parity/mobs/`), no Conductive shocks (vines are not power nodes), no slippery items
-// from Slippery vines, no `isvineimmune` factions (no plant-faction mobs here), no eating by
+// shortcut: the Flowering bud grows its venus human trap in `crate::mobs::jungle` (its
+// mutations are not passed on), no Conductive shocks (vines are not power nodes), no slippery
+// items from Slippery vines, vine-immune mobs are not let through dense vines, no eating by
 // aliens, no chemicals on vines (`on_chem` does nothing in tg either), no spread animation.
 
 use std::collections::VecDeque;
@@ -683,8 +683,11 @@ fn flower(world: &mut World, pos: TilePos) {
             })
         })
     };
-    if !near && world.resource_mut::<EventRng>().0.prob(10.0) {
-        crate::construction::spawn_obj(world, FLOWER_BUD, pos);
+    if !near
+        && world.resource_mut::<EventRng>().0.prob(10.0)
+        && let Some(bud) = crate::construction::spawn_obj(world, FLOWER_BUD, pos)
+    {
+        crate::mobs::jungle::bud_planted(world, bud);
     }
 }
 
@@ -720,6 +723,10 @@ pub fn entangle(world: &mut World, e: Entity, mob: Entity) {
     let Some(vine) = world.get::<Vine>(e).cloned() else {
         return;
     };
+    // `isvineimmune`: the vines' own (venus human traps, plants).
+    if crate::mobs::jungle::is_vine_immune(world, mob) {
+        return;
+    }
     if vine.mutations.has(Mutation::AggressiveSpread) {
         aggrospread_act(world, &vine, e, mob);
     }
@@ -879,6 +886,9 @@ pub fn on_cross(world: &mut World, e: Entity, mob: Entity) {
     let Some(vine) = world.get::<Vine>(e).cloned() else {
         return;
     };
+    if crate::mobs::jungle::is_vine_immune(world, mob) {
+        return;
+    }
     let m = vine.mutations;
     let silicon = world.get::<crate::silicon::chassis::Chassis>(mob).is_some();
     if m.has(Mutation::Toxicity) && !silicon && world.resource_mut::<EventRng>().0.prob(10.0) {
