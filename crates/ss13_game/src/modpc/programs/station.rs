@@ -270,6 +270,9 @@ fn screen(
                 &state.frontier,
             )))
         }
+        StationProgram::Robotact => {
+            StationScreen::Robotact(Box::new(super::robotact::data(world, pc)))
+        }
         // Launchers open their own window and never come to the front.
         StationProgram::BudgetOrders | StationProgram::ScienceHub => {
             StationScreen::Bots(Vec::new())
@@ -666,6 +669,7 @@ pub enum StationAct {
     DeleteRequest(u32),
     /// NT Frontier.
     Paper(crate::science::scipaper::PaperAct),
+    Robotact(super::robotact::RobotactAct),
 }
 
 impl StationAct {
@@ -684,6 +688,7 @@ impl StationAct {
             | Self::PayApplicant(..)
             | Self::DeleteRequest(_) => &[BountyBoard],
             Self::Paper(_) => &[Frontier],
+            Self::Robotact(_) => &[Robotact],
         }
     }
 }
@@ -692,6 +697,9 @@ impl StationAct {
 pub fn parse(action: &str, params: &UiParams) -> Option<Result<StationAct, UiReject>> {
     if let Some(act) = crate::science::scipaper::parse(action, params) {
         return Some(act.map(StationAct::Paper));
+    }
+    if let Some(act) = super::robotact::parse(action) {
+        return Some(Ok(StationAct::Robotact(act)));
     }
     let text = |key: &str| params.get(key).unwrap_or_default().to_owned();
     Some(match action {
@@ -876,6 +884,7 @@ pub fn apply(
         StationAct::ApplyRequest(r) => apply_request(world, client, pc, r),
         StationAct::PayApplicant(r, a) => pay_applicant(world, client, pc, r, a),
         StationAct::DeleteRequest(r) => delete_request(world, client, pc, r),
+        StationAct::Robotact(act) => super::robotact::apply(world, client, actor, pc, act),
         StationAct::Paper(act) => {
             let out = crate::science::scipaper::apply(world, pc, &mut state.frontier, act);
             if let Some(line) = out.say {
@@ -1020,6 +1029,7 @@ fn message_borg(
     if message.is_empty() {
         return Err("empty message");
     }
+    crate::modpc::silicon::logevent(world, borg, &format!("Message from {id} -- \"{message}\""));
     if let Some(borg_client) = world
         .get::<crate::server::PlayerMob>(borg)
         .map(|p| p.client)

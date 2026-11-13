@@ -16,6 +16,8 @@ pub mod messenger;
 #[cfg(feature = "server")]
 pub mod minesweeper;
 #[cfg(feature = "server")]
+pub mod robotact;
+#[cfg(feature = "server")]
 pub mod station;
 pub mod station_kinds;
 
@@ -323,12 +325,21 @@ impl ProgramKind {
 
     /// `undeletable`.
     pub fn undeletable(self) -> bool {
-        matches!(self, Self::Messenger | Self::Downloader | Self::FileManager)
+        matches!(
+            self,
+            Self::Messenger
+                | Self::Downloader
+                | Self::FileManager
+                | Self::Station(StationProgram::Robotact)
+        )
     }
 
     /// `program_flags & PROGRAM_HEADER`: shown above the program list.
     pub fn header_program(self) -> bool {
-        self == Self::Messenger
+        matches!(
+            self,
+            Self::Messenger | Self::Station(StationProgram::Robotact)
+        )
     }
 
     /// `ui_header`: the header icon while it runs in the background (the alarm monitor's turns

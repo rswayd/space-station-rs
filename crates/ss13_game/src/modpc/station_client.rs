@@ -1,5 +1,5 @@
 //! Client screens of the station programs (`NtosPay`, `NtosRadar`, `NtosCyborgRemoteMonitor`,
-//! `NtosRoboControl`, `NtosRevelation`, `NtosPhysScanner`, `NtosSpectreMeter`).
+//! `NtosRoboControl`, `NtosRevelation`, `NtosPhysScanner`, `NtosSpectreMeter`, `NtosRobotact`).
 // shortcut: the radar draws the target as text (grid cell or bearing), not tgui's map with a
 // pointer image; NT Pay takes the token and the amount in one input ("TOKEN AMOUNT", sent as
 // `transfer`), since an input sends only its own text.
@@ -134,7 +134,106 @@ pub fn screen(s: &StationScreen) -> Part {
             section("NT Restock Tracker".to_owned(), parts)
         }
         StationScreen::Scipaper(d) => scipaper(d),
+        StationScreen::Robotact(d) => robotact(d),
     }
+}
+
+/// tgui `NtosRobotact`'s Status, Logs and Network tabs, one after the other.
+fn robotact(d: &RobotactData) -> Part {
+    let none = Vec::new;
+    let mut parts: Vec<Part> = vec![
+        line(format!("Unit: {}", d.borg_name)),
+        line(format!("Type: {}", d.designation)),
+        line(format!(
+            "AI: {}",
+            d.master_ai.clone().unwrap_or_else(|| "None".to_owned())
+        )),
+        line(format!("Charge: {:.0} / {:.0} J", d.charge, d.max_charge)),
+    ];
+    if d.charge <= 0.0 {
+        parts.push(button(
+            "Power Alert".to_owned(),
+            "bolt",
+            ROBOTACT_ALERT_POWER,
+            none(),
+        ));
+    }
+    parts.push(line(format!("Chassis Integrity: {:.0}%", d.integrity)));
+    let cover = if d.cover_locked { "LOCKED" } else { "UNLOCKED" };
+    parts.push(line(format!("Maintenance Cover: {cover}")));
+    if d.cover_locked {
+        parts.push(button(
+            "Unlock".to_owned(),
+            "unlock",
+            ROBOTACT_COVER_UNLOCK,
+            none(),
+        ));
+    }
+    let sensors = if d.sensors { "ACTIVE" } else { "DISABLED" };
+    parts.push(button(
+        format!("Sensor Overlay: {sensors}"),
+        "eye",
+        ROBOTACT_SENSORS,
+        none(),
+    ));
+    if d.self_destruct_able {
+        parts.push(button(
+            "Self Destruct".to_owned(),
+            "bomb",
+            ROBOTACT_SELF_DESTRUCT,
+            none(),
+        ));
+    }
+    parts.push(line("Upgrades:".to_owned()));
+    parts.extend(d.upgrades.iter().map(|u| line(format!("  {u}"))));
+    for (label, value) in [
+        ("AI Connection", &d.wire_ai),
+        ("LawSync", &d.wire_law),
+        ("Camera", &d.wire_camera),
+        ("Module Controller", &d.wire_module),
+        ("Motor Controller", &d.locomotion),
+    ] {
+        parts.push(line(format!("{label}: {value}")));
+    }
+    parts.push(line("Laws:".to_owned()));
+    parts.extend(d.laws.iter().cloned().map(line));
+    parts.push(button(
+        "State Laws".to_owned(),
+        "volume-up",
+        ROBOTACT_LAW_STATE,
+        none(),
+    ));
+    parts.push(button(
+        "Law Channel".to_owned(),
+        "volume-off",
+        ROBOTACT_LAW_CHANNEL,
+        none(),
+    ));
+    parts.push(line("Logs:".to_owned()));
+    parts.extend(d.borg_log.iter().cloned().map(line));
+    parts.push(line(format!(
+        "Network: {}",
+        d.master_ai
+            .clone()
+            .unwrap_or_else(|| "NOT CONFIGURED".to_owned())
+    )));
+    for c in &d.cyborgs {
+        let status = if c.shell_discon {
+            "DISCONNECTED"
+        } else if c.status != 0 {
+            "OFFLINE"
+        } else if c.locked_down {
+            "LOCKED DOWN"
+        } else {
+            "NOMINAL"
+        };
+        let charge = c.charge.map_or("—".to_owned(), |c| format!("{c}%"));
+        parts.push(line(format!(
+            "{} ({}): {status}, condition {}%, charge {charge}",
+            c.name, c.module, c.integ
+        )));
+    }
+    section("RoboTact".to_owned(), parts)
 }
 
 /// `NtosScipaper`: the tabs as buttons, then the tab.

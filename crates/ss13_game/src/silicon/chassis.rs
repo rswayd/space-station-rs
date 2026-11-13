@@ -22,9 +22,9 @@
 //!   the cyborg's master is; shown on joining and whenever lawsync changes them.
 // shortcut: no wires (`/datum/wires/robot`), no screwdriver (wires, radio keys), no wrench
 // deconstruction, no welder or cable repair, hats, toner, headlamp, encryption keys,
-// defibrillator or RPED installation, no `logevent` journal (no Robotact), no malf AI
-// counter-emag and no AI shells; the lock and cover messages are chat lines (tg balloon
-// alerts), and the cover has no `ov-opencover` overlay.
+// defibrillator or RPED installation, no malf AI counter-emag and no AI shells; the lock and
+// cover messages are chat lines (tg balloon alerts), and the cover has no `ov-opencover`
+// overlay.
 // shortcut: the zeroth law names the emagger with "they" (tg `p_they()` pronouns).
 
 use bevy::ecs::message::MessageCursor;
@@ -321,6 +321,12 @@ pub fn toggle_cover(world: &mut World, borg: Entity, user: Option<Entity>) {
     let (locked, emagged) = (chassis.locked, chassis.emagged);
     let state = if locked { "locked" } else { "unlocked" };
     tell_mob(world, borg, Span::Notice, format!("cover {state}"));
+    let log = format!(
+        "{} cover lock has been {}",
+        if emagged { "ChÃ¥vÃis" } else { "Chassis" },
+        if locked { "engaged" } else { "released" }
+    );
+    crate::modpc::silicon::logevent(world, borg, &log);
     if let Some(user) = user {
         let text = if emagged {
             "chassis cover lock glitches".to_owned()
@@ -421,6 +427,22 @@ pub fn emag_act(world: &mut World, actor: Actor, borg: Entity) -> bool {
     true
 }
 
+/// The journal lines of `borg_emag_end`, by the step whose text they follow.
+fn emag_log(world: &mut World, borg: Entity, step: usize, master: &str) {
+    let line = match step {
+        0 => "ALERT: Foreign software detected.".to_owned(),
+        // `num2hex(rand(1,65535), -1)` twice.
+        2 => {
+            let mut rng = world.get_resource_or_init::<crate::combat::CombatRng>();
+            let (a, b) = (rng.range(1, 0xFFFF), rng.range(1, 0xFFFF));
+            format!("WARN: root privleges granted to PID {a:X}{b:X}.")
+        }
+        3 => format!("LOG: New user [{}], groups [root]", master.replace(' ', "")),
+        _ => return,
+    };
+    crate::modpc::silicon::logevent(world, borg, &line);
+}
+
 /// tg `SetEmagged`: the model's `emag_modules` come or go (`rebuild_modules`).
 pub fn set_emagged(world: &mut World, borg: Entity, state: bool) {
     let Some(mut chassis) = world.get_mut::<Chassis>(borg) else {
@@ -508,6 +530,7 @@ fn emag_sequences(world: &mut World) {
             continue;
         };
         tell_mob(world, borg, Span::Danger, line);
+        emag_log(world, borg, seq.step, &seq.master);
         let next = seq.step + 1;
         if let Some(&(delay, _)) = EMAG_END.get(next) {
             world.entity_mut(borg).insert(EmagSequence {
@@ -568,6 +591,11 @@ pub fn set_lockcharge(world: &mut World, borg: Entity, state: bool) {
     } else {
         world.entity_mut(borg).remove::<LockedDown>();
     }
+    let log = format!(
+        "System lockdown {}.",
+        if state { "triggered" } else { "released" }
+    );
+    crate::modpc::silicon::logevent(world, borg, &log);
 }
 
 /// tg `lockdown_override` when the 10 minutes are over.

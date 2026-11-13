@@ -139,6 +139,57 @@ pub struct RobotModel {
     /// One of [`OTHER_MODELS`]: not in the choice list.
     #[serde(default)]
     pub hidden: bool,
+    /// tg `borg_skins` (BandaStation adds its own): the looks offered when picking the model.
+    #[serde(default)]
+    pub skins: Vec<BorgSkin>,
+}
+
+/// An entry of `borg_skins`: its name, `SKIN_ICON_STATE` and `SKIN_ICON` (the dmi; none: the
+/// cyborg's `icons/mob/silicon/robots.dmi`).
+// shortcut: no `SKIN_PIXEL_X/Y`, `SKIN_LIGHT_KEY`, `SKIN_HAT_OFFSET` or `SKIN_TRAITS`: the
+// port has no cyborg lights, hats or model traits.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BorgSkin {
+    pub name: String,
+    pub icon_state: Option<String>,
+    pub icon: Option<String>,
+}
+
+/// `borg_skins`: `list("Name" = list(SKIN_ICON_STATE = "...", SKIN_ICON = 'x.dmi', ...))`.
+fn borg_skins(v: Option<&Value>) -> Vec<BorgSkin> {
+    let Some(items) = v.and_then(|v| v.get("list")).and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let pair = |item: &Value| -> Option<(Value, Value)> {
+        match item.get("assoc")?.as_array()?.as_slice() {
+            [k, v] => Some((k.clone(), v.clone())),
+            _ => None,
+        }
+    };
+    items
+        .iter()
+        .filter_map(|item| {
+            let (name, details) = pair(item)?;
+            let mut skin = BorgSkin {
+                name: name.as_str()?.to_owned(),
+                ..Default::default()
+            };
+            let details = details.get("list").and_then(Value::as_array);
+            for (key, value) in details.into_iter().flatten().filter_map(pair) {
+                match key.as_str() {
+                    Some("skin_icon_state") => skin.icon_state = value.as_str().map(str::to_owned),
+                    Some("skin_icon") => {
+                        skin.icon = value
+                            .get("resource")
+                            .and_then(Value::as_str)
+                            .map(str::to_owned);
+                    }
+                    _ => {}
+                }
+            }
+            Some(skin)
+        })
+        .collect()
 }
 
 /// A cyborg upgrade board (tg `/obj/item/borg/upgrade` vars).
@@ -312,6 +363,7 @@ pub fn resolve(types: &DmTypes) -> SiliconData {
             basic_modules: existing(types, list(types.resolved(path, "basic_modules"))),
             emag_modules: existing(types, list(types.resolved(path, "emag_modules"))),
             radio_channels: list(types.resolved(path, "radio_channels")),
+            skins: borg_skins(types.resolved(path, "borg_skins")),
         })
         .collect();
     let mut upgrades: Vec<BorgUpgrade> = types
@@ -471,6 +523,12 @@ mod tests {
         "/obj/item/robot_model/service": { "parent": "/obj/item/robot_model", "declared_vars": {
             "name": "Service", "cyborg_base_icon": "service_m",
             "basic_modules": { "list": [{ "path": "/obj/item/pen" }, { "path": "/obj/item/nope" }] },
+            "borg_skins": { "list": [
+                { "assoc": ["Bro", { "list": [{ "assoc": ["skin_icon_state", "brobot"] }] }] },
+                { "assoc": ["Waitress", { "list": [
+                    { "assoc": ["skin_icon_state", "service_f"] },
+                    { "assoc": ["skin_icon", { "resource": "modular_bandastation/borgs/icons/robots.dmi" }] },
+                    { "assoc": ["skin_hat_offset", 1e31] }] }] }] },
             "radio_channels": { "list": ["Сервис"] } } },
         "/obj/item/robot_model/saboteur": { "parent": "/obj/item/robot_model", "declared_vars": {
             "name": "Syndicate Saboteur", "cyborg_base_icon": "synd_engi",
@@ -517,6 +575,16 @@ mod tests {
         assert_eq!(data.models[0].basic_modules, ["/obj/item/pen"]);
         assert_eq!(data.models[0].radio_channels, ["Сервис"]);
         assert!(!data.models[0].hidden);
+        let skins = &data.models[0].skins;
+        assert_eq!(skins.len(), 2);
+        assert_eq!(skins[0].icon_state.as_deref(), Some("brobot"));
+        assert_eq!(skins[0].icon, None);
+        assert_eq!(skins[1].name, "Waitress");
+        assert_eq!(
+            skins[1].icon.as_deref(),
+            Some("modular_bandastation/borgs/icons/robots.dmi")
+        );
+        assert!(data.models[1].skins.is_empty());
         assert!(data.models[1].hidden, "{}", data.models[1].path);
         assert_eq!(data.upgrades.len(), 2);
         let amop = data.upgrade("/obj/item/borg/upgrade/amop").unwrap();

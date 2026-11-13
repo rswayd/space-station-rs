@@ -32,6 +32,58 @@ pub enum StationScreen {
     Restock(Vec<VendorRow>),
     /// `NtosScipaper` (NT Frontier).
     Scipaper(Box<ScipaperData>),
+    /// `NtosRobotact`.
+    Robotact(Box<RobotactData>),
+}
+
+/// `/datum/computer_file/program/robotact/ui_data` and `ui_static_data`.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct RobotactData {
+    pub borg_name: String,
+    /// `designation`: the model's name.
+    pub designation: String,
+    /// `masterAI`: `None` when not connected (`MasterAI_connected`).
+    pub master_ai: Option<String>,
+    pub master_ai_online: bool,
+    /// Joules.
+    pub charge: f64,
+    pub max_charge: f64,
+    /// `(health + 100) / 2`.
+    pub integrity: f32,
+    pub sensors: bool,
+    pub self_destruct_able: bool,
+    /// Every cyborg on the same AI (`evaluate_borg`).
+    pub cyborgs: Vec<RobotactPeer>,
+    pub cover_locked: bool,
+    /// `FAULT`, `DISABLED`, `ENABLED`.
+    pub locomotion: String,
+    /// `FAULT` or `NOMINAL`.
+    pub wire_module: String,
+    /// `FAULT`, `DISABLED` or `NOMINAL`.
+    pub wire_camera: String,
+    /// `FAULT`, `CONNECTED` or `READY`.
+    pub wire_ai: String,
+    pub wire_law: String,
+    /// `Laws`: `get_law_list(TRUE, TRUE, FALSE)`.
+    pub laws: Vec<String>,
+    pub borg_log: Vec<String>,
+    pub upgrades: Vec<String>,
+}
+
+/// An entry of `cyborg_groups`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RobotactPeer {
+    pub name: String,
+    /// `round((health + 100) / 2)`.
+    pub integ: i32,
+    pub locked_down: bool,
+    /// tg `stat`: 0 conscious, 3 unconscious, 4 dead.
+    pub status: u8,
+    /// An AI shell nobody controls.
+    pub shell_discon: bool,
+    /// Cell charge, percent; `None` without a cell.
+    pub charge: Option<u8>,
+    pub module: String,
 }
 
 /// `scipaper_program/return_gist()` of a paper.
@@ -203,6 +255,13 @@ pub struct BotRow {
     pub area: String,
 }
 
+// `NtosRobotact` acts.
+pub const ROBOTACT_COVER_UNLOCK: &str = "coverunlock";
+pub const ROBOTACT_LAW_CHANNEL: &str = "lawchannel";
+pub const ROBOTACT_LAW_STATE: &str = "lawstate";
+pub const ROBOTACT_ALERT_POWER: &str = "alertPower";
+pub const ROBOTACT_SENSORS: &str = "toggleSensors";
+pub const ROBOTACT_SELF_DESTRUCT: &str = "selfDestruct";
 // `NtosPay` acts.
 pub const PAY_TRANSACTION: &str = "Transaction";
 pub const PAY_GET_TOKEN: &str = "GetPayToken";

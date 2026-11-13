@@ -284,3 +284,66 @@ pub const UNLINK_SILICON: &str = "unlink_silicon";
 pub const LINK_RACK: &str = "link_rack";
 pub const UNLINK_RACK: &str = "unlink_rack";
 pub const REFRESH: &str = "refresh";
+
+/// tg `StateLawUi` (`/datum/state_laws_ui`): which laws a silicon states aloud.
+pub struct StateLawUi;
+
+impl UiInterface for StateLawUi {
+    const NAME: &'static str = "StateLawUi";
+    type Data = StateLawData;
+    type StaticData = ();
+}
+
+/// One law of `get_laws_ui_data`: `kind` is `hacked`, `core` or `supplied`; `number` the
+/// law's number, `0` for the zeroth, an ion number for hacked and ioned laws.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateLawEntry {
+    pub text: String,
+    pub number: String,
+    pub kind: String,
+}
+
+/// `ui_data`: `locked`, `stated_laws` (texts), `all_laws`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateLawData {
+    pub locked: bool,
+    pub stated_laws: Vec<String>,
+    pub all_laws: Vec<StateLawEntry>,
+}
+
+/// `act('toggle_stated', { law })`, `act('state_laws')`.
+pub const TOGGLE_STATED: &str = "toggle_stated";
+pub const STATE_LAWS: &str = "state_laws";
+
+/// BandaStation `AiLawChangeRequest` (`/datum/ai_law_change_request`): the AI drafts new core
+/// laws, an admin reviews them.
+pub struct AiLawChangeUi;
+
+impl UiInterface for AiLawChangeUi {
+    const NAME: &'static str = "AiLawChangeRequest";
+    type Data = AiLawChangeData;
+    type StaticData = ();
+}
+
+/// `ui_data`.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiLawChangeData {
+    pub reviewing: bool,
+    pub laws: Vec<String>,
+    pub notify_crew: bool,
+    pub max_law_length: u32,
+    pub law_amount: u32,
+    pub requester_key: String,
+    pub requester_name: String,
+}
+
+/// `act('submit' | 'confirm', { laws })`: the laws come as `law0`, `law1`, ... params.
+pub const LAW_CHANGE_SUBMIT: &str = "submit";
+pub const LAW_CHANGE_CONFIRM: &str = "confirm";
+pub const LAW_CHANGE_REJECT: &str = "reject";
+pub const LAW_CHANGE_TOGGLE_NOTIFY: &str = "toggle_notify";
+
+/// The param of law `i` of a submitted or confirmed request.
+pub fn law_change_param(i: usize) -> String {
+    format!("law{i}")
+}

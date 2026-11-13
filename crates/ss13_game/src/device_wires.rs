@@ -371,6 +371,12 @@ pub fn act_allowed(world: &mut World, e: Entity, kind: MachineWires, user: Entit
     !(shocks && wires::shock(world, e, user, 100.0))
 }
 
+/// The cyborg journal line of a cut or mended wire (`logevent`).
+fn borg_fault(world: &mut World, borg: Entity, part: &str, mend: bool) {
+    let state = if mend { "cleared" } else { "detected" };
+    crate::modpc::silicon::logevent(world, borg, &format!("{part} fault {state}"));
+}
+
 fn set_electrified(world: &mut World, e: Entity, value: Option<Electrified>) {
     wires::set_electrified(world, e, value);
 }
@@ -402,6 +408,7 @@ pub fn on_cut(
             if !mend {
                 crate::silicon::cyborg::disconnect(world, e);
             }
+            borg_fault(world, e, "AI connection", mend);
         }
         (MachineWires::Robot, WIRE_LAWSYNC) => {
             let emagged = world.get::<Chassis>(e).is_some_and(|c| c.emagged);
@@ -410,9 +417,11 @@ pub fn on_cut(
             {
                 c.lawupdate = mend;
             }
+            borg_fault(world, e, "Lawsync Module", mend);
         }
         (MachineWires::Robot, WIRE_LOCKDOWN) => {
             crate::silicon::chassis::set_lockdown(world, e, !mend);
+            borg_fault(world, e, "Motor Controller", mend);
         }
         (MachineWires::Robot, WIRE_RESET_MODEL) => {
             if !mend {

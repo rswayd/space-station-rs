@@ -965,6 +965,22 @@ fn cyborg_links_picks_a_model_and_charges() {
     s.run_until("the model is applied", |s| {
         s.server.world().get::<Cyborg>(borg).unwrap().model == Some(0)
     });
+    // `do_transform_delay`: locked down for the four tool sounds, then free again.
+    assert!(
+        s.server
+            .world()
+            .get::<ss13_game::silicon::chassis::LockedDown>(borg)
+            .is_some()
+    );
+    s.run_until("the transform ends", |s| {
+        let world = s.server.world();
+        world
+            .get::<ss13_game::silicon::cyborg::Transforming>(borg)
+            .is_none()
+            && world
+                .get::<ss13_game::silicon::chassis::LockedDown>(borg)
+                .is_none()
+    });
     let model = s
         .server
         .world()
@@ -1420,6 +1436,7 @@ fn ai_hud_alerts_and_announcement() {
             "camera",
             "camera_track",
             "alerts",
+            "state_laws",
             "modpc",
             "announcement",
             "call_shuttle",

@@ -193,6 +193,11 @@ pub struct ActWithLocal {
     pub default: String,
 }
 
+/// [`ActWithLocal`] for several fields at once (tgui `act('submit', { laws: lawInputs })` of a
+/// form with several inputs).
+#[derive(Component, Clone, Debug, Default, PartialEq)]
+pub struct ActWithLocals(pub Vec<ActWithLocal>);
+
 /// On a view's root node: keys pressed while the window has keyboard focus send
 /// `act(action, params)` (tgui `<Window.Content onKeyDown>`). Text fields keep Enter to
 /// themselves ([`ActOnSubmit`]); list it here only for windows without one.
@@ -1104,6 +1109,7 @@ fn send_act(
     act: On<UiAct>,
     windows: Query<(&ClientWindow, &UiLocalState)>,
     with_local: Query<&ActWithLocal>,
+    with_locals: Query<&ActWithLocals>,
     mut intents: MessageWriter<SendIntent>,
 ) {
     let Ok((window, local)) = windows.get(act.scope) else {
@@ -1112,6 +1118,10 @@ fn send_act(
     // ui_kit fills params from `ActParams` and from widgets that carry their own (Dropdown).
     let mut params = act.params.clone();
     if let Ok(with) = with_local.get(act.source) {
+        let value = local.value(&with.key).unwrap_or(&with.default);
+        params.extend(text_params(&with.param, value));
+    }
+    for with in with_locals.get(act.source).into_iter().flat_map(|w| &w.0) {
         let value = local.value(&with.key).unwrap_or(&with.default);
         params.extend(text_params(&with.param, value));
     }

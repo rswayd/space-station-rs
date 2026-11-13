@@ -3,13 +3,14 @@
 //!
 //! Every AI, cyborg and pAI has a built-in computer ([`ModularInterface`]): not an item, never
 //! dropped, imprinted with the silicon's name and "AI", "Cyborg" or "pAI Messenger". The AI's
-//! and pAI's run the messenger (the pAI's the chat client too), a cyborg's the file manager, the
-//! gas scanner and the crew list. It needs no power (`check_power_override`); a cyborg's has no
+//! and pAI's run the messenger (the pAI's the chat client too), a cyborg's the file manager,
+//! RoboTact (`programs::robotact`, with the journal of [`logevent`]), the gas scanner and the
+//! crew list. It needs no power (`check_power_override`); a cyborg's has no
 //! NTNet while locked down or with a dead cell, and its signal is the silicon's tile's. The AI
 //! opens it with its "Messenger" button, a cyborg with "Modular Interface"
 //! (`crate::silicon::ai_hud`), a pAI with its "Digital Messenger" software
 //! (`crate::silicon::pai`); the window follows the silicon (`crate::modpc::pda::ntos_status`).
-// shortcut: no RoboTact (`robotact`, the borg log), no lamp button and no cyborg tablet screen
+// shortcut: no lamp button and no cyborg tablet screen
 // object; it is not renamed when the silicon is.
 
 use bevy::prelude::*;
@@ -19,8 +20,8 @@ use ss13_tgui::server::{AlwaysState, OpenUi};
 use super::NtosUi;
 use super::pda::ModularComputer;
 use super::power::ComputerCell;
-use super::programs::ProgramKind;
 use super::programs::messenger::Messenger;
+use super::programs::{ProgramKind, StationProgram};
 use crate::silicon::ai::{AiCore, AiEye};
 use crate::silicon::cyborg::Cyborg;
 use crate::silicon::pai::Pai;
@@ -35,6 +36,36 @@ pub struct SiliconPda {
     pub owner: Entity,
 }
 
+/// On a cyborg's built-in computer: tg `borglog`, the journal RoboTact shows.
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+pub struct BorgLog(pub Vec<String>);
+
+/// tg `logevent`: "[round time] - text" in a living cyborg's journal (its computer is made if
+/// it has none yet).
+pub fn logevent(world: &mut World, silicon: Entity, text: &str) {
+    if text.is_empty()
+        || world.get::<Cyborg>(silicon).is_none()
+        || world.get::<crate::health::Stat>(silicon) == Some(&crate::health::Stat::Dead)
+    {
+        return;
+    }
+    let Some(pc) = create(world, silicon, CYBORG_PDA, "Cyborg") else {
+        return;
+    };
+    let stamp = if world.contains_resource::<Time>() {
+        crate::records::manifest::round_timestamp(world)
+    } else {
+        "00:00:00".to_owned()
+    };
+    let line = format!("{stamp} - {text}");
+    match world.get_mut::<BorgLog>(pc) {
+        Some(mut log) => log.0.push(line),
+        None => {
+            world.entity_mut(pc).insert(BorgLog(vec![line]));
+        }
+    }
+}
+
 /// On a silicon: its `modularInterface`.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModularInterface(pub Entity);
@@ -43,7 +74,12 @@ pub struct ModularInterface(pub Entity);
 pub fn silicon_programs(path: &str) -> Vec<ProgramKind> {
     use ProgramKind::*;
     match path {
-        CYBORG_PDA => vec![FileManager, Atmosscan, CrewManifest],
+        CYBORG_PDA => vec![
+            FileManager,
+            Station(StationProgram::Robotact),
+            Atmosscan,
+            CrewManifest,
+        ],
         PAI_PDA => vec![Messenger, ChatClient],
         _ => vec![Messenger],
     }
@@ -157,6 +193,34 @@ pub fn build(app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn logevent_journals_a_living_cyborgs_events() {
+        let mut world = World::new();
+        let borg = world
+            .spawn(Cyborg {
+                model: None,
+                model_item: None,
+                charge: 0.0,
+                max_charge: 0.0,
+                low_power: false,
+                connected_ai: None,
+                lawupdate: true,
+            })
+            .id();
+        logevent(&mut world, borg, "System brought online.");
+        let pc = world.get::<ModularInterface>(borg).unwrap().0;
+        assert_eq!(
+            world.get::<BorgLog>(pc).unwrap().0,
+            ["00:00:00 - System brought online."]
+        );
+        world.entity_mut(borg).insert(crate::health::Stat::Dead);
+        logevent(&mut world, borg, "late");
+        assert_eq!(world.get::<BorgLog>(pc).unwrap().0.len(), 1);
+        let ai = world.spawn_empty().id();
+        logevent(&mut world, ai, "not a cyborg");
+        assert!(world.get::<ModularInterface>(ai).is_none());
+    }
 
     #[test]
     fn a_cyborg_gets_an_imprinted_interface_that_needs_no_power() {

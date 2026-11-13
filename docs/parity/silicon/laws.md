@@ -61,7 +61,7 @@ Safeguard, Protect Station, Quarantine, Oxygen is toxic, Freeform (свой те
 
 - **Код:** [`/mob/living/silicon/ai`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/mob/living/silicon/ai/ai_defines.dm#L1); tgui: [`AiLawChangeRequest.tsx`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/tgui/packages/tgui/interfaces/AiLawChangeRequest.tsx)
 - **BandaStation:** [`modular_bandastation/ai_law_change/code/ai_law_change.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/ai_law_change/code/ai_law_change.dm#L27) — весь механизм
-- **Статус в ss13-rs:** ❌ нет
+- **Статус в ss13-rs:** ✅ реализовано — `crates/ss13_game/src/silicon/law_change.rs`: верб ИИ «Request Law Change» (вкладка «Команды ИИ»; отказы по порядку: отклонён, уже одобрен, прошло 10 минут раунда, ждёт рассмотрения; не в недееспособности) открывает `AiLawChangeRequest` — три закона (обрезка до `MAX_LAW_LEN` 1024, все обязательны, иначе «ПЕРЕПРОВЕРЬТЕ ВАШ ЗАПРОС.»); админам с `R_ADMIN` — уведомление со ссылками в чате «Одобрить / Рассмотреть / Отклонить» (права проверяются снова при клике); «Рассмотреть» открывает окно админу с правкой законов и переключателем оповещения экипажа; одобрение заменяет законы модуля ядра базовой стойки ИИ и синхронизирует стойку (`crates/ss13_game/src/silicon/law_rack.rs` `set_core_laws`), при оповещении — приоритетное объявление «Отдел работы с искуственным интеллектом»; отклонение — «ВАШ ЗАПРОС БЫЛ ОТКЛОНЁН.» и запрет новых запросов. Нет кнопок VV/PM/PP/FLW в окне рецензии (инструменты `ss13_admin`), мигания окна и звука у админов
 
 ### Админ-панель законов
 Админский просмотр и правка законов любого синтетика.

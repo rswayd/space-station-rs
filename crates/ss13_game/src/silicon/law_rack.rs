@@ -608,6 +608,29 @@ pub fn update_parent_lawset(world: &mut World, rack: Entity) {
     }
 }
 
+/// BandaStation `apply_laws` of an approved law change request (`super::law_change`): the core
+/// module of `mob`'s base rack (`get_law_rack().get_core_module()`) gets `laws` (`set_laws`)
+/// and the rack syncs its silicons. False when there is no such module.
+pub fn set_core_laws(world: &mut World, mob: Entity, laws: &[String]) -> bool {
+    let Some(LinkedRack(rack)) = world.get::<LinkedRack>(mob).copied() else {
+        return false;
+    };
+    let Some(module) = world
+        .get::<LawRack>(rack)
+        .filter(|r| r.kind == RackKind::Base && r.has_core_slot)
+        .and_then(|r| r.slots.first().cloned().flatten())
+        .map(|s| s.module)
+    else {
+        return false;
+    };
+    let Some(mut m) = world.get_mut::<LawModule>(module) else {
+        return false;
+    };
+    m.laws = laws.iter().map(|l| (l.clone(), false)).collect();
+    update_parent_lawset(world, rack);
+    true
+}
+
 /// tg `apply_lawset`: the rack's lawset replaces the silicon's (a protected law 0 stays).
 fn apply_lawset(world: &mut World, rack: Entity, mob: Entity, announce: bool) {
     let Some(combined) = world.get::<LawRack>(rack).map(|r| r.combined.clone()) else {

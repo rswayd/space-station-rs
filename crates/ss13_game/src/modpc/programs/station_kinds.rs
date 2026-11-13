@@ -34,10 +34,13 @@ pub enum StationProgram {
     RestockTracker,
     /// `/datum/computer_file/program/scipaper_program` (NT Frontier, `crate::science::scipaper`).
     Frontier,
+    /// `/datum/computer_file/program/robotact`: a cyborg's built-in computer only
+    /// (`super::robotact`).
+    Robotact,
 }
 
 impl StationProgram {
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::NtPay,
         Self::Lifeline,
         Self::CustodialLocator,
@@ -52,6 +55,7 @@ impl StationProgram {
         Self::ScienceHub,
         Self::RestockTracker,
         Self::Frontier,
+        Self::Robotact,
     ];
 
     pub fn filename(self) -> &'static str {
@@ -70,6 +74,7 @@ impl StationProgram {
             Self::ScienceHub => "experi_track",
             Self::RestockTracker => "restockapp",
             Self::Frontier => "ntfrontier",
+            Self::Robotact => "robotact",
         }
     }
 
@@ -89,6 +94,7 @@ impl StationProgram {
             Self::RestockTracker => "NT Restock Tracker",
             Self::SpectreMeter => "Spectre-Meter",
             Self::Frontier => "NT Frontier",
+            Self::Robotact => "RoboTact",
         }
     }
 
@@ -108,6 +114,7 @@ impl StationProgram {
             Self::ScienceHub => "atom",
             Self::RestockTracker => "cash-register",
             Self::Frontier => "paper-plane",
+            Self::Robotact => "terminal",
         }
     }
 
@@ -164,6 +171,9 @@ impl StationProgram {
             Self::Frontier => {
                 "Программное обеспечение для публикации и навигации по научным статьям."
             }
+            Self::Robotact => {
+                "Встроенное приложение для самостоятельного управления и диагностики киборга."
+            }
         }
     }
 
@@ -171,7 +181,7 @@ impl StationProgram {
         match self {
             Self::NtPay | Self::CustodialLocator | Self::PhysScanner => 2,
             Self::RestockTracker => 4,
-            Self::Lifeline | Self::BorgMonitor | Self::CivBounties => 5,
+            Self::Lifeline | Self::BorgMonitor | Self::CivBounties | Self::Robotact => 5,
             Self::BudgetOrders | Self::BountyBoard | Self::ScienceHub => 10,
             Self::Frontier => 12,
             Self::RoboControl => 6,
@@ -183,9 +193,11 @@ impl StationProgram {
     pub fn category(self) -> &'static str {
         match self {
             Self::NtPay | Self::Revelation => CATEGORY_DEVICE,
-            Self::BorgMonitor | Self::RoboControl | Self::ScienceHub | Self::Frontier => {
-                CATEGORY_SCIENCE
-            }
+            Self::BorgMonitor
+            | Self::RoboControl
+            | Self::ScienceHub
+            | Self::Frontier
+            | Self::Robotact => CATEGORY_SCIENCE,
             Self::BudgetOrders | Self::CivBounties | Self::BountyBoard | Self::RestockTracker => {
                 CATEGORY_SUPPLY
             }
@@ -200,7 +212,7 @@ impl StationProgram {
     pub fn on_ntnet_store(self) -> bool {
         !matches!(
             self,
-            Self::Revelation | Self::PhysScanner | Self::SpectreMeter
+            Self::Revelation | Self::PhysScanner | Self::SpectreMeter | Self::Robotact
         )
     }
 
@@ -218,7 +230,8 @@ impl StationProgram {
             | Self::PhysScanner
             | Self::SpectreMeter
             | Self::BudgetOrders
-            | Self::CivBounties => pda,
+            | Self::CivBounties
+            | Self::Robotact => pda,
             _ => true,
         }
     }
