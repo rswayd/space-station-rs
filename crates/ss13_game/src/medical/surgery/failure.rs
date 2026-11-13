@@ -240,6 +240,17 @@ pub(super) fn failure(
             }
             return;
         }
+        Op::TuneVocalCords => {
+            say(
+                world,
+                format!("Вы случайно вонзаете {tool} в горло {target}!"),
+                format!("{user} случайно вонзает {tool} в горло {target}!"),
+            );
+            pain(world, mob, "Вы чувствуете острую колющую боль в горле!");
+            // shortcut: the damage rolls no wound (tg `sharpness = TRUE`).
+            damage_limb(world, mob, body, DamageType::Brute, 20.0);
+            return;
+        }
         Op::Debride => {
             let hurt = super::super::fork_rng(world).range(4, 8) as f32;
             damage_limb(world, mob, body, DamageType::Brute, hurt);

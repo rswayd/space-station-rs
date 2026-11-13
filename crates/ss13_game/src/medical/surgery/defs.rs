@@ -137,6 +137,7 @@ impl Op {
             Self::Dissection,
             Self::ViralBonding,
             Self::Bionecrosis,
+            Self::TuneVocalCords,
         ]);
         ops.extend(Bioware::ALL.map(Self::Bioware));
         ops
@@ -958,6 +959,22 @@ impl Op {
                 tool_rec: "syringe",
                 required: &["в конечности должен присутствовать мозг"],
                 blocked: &["в конечности не должно быть Ромерол-опухоли"],
+                ..base
+            },
+            Self::TuneVocalCords => OpDef {
+                path: "/datum/surgery_operation/limb/tune_vocal_cords",
+                name: "Настройка голосовых связок",
+                desc: "Проведите операцию на связках пациента для изменения голоса.",
+                time: 64.0,
+                all_required: SKIN_OPEN,
+                implements: &[
+                    (Tool("scalpel"), 1.0),
+                    (Path("/obj/item/knife"), 2.0),
+                    (Tool("cutters"), 2.85),
+                    (Path("/obj/item/pen"), 5.0),
+                ],
+                tool_rec: "scalpel",
+                required: &["оперируйте голову"],
                 ..base
             },
             Self::Bioware(kind) => bioware_def(kind, base),

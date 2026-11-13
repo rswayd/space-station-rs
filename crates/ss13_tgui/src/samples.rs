@@ -51,6 +51,7 @@ use crate::interfaces::disposal_unit::{DisposalUnitData, DisposalUnitUi};
 use crate::interfaces::dna_console::{DnaConsoleData, DnaConsoleUi, DnaMutation};
 use crate::interfaces::dna_vault::{DnaVaultData, DnaVaultUi};
 use crate::interfaces::electrolyzer::{ElectrolyzerData, ElectrolyzerUi};
+use crate::interfaces::experimental_cloner::{ExperimentalClonerData, ExperimentalClonerUi};
 use crate::interfaces::gas_analyzer::{
     AtmosHandbook, GasAnalyzerData, GasAnalyzerUi, Gasmix, HandbookGas,
 };
@@ -930,6 +931,23 @@ pub fn sample(name: &str) -> Option<Sample> {
                 complexity_max: 3,
                 slots_used: 2,
                 slots_max: 5,
+            },
+        ),
+        ExperimentalClonerUi::NAME => of::<ExperimentalClonerUi>(
+            "experimental cloner control console",
+            &(),
+            &ExperimentalClonerData {
+                record_name: Some("John Doe".into()),
+                record_species: Some("Human".into()),
+                linked_scanner: true,
+                scanner_occupant: Some("Jane Roe".into()),
+                scanner_species: Some("Lizardperson".into()),
+                is_scanning: false,
+                linked_pod: true,
+                is_cloning: true,
+                cloning_name: Some("John Doe".into()),
+                cloning_species: Some("Human".into()),
+                cloning_progress: 40.0,
             },
         ),
         ImplantPadUi::NAME => of::<ImplantPadUi>(

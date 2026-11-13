@@ -362,6 +362,20 @@ fn drag(world: &mut World, client: Entity, from: DragEnd, to: DragEnd) {
     {
         return;
     }
+    // `experimental_cloner_scanner/mouse_drop_receive`.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && !traits.hands_blocked
+        && crate::genetics::cloner::mouse_drop_receive(world, over, dragged)
+    {
+        return;
+    }
+    // `dna_infuser/mouse_drop_receive` (`NEED_HANDS | NEED_DEXTERITY`): the infusion source.
+    if let (End::World(over), End::World(_)) = (to, from)
+        && !traits.hands_blocked
+        && crate::genetics::infuser::mouse_drop_receive(world, actor.mob, over, dragged)
+    {
+        return;
+    }
     // `dna_scannernew/mouse_drop_receive`.
     if let (End::World(over), End::World(_)) = (to, from)
         && crate::genetics::console::mouse_drop_receive(world, over, dragged)

@@ -608,6 +608,12 @@ pub(super) fn success(world: &mut World, actor: Actor, mob: Entity, op: Op, zone
                 bionecrosis_use_chems(world, actor.item, mob);
             }
         }
+        // shortcut: no voice to change yet (`change_tts_seed` asks the surgeon for a TTS seed);
+        // comes with the TTS component (`docs/parity/server/tts.md`).
+        Op::TuneVocalCords => {
+            own = format!("Вам удалось настроить голосовые связки {target}.");
+            others = format!("{user} успешно настраивает голосовые связки {target}!");
+        }
         Op::FilterBlood => {
             filter_blood(world, mob);
             let tool = capitalize(&tool);

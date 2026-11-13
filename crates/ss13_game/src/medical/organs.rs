@@ -625,6 +625,8 @@ pub fn insert(world: &mut World, organ: Entity, mob: Entity) -> bool {
         state.stop_at = None;
     }
     on_insert(world, organ, mob, slot);
+    // `organ_set_bonus/on_implanted`.
+    crate::genetics::infuser::refresh_set_bonuses(world, mob);
     true
 }
 
@@ -733,6 +735,8 @@ pub fn remove(world: &mut World, organ: Entity, special: bool) {
         }
         _ => {}
     }
+    // `organ_set_bonus/on_removed`.
+    crate::genetics::infuser::refresh_set_bonuses(world, mob);
     if state.spec().vital && !special && world.get::<Stat>(mob) != Some(&Stat::Dead) {
         kill(world, mob);
     }

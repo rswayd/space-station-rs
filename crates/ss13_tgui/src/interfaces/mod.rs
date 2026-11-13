@@ -22,6 +22,7 @@ pub mod disposal_unit;
 pub mod dna_console;
 pub mod dna_vault;
 pub mod electrolyzer;
+pub mod experimental_cloner;
 pub mod gas_analyzer;
 pub mod gps;
 pub mod gravity_generator;

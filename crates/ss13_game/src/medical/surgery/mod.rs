@@ -367,6 +367,8 @@ pub enum Op {
     ViralBonding,
     /// `limb/bionecrosis`: a romerol tumour in the brain.
     Bionecrosis,
+    /// BandaStation `limb/tune_vocal_cords`: the patient's voice changed.
+    TuneVocalCords,
 }
 
 /// The static part of an operation.

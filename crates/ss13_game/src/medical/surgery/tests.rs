@@ -455,3 +455,34 @@ fn viral_bonding_and_bionecrosis_are_locked_and_checked() {
     assert!(tool_check(Op::ViralBonding, &lighter));
     assert!(tool_quality(Op::ViralBonding, &lighter) > 0.0);
 }
+
+#[test]
+fn vocal_cords_are_tuned_on_an_open_head() {
+    let mut world = World::new();
+    world.init_resource::<Time>();
+    let mob = world
+        .spawn((
+            Health::default(),
+            Stat::Conscious,
+            organs::OrganHost,
+            Limbs::default(),
+            BodyPosition::default(),
+        ))
+        .id();
+    let op = Op::TuneVocalCords;
+    assert!(operation_pool(&[]).contains(&op));
+    assert!(!is_available(&world, op, mob, TargetZone::Head));
+    with_limbs(&mut world, mob, |l| {
+        for zone in [BodyZone::Chest, BodyZone::Head] {
+            let limb = l.limb_mut(zone);
+            limb.prepped = true;
+            limb.add_surgery(state::SKIN_OPEN);
+        }
+    });
+    assert!(is_available(&world, op, mob, TargetZone::Head));
+    assert!(!is_available(&world, op, mob, TargetZone::Chest));
+    let pen = tool("/obj/item/pen", "", 0, 0.0);
+    assert_eq!(tool_quality(op, &pen), 5.0);
+    let scalpel = tool("/obj/item/scalpel", "scalpel", 1, 10.0);
+    assert_eq!(tool_quality(op, &scalpel), 1.0);
+}
