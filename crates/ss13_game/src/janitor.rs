@@ -711,14 +711,10 @@ fn pepper_expose(world: &mut World, mob: Entity) {
     {
         return;
     }
-    if world.resource_mut::<CombatRng>().chance(5.0)
-        && let Some(emote) = ss13_chat::emote::find("scream")
-    {
-        crate::mobs::defense::emote(world, mob, emote.message);
+    if world.resource_mut::<CombatRng>().chance(5.0) {
+        crate::speech::run_emote(world, mob, "scream");
     }
-    if let Some(emote) = ss13_chat::emote::find("cry") {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::speech::run_emote(world, mob, "cry");
     crate::vision::set_eye_blur_if_lower(world, mob, 10.0);
     crate::vision::cure_temp_blindness(world, mob);
     crate::vision::adjust_temp_blindness(world, mob, 6.0);

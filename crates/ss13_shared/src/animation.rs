@@ -43,6 +43,15 @@ pub enum Animation {
         color: [u8; 3],
         style: RunechatStyle,
     },
+    /// tg `/datum/progressbar`: a bar over the entity that fills over `duration_ds`
+    /// deciseconds, for the acting client only. Bars on one entity stack upwards.
+    Progress { duration_ds: u32 },
+    /// The oldest running [`Animation::Progress`] over the entity ends: `success` keeps it
+    /// full, else it turns to its `_fail` state; either way it fades out.
+    ProgressEnd { success: bool },
+    /// tg `/datum/cogbar`: a cog over a busy mob fades in (`on`) or out, for everyone who sees
+    /// the mob but its own player.
+    Cog { on: bool },
 }
 
 /// The classes of a [`Animation::Runechat`] (`extra_classes`).

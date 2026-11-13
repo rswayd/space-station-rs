@@ -14,17 +14,18 @@ pub(crate) fn emote(world: &mut World, mob: Entity, key: &str) {
         return;
     }
     // BandaStation's lines of the emotes the chat does not have yet.
-    let text = match ss13_chat::emote::find(key) {
-        Some(emote) => emote.message,
-        None => match key {
-            "drool" => "пускает слюни.",
-            "gag" => "тужится.",
-            "sniff" => "шмыгает носом.",
-            "snore" => "храпит.",
-            "stare" => "уставился.",
-            "blink" => "моргает.",
-            _ => return,
-        },
+    if ss13_chat::emote::find(key).is_some() {
+        crate::speech::run_emote(world, mob, key);
+        return;
+    }
+    let text = match key {
+        "drool" => "пускает слюни.",
+        "gag" => "тужится.",
+        "sniff" => "шмыгает носом.",
+        "snore" => "храпит.",
+        "stare" => "уставился.",
+        "blink" => "моргает.",
+        _ => return,
     };
     crate::mobs::defense::emote(world, mob, text);
 }

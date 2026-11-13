@@ -480,9 +480,7 @@ fn smoke_mob(world: &mut World, mob: Entity, smoke: &Smoke, now: f64) {
 }
 
 fn cough(world: &mut World, mob: Entity) {
-    if let Some(emote) = ss13_chat::emote::find("cough") {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::speech::run_emote(world, mob, "cough");
 }
 
 /// `drop_all_held_items`.

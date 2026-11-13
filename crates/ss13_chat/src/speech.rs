@@ -12,6 +12,9 @@ pub enum SpeakerStat {
     Conscious,
     /// tg `SOFT_CRIT`: `TRAIT_FORCE_WHISPER`, no emotes without `EMOTE_CANUSE_SOFTCRIT`.
     SoftCrit,
+    /// tg `UNCONSCIOUS`: asleep or knocked out, no speech; only `EMOTE_CANUSE_UNCONSCIOUS`
+    /// emotes (a snore).
+    Unconscious,
     /// tg `HARD_CRIT`: unconscious, no speech.
     HardCrit,
     /// Dead bodies and ghosts: deadchat only.

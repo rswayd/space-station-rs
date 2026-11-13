@@ -478,7 +478,7 @@ pub fn blood_crawl(world: &mut World, mob: Entity) -> bool {
     }
     world.entity_mut(mob).remove::<crate::pull::Pulling>();
     crate::closets::put_mob_inside(world, victim, mob);
-    crate::mobs::defense::emote(world, victim, "кричит!");
+    crate::speech::run_emote(world, victim, "scream");
     let user = name_of(world, mob);
     show(
         world,

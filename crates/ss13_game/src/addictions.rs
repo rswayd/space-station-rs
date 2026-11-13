@@ -427,9 +427,7 @@ fn rng_prob(world: &mut World, percent: f32, secs: f32) -> bool {
 }
 
 fn emote(world: &mut World, mob: Entity, key: &str) {
-    if let Some(emote) = ss13_chat::emote::find(key) {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::speech::run_emote(world, mob, key);
 }
 
 /// `withdrawal_enters_stage_*` beyond the moodlet.

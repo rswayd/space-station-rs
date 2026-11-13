@@ -808,7 +808,7 @@ fn invoked(world: &mut World, client: Entity, mob: Entity, rune_entity: Entity) 
     rune.cheese += sacrifice_cheese(world, pos, rune.times_invoked);
     let word = rune.words[(rune.times_invoked as usize - 1).min(2)];
     if word.starts_with('*') {
-        crate::mobs::defense::emote(world, mob, "кричит!");
+        crate::speech::run_emote(world, mob, "scream");
     } else {
         say_invocation(world, mob, Invocation::Shout, word);
     }

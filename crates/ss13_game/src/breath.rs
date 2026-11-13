@@ -29,7 +29,7 @@ use ss13_shared::chat::{ChatChannel, ChatMessage, ChatSegment, Span};
 use ss13_tgui::server::{AppTguiExt, OpenUi, ServerUi, UiParams, UiReject, UiSystems};
 
 use crate::combat::CombatRng;
-use crate::health::{DEFAULT_MESSAGE_RANGE, DamageType, Health, HealthSystems, Stat, update_stat};
+use crate::health::{DamageType, Health, HealthSystems, Stat, update_stat};
 use crate::hud::{ALERT_CLICK, AlertHudData, AlertHudUi, HudAlert};
 use crate::internals::{
     Internals, STOPSPRESSUREDAMAGE, TankAir, can_breathe_internals, cutoff_message,
@@ -2090,9 +2090,6 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
         entity.insert(Internals(None));
     }
     let client = entity.get::<PlayerMob>().map(|p| p.client);
-    let name = entity
-        .get::<Name>()
-        .map_or_else(|| "Кто-то".to_owned(), |n| n.to_string());
     if cutoff && let (Some(client), Some(tank)) = (client, internal) {
         let tank = world
             .get::<ss13_mapload::DmName>(tank)
@@ -2102,14 +2099,7 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
     for event in events {
         let message = match event {
             LifeEvent::Emote(key) => {
-                let Some(emote) = ss13_chat::emote::find(key) else {
-                    continue;
-                };
-                let clients = clients_around(world, pos);
-                world.write_message(SendChat {
-                    clients,
-                    message: ss13_chat::server::emote_message(&name, emote.message),
-                });
+                crate::speech::run_emote(world, mob, key);
                 continue;
             }
             LifeEvent::Chat(span, text) => ChatMessage {
@@ -2215,11 +2205,6 @@ fn live(world: &mut World, mob: Entity, fired: u64, now: f64) {
             });
         }
     }
-}
-
-/// Clients whose mob is within `DEFAULT_MESSAGE_RANGE` of `pos` (tg `visible_message`).
-fn clients_around(world: &World, pos: TilePos) -> Vec<Entity> {
-    crate::obj_damage::clients_in_range(world, pos, DEFAULT_MESSAGE_RANGE, &[])
 }
 
 /// The owner's alert HUD follows its [`Alerts`].

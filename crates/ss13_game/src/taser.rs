@@ -152,7 +152,7 @@ pub fn tase(world: &mut World, p: &Projectile, target: Entity) {
     world.entity_mut(target).insert(tased);
     if first {
         crate::mood::add_event(world, target, "tased", &TASED_MOOD);
-        crate::mobs::defense::emote(world, target, "кричит!");
+        crate::speech::run_emote(world, target, "scream");
     }
     update_slowdown(world, target);
     update_slowdown(world, p.firer);

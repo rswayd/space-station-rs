@@ -515,7 +515,8 @@ mod server {
             let vulpkanin = emote_verbs(false, true, false);
             assert!(vulpkanin.contains(&"▷ Выть") && vulpkanin.contains(&"▷ Урчать"));
             // Verbs of emotes the port lacks are hidden.
-            assert!(!human.contains(&"▷ Храпеть"));
+            assert!(human.contains(&"▷ Храпеть"));
+            assert!(!human.contains(&"○ Потерять сознание"));
         }
 
         #[test]
@@ -524,9 +525,9 @@ mod server {
             assert_eq!(emote_of_verb(&human, "▷ Смеяться"), Some("laugh"));
             assert_eq!(emote_of_verb(&human, "▷ Мяукнуть"), None);
             assert_eq!(emote_of_verb(&human, "что угодно"), None);
-            // The tajaran's second "▷ Шипеть" is its own `hiss_t` (no carbon `hiss` yet).
+            // Two verbs of one name: the first shown wins (the carbon `hiss`, not `hiss_t`).
             let tajaran = emote_verbs(true, false, false);
-            assert_eq!(emote_of_verb(&tajaran, "▷ Шипеть"), Some("hiss_t"));
+            assert_eq!(emote_of_verb(&tajaran, "▷ Шипеть"), Some("hiss"));
         }
     }
 }

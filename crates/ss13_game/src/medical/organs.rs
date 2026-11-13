@@ -1218,9 +1218,7 @@ fn handle_liver(world: &mut World, mob: Entity, secs: f32) {
 
 /// `emote("cough")`.
 fn cough(world: &mut World, mob: Entity) {
-    if let Some(emote) = ss13_chat::emote::find("cough") {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::speech::run_emote(world, mob, "cough");
 }
 
 /// The ears' `TRAIT_DEAF` sources: no ears (`NO_EARS`), failing ears or temporary deafness

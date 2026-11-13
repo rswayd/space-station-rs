@@ -290,5 +290,6 @@ fn a_burger_is_cooked_from_what_lies_around() {
     let volume = s.get::<Reagents>(burger).0.total_volume;
     assert!((volume - 5.0).abs() < 0.01, "{volume}");
     assert!(s.try_get::<ss13_game::food::Handmade>(burger).is_some());
-    assert!(s.heard("Plain Burger: готово."));
+    // The line comes with the craft; the client may read it a tick after the burger.
+    s.run_until("the done line", |s| s.heard("Plain Burger: готово."));
 }

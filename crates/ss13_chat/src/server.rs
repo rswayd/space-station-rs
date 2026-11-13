@@ -984,7 +984,7 @@ fn handle_say(
         }
         // tg: an unconscious mob says nothing.
         // shortcut: no last words (a hard crit whisper that succumbs); add with `succumb`.
-        if message.is_empty() || stat >= SpeakerStat::HardCrit {
+        if message.is_empty() || stat >= SpeakerStat::Unconscious {
             continue;
         }
         let impediments = impediments.copied().unwrap_or_default();

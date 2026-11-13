@@ -343,6 +343,56 @@ pub const EMOTES: &[Emote] = &[
     ),
     emote("wave", "машет рукой.", 0),
     only(CARBON, emote("whistle", "свистит.", AUDIBLE)),
+    // `/datum/emote/living/carbon/crack` (tg also wants two usable hands).
+    Emote {
+        sounds: &["sound/mobs/humanoids/human/knuckle_crack/knuckles.ogg"],
+        cooldown: 6.0,
+        ..only(CARBON, emote("crack", "хрустит пальцами.", REQUIRE_HANDS))
+    },
+    // Sounds by mob type ([`human_sounds`]); an adult alien hisses with `SFX_HISS`.
+    Emote {
+        sounds: &["hiss"],
+        vary: true,
+        ..only(CARBON, emote("hiss", "шипит!", AUDIBLE))
+    },
+    only(CARBON, emote("moan", "стонет!", AUDIBLE)),
+    Emote {
+        vary: true,
+        ..emote("sniff", "шмыгает носом.", AUDIBLE)
+    },
+    emote("snore", "храпит.", UNCONSCIOUS | AUDIBLE),
+    only(
+        CARBON,
+        with_param(
+            "snap",
+            "щелкает пальцами.",
+            "щелкает пальцами в сторону %t.",
+            REQUIRE_HANDS | AUDIBLE,
+        ),
+    ),
+    // `/datum/emote/living/carbon/human/screech`: the scream's sound, 10 s between them
+    // (`manual_specific_emote_audio_cooldown`).
+    Emote {
+        cooldown: 10.0,
+        ..only(HUMAN, emote("screech", "визжит!", AUDIBLE))
+    },
+    // `/datum/emote/jump`: a hop (`jump_animation`, `ss13_game::speech`) with a thud; not
+    // `EMOTE_AUDIBLE`, so a mute jumps loudly too.
+    Emote {
+        sounds: &["sound/items/weapons/thudswoosh.ogg"],
+        ..emote("jump", "прыгает!", 0)
+    },
+    // `/datum/emote/living/moth/*`: `TRAIT_MOTH_EMOTES_ALLOWED` (a moth tongue).
+    Emote {
+        species: Some(EmoteSpecies::Moth),
+        sounds: &["sound/mobs/humanoids/moth/moth_chitter.ogg"],
+        ..only(HUMAN, emote("chitter", "стрекочет!", AUDIBLE))
+    },
+    Emote {
+        species: Some(EmoteSpecies::Moth),
+        sounds: &["sound/mobs/humanoids/moth/moth_squeak.ogg"],
+        ..only(HUMAN, emote("squeak", "пищит!", AUDIBLE))
+    },
     // `/datum/emote/living/carbon/circle`, `slap`, `shoesteal`: no message, the game puts the
     // hand gesture in a free hand (`ss13_game::devices::hand_items`, on `Emoted`).
     only(CARBON, emote("circle", "", REQUIRE_HANDS)),
@@ -789,7 +839,7 @@ const SCREAM_M: &[&str] = &[
 /// BandaStation `/obj/item/organ/tongue/<species>/emote_sounds`: the species tongue's sound
 /// for an emote key, which takes precedence over the emote's own (`EMOTE_SOUND_TONGUE`).
 // shortcut: by species, not by the tongue organ in the mouth (a transplanted tongue keeps the
-// species' sounds); `sniff`, `snore` and `hiss` are not in the emote table yet.
+// species' sounds).
 pub fn tongue_sounds(
     species: EmoteSpecies,
     female: bool,
@@ -945,10 +995,15 @@ pub fn human_sounds(female: bool, key: &str) -> Option<&'static [&'static str]> 
 /// tg `get_sound`: the tongue's, then a human's `sounds_by_mobtype` ([`human_sounds`]), then
 /// the emote's own (`sounds_by_mobtype` of `roar`: adults).
 fn sound_of(emote: &Emote, user: &EmoteUser) -> Option<EmoteSound> {
+    // `screech/get_sound` is the scream's.
+    let key = if emote.key == "screech" {
+        "scream"
+    } else {
+        emote.key
+    };
     let files = (user.mob == EmoteMob::Human)
         .then(|| {
-            tongue_sounds(user.species, user.female, emote.key)
-                .or_else(|| human_sounds(user.female, emote.key))
+            tongue_sounds(user.species, user.female, key).or_else(|| human_sounds(user.female, key))
         })
         .flatten()
         .or_else(|| {
@@ -1039,7 +1094,7 @@ pub fn run(
     }
     // `can_run_emote`; tg's warnings exist only in English.
     let refuse = |why: &str| EmoteOutcome::Refused(format!("You cannot {key} {why}!"));
-    if stat >= SpeakerStat::HardCrit && flags & UNCONSCIOUS == 0 {
+    if stat >= SpeakerStat::Unconscious && flags & UNCONSCIOUS == 0 {
         return refuse("while unconscious");
     }
     // Hands are blocked from soft crit on (`TRAIT_HANDS_BLOCKED`).

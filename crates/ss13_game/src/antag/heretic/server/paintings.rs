@@ -298,7 +298,7 @@ fn paintings_tick(world: &mut World, mut next_second: Local<f64>) {
                 until: t + CURSE_SECS,
                 next_tick: t + kind.tick_secs(),
             });
-            crate::mobs::defense::emote(world, viewer, "кричит!");
+            crate::speech::run_emote(world, viewer, "scream");
             chat_to(
                 world,
                 viewer,

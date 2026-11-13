@@ -86,7 +86,7 @@ fn send_seen(world: &mut World, actor: Entity, target: Entity, pos: TilePos, see
     }
 }
 
-pub(super) fn name_of(world: &World, e: Entity) -> String {
+pub(crate) fn name_of(world: &World, e: Entity) -> String {
     world
         .get::<Name>(e)
         .map(|n| n.as_str().to_owned())

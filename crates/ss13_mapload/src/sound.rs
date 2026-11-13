@@ -490,7 +490,9 @@ pub mod files {
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).
-    pub const GAME_CODE: [&str; 526] = [
+    pub const GAME_CODE: [&str; 528] = [
+        "sound/mobs/humanoids/human/knuckle_crack/knuckles.ogg",
+        "sound/mobs/humanoids/moth/moth_squeak.ogg",
         "modular_bandastation/emote_panel/audio/human/female/choke_female_1.ogg",
         "modular_bandastation/emote_panel/audio/human/female/choke_female_2.ogg",
         "modular_bandastation/emote_panel/audio/human/female/choke_female_3.ogg",

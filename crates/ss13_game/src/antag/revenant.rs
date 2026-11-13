@@ -1977,12 +1977,8 @@ pub fn revblight_act(
     };
     if !emotes.is_empty() {
         let key = emotes[rng.range(0, emotes.len() as u32 - 1) as usize];
-        if world.get::<Stat>(mob) == Some(&Stat::Conscious)
-            && let Some(emote) = ss13_chat::emote::find(key)
-        {
-            let text: &str = emote.message;
-            let text = text.to_owned();
-            crate::mobs::defense::emote(world, mob, &text);
+        if world.get::<Stat>(mob) == Some(&Stat::Conscious) {
+            crate::speech::run_emote(world, mob, key);
         }
     }
     if stage == 5 && !final_stage {

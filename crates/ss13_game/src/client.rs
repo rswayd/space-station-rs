@@ -49,6 +49,7 @@ impl Plugin for GameClientPlugin {
         app.add_plugins(crate::manufactorio_client::ManufactorioClientPlugin);
         app.add_plugins(crate::animation_client::AnimationClientPlugin);
         app.add_plugins(crate::balloon_client::BalloonClientPlugin);
+        app.add_plugins(crate::progressbar_client::plugin);
         app.add_plugins((
             crate::runechat_client::RunechatClientPlugin,
             crate::radial_client::RadialClientPlugin,

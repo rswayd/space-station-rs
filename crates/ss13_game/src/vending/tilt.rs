@@ -390,7 +390,7 @@ fn crush_living(world: &mut World, vendor: Entity, mob: Entity, damage: f32) {
         crate::medical::wounds::after_hit(world, mob, zone, hit);
     }
     crate::status_effects::apply(world, mob, Incap::Paralyze, PARALYZE_SECS);
-    crate::mobs::defense::emote(world, mob, "кричит!");
+    crate::speech::run_emote(world, mob, "scream");
     crate::sound::playsound(
         world,
         crate::sound::PlaySound::new(pos, BLOB_ATTACK, 40.0, true),

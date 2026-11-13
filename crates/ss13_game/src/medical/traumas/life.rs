@@ -296,9 +296,7 @@ pub(super) fn say_to(world: &mut World, mob: Entity, span: Span, text: impl Into
 }
 
 pub(super) fn emote(world: &mut World, mob: Entity, key: &str) {
-    if let Some(emote) = ss13_chat::emote::find(key) {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::speech::run_emote(world, mob, key);
 }
 
 pub(super) fn on_life(
@@ -506,7 +504,7 @@ pub(super) fn narcolepsy(
             .get::<crate::status_effects::StatusEffects>(mob)
             .is_some_and(|e| e.sleeping > 0.0);
         if rng.chance(50.0) && asleep {
-            crate::mobs::defense::emote(world, mob, "храпит.");
+            crate::speech::run_emote(world, mob, "snore");
         }
     }
 }

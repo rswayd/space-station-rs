@@ -199,9 +199,7 @@ fn pick<'a>(world: &mut World, list: &[&'a str]) -> &'a str {
 /// `emote(pick(keys))`; keys without a human emote here do nothing, as tg's unknown keys.
 fn emote(world: &mut World, mob: Entity, keys: &[&str]) {
     let key = pick(world, keys);
-    if let Some(emote) = ss13_chat::emote::find(key) {
-        crate::mobs::defense::emote(world, mob, emote.message);
-    }
+    crate::speech::run_emote(world, mob, key);
 }
 
 fn hurt(world: &mut World, mob: Entity, kind: DamageType, amount: f32) {

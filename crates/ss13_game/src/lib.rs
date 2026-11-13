@@ -580,6 +580,10 @@ pub mod power;
 #[cfg(feature = "client")]
 pub mod prediction;
 #[cfg(feature = "server")]
+pub mod progressbar;
+#[cfg(feature = "client")]
+pub mod progressbar_client;
+#[cfg(feature = "server")]
 pub mod projectile;
 #[cfg(feature = "server")]
 pub mod projectile_special;

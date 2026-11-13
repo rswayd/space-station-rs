@@ -176,6 +176,7 @@ impl Plugin for ToolsServerPlugin {
         app.add_plugins((
             crate::t_scanner::TScannerPlugin,
             crate::inducer::InducerPlugin,
+            crate::progressbar::plugin,
         ));
         // A welder lights or goes out.
         app.add_click_handler(ClickPhase::AttackSelf, 200, |w, c| {

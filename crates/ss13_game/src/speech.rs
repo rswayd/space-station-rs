@@ -1,6 +1,6 @@
 //! The mob's stat for speech (server): `ss13_chat` reads [`SpeakerStat`] to whisper from soft
 //! crit, silence hard crit, send the dead and ghosts to deadchat and check emotes. A mob knocked
-//! out by `Unconscious` or `Sleeping` (tg stat `UNCONSCIOUS`) speaks and emotes as in hard crit.
+//! out by `Unconscious` or `Sleeping` is [`SpeakerStat::Unconscious`] (tg stat `UNCONSCIOUS`).
 //!
 //! Emotes: the body's [`EmoteUser`] (its tg mob type, BandaStation species, physique and
 //! `TRAIT_SILICON_EMOTES_ALLOWED`) is kept here for `ss13_chat::emote`, and an emote that ran
@@ -41,6 +41,7 @@ impl Plugin for SpeechServerPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<Emoted>()
             .add_message::<PlaySound>()
+            .add_message::<ss13_net::animation::server::PlayAnimation>()
             .init_resource::<AiDisplayEmotion>()
             .init_resource::<SoundRng>()
             .add_message::<SpeechFiltered>()
@@ -223,6 +224,7 @@ fn emote_effects(
     mut rng: ResMut<SoundRng>,
     mut display: ResMut<AiDisplayEmotion>,
     mut sounds: MessageWriter<PlaySound>,
+    mut animations: MessageWriter<ss13_net::animation::server::PlayAnimation>,
     mut commands: Commands,
 ) {
     for emoted in emotes.read() {
@@ -240,6 +242,21 @@ fn emote_effects(
                     .ignore_walls(sound.ignore_walls),
             );
         }
+        // `/datum/emote/jump/jump_animation`: 4 px up over 0.1 s and back.
+        if emoted.key == "jump" {
+            use ss13_shared::animation::{Animation, AnimationStep, TransformAnimation};
+            let up = AnimationStep {
+                offset: [0.0, 4.0],
+                ..AnimationStep::rest(1.0)
+            };
+            animations.write(ss13_net::animation::server::PlayAnimation {
+                entity: user,
+                animation: Animation::Transform(TransformAnimation {
+                    steps: vec![up, AnimationStep::rest(1.0)],
+                    loops: 1,
+                }),
+            });
+        }
         if eyes.contains(emoted.speaker)
             && let Some(emotion) = ss13_chat::emote::ai_emotion(emoted.key)
         {
@@ -251,6 +268,83 @@ fn emote_effects(
             commands.entity(emoted.speaker).try_insert(SlimeMood(mood));
         }
     }
+}
+
+/// tg `mob.emote(key)` from code (`intentional = FALSE`): the same emote a player's `*key`
+/// runs, so it has its sound, its overhead text and the checks of `run_emote` (stat, mob type,
+/// muteness, a muzzle turning it into a noise), without the cooldowns (tg checks them only for
+/// intentional emotes). False when the mob cannot run it.
+pub fn run_emote(world: &mut World, mob: Entity, key: &str) -> bool {
+    use bevy::ecs::message::Messages;
+    use ss13_chat::emote::{AUDIBLE, EmoteOutcome, REQUIRE_HANDS};
+    use ss13_chat::server::{Overhead, OverheadKind};
+    let stat = world
+        .get::<SpeakerStat>(mob)
+        .copied()
+        .or_else(|| world.get::<Stat>(mob).map(|&s| speaker_stat(s)))
+        .unwrap_or_default();
+    let user = world.get::<EmoteUser>(mob).copied().unwrap_or_default();
+    let EmoteOutcome::Run { key, text, sound } =
+        ss13_chat::emote::run(key, stat, &user, |_, _| false)
+    else {
+        return false;
+    };
+    let Some(&pos) = world.get::<TilePos>(mob) else {
+        return false;
+    };
+    let flags = ss13_chat::emote::find(key).map_or(0, |e| e.flags);
+    let audible = flags & AUDIBLE != 0;
+    // `muffles_speech/emote_override`: an audible emote without hands is a noise.
+    let muffled = audible
+        && flags & REQUIRE_HANDS == 0
+        && world.get::<ss13_chat::speech::Muffled>(mob).is_some();
+    let silenced = world
+        .get::<ss13_chat::speech::Impediments>(mob)
+        .is_some_and(|i| i.mute)
+        || world.get::<ss13_chat::speech::Tongueless>(mob).is_some();
+    let text = if muffled {
+        let strength = ["сильный ", "слабый ", ""];
+        let pick = world.get_resource_or_init::<SoundRng>().0.range(0, 2) as usize;
+        format!("издаёт {}звук.", strength[pick])
+    } else {
+        text
+    };
+    if !text.is_empty() {
+        let name = crate::mobs::defense::name_of(world, mob);
+        let clients = crate::obj_damage::clients_in_range(
+            world,
+            pos,
+            crate::health::DEFAULT_MESSAGE_RANGE,
+            &[],
+        );
+        if world.contains_resource::<Messages<Overhead>>() {
+            for &client in &clients {
+                world.write_message(Overhead {
+                    client,
+                    speaker: mob,
+                    name: name.clone(),
+                    text: text.clone(),
+                    kind: OverheadKind::Emote,
+                });
+            }
+        }
+        world.write_message(ss13_net::chat::server::SendChat {
+            clients,
+            message: ss13_chat::server::emote_message(&name, &text),
+        });
+    }
+    if muffled {
+        return true;
+    }
+    let sound = sound.filter(|s| !(s.audible && silenced));
+    if world.contains_resource::<Messages<Emoted>>() {
+        world.write_message(Emoted {
+            speaker: mob,
+            key,
+            sound,
+        });
+    }
+    true
 }
 
 pub fn speaker_stat(stat: Stat) -> SpeakerStat {
@@ -277,8 +371,8 @@ fn sync_speaker_stat(
 ) {
     for (mob, &stat, traits, speaker) in &mut mobs {
         let mut wanted = speaker_stat(stat);
-        if traits.is_some_and(|t| t.knocked_out) && wanted < SpeakerStat::HardCrit {
-            wanted = SpeakerStat::HardCrit;
+        if traits.is_some_and(|t| t.knocked_out) && wanted < SpeakerStat::Unconscious {
+            wanted = SpeakerStat::Unconscious;
         }
         match speaker {
             Some(mut speaker) => {
@@ -419,5 +513,58 @@ mod tests {
             false,
         );
         assert_eq!((carp.mob, carp.female), (EmoteMob::Basic, false));
+    }
+
+    #[test]
+    fn a_scream_from_code_is_heard_and_makes_the_human_scream_sound() {
+        use bevy::ecs::message::Messages;
+        use ss13_net::chat::server::SendChat;
+
+        let mut world = World::new();
+        world.init_resource::<Messages<Emoted>>();
+        world.init_resource::<Messages<SendChat>>();
+        world.init_resource::<SoundRng>();
+        let mob = world
+            .spawn((
+                TilePos::new(1, 1, 1),
+                Stat::Conscious,
+                EmoteUser {
+                    female: true,
+                    ..default()
+                },
+            ))
+            .id();
+        assert!(run_emote(&mut world, mob, "scream"));
+        let emoted: Vec<Emoted> = world.resource_mut::<Messages<Emoted>>().drain().collect();
+        assert_eq!(emoted.len(), 1);
+        let sound = emoted[0].sound.expect("a scream has a sound");
+        assert!(sound.files.iter().all(|f| f.contains("femalescream")));
+        assert_eq!(
+            world.resource_mut::<Messages<SendChat>>().drain().count(),
+            1
+        );
+
+        // Mute: the line, no sound.
+        world
+            .entity_mut(mob)
+            .insert(ss13_chat::speech::Impediments {
+                mute: true,
+                ..default()
+            });
+        assert!(run_emote(&mut world, mob, "scream"));
+        let emoted: Vec<Emoted> = world.resource_mut::<Messages<Emoted>>().drain().collect();
+        assert_eq!(emoted[0].sound, None);
+
+        // Unconscious: no scream at all; a snore goes on.
+        world.entity_mut(mob).insert(Stat::HardCrit);
+        assert!(!run_emote(&mut world, mob, "scream"));
+        world.entity_mut(mob).insert(SpeakerStat::HardCrit);
+        assert!(
+            !run_emote(&mut world, mob, "snore"),
+            "hard crit is not asleep"
+        );
+        world.entity_mut(mob).insert(SpeakerStat::Unconscious);
+        assert!(run_emote(&mut world, mob, "snore"));
+        assert!(!run_emote(&mut world, mob, "scream"));
     }
 }

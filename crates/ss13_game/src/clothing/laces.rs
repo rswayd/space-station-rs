@@ -573,9 +573,7 @@ pub fn interrupted(world: &mut World, user: Entity, shoes: Entity, job: LaceJob)
         Span::BoldWarning,
         format!("Вы наступаете на руку {user_name}! Что за... Он пытался {doing} ваши {noun}!"),
     );
-    if let Some(emote) = ss13_chat::emote::find("scream") {
-        crate::mobs::defense::emote(world, user, emote.message);
-    }
+    crate::speech::run_emote(world, user, "scream");
     let arm = match world.get::<Inventory>(user).map(|i| i.active) {
         Some(0) => BodyZone::LArm,
         _ => BodyZone::RArm,

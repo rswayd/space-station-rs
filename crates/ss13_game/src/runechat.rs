@@ -96,7 +96,9 @@ fn send_overheads(world: &mut World, mut cursor: Local<MessageCursor<Overhead>>)
             continue;
         };
         // `IS_UNCONSCIOUS_AND_ALIVE`; an emote is seen, a blind mob sees none.
-        if world.get::<SpeakerStat>(body) == Some(&SpeakerStat::HardCrit)
+        if world
+            .get::<SpeakerStat>(body)
+            .is_some_and(|s| matches!(s, SpeakerStat::Unconscious | SpeakerStat::HardCrit))
             || (said.kind == OverheadKind::Emote && crate::vision::is_blind(world, body))
         {
             continue;
