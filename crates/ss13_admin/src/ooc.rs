@@ -441,6 +441,7 @@ fn looc_intent(world: &mut World, client: Entity, raw: &str, wall_pierce: bool) 
             name: name.clone(),
             text: text.clone(),
             kind: OverheadKind::Looc,
+            language: None,
         });
     }
 }

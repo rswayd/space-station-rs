@@ -1,20 +1,24 @@
 //! tg's runechat, server half (`/mob/proc/create_chat_message`, `code/datums/chatmessage.dm`): the
 //! say handler reports what each client heard ([`Overhead`]); here the hearer's state is checked,
 //! the text is clipped and colored by the speaker's name (`colorize_string`), and it goes to that
-//! client alone as [`Animation::Runechat`]. `crate::runechat_client` draws it.
+//! client alone as [`Animation::Runechat`] with its prefix icons: the radio's for words heard
+//! through a radio (over the speaker, never one's own), the emote's, then the language's as the
+//! hearer makes it out (`display_icon_type`). `crate::runechat_client` draws it, emphasis marks
+//! included (`apply_message_emphasis`).
 // shortcut: the `enable_runechat`, `see_chat_non_mob`, `see_rc_emotes` and `max_chat_length`
-// preferences need the preferences menu (`docs/parity/ui/preferences.md`); no language or radio
-// icon prefixes, no `apply_message_emphasis` (|i|, +b+, _u_), and radio messages have no bubble
-// over the speaker.
+// preferences need the preferences menu (`docs/parity/ui/preferences.md`). Radio bubbles stand
+// over the speaking mob (no `runechat_anchors` of radio-only speakers); emotes are colored by
+// the voice name, not the face name.
 
 use bevy::ecs::message::{MessageCursor, Messages};
 use bevy::prelude::*;
-use ss13_chat::language::ScrambleSeed;
+use ss13_chat::language::{self, LanguageHolder, LanguageId, LanguageTag, ScrambleSeed};
 use ss13_chat::server::{Overhead, OverheadKind, SaySystems};
 use ss13_chat::speech::SpeakerStat;
+use ss13_mapload::IconIndex;
 use ss13_net::animation::server::PlayAnimationFor;
 use ss13_net::server::ControlledEntity;
-use ss13_shared::animation::{Animation, MAX_RUNECHAT_CHARS, RunechatStyle};
+use ss13_shared::animation::{Animation, MAX_RUNECHAT_CHARS, RunechatIcon, RunechatStyle};
 
 /// `CM_COLOR_SAT_MIN`, `CM_COLOR_SAT_MAX`, `CM_COLOR_LUM_MIN`, `CM_COLOR_LUM_MAX`.
 const SAT_MIN: f32 = 0.6;
@@ -77,7 +81,49 @@ pub fn runechat_text(raw: &str) -> Option<String> {
     Some(cut)
 }
 
-/// Cost: per message heard, a few component reads per hearer.
+/// `'icons/ui/chat/chat_icons.dmi'`, and `'icons/ui/chat/language.dmi'` `"unknown"` drawn over
+/// a partly understood language's icon.
+const CHAT_ICONS: &str = "icons/ui/chat/chat_icons.dmi";
+const LANGUAGE_ICONS: &str = "icons/ui/chat/language.dmi";
+
+/// The prefix icons of a runechat (`generate_image`): radio or emote, then the language as
+/// heard with `understanding`. Icons the manifest lacks are left out.
+pub fn prefix_icons(
+    icons: Option<&IconIndex>,
+    kind: OverheadKind,
+    language: Option<(LanguageId, u8)>,
+) -> Vec<RunechatIcon> {
+    let Some(icons) = icons else {
+        return Vec::new();
+    };
+    let plain = |dmi: &str, state: &str| {
+        icons.get(dmi, state).map(|state| RunechatIcon {
+            state,
+            overlay: None,
+        })
+    };
+    let mut out = Vec::new();
+    match kind {
+        OverheadKind::Radio => out.extend(plain(CHAT_ICONS, "radio")),
+        OverheadKind::Emote => out.extend(plain(CHAT_ICONS, "emote")),
+        _ => {}
+    }
+    if let Some((l, understanding)) = language {
+        let (dmi, state) = l.icon();
+        let icon = match language::tag(l, understanding) {
+            LanguageTag::None => None,
+            LanguageTag::Full => plain(dmi, state),
+            LanguageTag::Partial => plain(dmi, state).map(|i| RunechatIcon {
+                overlay: icons.get(LANGUAGE_ICONS, "unknown"),
+                ..i
+            }),
+        };
+        out.extend(icon);
+    }
+    out
+}
+
+/// Cost: per message heard, a few component reads and icon lookups per hearer.
 fn send_overheads(world: &mut World, mut cursor: Local<MessageCursor<Overhead>>) {
     // Servers without chat (some test apps) have no say handler to report anything.
     if !world.contains_resource::<Messages<Overhead>>() {
@@ -109,6 +155,15 @@ fn send_overheads(world: &mut World, mut cursor: Local<MessageCursor<Overhead>>)
         let Some(entity) = crate::balloon::atom_on_turf(world, said.speaker) else {
             continue;
         };
+        // `translate_language`'s hearer: the dead understand everything.
+        let understanding = said.language.map(|l| {
+            let dead = world.get::<SpeakerStat>(body) == Some(&SpeakerStat::Dead);
+            (
+                l,
+                language::understanding(world.get::<LanguageHolder>(body), dead, l),
+            )
+        });
+        let icons = prefix_icons(world.get_resource::<IconIndex>(), said.kind, understanding);
         let italics = matches!(said.kind, OverheadKind::Whisper | OverheadKind::Emote);
         let style = RunechatStyle {
             italics,
@@ -121,7 +176,12 @@ fn send_overheads(world: &mut World, mut cursor: Local<MessageCursor<Overhead>>)
         world.write_message(PlayAnimationFor {
             client: said.client,
             entity,
-            animation: Animation::Runechat { text, color, style },
+            animation: Animation::Runechat {
+                text,
+                color,
+                style,
+                icons,
+            },
         });
     }
 }
@@ -146,6 +206,48 @@ mod tests {
             let lightness = (r.max(g).max(b) as f32 + r.min(g).min(b) as f32) / 510.0;
             assert!((0.6..=0.8).contains(&lightness), "{name}: {lightness}");
         }
+    }
+
+    #[test]
+    fn prefix_icons_follow_kind_and_understanding() {
+        use ss13_shared::IconStateId;
+        let index = IconIndex(
+            [
+                ((CHAT_ICONS, "radio"), 1),
+                ((CHAT_ICONS, "emote"), 2),
+                ((LANGUAGE_ICONS, "lizard"), 3),
+                ((LANGUAGE_ICONS, "unknown"), 4),
+                ((LANGUAGE_ICONS, "galcom"), 5),
+            ]
+            .into_iter()
+            .map(|((d, s), id)| ((d.to_owned(), s.to_owned()), IconStateId(id)))
+            .collect(),
+        );
+        let icon = |state: u32, overlay: Option<u32>| RunechatIcon {
+            state: IconStateId(state),
+            overlay: overlay.map(IconStateId),
+        };
+        let draconic = Some((LanguageId::Draconic, 0));
+        assert_eq!(
+            prefix_icons(Some(&index), OverheadKind::Radio, draconic),
+            [icon(1, None), icon(3, None)]
+        );
+        // Partly understood: the unknown mark over it.
+        assert_eq!(
+            prefix_icons(
+                Some(&index),
+                OverheadKind::Say,
+                Some((LanguageId::Draconic, 40))
+            ),
+            [icon(3, Some(4))]
+        );
+        // Galactic Common understood hides its icon (`LANGUAGE_HIDE_ICON_IF_UNDERSTOOD`).
+        let common = Some((LanguageId::Common, language::FULL));
+        assert_eq!(
+            prefix_icons(Some(&index), OverheadKind::Emote, common),
+            [icon(2, None)]
+        );
+        assert!(prefix_icons(None, OverheadKind::Radio, draconic).is_empty());
     }
 
     #[test]

@@ -1,10 +1,14 @@
 //! Speech-changing genetic mutations (tg `code/datums/mutations/speech.dm`, the
 //! `/datum/component/speechmod` of the Swedish, Chav, Elvis and Hulk mutations, the Medieval and
-//! Pig Latin `COMSIG_MOB_SAY` handlers), applied by `crate::server` where tg sends
-//! `COMSIG_MOB_SAY`. The game keeps [`Accents`] on the body (`ss13_game::genetics`).
+//! Pig Latin `COMSIG_MOB_SAY` handlers) and worn `speechmod`s (the French beret, the gondola and
+//! luchador masks, the Italian moustache, the crab hats), applied by `crate::server` where tg
+//! sends `COMSIG_MOB_SAY`. The game keeps [`Accents`] on the body (`ss13_game::genetics`,
+//! `ss13_game::speechmods`).
 // shortcut: `medieval_replacement.json` is ported in part (the common words, every starting).
 
 use bevy::prelude::*;
+
+mod tables;
 
 /// The Hulk's `speechmod` replacements.
 const HULK: Table = &[(".", &["!"])];
@@ -21,6 +25,16 @@ pub enum Accent {
     Hulk,
     /// `heckacious/handle_speech`; also `TREAT_CAPITALIZE_MESSAGE = FALSE` ([`no_capitalize`]).
     Heckacious,
+    /// `/obj/item/clothing/head/beret/frenchberet`'s speechmod.
+    French,
+    /// `/obj/item/clothing/mask/fakemoustache/italian`'s speechmod (BandaStation's Russian table).
+    Italian,
+    /// `/obj/item/clothing/mask/gondola`'s speechmod.
+    Spurdo,
+    /// `/obj/item/clothing/mask/luchador`'s speechmod: upper case, sometimes ` OLE!`.
+    Luchador,
+    /// The crab hats' speechmod (`crustacean_replacement.json`).
+    Crustacean,
 }
 
 /// `heckacious/handle_caps`: the message keeps its case.
@@ -491,6 +505,31 @@ impl Accent {
             // `COMPONENT_UPPERCASE_SPEECH`.
             Self::Hulk => speechmod(text, HULK, &["!!"], 100.0, roll).to_uppercase(),
             Self::Heckacious => heckacious(text, roll),
+            Self::French => speechmod(
+                text,
+                tables::FRENCH,
+                &[" Honh honh honh!", " Honh!", " Zut Alors!"],
+                3.0,
+                roll,
+            ),
+            Self::Italian => speechmod(
+                text,
+                tables::ITALIAN_RU,
+                &[
+                    " Равиоли, равиоли, подскажи мне формуоли!",
+                    " Мамма-мия!",
+                    " Мамма-мия! Какая острая фрикаделька!",
+                    " Ла ла ла ла ла фуникули+ фуникуля+!",
+                ],
+                3.0,
+                roll,
+            ),
+            Self::Spurdo => speechmod(text, tables::SPURDO, &[], 0.0, roll),
+            // `COMPONENT_UPPERCASE_SPEECH`.
+            Self::Luchador => {
+                speechmod(text, tables::LUCHADOR, &[" OLE!"], 25.0, roll).to_uppercase()
+            }
+            Self::Crustacean => speechmod(text, tables::CRUSTACEAN, &[], 0.0, roll),
         }
     }
 }
@@ -509,8 +548,8 @@ pub fn apply_all(accents: &[Accent], text: &str, mut roll: impl FnMut() -> f32) 
 /// `modify_speech`), kept on the body by the game (`ss13_game::medical::organs`). It is left out
 /// when the body speaks a language native to the tongue ([`TongueSpeech::native`],
 /// `should_modify_speech`).
-// shortcut: no zombie translation (`zombie_replacement.json`), alien hiss sound, bone or robot
-// voice spans; add them with their species.
+// shortcut: no bone or robot voice spans (`SPAN_SANS`, `SPAN_PAPYRUS`, `SPAN_ROBOT`: the chat has
+// no such fonts); add them with a span list on speech.
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TongueSpeech {
     /// `/obj/item/organ/tongue/lizard` (BandaStation: also Cyrillic `с` and `ч`).
@@ -525,6 +564,11 @@ pub enum TongueSpeech {
     Snail,
     /// `/obj/item/organ/tongue/rat` with BandaStation's `autohiss` greeting.
     Rat,
+    /// `/obj/item/organ/tongue/zombie`: known words become zombie words, the rest growls.
+    Zombie,
+    /// `/obj/item/organ/tongue/alien`: the words stay, the game plays a hiss
+    /// (`ss13_game::speechmods`).
+    Alien,
 }
 
 /// BandaStation's tajaran and vulpkanin `speech_replacements`.
@@ -608,13 +652,15 @@ fn word_start(text: &str, x: char, to: &str) -> String {
 impl TongueSpeech {
     /// The speech of a tongue organ type, `None` for a tongue that leaves it alone.
     pub fn of_path(path: &str) -> Option<Self> {
-        const TONGUES: [(&str, TongueSpeech); 6] = [
+        const TONGUES: [(&str, TongueSpeech); 8] = [
             ("/obj/item/organ/tongue/lizard", TongueSpeech::Lizard),
             ("/obj/item/organ/tongue/fly", TongueSpeech::Fly),
             ("/obj/item/organ/tongue/tajaran", TongueSpeech::Tajaran),
             ("/obj/item/organ/tongue/vulpkanin", TongueSpeech::Vulpkanin),
             ("/obj/item/organ/tongue/snail", TongueSpeech::Snail),
             ("/obj/item/organ/tongue/rat", TongueSpeech::Rat),
+            ("/obj/item/organ/tongue/zombie", TongueSpeech::Zombie),
+            ("/obj/item/organ/tongue/alien", TongueSpeech::Alien),
         ];
         TONGUES
             .into_iter()
@@ -633,7 +679,7 @@ impl TongueSpeech {
             Self::Fly => &[Buzzwords],
             Self::Tajaran => &[Siiktajr],
             Self::Vulpkanin => &[Canilunzt],
-            Self::Snail | Self::Rat => &[],
+            Self::Snail | Self::Rat | Self::Zombie | Self::Alien => &[],
         }
     }
 
@@ -683,8 +729,101 @@ impl TongueSpeech {
                     _ => text.to_owned(),
                 }
             }
+            Self::Zombie => zombie(text),
+            Self::Alien => text.to_owned(),
         }
     }
+}
+
+/// tg `plural_s`.
+fn plural_s(word: &str) -> &'static str {
+    if word.ends_with("ss") || word.ends_with("sh") || word.ends_with("ch") {
+        return "es";
+    }
+    if word.ends_with(['s', 'x', 'z']) {
+        "es"
+    } else {
+        "s"
+    }
+}
+
+/// `english_to_zombie[word]`: `add_word_to_translations` files every word with `plural_s`,
+/// `ing` and `ed` too, a later zombie word overwriting an earlier one.
+fn zombie_word(word: &str) -> Option<&'static str> {
+    tables::ZOMBIE.iter().rev().find_map(|&(zombie, english)| {
+        english
+            .iter()
+            .any(|&e| {
+                word.strip_prefix(e).is_some_and(|rest| {
+                    rest.is_empty() || rest == plural_s(e) || rest == "ing" || rest == "ed"
+                })
+            })
+            .then_some(zombie)
+    })
+}
+
+/// `/obj/item/organ/tongue/zombie/modify_speech`: a word the table knows becomes its zombie
+/// word; any other loses `eiou` to `r` and everything but `zhrgbmna.!?-` (so, as in
+/// BandaStation, an unknown Cyrillic word is gone), and words left empty go with their spaces.
+/// tg growls the whole message first and pairs the words back by index, which shifts the
+/// translations once a word vanishes; here each word is done in place.
+fn zombie(text: &str) -> String {
+    let words: Vec<String> = text
+        .split(' ')
+        .filter_map(|word| {
+            if let Some(zombie) = zombie_word(&word.to_lowercase()) {
+                return Some(zombie.to_owned());
+            }
+            let growl: String = word
+                .chars()
+                .map(|c| {
+                    if matches!(c.to_ascii_lowercase(), 'e' | 'i' | 'o' | 'u') {
+                        'r'
+                    } else {
+                        c
+                    }
+                })
+                .filter(|&c| {
+                    matches!(
+                        c.to_ascii_lowercase(),
+                        'z' | 'h' | 'r' | 'g' | 'b' | 'm' | 'n' | 'a' | '.' | '!' | '?' | '-'
+                    )
+                })
+                .collect();
+            (!growl.is_empty()).then(|| zombie_growl(&growl))
+        })
+        .collect();
+    ss13_shared::capitalize(&words.join(" "))
+}
+
+/// A word's `\lr\b` -> `rh`, then `\b[Aa]\b` -> `hra`.
+fn zombie_growl(word: &str) -> String {
+    let chars: Vec<char> = word.chars().collect();
+    let boundary_after = |i: usize| chars.get(i).is_none_or(|&c| !ascii_word(c));
+    let mut rh = Vec::with_capacity(chars.len() + 1);
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_lowercase() && chars.get(i + 1) == Some(&'r') && boundary_after(i + 2)
+        {
+            rh.extend(['r', 'h']);
+            i += 2;
+        } else {
+            rh.push(chars[i]);
+            i += 1;
+        }
+    }
+    let mut out = String::with_capacity(rh.len() + 2);
+    for (i, &c) in rh.iter().enumerate() {
+        let lone = matches!(c, 'a' | 'A')
+            && (i == 0 || !ascii_word(rh[i - 1]))
+            && rh.get(i + 1).is_none_or(|&n| !ascii_word(n));
+        if lone {
+            out.push_str("hra");
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -755,5 +894,41 @@ mod tests {
             "thef panty"
         );
         assert!(no_capitalize(&[Accent::Heckacious]));
+    }
+
+    #[test]
+    fn worn_speechmods_rewrite_speech() {
+        assert_eq!(
+            Accent::Luchador.apply("hello friend", &mut || 0.0),
+            "HOLA AMIGO OLE!"
+        );
+        assert_eq!(
+            Accent::Italian.apply("привет друг", &mut || 99.0),
+            "бонжорно амиго"
+        );
+        assert_eq!(Accent::Spurdo.apply("epic tick", &mut || 0.0), "ebin digg");
+        assert_eq!(
+            Accent::Crustacean.apply("no problem", &mut || 0.0),
+            "no prawnblem"
+        );
+    }
+
+    #[test]
+    fn zombies_translate_or_growl() {
+        let mut low = || 0.0;
+        let zombie = TongueSpeech::Zombie;
+        assert_eq!(zombie.apply("Helping hello", &mut low), "Hab hrh");
+        // Russian words of BandaStation's table; an unknown Cyrillic word is gone.
+        assert_eq!(
+            zombie.apply("Помогите табуретка мозги bor a", &mut low),
+            "Паамахиите маазгии brh hra"
+        );
+        assert_eq!(zombie.apply("табуретка", &mut low), "");
+        assert_eq!(zombie.apply("*scream", &mut low), "*scream");
+        assert_eq!(
+            TongueSpeech::of_path("/obj/item/organ/tongue/alien"),
+            Some(TongueSpeech::Alien)
+        );
+        assert_eq!(TongueSpeech::Alien.apply("Хсс", &mut low), "Хсс");
     }
 }

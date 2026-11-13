@@ -319,6 +319,8 @@ impl Plugin for GameServerPlugin {
         .add_plugins((
             crate::runechat::RunechatServerPlugin,
             crate::radial::RadialServerPlugin,
+            crate::language_manuals::LanguageManualsPlugin,
+            crate::speechmods::SpeechmodsPlugin,
         ))
         .add_plugins((
             crate::ssd::SsdPlugin,

@@ -138,6 +138,7 @@
 //! | 3377 | `science::bitrunning::disks::attack_self` (a bitrunning disk's program choice) |
 //! | 3387 | `clothing::laces::attack_self` (shoes in hand tied or untied) |
 //! | 3389 | `antag::voidwalker::use_skull` (the cosmic skull stared into) |
+//! | 3396 | `language_manuals` (a language manual read in hand) |
 //! | 4993 | `id_show::show` (an ID card shown to everyone around; after the cards with their own use) |
 //!
 //! [`ClickPhase::OtherHand`] (the other hand's item clicked; `held` is the active hand's):
@@ -393,6 +394,7 @@
 //! | 219 | `clothing::chameleon::scanner_click` (the chameleon scanner on a human, or a turf with one) |
 //! | 229 | `smoking::held_on_target` (lighters and matches on mobs, lighting someone's cigarette, smokables, matchboxes, vapes, dipping) |
 //! | 233 | `devices::hand_items::held_on_target` (the slapper on a mob or table, the stealing hand) |
+//! | 236 | `language_manuals` (a language manual on a living mob: the lesson or a smack) |
 //! | 237 | `modsuit` construction, paint, MODlink (MOD shell steps, core repairs, paint kit and skin applier; right click: recolor, multitool frequency; a cell into a scryer) |
 //! | 239 | `hookah::held_on` (coals, food, liquids, the mouthpiece and a flame on a hookah; the mouthpiece on oneself: a draw) |
 //! | 261 | `antag::nukeop::core_theft::held_on_target` (the nuclear bomb's deconstruction tools, cores and containers, a core and a container on each other) |

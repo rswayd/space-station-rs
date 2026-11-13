@@ -203,6 +203,9 @@ pub enum OverheadKind {
     Emote,
     /// BandaStation's `spans = list("looc")`.
     Looc,
+    /// Heard through a radio (tg's `virtual-speaker` class): over the speaker, with the radio
+    /// icon.
+    Radio,
 }
 
 /// One client's overhead text of what it heard or saw (tg `create_chat_message`): the words as
@@ -216,6 +219,8 @@ pub struct Overhead {
     pub name: String,
     pub text: String,
     pub kind: OverheadKind,
+    /// The language it was said in: the hearer sees its icon (`display_icon_type`).
+    pub language: Option<LanguageId>,
 }
 
 /// What one group of listeners hears of a message (tg `translate_language` per hearer): the
@@ -941,6 +946,7 @@ fn handle_say(
                                 name: name.clone(),
                                 text: text.clone(),
                                 kind: OverheadKind::Emote,
+                                language: None,
                             });
                         }
                         chat.write(SendChat {
@@ -1199,6 +1205,7 @@ fn handle_say(
                         name: name.clone(),
                         text: heard.text.clone(),
                         kind: OverheadKind::Say,
+                        language: spoken_in,
                     });
                 }
                 write_heard(
@@ -1228,6 +1235,7 @@ fn handle_say(
                     name: name.clone(),
                     text: heard.text.clone(),
                     kind: OverheadKind::Whisper,
+                    language: spoken_in,
                 });
             }
             write_heard(
@@ -1249,6 +1257,7 @@ fn handle_say(
                     name: name.clone(),
                     text: text.clone(),
                     kind: OverheadKind::Whisper,
+                    language: spoken_in,
                 });
             }
             chat.write(SendChat {

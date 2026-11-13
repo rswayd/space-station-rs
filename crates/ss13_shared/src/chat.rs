@@ -146,3 +146,125 @@ impl ChatMessage {
         self.segments.iter().map(|s| s.text.as_str()).collect()
     }
 }
+
+/// What a player's emphasis mark makes of the text between a pair of it (tg
+/// `GLOB.emphasis_types`: `|` italics, `+` bold, `_` underline, `^` small).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Emphasis {
+    Italic,
+    Bold,
+    Underline,
+    Small,
+}
+
+impl Emphasis {
+    fn of(mark: char) -> Option<Self> {
+        match mark {
+            '|' => Some(Self::Italic),
+            '+' => Some(Self::Bold),
+            '_' => Some(Self::Underline),
+            '^' => Some(Self::Small),
+            _ => None,
+        }
+    }
+}
+
+/// tg `apply_message_emphasis`: `(\\?(?:\||\+|_|\^))(.+?)\1` in one pass. A mark, some text
+/// (on one line) and the same mark again make an emphasized run; an escaped pair (`\|x\|`)
+/// leaves the marks in as plain text, unescaped. Marks inside a run stay as they are.
+pub fn emphasis_runs(text: &str) -> Vec<(Option<Emphasis>, String)> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut runs: Vec<(Option<Emphasis>, String)> = Vec::new();
+    let mut plain = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let escaped =
+            chars[i] == '\\' && chars.get(i + 1).is_some_and(|&c| Emphasis::of(c).is_some());
+        let open: &[char] = if escaped {
+            &chars[i..i + 2]
+        } else if Emphasis::of(chars[i]).is_some() {
+            &chars[i..i + 1]
+        } else {
+            plain.push(chars[i]);
+            i += 1;
+            continue;
+        };
+        let body_from = i + open.len();
+        // `.+?`: at least one character, no line break, up to the first closing mark.
+        let close = (body_from + 1..=chars.len().saturating_sub(open.len()))
+            .take_while(|&j| chars[j - 1] != '\n')
+            .find(|&j| chars[j..].starts_with(open));
+        let Some(close) = close else {
+            plain.push(chars[i]);
+            i += 1;
+            continue;
+        };
+        let body: String = chars[body_from..close].iter().collect();
+        if escaped {
+            let mark = open[1];
+            plain.push(mark);
+            plain.push_str(&body);
+            plain.push(mark);
+        } else {
+            if !plain.is_empty() {
+                runs.push((None, std::mem::take(&mut plain)));
+            }
+            runs.push((Emphasis::of(open[0]), body));
+        }
+        i = close + open.len();
+    }
+    if !plain.is_empty() {
+        runs.push((None, plain));
+    }
+    runs
+}
+
+#[cfg(test)]
+mod emphasis_tests {
+    use super::*;
+
+    fn runs(text: &str) -> Vec<(Option<Emphasis>, &str)> {
+        // Leaked for the comparison's lifetimes; a test only.
+        emphasis_runs(text)
+            .into_iter()
+            .map(|(e, t)| (e, &*Box::leak(t.into_boxed_str())))
+            .collect()
+    }
+
+    /// tg `code/modules/unit_tests/say.dm` `emphasis_characters`.
+    #[test]
+    fn emphasis_follows_tg() {
+        assert_eq!(runs("Blah Blah Blah"), [(None, "Blah Blah Blah")]);
+        assert_eq!(
+            runs("Blah |Blah| Blah"),
+            [
+                (None, "Blah "),
+                (Some(Emphasis::Italic), "Blah"),
+                (None, " Blah")
+            ]
+        );
+        assert_eq!(
+            runs("+Blah+ _Blah_"),
+            [
+                (Some(Emphasis::Bold), "Blah"),
+                (None, " "),
+                (Some(Emphasis::Underline), "Blah")
+            ]
+        );
+        // Escaped pairs stay, unescaped; a lone or empty pair is plain text.
+        assert_eq!(runs(r"Blah \|Blah\| Blah"), [(None, "Blah |Blah| Blah")]);
+        assert_eq!(runs("a | b"), [(None, "a | b")]);
+        assert_eq!(
+            runs("Blah + Blah = Blah :)"),
+            [(None, "Blah + Blah = Blah :)")]
+        );
+        assert_eq!(
+            runs(r"\|Blah\| \+Blah\+ Blah"),
+            [(None, "|Blah| +Blah+ Blah")]
+        );
+        assert_eq!(runs("||"), [(None, "||")]);
+        // One pass: marks inside a run are left alone.
+        assert_eq!(runs("|a _b_ c|"), [(Some(Emphasis::Italic), "a _b_ c")]);
+        assert_eq!(runs("^тихо^"), [(Some(Emphasis::Small), "тихо")]);
+    }
+}
