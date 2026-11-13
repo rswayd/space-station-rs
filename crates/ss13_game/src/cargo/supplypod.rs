@@ -10,9 +10,10 @@
 //! - [`launch_stray`]: the Stray Cargo Pod event's plain pod (`/obj/structure/closet/supplypod`,
 //!   not bluespace): it explodes on landing (BandaStation `explosionSize = list(1,2,3,3)`,
 //!   before the cargo is out, as tg's `PREVENT_CONTENTS_EXPLOSION_1`) and stays on its tile.
-// shortcut: the landing zone marker, the falling animation, sounds and pod styles are not shown
-// (the pod is the portal sprite when the assets have it, else the prototype's look); no reverse
-// pods, admin pod launcher or mobs in pods.
+// shortcut: the landing zone marker, the falling animation and pod styles are not shown (the pod
+// is the portal sprite when the assets have it, else the prototype's look); no syndicate portal
+// (`teleporter/syndicate`, uplink bundles and battle royale), reverse pods, admin pod launcher or
+// mobs in pods.
 
 use bevy::prelude::*;
 use ss13_mapload::IconIndex;
@@ -27,6 +28,12 @@ pub const OPENING_SECS: f64 = 3.0;
 pub const LEAVING_SECS: f64 = 3.0;
 /// The teleporter pod's look (`set_style`).
 const PORTAL: (&str, &str) = ("icons/obj/anomaly.dmi", "portal");
+/// The teleporter pod's `landingSound`, `openingSound`, `leavingSound`.
+const SFX_PORTAL_CREATED: &str = "portal_created";
+const SFX_PORTAL_ENTER: &str = "portal_enter";
+const SFX_PORTAL_CLOSE: &str = "portal_closed";
+/// `soundVolume`.
+const SOUND_VOLUME: f32 = 80.0;
 
 /// What a pod brings.
 #[derive(Clone, Debug, PartialEq)]
@@ -121,13 +128,16 @@ fn tick(world: &mut World) {
                 );
             }
             pod.pod = land(world, pod.pos, !pod.stray);
+            portal_sound(world, &pod, SFX_PORTAL_CREATED);
         }
         if since >= OPENING_SECS
             && let Some(cargo) = pod.cargo.take()
         {
+            portal_sound(world, &pod, SFX_PORTAL_ENTER);
             open(world, pod.pos, cargo);
         }
         if since >= OPENING_SECS + LEAVING_SECS {
+            portal_sound(world, &pod, SFX_PORTAL_CLOSE);
             // Not bluespace: the stray pod stays.
             if let Some(e) = pod.pod.take().filter(|_| !pod.stray)
                 && world.get_entity(e).is_ok()
@@ -141,6 +151,17 @@ fn tick(world: &mut World) {
     }
     // Pods launched while these were handled are already in the resource.
     world.resource_mut::<SupplyPods>().0.extend(kept);
+}
+
+/// The teleporter pod's sound on its tile (`playsound(turf, sound, soundVolume, FALSE, FALSE)`);
+/// the stray pod has none.
+fn portal_sound(world: &mut World, pod: &Pod, sound: &str) {
+    if !pod.stray {
+        crate::sound::playsound(
+            world,
+            crate::sound::PlaySound::new(pod.pos, sound, SOUND_VOLUME, false),
+        );
+    }
 }
 
 /// `pre_open`: the pod on its tile.

@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use bevy::prelude::*;
 use ss13_mapload::cargo::{CargoData as PackData, MANIFEST_PAPER, SupplyPackDef, order_flags};
 use ss13_mapload::dock::{map_shuttle, shuttle_template_path};
-use ss13_mapload::spawner::Rng;
+use ss13_mapload::spawner::{DmSpawner, Rng, pick};
 use ss13_mapload::{
     DmAtom, DmCloset, DmItem, DmName, DmObj, IconIndex, MapLoadPlugin, MapSeed, ShuttleTemplates,
     Template, Turf,
@@ -853,16 +853,21 @@ pub fn generate_pack(
     let mut contents: Vec<String> = Vec::new();
     // A materials market order holds full stacks of its sheets (`custom/minerals/fill`).
     let sheets = pack.id == super::materials_market::MATERIALS_ORDER;
+    let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
+    let mut rng = Rng::new(seed ^ crate_entity.to_bits());
     for (path, amount) in &pack.contains {
-        let stacks: Vec<Option<u32>> = if sheets {
+        let stacks: Vec<(String, Option<u32>)> = if sheets {
             super::materials_market::stack_sizes(*amount)
                 .into_iter()
-                .map(Some)
+                .map(|n| (path.clone(), Some(n)))
                 .collect()
         } else {
-            vec![None; *amount as usize]
+            (0..*amount)
+                .flat_map(|_| loot_of(world.resource::<SupplyPacks>(), path, &mut rng))
+                .map(|leaf| (leaf, None))
+                .collect()
         };
-        for stack in stacks {
+        for (path, stack) in &stacks {
             let Some(item) = spawn_template(world, path, None) else {
                 continue;
             };
@@ -870,7 +875,7 @@ pub fn generate_pack(
                 .entity_mut(item)
                 .insert((Networked, StoredIn(crate_entity)));
             crate::storage::finish_item(world, item, 1);
-            if let Some(amount) = stack {
+            if let Some(amount) = *stack {
                 world
                     .entity_mut(item)
                     .insert(crate::tools::Stack { amount });
@@ -965,26 +970,32 @@ fn pack_goodies(world: &mut World, buyer: u32, pos: TilePos, orders: &[SupplyOrd
     let mut ids = String::new();
     let mut cost = 0.0;
     let mut contents: Vec<String> = Vec::new();
+    let seed = world.get_resource::<MapSeed>().map_or(0, |s| s.0);
+    let mut rng = Rng::new(seed ^ container.to_bits());
     for order in orders {
         let pack = world.resource::<SupplyPacks>().packs[order.pack].clone();
         ids.push_str(&format!("#{} ", order.id));
         cost += pack.cost;
-        for (path, amount) in &pack.contains {
-            for _ in 0..*amount {
-                let Some(item) = spawn_template(world, path, None) else {
-                    continue;
-                };
+        let leaves: Vec<String> = pack
+            .contains
+            .iter()
+            .flat_map(|(path, amount)| (0..*amount).map(move |_| path))
+            .flat_map(|path| loot_of(world.resource::<SupplyPacks>(), path, &mut rng))
+            .collect();
+        for path in &leaves {
+            let Some(item) = spawn_template(world, path, None) else {
+                continue;
+            };
+            world
+                .entity_mut(item)
+                .insert((Networked, StoredIn(container)));
+            crate::storage::finish_item(world, item, 1);
+            contents.push(
                 world
-                    .entity_mut(item)
-                    .insert((Networked, StoredIn(container)));
-                crate::storage::finish_item(world, item, 1);
-                contents.push(
-                    world
-                        .get::<DmName>(item)
-                        .map(|n| n.name.clone())
-                        .unwrap_or_else(|| path.clone()),
-                );
-            }
+                    .get::<DmName>(item)
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| path.clone()),
+            );
         }
     }
     if let Some(paper) = spawn_template(world, MANIFEST_PAPER, None) {
@@ -1031,6 +1042,65 @@ pub(crate) fn spawn_template(
             Some(packs.templates.get(path)?.spawn(world, pos))
         })
         .flatten()
+}
+
+/// Nested spawners deeper than this give nothing.
+const MAX_LOOT_DEPTH: u32 = 8;
+
+/// What `path` makes: itself, or a spawner's loot rolled as at map load (`spawn_loot`); a
+/// spawner put in a crate or a letter drops its loot there.
+pub(crate) fn loot_of(packs: &SupplyPacks, path: &str, rng: &mut Rng) -> Vec<String> {
+    let mut out = Vec::new();
+    loot(packs, path, rng, 0, &mut out);
+    out
+}
+
+fn loot(packs: &SupplyPacks, path: &str, rng: &mut Rng, depth: u32, out: &mut Vec<String>) {
+    let spawner = packs
+        .templates
+        .get(path)
+        .and_then(|t| t.proto.get::<DmSpawner>())
+        .cloned();
+    let Some(s) = spawner else {
+        out.push(path.to_owned());
+        return;
+    };
+    if depth > MAX_LOOT_DEPTH || !s.unresolved.is_empty() {
+        return;
+    }
+    if !s.random {
+        for e in s
+            .loot
+            .iter()
+            .filter(|e| !e.path.is_empty() && e.parent.is_none())
+        {
+            loot(packs, &e.path, rng, depth + 1, out);
+        }
+        return;
+    }
+    if !rng.prob(s.chance) {
+        return;
+    }
+    let count = if s.all {
+        s.loot.len()
+    } else {
+        s.count as usize
+    };
+    let mut pool: Vec<usize> = (0..s.loot.len())
+        .filter(|&i| s.loot[i].parent.is_none())
+        .collect();
+    for _ in 0..count {
+        if pool.is_empty() {
+            break;
+        }
+        let Some((top, leaf)) = pick(&s.loot, &pool, rng) else {
+            continue;
+        };
+        if !s.double {
+            pool.remove(top);
+        }
+        loot(packs, &s.loot[leaf].path, rng, depth + 1, out);
+    }
 }
 
 /// Unanchored things a sale takes: items and structures, not mobs, turfs or ports.

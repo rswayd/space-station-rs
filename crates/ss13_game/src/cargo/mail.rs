@@ -26,7 +26,7 @@
 
 use bevy::prelude::*;
 use ss13_mapload::cargo::{JUNK_MAIL, MAIL, MAIL_BAG, MAIL_CRATE, MAIL_ENVELOPE};
-use ss13_mapload::spawner::{DmSpawner, Rng, pick};
+use ss13_mapload::spawner::Rng;
 use ss13_mapload::{DmCloset, DmItem, DmName, MapSeed};
 use ss13_net::server::Networked;
 use ss13_shared::TilePos;
@@ -49,8 +49,6 @@ const TICKS_PER_MAIL: u64 = 2;
 const LETTER_ODDS: f32 = 70.0;
 /// `unwrap`: 1.5 s.
 const UNWRAP_DELAY_DS: f32 = 15.0;
-/// Nested spawners deeper than this give nothing.
-const MAX_LOOT_DEPTH: u32 = 8;
 
 /// tg `department_colors` (`COLOR_*`), by `paycheck_department`.
 const DEPARTMENT_COLORS: [(&str, [u8; 4]); 7] = [
@@ -337,63 +335,15 @@ fn pick_weight(world: &mut World, list: &[(String, u32)]) -> Option<String> {
     None
 }
 
-/// What `path` makes: itself, or a spawner's loot (`spawn_loot`, as at map load).
+/// What `path` makes: itself, or a spawner's loot.
 fn loot_of(world: &mut World, path: &str) -> Vec<String> {
     let mut out = Vec::new();
     world.resource_scope(|world, mut state: Mut<MailState>| {
         if let Some(packs) = world.get_resource::<SupplyPacks>() {
-            loot(packs, path, &mut state.rng, 0, &mut out);
+            out = super::supply::loot_of(packs, path, &mut state.rng);
         }
     });
     out
-}
-
-fn loot(packs: &SupplyPacks, path: &str, rng: &mut Rng, depth: u32, out: &mut Vec<String>) {
-    let spawner = packs
-        .templates
-        .get(path)
-        .and_then(|t| t.proto.get::<DmSpawner>())
-        .cloned();
-    let Some(s) = spawner else {
-        out.push(path.to_owned());
-        return;
-    };
-    if depth > MAX_LOOT_DEPTH || !s.unresolved.is_empty() {
-        return;
-    }
-    if !s.random {
-        for e in s
-            .loot
-            .iter()
-            .filter(|e| !e.path.is_empty() && e.parent.is_none())
-        {
-            loot(packs, &e.path, rng, depth + 1, out);
-        }
-        return;
-    }
-    if !rng.prob(s.chance) {
-        return;
-    }
-    let count = if s.all {
-        s.loot.len()
-    } else {
-        s.count as usize
-    };
-    let mut pool: Vec<usize> = (0..s.loot.len())
-        .filter(|&i| s.loot[i].parent.is_none())
-        .collect();
-    for _ in 0..count {
-        if pool.is_empty() {
-            break;
-        }
-        let Some((top, leaf)) = pick(&s.loot, &pool, rng) else {
-            continue;
-        };
-        if !s.double {
-            pool.remove(top);
-        }
-        loot(packs, &s.loot[leaf].path, rng, depth + 1, out);
-    }
 }
 
 /// An item of `path` inside `mail` (non-items are not put in letters here).

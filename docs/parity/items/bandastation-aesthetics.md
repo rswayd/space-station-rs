@@ -53,4 +53,4 @@
 Поды доставки в стиле телепорта: портал вместо капсулы, без взрыва и дыма при посадке; используются маяками выбора и королевской битвой.
 
 - **Код:** [`/obj/structure/closet/supplypod/teleporter`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/modular_bandastation/aesthetics/supply_pods/code/supply_pods.dm#L1)
-- **Статус в ss13-rs:** ❌ нет — подов нет (см. ../cargo/)
+- **Статус в ss13-rs:** ✅ есть — `crates/ss13_game/src/cargo/supplypod.rs`: каждая доставка подом (экспресс-консоль, маяки выбора, чёрный рынок, шахтёрская консоль) — телепорт-под: спрайт `portal` из `icons/obj/anomaly.dmi`, без взрыва, дыма и смещения, звуки `portal_created`/`portal_enter`/`portal_closed` (громкость 80) при посадке, открытии и уходе, затем исчезает (`bluespace`); нет синдикатского портала `portal1` (`teleporter/syndicate`: аплинк-наборы, королевская битва, цели — их группы), анимации падения
