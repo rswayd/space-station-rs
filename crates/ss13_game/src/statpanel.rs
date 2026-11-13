@@ -514,9 +514,9 @@ mod server {
             assert!(tajaran.contains(&"▷ Мяукнуть"));
             let vulpkanin = emote_verbs(false, true, false);
             assert!(vulpkanin.contains(&"▷ Выть") && vulpkanin.contains(&"▷ Урчать"));
-            // Verbs of emotes the port lacks are hidden.
-            assert!(human.contains(&"▷ Храпеть"));
-            assert!(!human.contains(&"○ Потерять сознание"));
+            // Verbs of emotes the port lacks are hidden (`wing`: no wing organs).
+            assert!(human.contains(&"▷ Храпеть") && human.contains(&"○ Потерять сознание"));
+            assert!(!emote_verbs(false, false, true).contains(&"○ Расправить крылья"));
         }
 
         #[test]

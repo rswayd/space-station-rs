@@ -71,11 +71,31 @@ pub const LIVING: u16 = ANY & !EmoteMob::Brain.bit();
 /// `isanimal_or_basicmob`.
 const ANIMAL: u16 = EmoteMob::Slime.bit() | EmoteMob::Basic.bit() | EmoteMob::Gorilla.bit();
 
+/// What a body has that some emotes need ([`Emote::needs`], [`EmoteUser::has`]).
+/// `ORGAN_SLOT_EYES` (`blink`, `blink_r`).
+pub const HAS_EYES: u16 = 1;
+/// `ORGAN_SLOT_TONGUE` (`tongue`).
+pub const HAS_TONGUE: u16 = 2;
+/// `/obj/item/clothing/glasses/regular` or `sunglasses` in the eye slot (`glasses`).
+pub const HAS_GLASSES: u16 = 4;
+/// `/datum/status_effect/grouped/bodypart_effect/ethereal_glow` (`glow`, `flare`, `flicker`).
+pub const HAS_GLOW: u16 = 8;
+/// `TRAIT_CAT_EMOTES_ALLOWED` (`meow`, `purr`).
+pub const HAS_CAT: u16 = 16;
+/// `TRAIT_SIMIAN` (the monkey `gnarl`, `roll`, `scratch`, `sign`).
+pub const HAS_SIMIAN: u16 = 32;
+/// `TRAIT_LESSER_HUMANOID` (`message_monkey`).
+pub const HAS_LESSER: u16 = 64;
+/// What a body without an [`EmoteUser`] has: a human's eyes and tongue.
+pub const DEFAULT_HAS: u16 = HAS_EYES | HAS_TONGUE;
+
 /// The BandaStation species whose emotes or tongue sounds differ (`species_type_whitelist`,
-/// `/obj/item/organ/tongue/<species>/emote_sounds`), subtypes included.
+/// `/obj/item/organ/tongue/<species>/emote_sounds`, `get_evil_laugh_sound`), subtypes included.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum EmoteSpecies {
+    /// `/datum/species/human` itself.
     #[default]
+    Human,
     Other,
     Vulpkanin,
     Tajaran,
@@ -88,8 +108,8 @@ pub enum EmoteSpecies {
     Jelly,
 }
 
-/// On a body: who runs its emotes, kept by the game. Absent = a human of no listed species.
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// On a body: who runs its emotes, kept by the game. Absent = a human with eyes and a tongue.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EmoteUser {
     pub mob: EmoteMob,
     pub species: EmoteSpecies,
@@ -103,6 +123,26 @@ pub struct EmoteUser {
     pub in_processor: bool,
     /// A tail with `WAG_ABLE` (`ORGAN_SLOT_EXTERNAL_TAIL`): whether it is wagging.
     pub tail: Option<bool>,
+    /// `HAS_*` bits.
+    pub has: u16,
+    /// `TRAIT_MIMING` (`message_mime`).
+    pub mime: bool,
+}
+
+impl Default for EmoteUser {
+    fn default() -> Self {
+        Self {
+            mob: EmoteMob::Human,
+            species: EmoteSpecies::Human,
+            female: false,
+            silicon_emotes: false,
+            robotic: false,
+            in_processor: false,
+            tail: None,
+            has: DEFAULT_HAS,
+            mime: false,
+        }
+    }
 }
 
 /// The sound an emote makes: one of `files` (files or SFX keys) is played.
@@ -124,7 +164,13 @@ pub struct Emote {
     pub message: &'static str,
     /// `message_param`, `%t` is the parameter.
     pub message_param: Option<&'static str>,
+    /// `message_mime`: what a mime under the vow shows instead of `message`.
+    pub message_mime: &'static str,
+    /// `message_monkey` (`TRAIT_LESSER_HUMANOID`).
+    pub message_monkey: &'static str,
     pub flags: u8,
+    /// `HAS_*` bits the body must have (`trait_required`, `can_run_emote` overrides).
+    pub needs: u16,
     /// `mob_type_allowed_typecache` without `mob_type_blacklist_typecache`, [`EmoteMob`] bits.
     pub mobs: u16,
     /// `trait_required = TRAIT_SILICON_EMOTES_ALLOWED`.
@@ -148,7 +194,10 @@ const BASE: Emote = Emote {
     key: "",
     message: "",
     message_param: None,
+    message_mime: "",
+    message_monkey: "",
     flags: 0,
+    needs: 0,
     mobs: LIVING,
     silicon: false,
     species: None,
@@ -191,6 +240,19 @@ const fn with_param(
 /// The emote limited to these mobs.
 const fn only(mobs: u16, base: Emote) -> Emote {
     Emote { mobs, ..base }
+}
+
+/// The emote with its `message_mime`.
+const fn mimed(message_mime: &'static str, base: Emote) -> Emote {
+    Emote {
+        message_mime,
+        ..base
+    }
+}
+
+/// The emote only for bodies with these `HAS_*` bits.
+const fn needing(needs: u16, base: Emote) -> Emote {
+    Emote { needs, ..base }
 }
 
 /// `/datum/emote/silicon`: any mob with `TRAIT_SILICON_EMOTES_ALLOWED`, audible.
@@ -272,25 +334,43 @@ macro_rules! bp {
     };
 }
 
-/// The emote table, in tg's `GLOB.emote_list` order where keys repeat.
-// shortcut: the common emotes carry no sounds, overlays, mime variants or `taunt`/`collapse`
-// effects ("Эмоции живых и людей"); species tongues give theirs ([`tongue_sounds`]).
+/// The emote table, in tg's `GLOB.emote_list` order where keys repeat. The game makes the
+/// effects of `run_emote` overrides on [`crate::server::Emoted`] (`ss13_game::speech`).
+// shortcut: no emote overlays (`tongue`, `blush`, `cry`, `sigh`, `glasses` visuals): the port has
+// no timed bodypart overlays yet ("Эмоции живых и людей").
 pub const EMOTES: &[Emote] = &[
     with_param("bow", "кланяется.", "кланяется %t.", REQUIRE_HANDS),
     emote("blush", "краснеет.", 0),
-    emote("choke", "давится!", 0),
-    emote("chuckle", "усмехается.", 0),
+    mimed("бесшумно давится!", emote("choke", "давится!", AUDIBLE)),
+    mimed(
+        "изображает смешок.",
+        emote("chuckle", "усмехается.", AUDIBLE),
+    ),
     only(CARBON, emote("clap", "хлопает.", REQUIRE_HANDS)),
-    emote("cough", "кашляет!", AUDIBLE),
+    mimed(
+        "изображает преувеличенный кашель!",
+        emote("cough", "кашляет!", AUDIBLE),
+    ),
     emote("cross", "скрещивает свои руки.", REQUIRE_HANDS),
-    only(CARBON, emote("cry", "плачет.", SOFTCRIT | AUDIBLE)),
-    emote("dance", "радостно танцует.", REQUIRE_HANDS),
+    only(
+        CARBON,
+        mimed(
+            "бесшумно плачет.",
+            emote("cry", "плачет.", SOFTCRIT | AUDIBLE),
+        ),
+    ),
+    // BandaStation: 5 s, the dancer spins and jitters.
+    Emote {
+        cooldown: 5.0,
+        ..emote("dance", "радостно танцует.", REQUIRE_HANDS)
+    },
     Emote {
         message_robot: "на мгновение вздрагивает и замирает, глаза медленно темнеют.",
         message_ai: "скрипит, экран мерцает, пока системы медленно выключаются.",
         message_alien: "издает ослабевающий гортанный крик и падает на пол...",
         message_larva: "с тошнотворным шипением выдыхает воздух и падает на пол...",
         message_animal: "перестает двигаться...",
+        message_monkey: "издает слабый визг, когда рушится и перестает двигаться...",
         vary: true,
         volume: 200.0,
         ignore_walls: true,
@@ -302,30 +382,46 @@ pub const EMOTES: &[Emote] = &[
     },
     only(HUMAN, emote("eyebrow", "приподнимает бровь.", 0)),
     emote("frown", "хмурится.", 0),
-    emote(
-        "gasp",
-        "задыхается!",
-        SOFTCRIT | HARDCRIT | UNCONSCIOUS | AUDIBLE,
+    mimed(
+        "бесшумно задыхается!",
+        emote(
+            "gasp",
+            "задыхается!",
+            SOFTCRIT | HARDCRIT | UNCONSCIOUS | AUDIBLE,
+        ),
     ),
-    emote("giggle", "хихикает.", AUDIBLE),
+    mimed("бесшумно хихикает!", emote("giggle", "хихикает.", AUDIBLE)),
     emote("grin", "ухмыляется.", 0),
-    emote("groan", "болезненно стонет!", AUDIBLE),
-    emote("laugh", "смеется.", AUDIBLE),
-    with_param("nod", "кивает.", "кивает %t.", 0),
-    only(
-        HUMAN,
-        with_param("salute", "салютует.", "салютует %t.", REQUIRE_HANDS),
+    mimed(
+        "изображает болезненный стон!",
+        emote("groan", "болезненно стонет!", AUDIBLE),
     ),
-    emote("scream", "кричит!", AUDIBLE),
+    mimed("бесшумно смеется!", emote("laugh", "смеется.", AUDIBLE)),
+    with_param("nod", "кивает.", "кивает %t.", 0),
+    // Not `EMOTE_AUDIBLE`: a mute's salute clicks too.
+    Emote {
+        sounds: &["sound/mobs/humanoids/human/salute/salute.ogg"],
+        ..only(
+            HUMAN,
+            with_param("salute", "салютует.", "салютует %t.", REQUIRE_HANDS),
+        )
+    },
+    mimed("изображает крик!", emote("scream", "кричит!", AUDIBLE)),
     emote("shake", "качает своей головой.", 0),
     emote("shiver", "дрожит.", 0),
     only(HUMAN, emote("shrug", "пожимает плечами.", 0)),
     // `/datum/emote/living/carbon/human/wag`: only with a wag-able tail; the game toggles the
     // wagging on [`crate::server::Emoted`] (`ss13_game::medical::organs`).
     only(HUMAN, emote("wag", "начинает вилять хвостом.", 0)),
-    emote("sigh", "вздыхает.", AUDIBLE),
+    mimed(
+        "изображает преувеличенный бесшумный вздох.",
+        emote("sigh", "вздыхает.", AUDIBLE),
+    ),
     emote("smile", "улыбается.", 0),
-    emote("sneeze", "чихает.", AUDIBLE),
+    mimed(
+        "изображает преувеличенный бесшумный чих.",
+        emote("sneeze", "чихает.", AUDIBLE),
+    ),
     // `/datum/emote/living/surrender`: the game paralyzes the mob for 20 s
     // (`ss13_game::buffs`, on [`crate::server::Emoted`]).
     emote(
@@ -342,7 +438,10 @@ pub const EMOTES: &[Emote] = &[
         emote("thumbsup", "поднимает большой палец.", REQUIRE_HANDS),
     ),
     emote("wave", "машет рукой.", 0),
-    only(CARBON, emote("whistle", "свистит.", AUDIBLE)),
+    only(
+        CARBON,
+        mimed("бесшумно свистит!", emote("whistle", "свистит.", AUDIBLE)),
+    ),
     // `/datum/emote/living/carbon/crack` (tg also wants two usable hands).
     Emote {
         sounds: &["sound/mobs/humanoids/human/knuckle_crack/knuckles.ogg"],
@@ -355,12 +454,21 @@ pub const EMOTES: &[Emote] = &[
         vary: true,
         ..only(CARBON, emote("hiss", "шипит!", AUDIBLE))
     },
-    only(CARBON, emote("moan", "стонет!", AUDIBLE)),
+    only(
+        CARBON,
+        mimed("кажется, стонет!", emote("moan", "стонет!", AUDIBLE)),
+    ),
     Emote {
         vary: true,
-        ..emote("sniff", "шмыгает носом.", AUDIBLE)
+        ..mimed(
+            "бесшумно шмыгает носом.",
+            emote("sniff", "шмыгает носом.", AUDIBLE),
+        )
     },
-    emote("snore", "храпит.", UNCONSCIOUS | AUDIBLE),
+    mimed(
+        "бесшумно храпит.",
+        emote("snore", "храпит.", UNCONSCIOUS | AUDIBLE),
+    ),
     only(
         CARBON,
         with_param(
@@ -374,7 +482,18 @@ pub const EMOTES: &[Emote] = &[
     // (`manual_specific_emote_audio_cooldown`).
     Emote {
         cooldown: 10.0,
-        ..only(HUMAN, emote("screech", "визжит!", AUDIBLE))
+        ..only(
+            HUMAN,
+            mimed("бесшумно визжит.", emote("screech", "визжит!", AUDIBLE)),
+        )
+    },
+    // `/datum/emote/living/carbon/human/screech/roar`: the scream's sound too.
+    Emote {
+        cooldown: 10.0,
+        ..only(
+            HUMAN,
+            mimed("изображает рык.", emote("roar", "рычит!", AUDIBLE)),
+        )
     },
     // `/datum/emote/jump`: a hop (`jump_animation`, `ss13_game::speech`) with a thud; not
     // `EMOTE_AUDIBLE`, so a mute jumps loudly too.
@@ -386,12 +505,21 @@ pub const EMOTES: &[Emote] = &[
     Emote {
         species: Some(EmoteSpecies::Moth),
         sounds: &["sound/mobs/humanoids/moth/moth_chitter.ogg"],
-        ..only(HUMAN, emote("chitter", "стрекочет!", AUDIBLE))
+        ..only(
+            HUMAN,
+            mimed(
+                "бесшумно стрекочет?",
+                emote("chitter", "стрекочет!", AUDIBLE),
+            ),
+        )
     },
     Emote {
         species: Some(EmoteSpecies::Moth),
         sounds: &["sound/mobs/humanoids/moth/moth_squeak.ogg"],
-        ..only(HUMAN, emote("squeak", "пищит!", AUDIBLE))
+        ..only(
+            HUMAN,
+            mimed("бесшумно пищит?", emote("squeak", "пищит!", AUDIBLE)),
+        )
     },
     // `/datum/emote/living/carbon/circle`, `slap`, `shoesteal`: no message, the game puts the
     // hand gesture in a free hand (`ss13_game::devices::hand_items`, on `Emoted`).
@@ -403,7 +531,241 @@ pub const EMOTES: &[Emote] = &[
         // BandaStation's "сочувственно зевнуть." is an infinitive slip; the verb form here.
         message_robot: "сочувственно зевает.",
         message_ai: "сочувственно зевает.",
-        ..emote("yawn", "зевает.", AUDIBLE)
+        ..mimed(
+            "изображает преувеличенный бесшумный зевок.",
+            emote("yawn", "зевает.", AUDIBLE),
+        )
+    },
+    // `/datum/emote/living/*` without sounds of their own.
+    // 1.6 s: the matrix taunt's projectile block lasts that long in tg.
+    Emote {
+        cooldown: 1.6,
+        ..emote("taunt", "дразнится!", 0)
+    },
+    // `tongue/run_emote`: a human without a tongue is told so ([`run`]).
+    emote("tongue", "высовывает язык.", 0),
+    emote("tunesing", "подпевает мелодию.", 0),
+    mimed("изображает отрыжку.", emote("burp", "рыгает.", AUDIBLE)),
+    emote("collapse", "падает!", AUDIBLE),
+    emote("drool", "пускает слюни.", 0),
+    emote("faint", "теряет сознание.", 0),
+    // Wings open and close in tg; no wing organs here, so the line only.
+    emote("flap", "хлопает крыльями.", REQUIRE_HANDS),
+    emote("aflap", "сердито хлопает крыльями!", REQUIRE_HANDS),
+    mimed("бесшумно тужится.", emote("gag", "тужится.", AUDIBLE)),
+    with_param("glare", "сверлит взглядом.", "сверлит взглядом %t.", 0),
+    emote("grimace", "строит гримасу.", 0),
+    with_param("look", "смотрит.", "смотрит на %t.", 0),
+    // tg: no hands check here, `point/run_emote` points with a leg, a glance or the tongue.
+    // shortcut: hands are blocked here only by crit, which refuses `point` anyway, so the
+    // handless variants never come up; add them with a hands-blocked capability.
+    Emote {
+        cooldown: 1.0,
+        ..with_param("point", "указывает.", "указывает на %t.", 0)
+    },
+    emote("wheeze", "хрипит!", AUDIBLE),
+    mimed(
+        "бесшумно надувает губы.",
+        emote("pout", "надувает губы.", 0),
+    ),
+    emote("scowl", "сердито смотрит.", 0),
+    emote("sit", "садится.", 0),
+    emote("smug", "самодовольно улыбается.", 0),
+    with_param("stare", "уставился.", "уставился на %t.", 0),
+    emote("stretch", "протягивает свои руки.", 0),
+    emote("sulk", "грустно обижается.", 0),
+    emote("sway", "покачивается.", 0),
+    emote("tilt", "наклоняет голову на бок.", 0),
+    emote("tremble", "дрожит в страхе!", 0),
+    emote("twitch", "сильно дёргается.", 0),
+    emote("twitch_s", "дёргается.", 0),
+    mimed("кажется, задет.", emote("whimper", "хнычет.", AUDIBLE)),
+    emote("wsmile", "слабо улыбается.", 0),
+    mimed(
+        "бесшумно и неприятно булькает.",
+        emote("gurgle", "издает неприятное бульканье.", AUDIBLE),
+    ),
+    emote("inhale", "делает вдох.", AUDIBLE),
+    emote("exhale", "выдыхает.", AUDIBLE),
+    mimed("делает грубый жест!", emote("swear", "ругается!", AUDIBLE)),
+    // `/datum/emote/living/monkey/*`: `TRAIT_SIMIAN`.
+    needing(
+        HAS_SIMIAN,
+        mimed(
+            "бесшумно оскаливается, показывая зубы...",
+            emote("gnarl", "оскаливается и показывает зубы...", 0),
+        ),
+    ),
+    needing(HAS_SIMIAN, emote("roll", "катится.", REQUIRE_HANDS)),
+    needing(HAS_SIMIAN, emote("scratch", "чешется.", REQUIRE_HANDS)),
+    needing(
+        HAS_SIMIAN,
+        with_param("sign", "", "показывает число %t.", REQUIRE_HANDS),
+    ),
+    // `/datum/emote/living/cat/*`: `TRAIT_CAT_EMOTES_ALLOWED`.
+    Emote {
+        sounds: &["cat_meow"],
+        vary: true,
+        ..needing(
+            HAS_CAT,
+            mimed("бесшумно мяукает.", emote("meow", "мяукает!", AUDIBLE)),
+        )
+    },
+    // BandaStation leaves "purrs." untranslated.
+    Emote {
+        sounds: &["cat_purr"],
+        vary: true,
+        ..needing(HAS_CAT, emote("purr", "мурлычет.", AUDIBLE))
+    },
+    // BandaStation `emote_panel/code/human.dm`: by species and physique ([`evil_laugh`]).
+    Emote {
+        vary: true,
+        ..mimed(
+            "бесшумно злорадно смеётся!",
+            emote("laughevil", "злорадно смеётся.", AUDIBLE),
+        )
+    },
+    // By gender, for any mob ([`human_sounds`] for humans); not `EMOTE_AUDIBLE`.
+    Emote {
+        sounds: &["modular_bandastation/emote_panel/audio/human/male/sniff_male.ogg"],
+        ..mimed(
+            "бесшумно нюхает.",
+            with_param("sniffle", "нюхает.", "нюхает %t.", 0),
+        )
+    },
+    // `/datum/emote/flip`, `spin`: no message, the game spins the mob; spamming them trips
+    // or dizzies ([`EmoteOutcome::Spammed`]).
+    only(ANY, emote("flip", "", REQUIRE_HANDS)),
+    only(ANY, emote("backflip", "", REQUIRE_HANDS)),
+    only(ANY, emote("spin", "", REQUIRE_HANDS)),
+    // `/datum/emote/living/carbon/*`.
+    only(
+        CARBON,
+        emote(
+            "airguitar",
+            "невероятно играет на воображаемой гитаре.",
+            REQUIRE_HANDS,
+        ),
+    ),
+    only(ALIEN, emote("roll", "катится.", REQUIRE_HANDS)),
+    only(ALIEN, emote("scratch", "чешется.", REQUIRE_HANDS)),
+    // `sign/select_param`: only a number is signed ([`run`]).
+    only(
+        ALIEN,
+        with_param("sign", "", "показывает число %t.", REQUIRE_HANDS),
+    ),
+    only(
+        HUMAN,
+        with_param("signal", "", "показывает %t пальцев.", REQUIRE_HANDS),
+    ),
+    only(ALIEN, emote("tail", "машет хвостом.", 0)),
+    // `/datum/emote/living/carbon/human/*`.
+    only(
+        HUMAN,
+        with_param(
+            "dap",
+            "к сожалению, нет никого, кому можно дать пятюню, и даёт её самому себе. Стыдоба.",
+            "даёт пятюню %t.",
+            REQUIRE_HANDS,
+        ),
+    ),
+    needing(
+        HAS_GLASSES,
+        only(HUMAN, emote("glasses", "приподнимает свои очки.", 0)),
+    ),
+    only(
+        HUMAN,
+        mimed("бесшумно ворчит!", emote("grumble", "ворчит!", AUDIBLE)),
+    ),
+    only(
+        HUMAN,
+        with_param(
+            "handshake",
+            "дает рукопожатие себе.",
+            "дает рукопожатие %t.",
+            REQUIRE_HANDS | AUDIBLE,
+        ),
+    ),
+    only(
+        HUMAN,
+        with_param("hug", "обнимает себя.", "обнимает %t.", REQUIRE_HANDS),
+    ),
+    only(
+        HUMAN,
+        mimed("бесшумно бормочет!", emote("mumble", "бормочет!", AUDIBLE)),
+    ),
+    only(HUMAN, emote("pale", "на мгновение бледнеет.", 0)),
+    only(HUMAN, emote("raise", "поднимает руку.", REQUIRE_HANDS)),
+    only(
+        HUMAN,
+        emote("slit", "проводит пальцем поперёк горла.", REQUIRE_HANDS),
+    ),
+    only(HUMAN, emote("scratchhead", "чешет голову.", REQUIRE_HANDS)),
+    only(HUMAN, emote("time", "проверяет время.", REQUIRE_HANDS)),
+    only(HUMAN, emote("tap", "нетерпеливо постукивает ногой.", 0)),
+    only(
+        HUMAN,
+        emote(
+            "halt",
+            "поднимает ладонь, призывая остановиться.",
+            REQUIRE_HANDS,
+        ),
+    ),
+    only(
+        HUMAN,
+        emote("shush", "подносит палец к губам.", REQUIRE_HANDS),
+    ),
+    only(
+        HUMAN,
+        emote(
+            "listen",
+            "складывает ладонь рупором у уха, прислушиваясь.",
+            REQUIRE_HANDS,
+        ),
+    ),
+    only(
+        HUMAN,
+        emote("think", "задумчиво почёсывает голову.", REQUIRE_HANDS),
+    ),
+    only(
+        HUMAN,
+        emote(
+            "beckon",
+            "машет рукой, подзывая подойти ближе.",
+            REQUIRE_HANDS,
+        ),
+    ),
+    only(
+        HUMAN,
+        emote("airquote", "делает воздушные кавычки.", REQUIRE_HANDS),
+    ),
+    only(
+        HUMAN,
+        emote("crazy", "крутит пальцем у виска.", REQUIRE_HANDS),
+    ),
+    only(HUMAN, emote("squint", "прищуривается.", 0)),
+    only(HUMAN, emote("rub", "чешет подбородок.", REQUIRE_HANDS)),
+    only(HUMAN, emote("clear", "прочищает горло.", 0)),
+    // shortcut: no eyelids are drawn, so the eyes do not visibly close.
+    needing(HAS_EYES, only(HUMAN, emote("blink", "моргает.", 0))),
+    needing(
+        HAS_EYES,
+        only(HUMAN, emote("blink_r", "быстро моргает.", 0)),
+    ),
+    // Ethereal glow emotes ([`HAS_GLOW`]).
+    // shortcut: the ethereal glow has no light in the port, so `handle_glow_emote` and
+    // `start_flicker` change nothing; add them with the ethereal light.
+    needing(HAS_GLOW, only(HUMAN, emote("glow", "ярко светится!", 0))),
+    Emote {
+        sounds: &["sound/mobs/humanoids/ethereal/ethereal_hiss.ogg"],
+        ..needing(
+            HAS_GLOW,
+            only(HUMAN, emote("flare", "вспыхивает с яркой вспышкой!", 0)),
+        )
+    },
+    Emote {
+        sounds: &["sound/effects/sparks/sparks4.ogg"],
+        ..needing(HAS_GLOW, only(HUMAN, emote("flicker", "мерцает.", 0)))
     },
     // `/datum/emote/ai/emotion_display/*` ([`ai_emotion`]).
     ai_display("blank"),
@@ -519,27 +881,33 @@ pub const EMOTES: &[Emote] = &[
     slime_mood("moodsad"),
     slime_mood("moodangry"),
     // BandaStation `vulpkanin.dm`.
-    species(
-        EmoteSpecies::Vulpkanin,
-        "howl",
-        "воет.",
-        "воет на %t.",
-        bp!("vulpkanin/howl.ogg"),
-        false,
-        6.0,
-    ),
-    species(
-        EmoteSpecies::Vulpkanin,
-        "growl",
-        "рычит.",
-        "рычит на %t.",
-        bp!(
-            "vulpkanin/growl1.ogg",
-            "vulpkanin/growl2.ogg",
-            "vulpkanin/growl3.ogg"
+    mimed(
+        "делает вид, что воет.",
+        species(
+            EmoteSpecies::Vulpkanin,
+            "howl",
+            "воет.",
+            "воет на %t.",
+            bp!("vulpkanin/howl.ogg"),
+            false,
+            6.0,
         ),
-        false,
-        2.0,
+    ),
+    mimed(
+        "бесшумно рычит.",
+        species(
+            EmoteSpecies::Vulpkanin,
+            "growl",
+            "рычит.",
+            "рычит на %t.",
+            bp!(
+                "vulpkanin/growl1.ogg",
+                "vulpkanin/growl2.ogg",
+                "vulpkanin/growl3.ogg"
+            ),
+            false,
+            2.0,
+        ),
     ),
     species(
         EmoteSpecies::Vulpkanin,
@@ -569,59 +937,77 @@ pub const EMOTES: &[Emote] = &[
         2.0,
     ),
     // BandaStation `tajaran.dm`.
-    species(
-        EmoteSpecies::Tajaran,
-        "meow_t",
-        "мяукает.",
-        "мяукает на %t.",
-        bp!("tajaran/tajaran_meow.ogg"),
-        true,
-        4.0,
+    mimed(
+        "бесшумно мяукает.",
+        species(
+            EmoteSpecies::Tajaran,
+            "meow_t",
+            "мяукает.",
+            "мяукает на %t.",
+            bp!("tajaran/tajaran_meow.ogg"),
+            true,
+            4.0,
+        ),
     ),
-    species(
-        EmoteSpecies::Tajaran,
-        "mow",
-        "раздражённо мяукает.",
-        "раздражённо мяукает на %t.",
-        bp!("tajaran/tajaran_annoyed_meow.ogg"),
-        true,
-        4.0,
+    mimed(
+        "бесшумно раздражённо мяукает.",
+        species(
+            EmoteSpecies::Tajaran,
+            "mow",
+            "раздражённо мяукает.",
+            "раздражённо мяукает на %t.",
+            bp!("tajaran/tajaran_annoyed_meow.ogg"),
+            true,
+            4.0,
+        ),
     ),
-    species(
-        EmoteSpecies::Tajaran,
-        "purr_t",
-        "мурчит.",
-        "мурчит на %t.",
-        bp!("tajaran/tajaran_purr.ogg"),
-        false,
-        4.0,
+    mimed(
+        "бесшумно мурчит.",
+        species(
+            EmoteSpecies::Tajaran,
+            "purr_t",
+            "мурчит.",
+            "мурчит на %t.",
+            bp!("tajaran/tajaran_purr.ogg"),
+            false,
+            4.0,
+        ),
     ),
-    species(
-        EmoteSpecies::Tajaran,
-        "pur",
-        "кратко мурчит.",
-        "кратко мурчит на %t.",
-        bp!("tajaran/tajaran_purr_short.ogg"),
-        false,
-        4.0,
+    mimed(
+        "бесшумно кратко мурчит.",
+        species(
+            EmoteSpecies::Tajaran,
+            "pur",
+            "кратко мурчит.",
+            "кратко мурчит на %t.",
+            bp!("tajaran/tajaran_purr_short.ogg"),
+            false,
+            4.0,
+        ),
     ),
-    species(
-        EmoteSpecies::Tajaran,
-        "purrr",
-        "длительно мурчит.",
-        "длительно мурчит на %t.",
-        bp!("tajaran/tajaran_purr_long.ogg"),
-        false,
-        4.0,
+    mimed(
+        "бесшумно длительно мурчит.",
+        species(
+            EmoteSpecies::Tajaran,
+            "purrr",
+            "длительно мурчит.",
+            "длительно мурчит на %t.",
+            bp!("tajaran/tajaran_purr_long.ogg"),
+            false,
+            4.0,
+        ),
     ),
-    species(
-        EmoteSpecies::Tajaran,
-        "hiss_t",
-        "шипит.",
-        "шипит на %t.",
-        bp!("tajaran/tajaran_hiss.ogg"),
-        false,
-        4.0,
+    mimed(
+        "бесшумно шипит.",
+        species(
+            EmoteSpecies::Tajaran,
+            "hiss_t",
+            "шипит.",
+            "шипит на %t.",
+            bp!("tajaran/tajaran_hiss.ogg"),
+            false,
+            4.0,
+        ),
     ),
     // BandaStation `skrell.dm`.
     species(
@@ -671,16 +1057,18 @@ pub fn find(key: &str) -> Option<&'static Emote> {
     EMOTES.iter().find(|e| e.key == key)
 }
 
-/// tg `can_run_emote` without the stat checks: the mob type, the trait, the species.
+/// tg `can_run_emote` without the stat checks: the mob type, the traits and organs, the
+/// species.
 pub fn allowed(emote: &Emote, user: &EmoteUser) -> bool {
     emote.mobs & user.mob.bit() != 0
+        && emote.needs & !user.has == 0
         && (!emote.silicon || user.silicon_emotes)
         && emote.species.is_none_or(|s| s == user.species)
         && (user.mob != EmoteMob::Brain || user.in_processor)
         && (emote.key != "wag" || user.tail.is_some())
 }
 
-/// tg `select_message_type` (no mime: the vow does not reach emotes yet).
+/// tg `select_message_type`.
 fn select_message(emote: &Emote, user: &EmoteUser) -> &'static str {
     // BandaStation's `wag/select_message_type`: stopping is its own line.
     if emote.key == "wag" && user.tail == Some(true) {
@@ -694,6 +1082,11 @@ fn select_message(emote: &Emote, user: &EmoteUser) -> &'static str {
         _ => None,
     }
     .or_else(|| {
+        (user.has & HAS_LESSER != 0)
+            .then(|| pick(emote.message_monkey))
+            .flatten()
+    })
+    .or_else(|| {
         (user.mob == EmoteMob::Cyborg || user.robotic)
             .then(|| pick(emote.message_robot))
             .flatten()
@@ -703,7 +1096,21 @@ fn select_message(emote: &Emote, user: &EmoteUser) -> &'static str {
             .then(|| pick(emote.message_animal))
             .flatten()
     });
-    special.unwrap_or(emote.message)
+    let own = if user.mime && !emote.message_mime.is_empty() {
+        emote.message_mime
+    } else {
+        emote.message
+    };
+    special.unwrap_or(own)
+}
+
+/// BYOND `isnum(text2num(text))`: the text starts with a number.
+fn starts_with_number(text: &str) -> bool {
+    let digits = text
+        .trim_start()
+        .trim_start_matches(['+', '-'])
+        .trim_start_matches('.');
+    digits.starts_with(|c: char| c.is_ascii_digit())
 }
 
 /// The emotes that only put a hand gesture (`/obj/item/hand_item`) in a free hand.
@@ -850,7 +1257,7 @@ pub fn tongue_sounds(
         if female { f } else { m }
     };
     let files: &'static [&'static str] = match (species, key) {
-        (Other, _) => return None,
+        (Human | Other, _) => return None,
         (Vulpkanin | Tajaran | Pod | Skrell, "cough") => gendered(COUGH_F, COUGH_M),
         (Jelly, "cough") => bp!("slime/jelly_squish.ogg"),
         (Moth, "cough") => bp!("moth/moth_cough.ogg"),
@@ -992,25 +1399,57 @@ pub fn human_sounds(female: bool, key: &str) -> Option<&'static [&'static str]> 
     })
 }
 
+const EVIL_LAUGH_F: &[&str] = bp!(
+    "human/female/evil_laugh_female_1.ogg",
+    "human/female/evil_laugh_female_2.ogg"
+);
+const EVIL_LAUGH_M: &[&str] = bp!(
+    "human/male/evil_laugh_male_1.ogg",
+    "human/male/evil_laugh_male_2.ogg"
+);
+
+/// BandaStation `/datum/species/proc/get_evil_laugh_sound` (`laughevil`): none for the
+/// species that do not override it.
+pub fn evil_laugh(species: EmoteSpecies, female: bool) -> Option<&'static [&'static str]> {
+    use EmoteSpecies::*;
+    match species {
+        Human | Jelly | Pod | Skrell | Tajaran | Vulpkanin => {
+            Some(if female { EVIL_LAUGH_F } else { EVIL_LAUGH_M })
+        }
+        Lizard => Some(&["sound/mobs/humanoids/lizard/lizard_laugh1.ogg"]),
+        Moth => Some(&["sound/mobs/humanoids/moth/moth_laugh1.ogg"]),
+        Other => None,
+    }
+}
+
 /// tg `get_sound`: the tongue's, then a human's `sounds_by_mobtype` ([`human_sounds`]), then
 /// the emote's own (`sounds_by_mobtype` of `roar`: adults).
 fn sound_of(emote: &Emote, user: &EmoteUser) -> Option<EmoteSound> {
-    // `screech/get_sound` is the scream's.
-    let key = if emote.key == "screech" {
-        "scream"
-    } else {
-        emote.key
+    let human = user.mob == EmoteMob::Human;
+    // `screech/get_sound` is the scream's, and the human `roar` is a `screech`.
+    let key = match emote.key {
+        "screech" => "scream",
+        "roar" if human => "scream",
+        key => key,
     };
-    let files = (user.mob == EmoteMob::Human)
-        .then(|| {
-            tongue_sounds(user.species, user.female, key).or_else(|| human_sounds(user.female, key))
-        })
-        .flatten()
-        .or_else(|| {
-            let own = !emote.sounds.is_empty()
-                && (emote.key != "roar" || user.mob == EmoteMob::AlienAdult);
-            own.then_some(emote.sounds)
-        })?;
+    let by_body = if key == "laughevil" {
+        // Its `get_sound` replaces the tongue's and the mob type's.
+        human
+            .then(|| evil_laugh(user.species, user.female))
+            .flatten()
+    } else {
+        human
+            .then(|| {
+                tongue_sounds(user.species, user.female, key)
+                    .or_else(|| human_sounds(user.female, key))
+            })
+            .flatten()
+    };
+    let files = by_body.or_else(|| {
+        let own =
+            !emote.sounds.is_empty() && (emote.key != "roar" || user.mob == EmoteMob::AlienAdult);
+        own.then_some(emote.sounds)
+    })?;
     Some(EmoteSound {
         files,
         vary: emote.vary,
@@ -1036,6 +1475,41 @@ pub enum EmoteOutcome {
     Silent,
     /// `*help`: the list of keys.
     Help(String),
+    /// `flip/check_cooldown`, `spin/check_cooldown`: run again while cooling down, the emote
+    /// does not run but the mob may fall over or get dizzy (the game decides).
+    Spammed(&'static str),
+}
+
+/// The emotes whose cooldown check has an effect ([`EmoteOutcome::Spammed`]).
+pub const SPAM_PENALTY: [&str; 3] = ["flip", "backflip", "spin"];
+
+/// The emotes without a message that still run for their effect (tg calls the display, mood,
+/// gesture or spin code after the parent's empty-message return).
+fn effect_only(key: &str) -> bool {
+    ai_emotion(key).is_some()
+        || slime_mood_key(key).is_some()
+        || HAND_GESTURES.contains(&key)
+        || SPAM_PENALTY.contains(&key)
+}
+
+/// `can_run_emote`'s stat checks; tg's warnings exist only in English.
+fn stat_refusal(key: &str, flags: u8, stat: SpeakerStat) -> Option<EmoteOutcome> {
+    let refuse = |why: &str| Some(EmoteOutcome::Refused(format!("You cannot {key} {why}!")));
+    if stat >= SpeakerStat::Unconscious && flags & UNCONSCIOUS == 0 {
+        return refuse("while unconscious");
+    }
+    // Hands are blocked from soft crit on (`TRAIT_HANDS_BLOCKED`).
+    if stat >= SpeakerStat::SoftCrit && flags & REQUIRE_HANDS != 0 {
+        return Some(EmoteOutcome::Refused(format!(
+            "You cannot use your hands to {key} right now!"
+        )));
+    }
+    match stat {
+        SpeakerStat::SoftCrit if flags & SOFTCRIT == 0 => refuse("while in a critical condition"),
+        SpeakerStat::HardCrit if flags & HARDCRIT == 0 => refuse("while in a critical condition"),
+        SpeakerStat::Dead => refuse("while dead"),
+        _ => None,
+    }
 }
 
 /// tg `/mob/proc/emote` -> `can_run_emote` -> `run_emote` for an intentional emote; `act` is
@@ -1090,26 +1564,18 @@ pub fn run(
         (e.key, e.cooldown, e.flags)
     });
     if on_cooldown(key, cooldown) {
-        return EmoteOutcome::Silent;
+        // The penalty's own `can_run_emote` warns, as the emote would.
+        return match stat_refusal(key, flags, stat) {
+            Some(refusal) if SPAM_PENALTY.contains(&key) => refusal,
+            None if SPAM_PENALTY.contains(&key) => EmoteOutcome::Spammed(key),
+            _ => EmoteOutcome::Silent,
+        };
     }
-    // `can_run_emote`; tg's warnings exist only in English.
-    let refuse = |why: &str| EmoteOutcome::Refused(format!("You cannot {key} {why}!"));
-    if stat >= SpeakerStat::Unconscious && flags & UNCONSCIOUS == 0 {
-        return refuse("while unconscious");
+    if let Some(refusal) = stat_refusal(key, flags, stat) {
+        return refusal;
     }
-    // Hands are blocked from soft crit on (`TRAIT_HANDS_BLOCKED`).
-    if stat >= SpeakerStat::SoftCrit && flags & REQUIRE_HANDS != 0 {
-        return EmoteOutcome::Refused(format!("You cannot use your hands to {key} right now!"));
-    }
-    match stat {
-        SpeakerStat::SoftCrit if flags & SOFTCRIT == 0 => {
-            return refuse("while in a critical condition");
-        }
-        SpeakerStat::HardCrit if flags & HARDCRIT == 0 => {
-            return refuse("while in a critical condition");
-        }
-        SpeakerStat::Dead => return refuse("while dead"),
-        _ => {}
+    if key == "tongue" && user.mob == EmoteMob::Human && user.has & HAS_TONGUE == 0 {
+        return EmoteOutcome::Refused("You don't have a tongue!".to_owned());
     }
     let Some(emote) = emote else {
         return if params.is_empty() {
@@ -1124,14 +1590,15 @@ pub fn run(
     };
     let text = match (params.is_empty(), emote.message_param) {
         (true, _) => select_message(emote, user).to_owned(),
+        // `sign/select_param`: not a number signs nothing (its `message` is empty).
+        (false, Some(_)) if matches!(key, "sign" | "signal") && !starts_with_number(params) => {
+            emote.message.to_owned()
+        }
         (false, Some(param)) => param.replace("%t", params),
         (false, None) => params.to_owned(),
     };
-    // A plain emote without words does nothing; an effect-only one still runs (tg calls the
-    // display / mood code after the parent's empty-message return).
-    let effect_only =
-        ai_emotion(key).is_some() || slime_mood_key(key).is_some() || HAND_GESTURES.contains(&key);
-    if text.is_empty() && !effect_only {
+    // A plain emote without words does nothing; an effect-only one still runs.
+    if text.is_empty() && !effect_only(key) {
         return EmoteOutcome::Silent;
     }
     EmoteOutcome::Run {
@@ -1148,12 +1615,14 @@ mod tests {
     const C: SpeakerStat = SpeakerStat::Conscious;
     const HUMAN_USER: EmoteUser = EmoteUser {
         mob: EmoteMob::Human,
-        species: EmoteSpecies::Other,
+        species: EmoteSpecies::Human,
         female: false,
         silicon_emotes: false,
         robotic: false,
         in_processor: false,
         tail: None,
+        has: DEFAULT_HAS,
+        mime: false,
     };
 
     fn user(mob: EmoteMob) -> EmoteUser {
@@ -1397,5 +1866,215 @@ mod tests {
             EmoteOutcome::Run { key: "slap", text, .. } if text.is_empty()
         ));
         assert!(refused(&run_as("circle", &user(EmoteMob::Cyborg))));
+    }
+
+    #[test]
+    fn the_default_user_is_a_human_with_eyes_and_a_tongue() {
+        assert_eq!(EmoteUser::default(), HUMAN_USER);
+        assert_eq!(ran(run_as("blink", &EmoteUser::default())), "моргает.");
+    }
+
+    #[test]
+    fn organ_clothing_and_trait_emotes_need_them() {
+        let h = &HUMAN_USER;
+        let without = |bits: u16| EmoteUser {
+            has: h.has & !bits,
+            ..HUMAN_USER
+        };
+        let with = |bits: u16| EmoteUser {
+            has: h.has | bits,
+            ..HUMAN_USER
+        };
+        // Eyes blink; no eyes, no blink.
+        assert_eq!(ran(run_as("blink_r", h)), "быстро моргает.");
+        assert!(refused(&run_as("blink", &without(HAS_EYES))));
+        // A tongueless human is told so; a cyborg has no tongue check.
+        assert_eq!(ran(run_as("tongue", h)), "высовывает язык.");
+        assert_eq!(
+            run_as("tongue", &without(HAS_TONGUE)),
+            EmoteOutcome::Refused("You don't have a tongue!".to_owned())
+        );
+        assert_eq!(
+            ran(run_as(
+                "tongue",
+                &EmoteUser {
+                    has: 0,
+                    ..user(EmoteMob::Cyborg)
+                }
+            )),
+            "высовывает язык."
+        );
+        // Glasses, the ethereal glow, cat and simian traits.
+        assert!(refused(&run_as("glasses", h)));
+        assert_eq!(
+            ran(run_as("glasses", &with(HAS_GLASSES))),
+            "приподнимает свои очки."
+        );
+        assert!(refused(&run_as("flare", h)));
+        let flare = run_as("flare", &with(HAS_GLOW));
+        assert_eq!(
+            sound(flare).map(|s| s.files),
+            Some(&["sound/mobs/humanoids/ethereal/ethereal_hiss.ogg"][..])
+        );
+        assert!(refused(&run_as("meow", h)));
+        let meow = run_as("meow", &with(HAS_CAT));
+        assert_eq!(
+            sound(meow.clone()).map(|s| s.files),
+            Some(&["cat_meow"][..])
+        );
+        assert_eq!(ran(meow), "мяукает!");
+        let cat = EmoteUser {
+            has: HAS_CAT,
+            ..user(EmoteMob::Basic)
+        };
+        assert_eq!(ran(run_as("purr", &cat)), "мурлычет.");
+        // A vulpkanin without cat ears purrs its own way.
+        let vulp = EmoteUser {
+            species: EmoteSpecies::Vulpkanin,
+            ..HUMAN_USER
+        };
+        assert_eq!(ran(run_as("purr", &vulp)), "урчит.");
+        assert!(refused(&run_as("roll", h)));
+        assert_eq!(ran(run_as("roll", &with(HAS_SIMIAN))), "катится.");
+        let gorilla = EmoteUser {
+            has: HAS_SIMIAN,
+            ..user(EmoteMob::Gorilla)
+        };
+        assert_eq!(ran(run_as("scratch", &gorilla)), "чешется.");
+        assert_eq!(
+            ran(run_as("gnarl", &gorilla)),
+            "оскаливается и показывает зубы..."
+        );
+    }
+
+    #[test]
+    fn creature_and_hand_sign_emotes() {
+        let alien = user(EmoteMob::AlienAdult);
+        assert_eq!(ran(run_as("tail", &alien)), "машет хвостом.");
+        assert_eq!(ran(run_as("roll", &alien)), "катится.");
+        assert!(refused(&run_as("tail", &HUMAN_USER)));
+        // Only a number is signed.
+        assert_eq!(ran(run_as("sign 3", &alien)), "показывает число 3.");
+        assert_eq!(run_as("sign привет", &alien), EmoteOutcome::Silent);
+        assert_eq!(run_as("sign", &alien), EmoteOutcome::Silent);
+        assert_eq!(
+            ran(run_as("signal 5", &HUMAN_USER)),
+            "показывает 5 пальцев."
+        );
+        assert_eq!(run_as("signal пять", &HUMAN_USER), EmoteOutcome::Silent);
+        assert!(refused(&run_as("signal 5", &alien)));
+        assert!(starts_with_number(" -2.5 штуки") && !starts_with_number("x1"));
+        // Hands and crit.
+        let soft = SpeakerStat::SoftCrit;
+        assert!(refused(&run("hug", soft, &HUMAN_USER, |_, _| false)));
+        assert_eq!(ran(run_as("hug Боба", &HUMAN_USER)), "обнимает Боба.");
+        assert_eq!(
+            ran(run_as("flap", &user(EmoteMob::Cyborg))),
+            "хлопает крыльями."
+        );
+    }
+
+    #[test]
+    fn mimes_and_monkeys_have_their_own_lines() {
+        let mime = EmoteUser {
+            mime: true,
+            ..HUMAN_USER
+        };
+        assert_eq!(ran(run_as("scream", &mime)), "изображает крик!");
+        assert_eq!(ran(run_as("swear", &mime)), "делает грубый жест!");
+        // No mime line: the usual one.
+        assert_eq!(ran(run_as("smile", &mime)), "улыбается.");
+        // The mime's line gives way to the alien's.
+        let mime_alien = EmoteUser {
+            mime: true,
+            ..user(EmoteMob::AlienAdult)
+        };
+        assert_eq!(
+            ran(run_as("deathgasp", &mime_alien)),
+            "издает ослабевающий гортанный крик и падает на пол..."
+        );
+        let monkey = EmoteUser {
+            has: DEFAULT_HAS | HAS_SIMIAN | HAS_LESSER,
+            ..HUMAN_USER
+        };
+        assert_eq!(
+            ran(run_as("deathgasp", &monkey)),
+            "издает слабый визг, когда рушится и перестает двигаться..."
+        );
+        let tajaran = EmoteUser {
+            species: EmoteSpecies::Tajaran,
+            mime: true,
+            ..HUMAN_USER
+        };
+        assert_eq!(
+            ran(run_as("mow", &tajaran)),
+            "бесшумно раздражённо мяукает."
+        );
+    }
+
+    #[test]
+    fn evil_laughs_sniffles_and_roars_sound_right() {
+        let files = |act: &str, u: &EmoteUser| sound(run_as(act, u)).map(|s| s.files);
+        let female = EmoteUser {
+            female: true,
+            ..HUMAN_USER
+        };
+        assert_eq!(files("laughevil", &female), Some(EVIL_LAUGH_F));
+        assert_eq!(files("laughevil", &HUMAN_USER), Some(EVIL_LAUGH_M));
+        let lizard = EmoteUser {
+            species: EmoteSpecies::Lizard,
+            ..HUMAN_USER
+        };
+        assert_eq!(
+            files("laughevil", &lizard),
+            Some(&["sound/mobs/humanoids/lizard/lizard_laugh1.ogg"][..])
+        );
+        // A species without its own evil laugh, and a non-human, laugh silently.
+        let other = EmoteUser {
+            species: EmoteSpecies::Other,
+            ..HUMAN_USER
+        };
+        assert_eq!(files("laughevil", &other), None);
+        assert_eq!(files("laughevil", &user(EmoteMob::Cyborg)), None);
+        assert_eq!(
+            files("sniffle", &female),
+            Some(&["modular_bandastation/emote_panel/audio/human/female/sniff_female.ogg"][..])
+        );
+        assert_eq!(ran(run_as("sniffle цветок", &HUMAN_USER)), "нюхает цветок.");
+        assert!(files("sniffle", &user(EmoteMob::Basic)).is_some());
+        // A human roar is a scream; the alien roar keeps its hiss.
+        assert_eq!(files("roar", &HUMAN_USER), Some(SCREAM_M));
+        assert_eq!(ran(run_as("roar", &HUMAN_USER)), "рычит!");
+        assert_eq!(
+            files("salute", &HUMAN_USER),
+            Some(&["sound/mobs/humanoids/human/salute/salute.ogg"][..])
+        );
+    }
+
+    #[test]
+    fn flips_and_spins_run_for_their_effect_and_spamming_them_costs() {
+        let h = &HUMAN_USER;
+        for key in SPAM_PENALTY {
+            assert!(matches!(
+                run_as(key, h),
+                EmoteOutcome::Run { key: k, text, .. } if k == key && text.is_empty()
+            ));
+            assert_eq!(run(key, C, h, |_, _| true), EmoteOutcome::Spammed(key));
+        }
+        // Spamming from crit only warns, as the emote would.
+        assert!(refused(&run("flip", SpeakerStat::SoftCrit, h, |_, _| true)));
+        // Other emotes just wait.
+        assert_eq!(run("collapse", C, h, |_, _| true), EmoteOutcome::Silent);
+        assert_eq!(ran(run_as("collapse", h)), "падает!");
+        assert_eq!(ran(run_as("faint", h)), "теряет сознание.");
+        // `taunt` and `point` cool down faster.
+        let mut asked = Vec::new();
+        for key in ["taunt", "point", "dance"] {
+            run(key, C, h, |_, cooldown| {
+                asked.push(cooldown);
+                false
+            });
+        }
+        assert_eq!(asked, vec![1.6, 1.0, 5.0]);
     }
 }

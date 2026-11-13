@@ -182,6 +182,14 @@ pub struct Emoted {
     pub sound: Option<EmoteSound>,
 }
 
+/// A `flip` or `spin` run again while it cools down ([`EmoteOutcome::Spammed`]): the game
+/// trips or dizzies the body (tg `check_cooldown` overrides).
+#[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EmoteSpammed {
+    pub speaker: Entity,
+    pub key: &'static str,
+}
+
 /// A say the Social Anxiety quirk swallowed ([`Anxiety`]), for its game effects: the
 /// withdrawal's silence, the once-a-life spaghetti.
 #[derive(Message, Clone, Copy, Debug, PartialEq, Eq)]
@@ -485,6 +493,7 @@ impl Plugin for ChatServerPlugin {
             .add_message::<SayRejected>()
             .add_message::<Spoke>()
             .add_message::<Emoted>()
+            .add_message::<EmoteSpammed>()
             .add_message::<AnxiousSpoke>()
             .add_message::<Overhead>()
             .add_message::<SpeechFiltered>()
@@ -725,12 +734,13 @@ fn handle_say(
     mut rng: ResMut<SpeechRng>,
     time: Res<Time<Real>>,
     mut chat: MessageWriter<SendChat>,
-    (mut rejected, mut emoted, mut anxious, mut overhead, mut filtered): (
+    (mut rejected, mut emoted, mut anxious, mut overhead, mut filtered, mut spammed): (
         MessageWriter<SayRejected>,
         MessageWriter<Emoted>,
         MessageWriter<AnxiousSpoke>,
         MessageWriter<Overhead>,
         MessageWriter<SpeechFiltered>,
+        MessageWriter<EmoteSpammed>,
     ),
     mut spoke: MessageWriter<Spoke>,
     mut commands: Commands,
@@ -956,6 +966,9 @@ fn handle_say(
                 }
                 EmoteOutcome::Refused(text) | EmoteOutcome::Help(text) => {
                     chat.write(notice(text));
+                }
+                EmoteOutcome::Spammed(key) => {
+                    spammed.write(EmoteSpammed { speaker, key });
                 }
                 EmoteOutcome::Silent => {}
             }
