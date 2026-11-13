@@ -55,6 +55,8 @@ pub mod raiders;
 pub mod revenant;
 pub mod revolution;
 #[cfg(feature = "server")]
+pub mod santa;
+#[cfg(feature = "server")]
 pub mod slaughter;
 #[cfg(feature = "server")]
 pub mod space_dragon;
@@ -110,7 +112,12 @@ impl bevy::prelude::Plugin for AntagServerPlugin {
             slaughter::SlaughterPlugin,
             spiders::SpidersPlugin,
         ))
-        .add_plugins((zombie::ZombiePlugin, ert::ErtPlugin, raiders::RaidersPlugin))
+        .add_plugins((
+            zombie::ZombiePlugin,
+            ert::ErtPlugin,
+            raiders::RaidersPlugin,
+            santa::SantaPlugin,
+        ))
         .add_systems(Startup, dynamic::init)
         .add_plugins(midround::MidroundPlugin);
     }

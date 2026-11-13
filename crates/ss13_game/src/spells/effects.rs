@@ -298,7 +298,9 @@ pub(super) fn cast(
             blink(world, mob, pos);
             true
         }
-        (Spell::Teleport, CastOn::Area(area)) => area_teleport(world, mob, area),
+        (Spell::Teleport | Spell::SantaTeleport, CastOn::Area(area)) => {
+            area_teleport(world, mob, area)
+        }
         (Spell::EtherealJaunt, _) => {
             start_jaunt(world, mob, pos);
             true

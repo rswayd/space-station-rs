@@ -253,15 +253,17 @@ pub const ERT_OUTFITS: [&str; 56] = [
     "/datum/outfit/bountysynth/ert",
 ];
 
-/// The space ninja's and the fugitives' outfits (`ss13_game::antag::raiders`; pirates and
-/// hunters wear their spawners' outfits, `crate::mob_spawn`).
-pub const RAIDER_OUTFITS: [&str; 6] = [
+/// The space ninja's, the fugitives' and Santa's outfits (`ss13_game::antag::raiders`,
+/// `ss13_game::antag::santa`; pirates and hunters wear their spawners' outfits,
+/// `crate::mob_spawn`).
+pub const RAIDER_OUTFITS: [&str; 7] = [
     "/datum/outfit/ninja",
     "/datum/outfit/prisoner",
     "/datum/outfit/yalp_cultist",
     "/datum/outfit/waldo",
     "/datum/outfit/synthetic",
     "/datum/outfit/invisible_man",
+    "/datum/outfit/santa",
 ];
 
 /// What the raiders make at runtime (`ss13_game::antag::raiders`, `ss13_game::modsuit::ninja`):

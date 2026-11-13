@@ -10,7 +10,7 @@
 //!   (`crate::antag::valentine`).
 // shortcut: Halloween's Ian in a bedsheet and ghost Poly, Easter's surprise eggs in maintenance
 // loot and the 35% rabbits on `/obj/effect/landmark/event_spawn` (those landmarks are not
-// tracked) are not ported; Visit by Santa needs its antagonist (`crate::ghost_poll` is there); the valentine
+// tracked) are not ported (Visit by Santa: `crate::antag::santa`); the valentine
 // card's message and the candy heart's text (`strings/valentines.json`) are not picked.
 
 use bevy::prelude::*;

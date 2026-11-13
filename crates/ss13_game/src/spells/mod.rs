@@ -166,6 +166,8 @@ pub enum Spell {
     TeslaBlast,
     GauntletEcho,
     Telepathy,
+    /// Santa's (`area_teleport/wizard/santa`): no robes, no antimagic check, the area unsaid.
+    SantaTeleport,
 }
 
 /// A spell type's vars.
@@ -232,7 +234,7 @@ const fn def(spell: Spell, path: &'static str, name: &'static str) -> SpellDef {
 }
 
 /// Every ported spell, in [`Spell`] order.
-pub const SPELLS: [SpellDef; 50] = [
+pub const SPELLS: [SpellDef; 51] = [
     SpellDef {
         desc: "This spell fires several, slow moving, magic projectiles at nearby targets.",
         icon: "magicm",
@@ -980,6 +982,23 @@ pub const SPELLS: [SpellDef; 50] = [
             "Telepathy",
         )
     },
+    SpellDef {
+        desc: "This spell teleports you to an area of your selection.",
+        icon: "teleport",
+        sound: "sound/effects/magic/teleport_diss.ogg",
+        cooldown: 60.0,
+        cooldown_reduction_per_rank: 20.0,
+        max_level: 3,
+        invocation: "HO HO HO!",
+        invocation_type: Invocation::Shout,
+        requirements: 0,
+        antimagic: 0,
+        ..def(
+            Spell::SantaTeleport,
+            "/datum/action/cooldown/spell/teleport/area_teleport/wizard/santa",
+            "Santa Teleport",
+        )
+    },
 ];
 
 impl Spell {
@@ -1090,6 +1109,8 @@ pub enum Learned {
 pub struct TeleportPrompt {
     /// The area teleport spell, or a scroll of teleportation (no invocation, its uses).
     pub scroll: Option<Entity>,
+    /// The area teleport spell cast ([`Spell::Teleport`] or [`Spell::SantaTeleport`]).
+    pub spell: Spell,
     pub areas: Vec<Entity>,
 }
 
@@ -1721,9 +1742,9 @@ fn trigger(world: &mut World, client: Entity, mob: Entity, spell: Spell) {
             );
         }
         Targeting::Touch { .. } => effects::toggle_hand(world, mob, spell),
-        Targeting::Caster if spell == Spell::Teleport => {
+        Targeting::Caster if matches!(spell, Spell::Teleport | Spell::SantaTeleport) => {
             if ready(world, mob, spell) && checked(world, mob, spell) {
-                open_teleport_prompt(world, client, mob, None);
+                teleport_prompt(world, client, mob, None, spell);
             }
         }
         Targeting::Caster if spell == Spell::WildShapeshift => {
@@ -1894,6 +1915,16 @@ pub fn open_teleport_prompt(
     mob: Entity,
     scroll: Option<Entity>,
 ) {
+    teleport_prompt(world, client, mob, scroll, Spell::Teleport);
+}
+
+fn teleport_prompt(
+    world: &mut World,
+    client: Entity,
+    mob: Entity,
+    scroll: Option<Entity>,
+    spell: Spell,
+) {
     let areas = teleport_areas(world);
     if areas.is_empty() {
         return;
@@ -1912,6 +1943,7 @@ pub fn open_teleport_prompt(
     let prompt = ask_world(world, ask);
     world.entity_mut(prompt).insert(TeleportPrompt {
         scroll,
+        spell,
         areas: areas.into_iter().map(|(_, a)| a).collect(),
     });
 }
@@ -1937,8 +1969,8 @@ fn teleport_answers(world: &mut World, mut answers: Local<MessageCursor<PromptAn
         }
         match asked.scroll {
             None => {
-                if knows(world, actor, Spell::Teleport) {
-                    cast(world, client, actor, Spell::Teleport, CastOn::Area(area));
+                if knows(world, actor, asked.spell) {
+                    cast(world, client, actor, asked.spell, CastOn::Area(area));
                 }
             }
             Some(scroll) => effects::scroll_teleport(world, actor, scroll, area),

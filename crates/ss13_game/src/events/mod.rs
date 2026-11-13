@@ -621,6 +621,17 @@ pub fn controls() -> Vec<EventControl> {
             ),
         ),
         on(
+            holidays::CHRISTMAS,
+            c(
+                crate::antag::santa::NAME,
+                20,
+                30.0,
+                0,
+                1,
+                crate::antag::santa::make,
+            ),
+        ),
+        on(
             holidays::EASTER,
             c(
                 holiday_events::RABBITS,
