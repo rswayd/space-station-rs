@@ -362,6 +362,8 @@ pub mod furniture;
 pub mod genetics;
 #[cfg(feature = "server")]
 pub mod ghost;
+#[cfg(feature = "server")]
+pub mod ghost_edible;
 pub mod ghost_menu;
 #[cfg(feature = "client")]
 pub mod ghost_menu_client;
