@@ -64,6 +64,7 @@ mod ghost_roles;
 mod grabs;
 mod gravity;
 mod grenades;
+mod guardians;
 mod gulag;
 mod guns;
 mod harness;
