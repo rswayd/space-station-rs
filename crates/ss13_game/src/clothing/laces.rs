@@ -785,7 +785,7 @@ fn equip_alerts(
         match last {
             Some(mut last) => last.0 = shoes,
             None => {
-                commands.entity(mob).insert(LastShoes(shoes));
+                commands.entity(mob).try_insert(LastShoes(shoes));
             }
         }
         let Some(mut alerts) = alerts else {
