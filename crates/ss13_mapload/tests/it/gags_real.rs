@@ -42,7 +42,7 @@ impl Atlases<'_> {
 /// Pixels equal (both transparent counts as equal), and within 2 per channel.
 fn compare(a: &[u8], b: &[u8]) -> (usize, usize, usize) {
     let (mut exact, mut close) = (0, 0);
-    for (p, q) in a.chunks_exact(4).zip(b.chunks_exact(4)) {
+    for (p, q) in a.as_chunks::<4>().0.iter().zip(b.as_chunks::<4>().0) {
         if p == q || (p[3] == 0 && q[3] == 0) {
             exact += 1;
             close += 1;

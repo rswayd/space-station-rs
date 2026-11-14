@@ -674,7 +674,7 @@ mod tests {
         // The page on disk is a QOI file holding the icons (icon `i` filled with `[i, i, i, 255]`).
         let page = crate::page::decode(&fs::read(out.join(atlas_path(0))).unwrap()).unwrap();
         assert_eq!(page.rgba.len(), (page.width * page.height * 4) as usize);
-        assert!(page.rgba.chunks_exact(4).any(|p| p == [1, 1, 1, 255]));
+        assert!(page.rgba.as_chunks::<4>().0.contains(&[1, 1, 1, 255]));
         let _ = fs::remove_dir_all(&dir);
     }
 }

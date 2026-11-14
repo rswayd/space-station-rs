@@ -52,7 +52,7 @@ function wasmSizes() {
   }
 }
 
-// A data file gzipped by web-build.sh (atlas pages): inflated and mounted without `.gz`.
+// A pack gzipped by web-pack.py: inflated before its files are cut out.
 const isGz = (path) => path.endsWith(".gz");
 
 const isGzip = (bytes) => bytes[0] === 0x1f && bytes[1] === 0x8b;
@@ -106,17 +106,19 @@ async function run() {
 
   const listRes = await fetch("data/files.json");
   if (!listRes.ok) throw new Error(`data/files.json: HTTP ${listRes.status}`);
-  const list = await listRes.json();
-  for (const f of list) {
-    if (!SIDES.has(f.side)) throw new Error(`data/files.json: ${f.path}: side "${f.side}"`);
+  const { packs } = await listRes.json();
+  for (const p of packs) {
+    if (!SIDES.has(p.side)) throw new Error(`data/files.json: ${p.url}: side "${p.side}"`);
   }
+  const now = packs.filter((p) => !p.later);
+  const later = packs.filter((p) => p.later);
 
   const sizes = wasmSizes();
   // Not exact: a host that decodes gzip itself delivers more bytes than the file size.
   const jobs = [
     { url: CLIENT_WASM, size: sizes.client, exact: false },
     { url: SERVER_WASM, size: sizes.server, exact: false },
-    ...list.map((f) => ({ url: `data/${f.path}`, size: f.size, gz: isGz(f.path) })),
+    ...now.map((p) => ({ url: `data/${p.url}`, size: p.size, pack: p })),
   ];
   const total = jobs.reduce((sum, j) => sum + (j.size ?? 0), 0);
   let loaded = 0;
@@ -126,26 +128,25 @@ async function run() {
     text.textContent = `${mb(loaded)} / ${mb(total)} МБ`;
   };
   onBytes(0);
-  const got = new Map();
-  await inParallel(jobs, PARALLEL_FETCHES, async (j) => {
-    const bytes = await download(j.url, j.size, onBytes, !j.gz && (j.exact ?? true));
-    // Still gzip: the host sent the file as stored, so the size check of `download` applies.
-    if (j.gz && isGzip(bytes) && bytes.length !== j.size) {
-      throw new Error(`${j.url}: ожидалось ${j.size} байт, получено ${bytes.length}. Обновите страницу.`);
-    }
-    got.set(j.url, j.gz ? await gunzip(bytes) : bytes);
-  });
-
   const serverFiles = new Map();
   const clientFiles = new Map();
   const transfer = [];
-  for (const f of list) {
-    const bytes = got.get(`data/${f.path}`);
-    const path = isGz(f.path) ? f.path.slice(0, -3) : f.path;
-    if (f.side !== "client") serverFiles.set(path, bytes);
-    if (f.side !== "server") clientFiles.set(path, bytes);
-    if (f.side === "server") transfer.push(bytes.buffer);
-  }
+  // A later pack's files are listed now (the sound list is read at the start) and filled in when
+  // the pack arrives: until then a read finds no bytes and the sound is skipped.
+  for (const p of later) for (const [path] of p.files) clientFiles.set(path, null);
+  const got = new Map();
+  await inParallel(jobs, PARALLEL_FETCHES, async (j) => {
+    if (!j.pack) {
+      got.set(j.url, await download(j.url, j.size, onBytes, j.exact));
+      return;
+    }
+    const bytes = await fetchPack(j.pack, onBytes);
+    unpack(j.pack, bytes, (path, file) => {
+      if (j.pack.side !== "client") serverFiles.set(path, file);
+      if (j.pack.side !== "server") clientFiles.set(path, file);
+    });
+    if (j.pack.side === "server") transfer.push(bytes.buffer);
+  });
   const serverWasm = await gunzip(got.get(SERVER_WASM));
   const clientWasm = await gunzip(got.get(CLIENT_WASM));
   got.clear();
@@ -196,4 +197,30 @@ async function run() {
     if (!String(e?.message ?? e).includes("Using exceptions for control flow")) throw e;
   }
   $("game").focus();
+  // The client reads `clientFiles` on demand: filling it in is all a later pack needs.
+  inParallel(later, 2, async (p) => {
+    const bytes = await fetchPack(p, () => {});
+    unpack(p, bytes, (path, file) => clientFiles.set(path, file));
+  }).catch((e) => console.error("sounds:", e));
 }
+
+// A pack of files.json, inflated, its size checked.
+async function fetchPack(pack, onBytes) {
+  const url = `data/${pack.url}`;
+  const gz = isGz(pack.url);
+  const bytes = await download(url, pack.size, onBytes, !gz);
+  // Still gzip: the host sent the file as stored, so the size check of `download` applies.
+  if (gz && isGzip(bytes) && bytes.length !== pack.size) {
+    throw new Error(`${url}: ожидалось ${pack.size} байт, получено ${bytes.length}. Обновите страницу.`);
+  }
+  return gz ? gunzip(bytes) : bytes;
+}
+
+// Every file of `pack` as a view into `bytes` (no copy).
+function unpack(pack, bytes, put) {
+  for (const [path, offset, length] of pack.files) {
+    if (offset + length > bytes.length) throw new Error(`${pack.url}: ${path} за концом пакета`);
+    put(path, bytes.subarray(offset, offset + length));
+  }
+}
+

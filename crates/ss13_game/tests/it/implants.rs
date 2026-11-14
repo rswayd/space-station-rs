@@ -4,13 +4,13 @@
 //!   implant's action button; an empty implanter takes the implant out of a tracking case; a
 //!   macrobomb arms when its host dies.
 //! - An AI turret on the map pops up and shoots a player in view with its stun beam; the turret
-//!   control panel of its area turns it off.
+//!   control panel of its area turns it off; a panel's turret ignores players outside its area.
 
 use std::path::{Path, PathBuf};
 
 use bevy::prelude::*;
 use ss13_game::actions::ActionButtons;
-use ss13_game::defenses::server::{Turret, TurretControl, update_turrets};
+use ss13_game::defenses::server::{ControlZone, Turret, TurretControl, targets, update_turrets};
 use ss13_game::health::{DamageType, Health, Stat, apply_damage};
 use ss13_game::implants::{
     Detonation, Implant, ImplantHolder, ImplantKind, Implants, MACROBOMB, implant, item_interaction,
@@ -97,7 +97,8 @@ const TYPES: &str = r##"{
     "/turf/closed": { "parent": "/turf", "declared_vars": { "density": 1, "opacity": 1 } },
     "/turf/closed/wall": { "parent": "/turf/closed", "declared_vars": { "icon_state": "wall" } },
     "/area": { "parent": "/atom" },
-    "/area/space": { "parent": "/area" }
+    "/area/space": { "parent": "/area" },
+    "/area/hall": { "parent": "/area" }
   }
 }"##;
 
@@ -106,6 +107,8 @@ const PREFABS: &str = r##""w" = (/turf/closed/wall,/area/space)
 "s" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/space)
 "t" = (/obj/machinery/porta_turret/ai,/turf/open/floor,/area/space)
 "p" = (/obj/machinery/turretid,/turf/open/floor,/area/space)
+"h" = (/turf/open/floor,/area/hall)
+"S" = (/obj/effect/landmark/start/assistant,/turf/open/floor,/area/hall)
 "##;
 
 /// A player at (3,3).
@@ -126,6 +129,17 @@ wwwwwwwwww
 wfffffpffw
 wfsffftffw
 wffffffffw
+wwwwwwwwww
+"}
+"##;
+
+/// As [`TURRET_MAP`], but the player and the tiles west of x = 5 are another area (`/area/hall`).
+const ZONE_MAP: &str = r##"
+(1,1,1) = {"
+wwwwwwwwww
+whhhffpffw
+whShfftffw
+whhhfffffw
 wwwwwwwwww
 "}
 "##;
@@ -157,6 +171,7 @@ fn fixture_assets(test: &str, map: &str) -> PathBuf {
         "/turf/closed/wall",
         "/turf/open/space/basic",
         "/area/space",
+        "/area/hall",
     ];
     let map = format!("{PREFABS}{map}");
     write_fixture(&dir, TYPES, &used, &STATES, &[("map.dmm", &map)])
@@ -273,4 +288,30 @@ fn turret_shoots_and_its_panel_turns_it_off() {
     update_turrets(s.server.world_mut(), panel);
     assert!(!s.get::<Turret>(turret).on);
     s.run_until("the turret pops down", |s| !s.get::<Turret>(turret).raised);
+}
+
+#[test]
+fn a_panels_turret_keeps_to_its_area() {
+    let mut s = Station::start("a_panels_turret_keeps_to_its_area", ZONE_MAP);
+    let a = s.players[0].mob;
+    let turret = {
+        let world = s.server.world_mut();
+        let mut turrets = world.query_filtered::<Entity, With<Turret>>();
+        turrets.iter(world).next().expect("the turret")
+    };
+    assert!(s.try_get::<ControlZone>(turret).is_some());
+    // In view four tiles west, but in the hall: no target.
+    assert!(targets(s.server.world_mut(), turret).is_empty());
+
+    // Into the turret's area: shot.
+    s.server
+        .world_mut()
+        .entity_mut(a)
+        .insert(TilePos::new(5, 3, 1));
+    s.tick();
+    assert_eq!(targets(s.server.world_mut(), turret), [a]);
+    s.run_until("the turret's stun beam hits", |s| {
+        s.try_get::<StatusEffects>(a)
+            .is_some_and(|e| e.stamina > 0.0)
+    });
 }

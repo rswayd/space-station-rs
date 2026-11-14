@@ -26,7 +26,6 @@
 // synthesizer are their generic types (guns, tools) without abductor-only behaviour.
 
 use bevy::ecs::message::MessageCursor;
-use bevy::prelude::*;
 use ss13_mapload::DmItem;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;

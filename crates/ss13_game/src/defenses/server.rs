@@ -3,7 +3,8 @@
 //!
 //! - A turret ([`Turret`], its type data [`DmTurret`] with the projectiles of its installed gun
 //!   resolved by `ss13-mapload`) is processed every 2 s (tg `SSturrets`): while on and powered it
-//!   looks at the mobs it can see within `scan_range` (tg `view`). Basic mobs are targets with
+//!   looks at the mobs it can see within `scan_range` (tg `view`; a panel's turret: in the panel's
+//!   area only, [`ControlZone`]). Basic mobs are targets with
 //!   `TURRET_FLAG_SHOOT_ANOMALOUS` while conscious and not of its faction; cyborgs with
 //!   `TURRET_FLAG_SHOOT_BORGS`; humans when [`assess_perp`] gives at least 4 (in stun mode only
 //!   those who can still act, in lethal mode the living). It picks one at random, pops up (0.5 s,
@@ -134,7 +135,16 @@ pub struct TurretControl {
     pub req_access: Vec<String>,
     /// `turrets`.
     pub turrets: Vec<Entity>,
+    /// `control_area`: the area its turrets guard ([`ControlZone`]).
+    pub area: Option<Entity>,
 }
+
+/// A turret of a control panel looks for targets in the panel's area only.
+// Deviation: tg turrets fire at whoever `view` shows and their beams pass glass, so the AI core's
+// turrets stun anyone walking past its windows outside; here they keep to their area. Turrets
+// without a panel (syndicate, ruins) still fire at everything in view.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ControlZone(pub Entity);
 
 pub struct DefensesPlugin;
 
@@ -283,8 +293,14 @@ fn init_panels(world: &mut World) {
             shoot_cyborgs: dm.shoot_cyborgs,
             emagged: false,
             req_access: dm.req_access.clone(),
-            turrets: linked,
+            turrets: linked.clone(),
+            area,
         });
+        if let Some(area) = area {
+            for t in linked {
+                world.entity_mut(t).insert(ControlZone(area));
+            }
+        }
         refresh_panel_look(world, e);
     }
 }
@@ -582,14 +598,17 @@ pub fn targets(world: &World, e: Entity) -> Vec<Entity> {
         return Vec::new();
     };
     let range = dm.scan_range.max(1.0) as u32;
+    let zone = world.get::<ControlZone>(e).map(|z| z.0);
+    let areas = world.resource::<Areas>();
     let index = world.resource::<SpatialIndex>();
     let mut out = Vec::new();
     for mob in index.in_radius(pos, range) {
         if world.get::<Health>(mob).is_none()
             || world.get::<crate::bots::Bot>(mob).is_some()
-            || world
-                .get::<TilePos>(mob)
-                .is_none_or(|p| !crate::mobs::ai::behaviors::can_see(world, pos, *p, range))
+            || world.get::<TilePos>(mob).is_none_or(|p| {
+                !crate::mobs::ai::behaviors::can_see(world, pos, *p, range)
+                    || zone.is_some_and(|z| areas.area_at(*p) != Some(z))
+            })
         {
             continue;
         }
@@ -915,6 +934,9 @@ fn link_buffer(world: &mut World, client: Entity, held: Entity, panel: Entity) -
     };
     if !p.turrets.contains(&buffered) {
         p.turrets.push(buffered);
+    }
+    if let Some(area) = p.area {
+        world.entity_mut(buffered).insert(ControlZone(area));
     }
     let (what, name) = (plain_name(world, buffered), plain_name(world, panel));
     tell(

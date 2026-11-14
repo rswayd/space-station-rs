@@ -199,11 +199,15 @@ fn to_rgba8(buf: Vec<u8>, color: png::ColorType) -> Vec<u8> {
     match color {
         Rgba => buf,
         Rgb => buf
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|p| [p[0], p[1], p[2], 255])
             .collect(),
         GrayscaleAlpha => buf
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .flat_map(|p| [p[0], p[0], p[0], p[1]])
             .collect(),
         Grayscale => buf.iter().flat_map(|&g| [g, g, g, 255]).collect(),
@@ -476,7 +480,7 @@ state = \"q\\\"uote\\\\\"
         assert_eq!(dmi.icon_rect(idx), [16, 24, 16, 24]);
         let px = dmi.icon_pixels(idx);
         assert_eq!(px.len(), 16 * 24 * 4);
-        assert!(px.chunks_exact(4).all(|p| p == [7, 7, 7, 255]));
+        assert!(px.as_chunks::<4>().0.iter().all(|p| *p == [7, 7, 7, 255]));
     }
 
     #[test]

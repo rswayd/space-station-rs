@@ -31,7 +31,6 @@ use ss13_mapload::{DmName, DmObj};
 use ss13_net::chat::server::SendChat;
 use ss13_net::server::ClientToken;
 use ss13_shared::TilePos;
-use ss13_tgui::UiInterface as _;
 use ss13_tgui::UiStatus;
 use ss13_tgui::interfaces::vending::ProductIcon;
 use ss13_tgui::server::{

@@ -400,7 +400,7 @@ pub(super) fn rebuild_ui(world: &mut World, vendor: Entity) {
     let Some(mut machine) = world.get_mut::<Vendor>(vendor) else {
         return;
     };
-    let mut all: Vec<ProductRecord> = machine.ui.product_records.drain(..).collect();
+    let mut all: Vec<ProductRecord> = std::mem::take(&mut machine.ui.product_records);
     all.append(&mut machine.ui.hidden_records);
     all.sort_by_key(|r| r.reference);
     for row in all {

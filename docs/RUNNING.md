@@ -185,8 +185,9 @@ SS13_ADMIN_UI=players SS13_SCRIPT=$PWD/scripts/visual/demo.txt SS13_SCRIPT_OUT=/
 A single-player static site (architecture: `docs/WEB.md`): the server runs in a Web Worker, the
 client on a WebGL2 canvas, connected in memory; Chrome only. The landing page explains it and
 links the source (AGPL §13, the exact commit) and the asset licenses; "Запустить игру" downloads
-every file of `data/files.json` and both wasm binaries with a progress bar (~104 MB, no lazy
-loading), starts the worker, waits for its `ready` and then starts the client. A reload resets
+the up-front packs of `data/files.json` and both wasm binaries with a progress bar (~35 MB of
+data), starts the worker, waits for its `ready` and then starts the client; the sound packs
+(~100 MB) follow in the background, a sound not there yet is skipped. A reload resets
 everything.
 
 ```sh
@@ -199,11 +200,14 @@ python3 -m http.server -d dist 8000                     # then open http://127.0
 `wasm-bindgen` at the exact version of the `wasm-bindgen` crate in `Cargo.lock` (it checks) and
 `wasm-opt` (binaryen). `dist/`: `index.html`, `main.js`, `style.css`, `server-worker.js` (from
 `web/`), `progress.html` (`docs/parity/PROGRESS.html`, linked from the landing), `client/` and `server/` (wasm-bindgen `--target web` output after `wasm-opt -Oz`),
-`data/` (the package's assets and `BandaStation/_maps/...` files, keyed by these relative paths)
-and `data/files.json` (`[{path, size, side}]`, `side` = `server`, `client` (atlas pages, sounds)
-or `both` (`manifest.postcard`)). Attribution texts are shipped but not downloaded up front.
-Atlas pages ship gzipped (`atlas/N.qoi.gz`; the host does not compress unknown types): the page
-inflates every `.gz` of `files.json` with `DecompressionStream` and mounts it without the suffix.
+`data/files.json` and `data/pack/` (`scripts/web-pack.py`: the package's assets and
+`BandaStation/_maps/...` files, keyed by these relative paths, concatenated into packs of at most
+24 MiB, gzipped but the sounds, named by content hash; `_headers` lets the browser keep them):
+`{packs: [{url, size, side, later, files: [[path, offset, length]]}]}`, `side` = `server`,
+`client` (atlas pages, nanomaps, sounds) or `both` (`manifest.postcard`), `later` = downloaded
+after the start (the sounds but the lobby music). The page inflates a `.gz` pack with
+`DecompressionStream` and mounts its files as views into it. Attribution texts are shipped as
+files, not packed.
 Page/worker messages: `{t: "init", files, wasm}` page→worker (`wasm`: the server binary the page
 already downloaded), `progress`/`ready`/`error` worker→page, then `open`/`frame`/`dgram`/`close`
 both ways (`ArrayBuffer`s transferred).

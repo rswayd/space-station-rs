@@ -255,20 +255,24 @@ fn sound_source(files: &mut SoundFiles, file: &str) -> Option<AudioSource> {
     if file.contains("..") || file.starts_with('/') {
         return None;
     }
-    let root = files.root.clone();
-    files
-        .loaded
-        .entry(file.to_owned())
-        .or_insert_with(|| match ss13_data::read(&root.join(file)) {
-            Ok(bytes) => Some(AudioSource {
-                bytes: bytes.into(),
-            }),
-            Err(e) => {
-                warn!("sound {file}: {e}");
-                None
-            }
-        })
-        .clone()
+    if let Some(known) = files.loaded.get(file) {
+        return known.clone();
+    }
+    let path = files.root.join(file);
+    let source = match ss13_data::read(&path) {
+        Ok(bytes) => Some(AudioSource {
+            bytes: bytes.into(),
+        }),
+        // Listed but not readable yet: the browser demo downloads the sounds after the start
+        // (web/main.js); asked again next time.
+        Err(_) if ss13_data::is_file(&path) => return None,
+        Err(e) => {
+            warn!("sound {file}: {e}");
+            None
+        }
+    };
+    files.loaded.insert(file.to_owned(), source.clone());
+    source
 }
 
 /// Starts `sound` with its datum's effects at the player's volume of `category`.

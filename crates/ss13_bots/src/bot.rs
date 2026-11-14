@@ -85,7 +85,7 @@ impl PageAlpha {
 
     fn from_page(page: ss13_assets::page::PagePixels) -> Self {
         let mut bits = vec![0u64; (page.rgba.len() / 4).div_ceil(64)];
-        for (i, px) in page.rgba.chunks_exact(4).enumerate() {
+        for (i, px) in page.rgba.as_chunks::<4>().0.iter().enumerate() {
             if px[3] > 0 {
                 bits[i / 64] |= 1 << (i % 64);
             }
@@ -707,7 +707,7 @@ mod tests {
     fn page_alpha_from_a_page_file() {
         // 3x2, rows top-down: (1,0) has alpha 1, (2,1) alpha 255, the rest 0.
         let mut rgba = vec![200u8; 3 * 2 * 4];
-        for (i, px) in rgba.chunks_exact_mut(4).enumerate() {
+        for (i, px) in rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             px[3] = [0, 1, 0, 0, 0, 255][i];
         }
         let file = std::env::temp_dir().join(format!("ss13_bots_page_{}.qoi", std::process::id()));

@@ -25,12 +25,10 @@
 use std::path::Path;
 
 use bevy::ecs::message::MessageCursor;
-use bevy::prelude::*;
 use ss13_assets::dmm::{DmValue, DmmMap};
 use ss13_mapload::{DmName, DmObj, MapLoadReport, ShuttleTemplates};
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
-use ss13_tgui::UiInterface as _;
 use ss13_tgui::UiStatus;
 use ss13_tgui::server::{
     AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,

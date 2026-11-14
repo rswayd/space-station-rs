@@ -15,7 +15,6 @@ use bevy::prelude::*;
 use ss13_mapload::{DmItem, DmName, DmObj};
 use ss13_shared::chat::Span;
 use ss13_shared::{Appearance, TilePos};
-use ss13_tgui::UiInterface as _;
 use ss13_tgui::UiStatus;
 use ss13_tgui::interfaces::vending::ProductIcon;
 use ss13_tgui::server::{

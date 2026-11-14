@@ -67,7 +67,7 @@ impl ScreenFilter {
 /// BYOND colour matrices applied one after the other (`a` first) as one.
 pub fn compose(a: &[f32; 20], b: &[f32; 20]) -> [f32; 20] {
     let mut out = [0.0; 20];
-    for (i, row) in out.chunks_exact_mut(4).enumerate() {
+    for (i, row) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
         // Row i of `a` (an input channel's contribution, or the constant) through `b`.
         for (j, value) in row.iter_mut().enumerate() {
             let through: f32 = (0..4).map(|k| a[i * 4 + k] * b[k * 4 + j]).sum();

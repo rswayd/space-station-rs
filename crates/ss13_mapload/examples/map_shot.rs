@@ -122,7 +122,7 @@ fn main() {
     let (w, h) = (((x1 - x0 + 1) * 32) as u32, ((y1 - y0 + 1) * 32) as u32);
     let mut canvas = vec![0u8; (w * h * 4) as usize];
     // Space-black background like the client's clear color.
-    for px in canvas.chunks_exact_mut(4) {
+    for px in canvas.as_chunks_mut::<4>().0 {
         px.copy_from_slice(&[0, 0, 0, 255]);
     }
     let mut atlases = Atlases::new(&a.assets, &manifest);

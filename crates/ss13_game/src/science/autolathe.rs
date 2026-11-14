@@ -31,10 +31,10 @@ use ss13_mapload::research::{MAX_STACK_SIZE, SHEET_MATERIAL_AMOUNT, build_type};
 use ss13_mapload::{DmObj, DmPower, DmStack};
 use ss13_proto::Prototypes;
 use ss13_shared::TilePos;
+use ss13_tgui::UiStatus;
 use ss13_tgui::server::{
     AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
 };
-use ss13_tgui::{UiInterface as _, UiStatus};
 use ss13_world::WorldSystems;
 
 use super::lathe::{MaterialStore, design_cost, material_infos, optimal_cost};

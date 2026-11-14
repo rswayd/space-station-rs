@@ -87,7 +87,7 @@ impl AlphaMask {
             return None;
         }
         let mut bits = vec![0u64; pixels.div_ceil(64)];
-        for (i, px) in rgba.chunks_exact(4).enumerate() {
+        for (i, px) in rgba.as_chunks::<4>().0.iter().enumerate() {
             if px[3] != 0 {
                 bits[i / 64] |= 1 << (i % 64);
             }
@@ -451,7 +451,7 @@ mod tests {
     fn alpha_mask_marks_pixels_with_any_alpha() {
         // 3x2, rows top-down: only (1,0) (alpha 1) and (2,1) (alpha 255) are drawn.
         let mut rgba = vec![255u8; 3 * 2 * 4];
-        for (i, px) in rgba.chunks_exact_mut(4).enumerate() {
+        for (i, px) in rgba.as_chunks_mut::<4>().0.iter_mut().enumerate() {
             px[3] = match i {
                 1 => 1,
                 5 => 255,

@@ -247,8 +247,8 @@ pub fn quick_deploy(world: &mut World, control: Entity, user: Entity) -> bool {
         );
     }
     sound_at(world, control, MECHMOVE, 25.0, SHORT_RANGE_SOUND_EXTRARANGE);
-    for i in 0..suit.parts.len() {
-        let is_out = world.get::<CarriedBy>(suit.parts[i].item).is_some();
+    for (i, part) in suit.parts.iter().enumerate() {
+        let is_out = world.get::<CarriedBy>(part.item).is_some();
         if deploying && !is_out {
             deploy(world, control, i, None, false);
         } else if !deploying && is_out {

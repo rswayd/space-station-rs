@@ -43,26 +43,13 @@ cp docs/parity/PROGRESS.html "$out/progress.html"
 cp -a "$pkg/assets/." "$out/data/"
 cp -a "$pkg/data/BandaStation" "$out/data/"
 cp "$pkg/LICENSE" "$pkg/ASSETS-LICENSE.md" "$out/"
-# Atlas pages are QOI (fast to decode, not entropy-coded): gzip halves them again, and the host
-# does not compress unknown types. main.js inflates every `.gz` of files.json and mounts it
-# without the suffix.
-gzip -9 "$out"/data/atlas/*.qoi
-
-# Runtime files only: attribution texts and licenses/ are shipped (linked from the page) but not
-# downloaded up front.
-list=$(cd "$out/data" && find . -type f ! -name '*.txt' ! -path './licenses/*' -printf '%P\t%s\n' | LC_ALL=C sort)
-data_bytes=$(awk -F'\t' '{ s += $2 } END { print s + 0 }' <<<"$list")
-awk -F'\t' '
-    BEGIN { printf "[" }
-    {
-        side = "server"
-        if ($1 == "manifest.postcard") side = "both"
-        else if ($1 ~ /^(atlas|sound|nanomap)\//) side = "client"
-        gsub(/\\/, "\\\\", $1); gsub(/"/, "\\\"", $1)
-        printf "%s\n{\"path\":\"%s\",\"size\":%d,\"side\":\"%s\"}", (NR > 1 ? "," : ""), $1, $2, side
-    }
-    END { print "\n]" }
-' <<<"$list" >"$out/data/files.json"
+# Packs instead of thousands of small files, files.json lists them (scripts/web-pack.py); the
+# download counts the packs fetched before the start.
+python3 scripts/web-pack.py "$out/data"
+data_bytes=$(python3 -c 'import json, sys
+print(sum(p["size"] for p in json.load(open(sys.argv[1]))["packs"] if not p["later"]))' "$out/data/files.json")
+# Packs are named by their content: a browser keeps them across visits and builds.
+printf '%s\n' '/data/pack/*' '  Cache-Control: public, max-age=31536000, immutable' >"$out/_headers"
 
 client_bytes=$(stat -c %s "$out/client/ss13_web_client_bg.wasm.gz")
 server_bytes=$(stat -c %s "$out/server/ss13_web_server_bg.wasm.gz")

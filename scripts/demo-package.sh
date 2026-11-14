@@ -16,6 +16,9 @@ mkdir -p "$out/assets" "$out/data/BandaStation" "$out/config"
 # runtime.
 cp -a "$assets/." "$out/assets/"
 rm -f "$out/assets/dm_types.json"
+# Lobby remixes of copyrighted themes we have no licence to redistribute (never played:
+# crates/ss13_game/src/lobby_music.rs, ROUND_START_MUSIC).
+rm -f "$out"/assets/sound/sound/music/lobby_music/title{2,3}.ogg
 
 # What the server opens under SS13_SOURCE for MetaStation:
 # - the station map (ss13_mapload MapLoadPlugin::map_paths), read again for landmarks;

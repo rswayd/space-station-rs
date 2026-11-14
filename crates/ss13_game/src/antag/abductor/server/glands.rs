@@ -34,7 +34,6 @@
 // quantum's commands, no mind control alert; a gland inserted by any surgery starts at once
 // (tg waits for the experiment when an abductor implants it).
 
-use bevy::prelude::*;
 use ss13_mapload::DmItem;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;

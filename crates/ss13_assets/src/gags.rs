@@ -310,7 +310,7 @@ impl Frames {
 
     fn map_pixels(&mut self, f: impl Fn([u8; 4]) -> [u8; 4]) {
         for icon in &mut self.icons {
-            for px in icon.chunks_exact_mut(4) {
+            for px in icon.as_chunks_mut::<4>().0 {
                 let out = f([px[0], px[1], px[2], px[3]]);
                 px.copy_from_slice(&out);
             }

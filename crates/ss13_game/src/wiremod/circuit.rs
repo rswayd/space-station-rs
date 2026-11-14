@@ -1457,10 +1457,7 @@ impl Circuit {
         let default_trigger = port.is_none_or(|p| n.inputs[p].trigger == Trigger::Input);
         let by_trigger =
             port.is_some_and(|p| Some(p) == n.trigger_in && n.inputs[p].value.truthy());
-        if default_trigger && n.flags & IN_SIGNAL != 0 && !by_trigger {
-            return false;
-        }
-        true
+        !(default_trigger && n.flags & IN_SIGNAL != 0 && !by_trigger)
     }
 
     /// `pre_input_received`: port types that follow an option, the radio's frequency.

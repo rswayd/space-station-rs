@@ -286,10 +286,7 @@ fn can_consume(world: &mut World, actor: Actor, eater: Entity) -> bool {
         return false;
     }
     // `COMSIG_CARBON_ATTEMPT_EAT` of a choking mob (`crate::afflictions`).
-    if crate::afflictions::blocks_eating(world, eater) {
-        return false;
-    }
-    true
+    !crate::afflictions::blocks_eating(world, eater)
 }
 
 /// The food a held item eats with: itself, what tongs hold or a plate's first food

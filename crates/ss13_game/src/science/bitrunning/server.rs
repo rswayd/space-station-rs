@@ -45,7 +45,6 @@ use ss13_mapload::{DmAtom, DmCloset, DmMob, DmName, DmObj, IconIndex, MapLoadPlu
 use ss13_net::server::Networked;
 use ss13_shared::TilePos;
 use ss13_shared::chat::Span;
-use ss13_tgui::UiInterface as _;
 use ss13_tgui::UiStatus;
 use ss13_tgui::server::{
     AppTguiExt, OpenUi, ServerUi, UiActed, UiParams, UiReject, UiSystems, UiWindow,
