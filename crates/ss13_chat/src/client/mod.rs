@@ -9,6 +9,7 @@ pub mod log;
 pub mod panel;
 pub mod prefs;
 pub mod settings_ui;
+pub mod stat_dock;
 pub mod style;
 mod wrap;
 

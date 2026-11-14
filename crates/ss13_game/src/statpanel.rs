@@ -11,8 +11,8 @@
 //! - Verb tabs so far: BandaStation's «Эмоции» (`modular_bandastation/emote_panel/code/
 //!   emote_verbs.dm`) on humans, with the species verbs (tajaran, vulpkanin, moth, tails).
 // shortcut: no MC/admin tabs, tickets, turf listing (alt-click "objects on the tile") or other
-// verb categories (the port has no verb objects yet); the window can be closed and only comes
-// back on reconnect.
+// verb categories (the port has no verb objects yet). The window sits in the chat column's
+// dock (`crate::statpanel_client`), not on its own.
 
 use serde::{Deserialize, Serialize};
 use ss13_tgui::UiInterface;

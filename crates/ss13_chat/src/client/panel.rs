@@ -40,6 +40,7 @@ use ss13_ui_kit::virtual_list::VirtualListState;
 use super::log::{COMBINE_MAX_MESSAGES, ChatEntry, ChatLog};
 use super::prefs::{self, ChannelSet, Highlighter};
 use super::settings_ui;
+use super::stat_dock;
 use super::style;
 use super::wrap::break_lines;
 
@@ -605,6 +606,7 @@ pub(crate) fn plugin(app: &mut App) {
         .add_observer(on_say_submitted)
         .add_observer(on_say_changed);
     settings_ui::plugin(app);
+    stat_dock::plugin(app);
 }
 
 /// `TextFont` of a span, as a scene patch (`TextFont` holds asset handles and is a template).
@@ -799,6 +801,10 @@ fn spawn_panel(view: Res<ChatView>, mut commands: Commands) {
         BackgroundColor(style::PANEL_BACKGROUND)
         BorderColor::all(theme::COLOR_BORDER_DARK)
         Children [
+            @{stat_dock::dock()}
+            --
+            @{stat_dock::divider()}
+            --
             @{settings_ui::top_bar()}
             --
             @{settings_ui::emotes_root()}

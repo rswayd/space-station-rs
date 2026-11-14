@@ -472,6 +472,14 @@ pub fn place_window(size: Vec2, screen: Vec2, recalled: Option<Vec2>, open: &[Ve
 #[derive(Resource, Default)]
 pub struct ClientWindows(pub HashMap<u32, Entity>);
 
+/// A place in the layout for the windows of one interface, instead of a floating window (the
+/// BYOND skin's panes: the stat panel's `statwindow`): no title bar, no close button, filling
+/// this node.
+#[derive(Component, Clone, Debug, Default)]
+pub struct UiDock {
+    pub interface: String,
+}
+
 pub struct TguiClientPlugin;
 
 impl Plugin for TguiClientPlugin {
@@ -592,6 +600,7 @@ fn apply_messages(
     headless: Res<HeadlessUis>,
     mut windows: ResMut<ClientWindows>,
     mut roots: Query<(&mut ClientWindow, &Node)>,
+    docks: Query<(Entity, &UiDock)>,
     positions: Res<WindowPositions>,
     screens: Query<&bevy::window::Window, With<bevy::window::PrimaryWindow>>,
     scale: Option<Res<UiScale>>,
@@ -622,6 +631,10 @@ fn apply_messages(
                     send.write(SendUi(UiClientMessage::Close { window: *id }));
                     continue;
                 };
+                let dock = docks
+                    .iter()
+                    .find(|(_, d)| d.interface == *interface)
+                    .map(|(e, _)| e);
                 let (width, height) =
                     (view.size)(static_data, data).unwrap_or((view.width, view.height));
                 if !corners_read {
@@ -633,6 +646,30 @@ fn apply_messages(
                         .collect();
                 }
                 corners.retain(|(open, _)| open != id);
+                let window = ClientWindow {
+                    id: *id,
+                    interface: interface.clone(),
+                    status: *status,
+                    static_data: static_data.clone(),
+                    data: data.clone(),
+                    content: None,
+                    pending: None,
+                    ready: None,
+                    dimmer: None,
+                    dirty: true,
+                    scroll: Vec::new(),
+                    placed: Vec2::ZERO,
+                    autofocused: false,
+                };
+                if let Some(dock) = dock {
+                    let root = commands
+                        .spawn_scene(docked_window())
+                        .insert((window, UiLocalState::default(), Visibility::Hidden))
+                        .insert(ChildOf(dock))
+                        .id();
+                    windows.0.insert(*id, root);
+                    continue;
+                }
                 let screen = screens
                     .single()
                     .map_or(Vec2::new(1280.0, 720.0), |w| w.resolution.size())
@@ -653,21 +690,7 @@ fn apply_messages(
                             @title: title, @width: width, @height: height, @left: left, @top: top
                         }
                     })
-                    .insert(ClientWindow {
-                        id: *id,
-                        interface: interface.clone(),
-                        status: *status,
-                        static_data: static_data.clone(),
-                        data: data.clone(),
-                        content: None,
-                        pending: None,
-                        ready: None,
-                        dimmer: None,
-                        dirty: true,
-                        scroll: Vec::new(),
-                        placed,
-                        autofocused: false,
-                    })
+                    .insert(ClientWindow { placed, ..window })
                     .insert((UiLocalState::default(), Visibility::Hidden))
                     .id();
                 windows.0.insert(*id, root);
@@ -696,6 +719,26 @@ fn apply_messages(
                 corners.retain(|(open, _)| open != id);
             }
         }
+    }
+}
+
+/// A window in its [`UiDock`]: the floating window's body (its act scope, colours and text
+/// style, the content slot) without the frame.
+fn docked_window() -> impl Scene {
+    bsn! {
+        Node { flex_grow: 1.0, min_height: px(0), flex_direction: FlexDirection::Column }
+        ss13_ui_kit::ActScope
+        BackgroundColor(theme::COLOR_BASE)
+        @theme::root_text_style()
+        Children [
+            Node {
+                flex_grow: 1.0,
+                min_height: px(0),
+                flex_direction: FlexDirection::Column,
+                overflow: Overflow::clip(),
+            }
+            Slot
+        ]
     }
 }
 

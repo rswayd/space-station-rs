@@ -1616,6 +1616,17 @@ pub fn run(
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_panel_offers_every_emote_once() {
+        let mut keys: Vec<_> = EMOTES.iter().map(|e| e.key).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let mut named: Vec<_> = crate::emote_names::NAMES.iter().map(|(k, _)| *k).collect();
+        named.sort_unstable();
+        assert_eq!(named, keys);
+        assert_eq!(crate::emote_names::name_of("scream"), Some("кричать"));
+    }
+
     const C: SpeakerStat = SpeakerStat::Conscious;
     const HUMAN_USER: EmoteUser = EmoteUser {
         mob: EmoteMob::Human,

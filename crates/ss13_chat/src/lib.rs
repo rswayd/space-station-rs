@@ -11,6 +11,7 @@ pub mod client;
 pub mod emoji;
 #[cfg(feature = "server")]
 pub mod emote;
+pub mod emote_names;
 #[cfg(feature = "server")]
 pub mod language;
 pub mod radio;

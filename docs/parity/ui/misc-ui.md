@@ -29,7 +29,7 @@
 Панель вкладок (Status, вербы по категориям, MC для админов, тикеты, объекты на тайле), обновляется подсистемой `SSstatpanels`.
 
 - **Код:** [`SUBSYSTEM_DEF(statpanels)`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/controllers/subsystem/statpanel.dm#L1), [`stat_panel.dm`](https://github.com/ss220club/BandaStation/blob/ce5b1f159748db35281bd3b673551598807f4a0b/code/modules/client/verbs/stat_panel.dm#L1)
-- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/statpanel.rs`, `crates/ss13_game/src/statpanel_client.rs`: окно с вкладками (Status: станция, время раунда, игроки; вкладки вербов моба, верб — кнопка, сервер проверяет, что верб у моба есть), обновление раз в секунду. Нет вкладок MC/админов, тикетов, предметов на тайле и других категорий вербов (в порте нет объектов-вербов); окно закрывается до переподключения
+- **Статус в ss13-rs:** 🟡 частично — `crates/ss13_game/src/statpanel.rs`, `crates/ss13_game/src/statpanel_client.rs`: окно с вкладками (Status: станция, время раунда, игроки; вкладки вербов моба, верб — кнопка, сервер проверяет, что верб у моба есть), обновление раз в секунду. Нет вкладок MC/админов, тикетов, предметов на тайле и других категорий вербов (в порте нет объектов-вербов). Место как в скине (`info_child`): над чатом, доля 40% по умолчанию, граница перетаскивается, кнопка «Статпанель» над чатом скрывает её (`toggle_stat_panel`), обе настройки в `client.cfg` — `crates/ss13_chat/src/client/stat_dock.rs`, док окна tgui `UiDock` (`crates/ss13_tgui/src/client.rs`); нет обязательного показа админам (`needs_stat_panel`)
 
 ### Меню Escape
 Меню по Esc: продолжить, настройки, админ-помощь (тикеты), выход в лобби/дисконнект, время сервера.

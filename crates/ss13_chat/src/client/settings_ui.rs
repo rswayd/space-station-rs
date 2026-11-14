@@ -23,6 +23,7 @@ use super::prefs::{
     self, CustomEmote, MAX_EMOTE_LENGTH, MAX_EMOTE_NAME_LENGTH, MAX_EMOTES, PAGE_CHANNELS,
     WARN_AFTER_HIGHLIGHT_AMT,
 };
+use crate::emote_names;
 
 /// "Save chat log": the page to write (`ss13_game` puts it beside the client settings).
 #[derive(Message, Clone, Debug, PartialEq)]
@@ -62,6 +63,8 @@ pub struct EmoteForm {
     pub name: String,
     pub key: String,
     pub text: String,
+    /// The filter of the emote list (`tgui_input_list`'s search).
+    pub search: String,
 }
 
 impl EmoteForm {
@@ -77,13 +80,13 @@ impl EmoteForm {
             name: emote.name.clone(),
             key,
             text,
+            search: String::new(),
         }
     }
 
-    /// The emote the form describes, with BandaStation's checks and warnings. The key is checked
-    /// by the server when the emote runs (`Эмоция '...' не существует`).
-    // shortcut: the key is typed, not picked from BandaStation's list of every emote (the
-    // client has no emote table); a list needs the server to send the mob's emotes.
+    /// The emote the form describes, with BandaStation's checks and warnings. The key is picked
+    /// from [`emote_names::NAMES`], as BandaStation's `all_emotes`; whether the mob may run it
+    /// is checked by the server when it runs.
     pub fn build(&self, emotes: &[CustomEmote]) -> Result<CustomEmote, String> {
         const CANCEL: &str = "Добавление эмоции отменено.";
         if self.editing.is_none() && emotes.len() >= MAX_EMOTES {
@@ -95,7 +98,7 @@ impl EmoteForm {
         if needs_key && key.is_empty() {
             return Err(CANCEL.into());
         }
-        if needs_key && key.contains(char::is_whitespace) {
+        if needs_key && emote_names::name_of(&key).is_none() {
             return Err(format!("Эмоция {key} не существует!"));
         }
         if self.kind != EmoteKind::Default
@@ -105,7 +108,7 @@ impl EmoteForm {
         }
         let name = match self.name.trim() {
             "" if self.kind == EmoteKind::Me => text.chars().take(MAX_EMOTE_NAME_LENGTH).collect(),
-            "" => key.clone(),
+            "" => emote_names::name_of(&key).unwrap_or(&key).to_owned(),
             name => name.to_owned(),
         };
         if name.chars().count() > MAX_EMOTE_NAME_LENGTH {
@@ -177,9 +180,13 @@ pub enum PrefInput {
     HighlightText(usize),
     HighlightColor(usize),
     EmoteName,
-    EmoteKey,
+    EmoteSearch,
     EmoteText,
 }
+
+/// An emote of the form's list: its key.
+#[derive(Component, Clone, Debug, Default)]
+pub struct EmotePick(pub &'static str);
 
 pub(crate) fn plugin(app: &mut App) {
     ss13_tgui::slider::plugin(app);
@@ -188,7 +195,8 @@ pub(crate) fn plugin(app: &mut App) {
         .add_message::<ChatExported>()
         .add_observer(on_settings_act)
         .add_observer(on_pref_input)
-        .add_observer(on_emote_right_click);
+        .add_observer(on_emote_right_click)
+        .add_observer(on_emote_pick);
 }
 
 /// The top bar's tabs and buttons, put in the panel by [`super::panel`].
@@ -210,6 +218,11 @@ pub(crate) fn top_bar() -> impl Scene {
             @Button { @icon: "plus", @tooltip: "Новая вкладка" }
             Button { color: UiColor::Transparent }
             Act("page_add")
+            --
+            @Button { @icon: "table-list", @tooltip: "Статпанель" }
+            Button { color: UiColor::Grey }
+            Act({super::stat_dock::TOGGLE_ACT.to_owned()})
+            super::stat_dock::StatToggle
             --
             @Button { @icon: "face-grin-beam", @tooltip: "Панель эмоций" }
             Button { color: UiColor::Grey }
@@ -595,13 +608,9 @@ fn emote_form(form: &EmoteForm) -> Box<dyn Scene> {
     if form.kind != EmoteKind::Me {
         rows.push(row(vec![
             label("Эмоция:"),
-            input(
-                form.key.clone(),
-                PrefInput::EmoteKey,
-                32,
-                "ключ, например sigh",
-            ),
+            input(form.search.clone(), PrefInput::EmoteSearch, 32, "поиск"),
         ]));
+        rows.push(emote_list(form));
     }
     if form.kind != EmoteKind::Default {
         rows.push(row(vec![
@@ -1023,6 +1032,7 @@ fn on_settings_act(
 fn on_pref_input(
     changed: On<InputChanged>,
     fields: Query<&PrefInput>,
+    mut picks: Query<(&EmotePick, &mut Node)>,
     mut prefs: ResMut<prefs::ChatPrefs>,
     mut ui: ResMut<PanelUi>,
 ) {
@@ -1045,17 +1055,109 @@ fn on_pref_input(
             }
         }
         // The form is view state: changing it must not rebuild the panel under the cursor.
-        PrefInput::EmoteName | PrefInput::EmoteKey | PrefInput::EmoteText => {
+        PrefInput::EmoteName | PrefInput::EmoteText => {
             let ui = ui.bypass_change_detection();
             if let Some(form) = ui.emote_form.as_mut() {
                 match field {
                     PrefInput::EmoteName => form.name = value,
-                    PrefInput::EmoteKey => form.key = value,
                     _ => form.text = value,
                 }
             }
         }
+        PrefInput::EmoteSearch => {
+            let ui = ui.bypass_change_detection();
+            if let Some(form) = ui.emote_form.as_mut() {
+                form.search = value;
+                for (pick, mut node) in &mut picks {
+                    node.display = display_if(matches(&form.search, pick.0));
+                }
+            }
+        }
     }
+}
+
+/// Picking an emote of the form's list (`tgui_input_list`): selects it and, while the name is
+/// still the previous pick's, names it after the emote (`suggested_name`). The form is not
+/// rebuilt, so the list keeps its scroll and the search field its text.
+fn on_emote_pick(
+    mut click: On<PointerClick>,
+    picks: Query<&EmotePick>,
+    mut buttons: Query<(&EmotePick, &mut Button)>,
+    mut fields: Query<(&PrefInput, &mut Input)>,
+    mut ui: ResMut<PanelUi>,
+) {
+    if click.button != PointerButton::Primary {
+        return;
+    }
+    let Ok(&EmotePick(key)) = picks.get(click.entity) else {
+        return;
+    };
+    click.propagate(false);
+    let ui = ui.bypass_change_detection();
+    let Some(form) = ui.emote_form.as_mut() else {
+        return;
+    };
+    let old_name = emote_names::name_of(&form.key).unwrap_or(&form.key);
+    let rename = form.name.trim().is_empty() || form.name == old_name;
+    form.key = key.to_owned();
+    for (pick, mut button) in &mut buttons {
+        let selected = pick.0 == key;
+        if button.selected != selected {
+            button.selected = selected;
+        }
+    }
+    if rename {
+        form.name = emote_names::name_of(key).unwrap_or(key).to_owned();
+        for (field, mut input) in &mut fields {
+            if *field == PrefInput::EmoteName {
+                input.value.clone_from(&form.name);
+            }
+        }
+    }
+}
+
+/// Whether the list shows `key` under the filter `search` (by name or key, any case).
+fn matches(search: &str, key: &str) -> bool {
+    let search = search.trim().to_lowercase();
+    search.is_empty()
+        || key.contains(&search)
+        || emote_names::name_of(key).is_some_and(|n| n.to_lowercase().contains(&search))
+}
+
+fn display_if(shown: bool) -> Display {
+    if shown { Display::Flex } else { Display::None }
+}
+
+/// BandaStation's "Выбор эмоции" list: every emote by name, the picked one selected.
+fn emote_list(form: &EmoteForm) -> Box<dyn Scene> {
+    let mut names: Vec<_> = emote_names::NAMES.to_vec();
+    names.sort_by(|a, b| a.1.cmp(b.1));
+    let items: Vec<Box<dyn Scene>> = names
+        .into_iter()
+        .map(|(key, name)| {
+            let selected = form.key == key;
+            let display = display_if(matches(&form.search, key));
+            let content = name.to_owned();
+            let tooltip = format!("*{key}");
+            boxed(bsn! {
+                @Button { @content: content, @tooltip: tooltip }
+                Button { selected: selected }
+                Node { display: display }
+                EmotePick(key)
+            })
+        })
+        .collect();
+    boxed(bsn! {
+        Node {
+            width: percent(100),
+            max_height: px(160),
+            flex_direction: FlexDirection::Row,
+            flex_wrap: FlexWrap::Wrap,
+            align_content: AlignContent::FlexStart,
+            overflow: Overflow::scroll_y(),
+        }
+        Children [ {items} ]
+    })
 }
 
 /// BandaStation `emotes/contextAction` (right click): the emote's edit form.
@@ -1099,23 +1201,20 @@ mod tests {
         assert_eq!(
             form.build(&[]),
             Ok(CustomEmote {
-                name: "sigh".into(),
+                name: "вздох".into(),
                 emote: PanelEmote::Default { key: "sigh".into() },
             })
         );
         assert_eq!(
-            form.build(&[emote("sigh")]),
-            Err("Эмоция \"sigh\" уже существует!".into())
+            form.build(&[emote("вздох")]),
+            Err("Эмоция \"вздох\" уже существует!".into())
         );
         // Editing it keeps its own name.
         form.editing = Some(0);
-        assert!(form.build(&[emote("sigh")]).is_ok());
+        assert!(form.build(&[emote("вздох")]).is_ok());
         form.editing = None;
-        form.key = "two words".into();
-        assert_eq!(
-            form.build(&[]),
-            Err("Эмоция two words не существует!".into())
-        );
+        form.key = "вфвф".into();
+        assert_eq!(form.build(&[]), Err("Эмоция вфвф не существует!".into()));
         // A custom text needs the text; `*me` is named after it.
         form.kind = EmoteKind::Custom;
         form.key = "scream".into();

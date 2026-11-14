@@ -403,7 +403,16 @@ pub struct ChatPrefs {
     pub font_size: f32,
     pub line_height: f32,
     pub emotes: Vec<CustomEmote>,
+    /// The stat panel's share of the chat column (the skin's `info_child.splitter`).
+    pub stat_split: f32,
+    /// The stat panel is shown (tg's `statpanel` preference, on by default).
+    pub stat_shown: bool,
 }
+
+/// The skin's `splitter = 40`.
+pub const DEFAULT_STAT_SPLIT: f32 = 0.4;
+pub const STAT_SPLIT_MIN: f32 = 0.1;
+pub const STAT_SPLIT_MAX: f32 = 0.9;
 
 impl Default for ChatPrefs {
     fn default() -> Self {
@@ -414,6 +423,8 @@ impl Default for ChatPrefs {
             font_size: DEFAULT_FONT_SIZE,
             line_height: DEFAULT_LINE_HEIGHT,
             emotes: Vec::new(),
+            stat_split: DEFAULT_STAT_SPLIT,
+            stat_shown: true,
         }
     }
 }
@@ -424,6 +435,8 @@ pub const KEY_PAGES: &str = "chat.pages";
 pub const KEY_PAGE: &str = "chat.page";
 pub const KEY_HIGHLIGHTS: &str = "chat.highlights";
 pub const KEY_EMOTES: &str = "chat.emotes";
+pub const KEY_STAT_SPLIT: &str = "chat.stat_split";
+pub const KEY_STAT_SHOWN: &str = "chat.stat_shown";
 
 /// The separators of the encoded lists, and what the settings file trims or splits on.
 fn escape(text: &str) -> String {
@@ -586,6 +599,8 @@ impl ChatPrefs {
             (KEY_PAGE, self.pages.current.to_string()),
             (KEY_HIGHLIGHTS, encode_highlights(&self.highlights)),
             (KEY_EMOTES, encode_emotes(&self.emotes)),
+            (KEY_STAT_SPLIT, format!("{:.3}", self.stat_split)),
+            (KEY_STAT_SHOWN, self.stat_shown.to_string()),
         ]
     }
 
@@ -618,6 +633,13 @@ impl ChatPrefs {
                 DEFAULT_LINE_HEIGHT,
             ),
             emotes: get(KEY_EMOTES).map_or_else(Vec::new, |text| decode_emotes(&text)),
+            stat_split: number(
+                KEY_STAT_SPLIT,
+                STAT_SPLIT_MIN,
+                STAT_SPLIT_MAX,
+                DEFAULT_STAT_SPLIT,
+            ),
+            stat_shown: get(KEY_STAT_SHOWN).is_none_or(|v| v != "false"),
         }
     }
 }
@@ -762,6 +784,8 @@ mod tests {
         let mut prefs = ChatPrefs {
             font_size: 17.0,
             line_height: 1.55,
+            stat_split: 0.25,
+            stat_shown: false,
             ..ChatPrefs::default()
         };
         prefs.pages.add();
@@ -829,5 +853,7 @@ mod tests {
         assert_eq!(broken.line_height, DEFAULT_LINE_HEIGHT);
         assert_eq!(broken.pages, ChatPages::default());
         assert!(broken.highlights.is_empty() && broken.emotes.is_empty());
+        assert_eq!(broken.stat_split, DEFAULT_STAT_SPLIT);
+        assert!(broken.stat_shown);
     }
 }

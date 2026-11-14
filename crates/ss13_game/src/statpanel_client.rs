@@ -1,6 +1,7 @@
 //! Client half of the statpanel ([`crate::statpanel`]): the tabs across the top (Status first,
 //! then the verb categories), the Status lines, a verb category's buttons; the shown tab is
-//! window-local state (the stat browser's `current_tab`).
+//! window-local state (the stat browser's `current_tab`). It is shown in the chat column's dock
+//! (`ss13_chat::client::stat_dock`), as the skin's `statwindow` above the chat.
 
 use bevy::scene::{EntityScene, SceneList};
 use ss13_tgui::client::{AppTguiClientExt, ClientUi, SetLocal, UiLocalState};
@@ -16,8 +17,20 @@ pub struct StatPanelClientPlugin;
 
 impl Plugin for StatPanelClientPlugin {
     fn build(&self, app: &mut App) {
-        app.register_ui_view::<StatPanelUi>();
+        app.register_ui_view::<StatPanelUi>()
+            .add_observer(dock_here);
     }
+}
+
+/// The stat panel lives in the chat column's dock (the skin's `statwindow`), not in a floating
+/// window.
+fn dock_here(add: On<Add<ss13_chat::client::stat_dock::StatDock>>, mut commands: Commands) {
+    use ss13_tgui::UiInterface;
+    commands
+        .entity(add.entity)
+        .insert(ss13_tgui::client::UiDock {
+            interface: StatPanelUi::NAME.to_owned(),
+        });
 }
 
 impl ClientUi for StatPanelUi {

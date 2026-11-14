@@ -658,7 +658,19 @@ pub fn sanitize_say(raw: &str) -> Result<String, SayReject> {
             c => Some(c),
         })
         .collect();
-    let filtered = ss13_shared::text::ic_filter(&cleaned);
+    // An emote key (`*purr_t`) is not speech: the filter would strip its `_` and the emote would
+    // not exist (BandaStation's panel calls `emote(key)` past the filter; typed, the key broke).
+    let filtered = match cleaned.strip_prefix('*') {
+        Some(rest) => {
+            let (key, param) = rest.split_at(rest.find(char::is_whitespace).unwrap_or(rest.len()));
+            if key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                format!("*{key}{}", ss13_shared::text::ic_filter(param))
+            } else {
+                ss13_shared::text::ic_filter(&cleaned)
+            }
+        }
+        None => ss13_shared::text::ic_filter(&cleaned),
+    };
     let text = filtered.trim();
     if text.is_empty() {
         return Err(SayReject::Empty);
@@ -1530,6 +1542,9 @@ mod tests {
     fn sanitize_strips_controls_checks_length_and_capitalizes() {
         assert_eq!(sanitize_say("  при\u{7}вет\nмир  ").unwrap(), "Привет мир");
         assert_eq!(sanitize_say("a\u{202E}b\u{2066}c").unwrap(), "Abc");
+        // An emote key keeps its `_`; its text is filtered.
+        assert_eq!(sanitize_say("*purr_t").unwrap(), "*purr_t");
+        assert_eq!(sanitize_say("*me (тихо)").unwrap(), "*me тихо");
         assert_eq!(sanitize_say("\u{0}\u{1b}\t "), Err(SayReject::Empty));
         let max = "я".repeat(MAX_MESSAGE_LEN);
         assert_eq!(sanitize_say(&max).unwrap().chars().count(), MAX_MESSAGE_LEN);
