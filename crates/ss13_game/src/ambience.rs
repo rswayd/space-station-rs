@@ -67,7 +67,8 @@ pub struct Ambience {
     pub buzz: HashMap<Entity, String>,
 }
 
-/// `SSsounds.get_sound_length`: seconds by file, read once (0 for a missing file).
+/// `SSsounds.get_sound_length`: seconds by file, from the converter's table
+/// (`ss13_mapload::sound::LENGTHS_FILE`), else read from the file once (0 for a missing one).
 #[derive(Resource, Debug, Default)]
 pub struct SoundLengths(pub HashMap<String, f64>);
 
@@ -78,6 +79,7 @@ impl Plugin for AmbiencePlugin {
         app.init_resource::<Ambience>()
             .init_resource::<SoundLengths>()
             .init_resource::<SoundRng>()
+            .add_systems(Startup, load_lengths)
             .add_systems(Update, (fire, refresh_moved));
     }
 }
@@ -125,13 +127,22 @@ fn deaf(world: &World, mob: Entity) -> bool {
         || world.get::<Stat>(mob).is_some_and(|s| *s >= Stat::HardCrit)
 }
 
+fn load_lengths(plugin: Option<Res<MapLoadPlugin>>, mut lengths: ResMut<SoundLengths>) {
+    if let Some(plugin) = plugin {
+        lengths.0 = ss13_mapload::sound::read_lengths(&plugin.assets);
+    }
+}
+
 fn sound_length(world: &mut World, file: &str) -> f64 {
     if let Some(&secs) = world.resource::<SoundLengths>().0.get(file) {
         return secs;
     }
+    // Assets converted before the table: the file itself.
     let secs = world
         .get_resource::<MapLoadPlugin>()
-        .and_then(|m| std::fs::read(m.assets.join(ss13_mapload::sound::SOUND_DIR).join(file)).ok())
+        .and_then(|m| {
+            ss13_data::read(&m.assets.join(ss13_mapload::sound::SOUND_DIR).join(file)).ok()
+        })
         .and_then(|b| ss13_mapload::sound::ogg_duration(&b))
         .unwrap_or_else(|| {
             // tg: sounds then cut into each other.

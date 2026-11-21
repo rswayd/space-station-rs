@@ -4,7 +4,7 @@
 //! (`ss13_chat::client::stat_dock`), as the skin's `statwindow` above the chat.
 
 use bevy::scene::{EntityScene, SceneList};
-use ss13_tgui::client::{AppTguiClientExt, ClientUi, SetLocal, UiLocalState};
+use ss13_tgui::client::{AppTguiClientExt, ClientUi, SetLocal, UiLocalState, memo_of};
 use ss13_ui_kit::ActParams;
 use ss13_ui_kit::prelude::*;
 
@@ -58,26 +58,16 @@ fn view(data: &StatPanelData, local: &UiLocalState) -> impl Scene + use<> {
     let shown = shown_tab(data, local.get(SHOWN))
         .cloned()
         .unwrap_or_default();
-    let tabs: Vec<_> = data
-        .tabs
-        .iter()
-        .map(|t| {
-            let label = t.name.clone();
-            let value = t.name.clone();
-            let selected = t.name == shown.name;
-            let name = Name::new(format!("statpanel tab: {}", t.name));
-            bsn! {
-                @TabsTab { @content: label }
-                TabsTab { selected: selected }
-                SetLocal { key: {SHOWN.to_owned()}, value: value, rerender: true }
-                name
-            }
-        })
-        .collect();
+    // The panel re-renders every second (the Status lines): the tabs and the verb buttons are
+    // kept while they stay the same, so a hovered button does not blink.
+    let names: Vec<String> = data.tabs.iter().map(|t| t.name.clone()).collect();
+    let tabs = memo_of(&(names, shown.name.clone()), tab_strip);
     let body = if shown.verbs.is_empty() {
         Box::new(EntityScene(lines(&shown.lines))) as Box<dyn SceneList>
     } else {
-        Box::new(EntityScene(verbs(&shown.name, &shown.verbs))) as Box<dyn SceneList>
+        memo_of(&(shown.name.clone(), shown.verbs.clone()), |(tab, list)| {
+            verbs(tab, list)
+        })
     };
     bsn! {
         @WindowContent
@@ -85,7 +75,7 @@ fn view(data: &StatPanelData, local: &UiLocalState) -> impl Scene + use<> {
             @Stack { @vertical: true, @fill: true }
             Children [
                 @StackItem
-                Children [ @Tabs { @fluid: true } Children [ {tabs} ] ]
+                Children [ {tabs} ]
                 --
                 @StackItem { @grow: 1.0 }
                 Node { min_height: px(0) }
@@ -96,6 +86,26 @@ fn view(data: &StatPanelData, local: &UiLocalState) -> impl Scene + use<> {
             ]
         ]
     }
+}
+
+/// The tab strip: every tab by name, `shown` selected.
+fn tab_strip((names, shown): &(Vec<String>, String)) -> impl Scene + use<> {
+    let tabs: Vec<_> = names
+        .iter()
+        .map(|tab| {
+            let label = tab.clone();
+            let value = tab.clone();
+            let selected = tab == shown;
+            let name = Name::new(format!("statpanel tab: {tab}"));
+            bsn! {
+                @TabsTab { @content: label }
+                TabsTab { selected: selected }
+                SetLocal { key: {SHOWN.to_owned()}, value: value, rerender: true }
+                name
+            }
+        })
+        .collect();
+    bsn! { @Tabs { @fluid: true } Children [ {tabs} ] }
 }
 
 /// The Status tab's lines.

@@ -9,7 +9,7 @@
 //!   with the `attributions.txt` / `attribution.txt` / `license.txt` of every directory they came
 //!   from and a `SOURCES.txt` (file, source path, source commit).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
@@ -26,6 +26,14 @@ use crate::fidelity::is_under;
 pub const SFX_FILE: &str = "sfx.ron";
 /// `<assets>/sound/<tg path>`.
 pub const SOUND_DIR: &str = "sound";
+/// Seconds of every copied Ogg file by its path under [`SOUND_DIR`] (`SSsounds.get_sound_length`
+/// without the file: the browser demo's server has no sounds), in the assets root.
+pub const LENGTHS_FILE: &str = "sound_lengths.ron";
+
+/// The [`LENGTHS_FILE`] of `assets`; empty when there is none (assets converted before it).
+pub fn read_lengths(assets: &Path) -> HashMap<String, f64> {
+    crate::read_ron(&assets.join(LENGTHS_FILE)).unwrap_or_default()
+}
 const SFX_ROOT: &str = "/datum/sound_effect";
 
 /// Vars holding a sound file (or an SFX key) on the types the game ports.
@@ -1598,6 +1606,7 @@ pub fn copy_sounds(
          source repository's.\n# file\tsource path\n"
     );
     let mut attributions = Attributions::default();
+    let mut lengths = BTreeMap::new();
     for rel in files {
         let Some(found) = resolve_case(source, rel) else {
             report.missing.push(rel.clone());
@@ -1608,12 +1617,19 @@ pub fn copy_sounds(
         report.bytes +=
             std::fs::copy(source.join(&found), &dest).with_context(|| format!("copying {rel}"))?;
         report.copied += 1;
+        if let Some(secs) = std::fs::read(&dest).ok().and_then(|b| ogg_duration(&b)) {
+            lengths.insert(rel.clone(), secs);
+        }
         sources.push_str(&format!("{rel}\t{}\n", found.display()));
         attributions.add(&found, rel);
     }
     report.attributions = attributions.copy(source, &out)?;
     std::fs::create_dir_all(&out)?;
     std::fs::write(out.join("SOURCES.txt"), sources)?;
+    std::fs::write(
+        assets.join(LENGTHS_FILE),
+        ron::to_string(&lengths).expect("a map of numbers serializes"),
+    )?;
     Ok(report)
 }
 
@@ -1702,7 +1718,11 @@ mod tests {
         std::fs::create_dir_all(source.join("sound/items/weapons")).unwrap();
         std::fs::write(source.join("sound/attributions.txt"), "root").unwrap();
         std::fs::write(source.join("sound/items/license.txt"), "items").unwrap();
-        std::fs::write(source.join("sound/items/weapons/Shot.ogg"), "ogg").unwrap();
+        std::fs::write(
+            source.join("sound/items/weapons/Shot.ogg"),
+            ogg(22050, 44100),
+        )
+        .unwrap();
         let files = BTreeSet::from(["sound/items/weapons/shot.ogg".to_owned()]);
         let report = copy_sounds(&source, &assets, &files, "abc").unwrap();
         assert_eq!((report.copied, report.attributions), (1, 2));
@@ -1714,6 +1734,9 @@ mod tests {
         let sources = std::fs::read_to_string(out.join("SOURCES.txt")).unwrap();
         assert!(sources.contains("commit abc"));
         assert!(sources.contains("sound/items/weapons/shot.ogg\tsound/items/weapons/Shot.ogg"));
+        let lengths: BTreeMap<String, f64> =
+            ron::from_str(&std::fs::read_to_string(assets.join(LENGTHS_FILE)).unwrap()).unwrap();
+        assert_eq!(lengths["sound/items/weapons/shot.ogg"], 2.0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
