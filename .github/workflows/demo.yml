@@ -47,9 +47,12 @@ jobs:
     # `[profile.release]` has `codegen-units = 1`: ss13_game alone took 17 min on the 4-core
     # runner and the LTO links of both binaries ran past an hour. 16 units build in parallel;
     # rust-cache only saves after a successful run, so a run that never finishes never warms it.
-    timeout-minutes: 75
+    # Even with 16 units a cold run hit 75 min: ss13_game took ~26 min and the thin-LTO links of
+    # both binaries were still going after 20 more. No cross-crate LTO for the demo (a bigger,
+    # slightly slower exe), and GitHub's default 6 h limit for a cold run.
     env:
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+      CARGO_PROFILE_RELEASE_LTO: "off"
     steps:
       - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
