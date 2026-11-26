@@ -20,7 +20,8 @@
 //!   already on the button's level, else calls it there and says how the trip ended.
 //! - Elevator music (`/obj/effect/abstract/elevator_music_zone`): a player within a tile of the
 //!   zone hears `local_forecast` on the elevator channel at their ambience volume while its
-//!   panel has power ([`elevator_music`]).
+//!   panel has power ([`elevator_music`]). The loop has no track yet (`LOCAL_FORECAST`), so it
+//!   is silent.
 // shortcut: no radial up/down on the platform itself (tramstation's public lifts have none), no
 // floor indicators, no warnings on the level below, no multitool reset of the panel or button,
 // no emag of the button, no `simple_move_wrapper`.

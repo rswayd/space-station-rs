@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The platform-independent part of the single-player demo package (docs/RUNNING.md, "Windows
 # demo / releases"): converted assets, the BYOND map files the server reads at runtime, the admin
-# config, licenses and a README. The release workflow (.github/workflows/demo.yml) adds the
+# config, licenses (cargo-about must be installed) and a README. The release workflow (.github/workflows/demo.yml) adds the
 # executables and zips it.
 # Usage: scripts/demo-package.sh <BandaStation checkout> <converted assets> <out dir>
 set -euo pipefail
@@ -16,9 +16,10 @@ mkdir -p "$out/assets" "$out/data/BandaStation" "$out/config"
 # runtime.
 cp -a "$assets/." "$out/assets/"
 rm -f "$out/assets/dm_types.json"
-# Lobby remixes of copyrighted themes we have no licence to redistribute (never played:
-# crates/ss13_game/src/lobby_music.rs, ROUND_START_MUSIC).
-rm -f "$out"/assets/sound/sound/music/lobby_music/title{2,3}.ogg
+# Remixes of copyrighted themes we have no licence to redistribute (never played: lobby_music.rs
+# ROUND_START_MUSIC, looping_sound.rs LOCAL_FORECAST), in case an older converter copied them.
+rm -f "$out"/assets/sound/sound/music/lobby_music/title{2,3}.ogg \
+    "$out"/assets/sound/sound/music/elevator/robocop-short.ogg
 
 # What the server opens under SS13_SOURCE for MetaStation:
 # - the station map (ss13_mapload MapLoadPlugin::map_paths), read again for landmarks;
@@ -43,7 +44,9 @@ cp config/admin_ranks.txt "$out/config/"
 # the client binds it to loopback (crates/ss13_client/src/local_server.rs).
 printf '%s\n' "dev = Host" >"$out/config/admins.txt"
 
-cp LICENSE ASSETS-LICENSE.md "$out/"
+cp LICENSE ASSETS-LICENSE.md THIRD-PARTY-NOTICES.md "$out/"
+# The notices of the Rust crates in the binaries (MIT, Apache-2.0, ... require shipping them).
+cargo about generate --all-features about.hbs -o "$out/THIRD-PARTY-LICENSES.html"
 commit=$(git rev-parse HEAD)
 source_commit=$(git -C "$source_dir" rev-parse HEAD)
 cat >"$out/README.txt" <<EOF
@@ -68,4 +71,7 @@ Assets (assets/) and map files (data/BandaStation/) come from BandaStation
 (https://github.com/ss220club/BandaStation) commit $source_commit:
 CC BY-SA 3.0 unless an attribution file says otherwise; the map files are AGPL-3.0, like
 BandaStation's code. Details: ASSETS-LICENSE.md. This project is non-commercial.
+
+Third-party code (tgui, fonts): THIRD-PARTY-NOTICES.md. Licenses of the Rust crates the
+executables are built from: THIRD-PARTY-LICENSES.html.
 EOF

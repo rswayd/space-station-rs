@@ -147,10 +147,12 @@ manual run (`workflow_dispatch`) uploads the same tree as a workflow artifact. J
 (release, `x86_64-pc-windows-msvc`); `package` puts the executables into that tree and zips it.
 
 The package (`scripts/demo-package.sh <BandaStation> <assets> <out>` makes all but the
-executables):
+executables; it needs [cargo-about](https://github.com/EmbarkStudios/cargo-about),
+`cargo install --locked cargo-about --features cli`):
 
-- `ss13_client.exe`, `ss13_server.exe`, `LICENSE`, `ASSETS-LICENSE.md`, `README.txt` (how to run,
-  the source link and both commits);
+- `ss13_client.exe`, `ss13_server.exe`, `LICENSE`, `ASSETS-LICENSE.md`, `THIRD-PARTY-NOTICES.md`,
+  `THIRD-PARTY-LICENSES.html` (the Rust crates' licenses, from `about.toml`/`about.hbs`),
+  `README.txt` (how to run, the source link and both commits);
 - `assets/`: the converted assets without `dm_types.json` (converter input only);
 - `data/BandaStation/`: only the BYOND files the server reads at runtime for MetaStation: the
   `.dmm`, `_maps/map_jsons/metastation.json` and the shuttle templates it loads (emergency
@@ -216,9 +218,9 @@ both ways (`ArrayBuffer`s transferred).
 `data` (as in `demo.yml`), `site` (wasm build, `web-build.sh`, the 25 MiB per-file limit check,
 `wrangler pages deploy`). It needs the repository secrets `CLOUDFLARE_API_TOKEN` (permission
 "Cloudflare Pages: Edit") and `CLOUDFLARE_ACCOUNT_ID` and a Pages project `space-station-rs`.
-The site ships `LICENSE` and `ASSETS-LICENSE.md`, but no source archive yet (see the shortcut in
-`web-build.sh`): the site conveys the program, so AGPL-3.0 needs the source offered to its users
-before the demo is shown beyond trusted testers.
+The site ships `LICENSE`, `ASSETS-LICENSE.md`, `THIRD-PARTY-NOTICES.md` and
+`THIRD-PARTY-LICENSES.html`; the page footer links the source of the build (the public repository
+at its commit), which is the AGPL-3.0 source offer for the wasm the site conveys.
 `scripts/gate.sh` runs `cargo check --target wasm32-unknown-unknown` of `ss13_server` and
 `ss13_client`, so native changes cannot break the wasm build unnoticed.
 

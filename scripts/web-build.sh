@@ -42,7 +42,8 @@ cp docs/parity/PROGRESS.html "$out/progress.html"
 # Data root = the assets root; the map files keep the BandaStation/ prefix of the package.
 cp -a "$pkg/assets/." "$out/data/"
 cp -a "$pkg/data/BandaStation" "$out/data/"
-cp "$pkg/LICENSE" "$pkg/ASSETS-LICENSE.md" "$out/"
+cp "$pkg/LICENSE" "$pkg/ASSETS-LICENSE.md" "$pkg/THIRD-PARTY-NOTICES.md" \
+    "$pkg/THIRD-PARTY-LICENSES.html" "$out/"
 # Packs instead of thousands of small files, files.json lists them (scripts/web-pack.py); the
 # download counts the packs fetched before the start.
 python3 scripts/web-pack.py "$out/data"
@@ -55,10 +56,9 @@ client_bytes=$(stat -c %s "$out/client/ss13_web_client_bg.wasm.gz")
 server_bytes=$(stat -c %s "$out/server/ss13_web_server_bg.wasm.gz")
 download_mb=$(((data_bytes + client_bytes + server_bytes + 524288) / 1048576))
 commit=$(git rev-parse HEAD)
-# shortcut: no source archive on the site yet (owner's decision while the code is not ready);
-# AGPL-3.0 §6 requires offering the Corresponding Source to everyone the site conveys the wasm to,
-# so add `git archive` here (and the page link) before showing the demo beyond trusted testers.
-cp LICENSE ASSETS-LICENSE.md "$out/"
+# AGPL-3.0 §6(d): the page links the Corresponding Source of this build, the public repository at
+# this commit (web/index.html footer).
+cp LICENSE ASSETS-LICENSE.md THIRD-PARTY-NOTICES.md "$out/"
 sed -i -e "s/__COMMIT__/$commit/g" -e "s/__DOWNLOAD_MB__/$download_mb/g" \
     -e "s/__WASM_BYTES__/{\"client\":$client_bytes,\"server\":$server_bytes}/" "$out/index.html"
 echo "$out: data $((data_bytes / 1048576)) MB, client wasm $((client_bytes / 1048576)) MB," \

@@ -546,9 +546,12 @@ pub mod defs {
         ..BASE
     };
     /// Elevator music, at the listener's ambience volume (`pref_volume`).
+    // Deviation: no track, so the loop never starts (`start_with`). tg's only one,
+    // `sound/music/elevator/robocop-short.ogg`, is a remix of a copyrighted theme with no licence
+    // we can redistribute under (as the lobby's title2).
     pub const LOCAL_FORECAST: LoopDef = LoopDef {
         path: "/datum/looping_sound/local_forecast",
-        mid_sounds: &[("sound/music/elevator/robocop-short.ogg", 1)],
+        mid_sounds: &[],
         mid_length: 61.0,
         volume: 20.0,
         sound_channel: Some(CHANNEL_ELEVATOR),

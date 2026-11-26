@@ -351,7 +351,7 @@ pub mod files {
     ];
     /// Looping sounds (`ss13_game::looping_sound::defs`): every start, mid and end sound of
     /// the loops with an owner in the game (machines, storms, mobs).
-    pub const LOOPING: [&str; 143] = [
+    pub const LOOPING: [&str; 142] = [
         "sound/ambience/misc/ticking_clock.ogg",
         "sound/ambience/weather/ashstorm/inside/active_end.ogg",
         "sound/ambience/weather/ashstorm/inside/active_mid1.ogg",
@@ -494,7 +494,6 @@ pub mod files {
         "sound/mobs/humanoids/human/gag_vomit/gag4.ogg",
         "sound/mobs/humanoids/human/gag_vomit/gag5.ogg",
         "sound/music/antag/heretic/VoidsEmbrace.ogg",
-        "sound/music/elevator/robocop-short.ogg",
     ];
     /// Sounds the game code plays by a constant path (checked by the real-asset test
     /// `runtime_types::game_sound_literals_are_converted` in ss13_game).

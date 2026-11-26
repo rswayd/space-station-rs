@@ -61,7 +61,9 @@ To generate the assets and run a server, clients and the tests, see
 
 ## License
 
-Code: AGPL-3.0-only (`LICENSE`). Assets: see [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md).
+Code: AGPL-3.0-only (`LICENSE`). Assets: see [`ASSETS-LICENSE.md`](ASSETS-LICENSE.md). Ported
+MIT code (tgui, tgui-core), fonts and the Rust dependencies:
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 A public server must offer its source to players: set `SS13_SOURCE_URL` (`docs/RUNNING.md`).
 The project is non-commercial, and a few assets allow only non-commercial use
 (`ASSETS-LICENSE.md`).
